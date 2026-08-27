@@ -1,0 +1,15 @@
+{
+  "name": "sydevs",
+  "description": "Shared Claude Code workflow for the Sahaja Yoga Developers projects \u2014 one issue-to-PR pipeline across SahajCloud, SahajAtlasWeb, WeMeditateWeb and SahajAtlasWordpress.",
+  "owner": {
+    "name": "Sahaja Yoga Developers",
+    "url": "https://github.com/sydevs"
+  },
+  "plugins": [
+    {
+      "name": "workflow",
+      "source": "./workflow",
+      "description": "The shared issue-to-PR workflow for the sydevs projects: draft a ticket, implement it in a worktree, and finalize the PR. Per-repo variation comes from .claude/workflow.json."
+    }
+  ]
+}
