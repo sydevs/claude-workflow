@@ -114,6 +114,13 @@ covers them:
 `prettier-format` and `eslint-fix` survive because they *rewrite* files, which no language server
 does.
 
+## Standing this up on a new account
+
+Every dashboard, identifier and gotcha involved is in
+**[docs/routine-setup.md](docs/routine-setup.md)** — GitHub metadata, Mailpit on Railway, the Sentry
+integration, the Claude cloud environment, and the routines themselves, in dependency order. Written
+so the loop can be rebuilt from nothing on a different Claude account.
+
 ## Development
 
 ```bash
