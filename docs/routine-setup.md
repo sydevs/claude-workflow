@@ -311,6 +311,38 @@ Then set `enabled: true` on both.
 
 ---
 
+## Issue Relationships are unreachable from a routine
+
+GitHub calls them **Relationships**; the REST resource is `dependencies/blocked_by` and
+`dependencies/blocking`, and the issue object carries `issue_dependencies_summary`.
+
+`github/github-mcp-server` **does** ship `issue_dependency_read` / `issue_dependency_write`
+(PR #2839, full read/write, cross-repo), gated behind the `issue_dependencies` feature flag —
+which is in `AllowedFeatureFlags`, so it is user-toggleable via `X-MCP-Features`. None of that
+helps here. Every route to switching it on was tested and all fail at the same wall:
+
+| Route | Fails at |
+| --- | --- |
+| Repo `.mcp.json`, multi-repo routine | Config never read — session root is `/home/user`, repos are subdirectories, so no repo is the project root |
+| Repo `.mcp.json`, single-repo routine | Config **is** read, then: `Dynamic Client Registration rejected (HTTP 403): This GitHub API path is not available: sessions are bound to their configured repositories` |
+| Routine `mcp_connections` | `headers: Extra inputs are not permitted`, and `connector_uuid` is required |
+| A custom claude.ai connector | Same proxy, same non-repo-scoped path — no reason to expect a different result |
+| `curl https://api.github.com/...` with `GH_TOKEN` | 403 on every endpoint; the proxy declines rather than substituting |
+
+The blocker is not the flag, the header, or where the config lives: **a session cannot open a
+second GitHub MCP connection at all**, because `api.githubcopilot.com/mcp/` is not a
+repository-scoped path and the proxy refuses it during the handshake.
+
+**Consequence for the loop:** it cannot read whether a ticket is blocked. Until this changes,
+Relationships are set **locally** (where `gh` works and the GitHub UI graph is the point) and
+mirrored into the issue body as a `Blocked by: <url>` line that a cloud run can grep. Re-test the
+`select:` probe after any GitHub MCP release; the day the tools appear, the body line becomes
+redundant.
+
+Issue **fields** have no such problem — `list_issue_fields`, `issue_read.field_values`,
+`list_issues(fields:["field_values"])` and `issue_write(issue_fields:[...])` all work from a
+routine, so Priority and Effort are fully usable.
+
 ## Failure modes worth recognising
 
 | Symptom | Cause |
