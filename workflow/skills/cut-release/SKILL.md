@@ -19,16 +19,32 @@ exception is the one that matters most to end users.
 | WeMeditateWeb | No — Cloudflare Workers deploys on merge. |
 | SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract; see `survey-contracts`. |
 
-**`v0.1.0` of the WordPress plugin has never been tagged.** Both phases are implemented and tested,
-and the README's install instructions point at a Releases zip that does not exist — so the
-documented install path currently cannot be followed at all. That is the first release to cut.
+`v0.1.0` of the WordPress plugin shipped on 2026-08-27, so the install path documented in its
+README now works. Its README status line still says "complete, not yet tagged" — stale, and worth
+correcting whenever that file is next touched.
+
+## Finding the last release — carefully
+
+`git describe --tags` returns the most recent tag of **any** kind, which is not the same question.
+WeMeditateWeb's only tag is `pre-dependency-update`, a checkpoint marker; treating it as a release
+boundary reports 39 commits of "unreleased work" in a repo that does not do releases at all.
+
+Match semver explicitly, and only in a repo from the table above:
+
+```bash
+git fetch --tags origin
+git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1
+```
+
+No semver tag in a repo that *should* release → that is the first release. No semver tag in a repo
+that should not → nothing to do, and not a finding.
 
 ## When to cut
 
 Only when **all** hold:
 
-- Merged commits exist since the last tag that change shipped behaviour (ignore CI-only and
-  docs-only churn).
+- Merged commits exist since the last **semver** tag that change shipped behaviour. Ignore CI-only,
+  chore-only and docs-only churn — two `chore:` commits are not a release.
 - CI is green on `main`.
 - No open PR is about to land in the same area — releasing mid-sequence means an immediate follow-up.
 
