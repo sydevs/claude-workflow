@@ -41,29 +41,27 @@ below comes from it — none are hard-coded here.
 
 ## Rung 0 — Preflight
 
-**Verify GitHub access before anything else.** `gh` ships in the sandbox image, but the session's
-GitHub proxy has to be authorized separately, and an unauthorized session fails *every* call with a
-403 rather than an auth prompt:
+**This runs on the GitHub MCP tools, not `gh`.** A routine sandbox has no `gh` binary and its
+session prompt mandates `mcp__github__*` for all GitHub work. Everything below is expressed in
+those tools. `gh` remains correct when a skill is invoked locally as a slash command.
 
-```bash
-gh api repos/$ORG/claude-workflow --jq .full_name
+Confirm access before doing anything, because an unauthorized session fails every call with a 403
+rather than an auth prompt:
+
+```
+mcp__github__get_me
 ```
 
-- `403 GitHub access is not enabled for this session` → the account's GitHub connection is missing.
-  Fixed by running `/web-setup` locally, or by authorizing the Claude GitHub App. **Journal it and
-  stop the run** — do not fall back to the GitHub MCP tools and carry on. They can read issues and
-  post comments, but they reach neither issue **types** nor **blocked-by dependencies**, so a run
-  that continues on them files untyped tickets and cannot tell a blocked ticket from a ready one.
-  That is worse than not running.
-- `403 This GraphQL query is not enabled for this session` on a specific command → the proxy serves
-  only pinned PR-review GraphQL operations. Use the REST form via `gh api repos/{owner}/{repo}/...`,
-  which the error message itself names.
+Failure → journal it and stop. Do not improvise.
 
-```bash
-gh auth status                                   # fail loudly if unauthenticated
-jq -e . loop-config.json >/dev/null              # config parses
-date -u +%A | tr 'A-Z' 'a-z'                     # today's survey key
-```
+**Two capability limits shape the rungs below**, both verified rather than assumed:
+
+- **Priority and Effort are readable and writable** as native issue fields. `list_issues` with
+  `fields: ["field_values"]` returns the whole backlog's priorities in one call.
+- **Relationships are invisible.** No MCP tool reads `blocked_by`. Blocked-ness is determined from
+  the `Blocked by:` line in the issue body (see `/workflow:triage-issue`). Never conclude a ticket
+  is unblocked because you could not find a blocker — conclude it only from the body.
+
 
 Census, across all repos in `repos`:
 
@@ -133,10 +131,20 @@ Ceiling: `maxImplementationsPerRun` (1). Skip this rung entirely when:
 - the repo is at `wipCapPerRepo` open loop PRs, or
 - there are no `approved` tickets that are unblocked.
 
-**Unblocked** means `dependencies/blocked_by` is empty or fully closed, and the ticket carries
-neither `hold` nor `blocked-upstream`.
+**Unblocked** means: no `Blocked by:` line in the body naming a still-open issue, and the ticket
+carries neither `hold` nor `blocked-upstream`. Resolve each `Blocked by:` URL with `issue_read` and
+check its state — a closed blocker does not block.
 
-Selection: highest priority (`Critical` → `Low`), then oldest `updatedAt`. Then hand to
+Selection: highest **Priority** field (`Urgent` → `Low`), then oldest `updatedAt`. Pull the whole
+candidate set in one call:
+
+```
+mcp__github__list_issues  state:OPEN  labels:["approved"]  fields:["field_values","labels","body"]
+```
+
+Use **Effort** as a tie-break and a sanity check: an `Effort: High` ticket that cannot plausibly
+finish within one run should be split rather than started, since an implementation is never carried
+across runs. Then hand to
 `/workflow:implement-issue`, which owns worktree, contract step, and shipping.
 
 **Cross-repo side effects are exempt from the WIP cap.** If the implementation forces a consumer

@@ -27,17 +27,35 @@ gh issue edit <n> --repo "$ORG/$REPO" --type Bug
 An investigation whose *outcome* is a decision is a `Task`, even when it may lead to a `Feature`.
 Type describes the work being requested, not what it might become.
 
-### Priority — one label, always exactly one
+### Priority and Effort — native **fields**, not labels
 
-| Label | Means | Examples from this workspace |
+GitHub's org-level issue fields, available on every `sydevs` repo with no per-repo setup. They are
+**not** Projects v2 (which a cloud routine cannot reach) and **not** labels.
+
+| Field | Options | Means |
 | --- | --- | --- |
-| `Critical` | Data loss, outage, or security exposure. Drop other work. | A public write path accepting arbitrary payloads; leaked production credential |
-| `High` | User-visible breakage, or it blocks other work. | New users get no verification email; a form that will 404 the moment an upstream PR deploys |
-| `Medium` | Planned work. **The default** — most tickets are this. | A new endpoint; an i18n migration |
-| `Low` | Do when nothing above it waits. Deferred or speculative. | Analytics instrumentation; a nice-to-have collection |
+| **Priority** | `Urgent` | Data loss, outage, or security exposure. Drop other work. |
+| | `High` | User-visible breakage, or it blocks other work. |
+| | `Medium` | Planned work. **The default** — most tickets are this. |
+| | `Low` | Do when nothing above it waits. Deferred or speculative. |
+| **Effort** | `High` / `Medium` / `Low` | Rough size. Set it honestly — the loop uses it to avoid starting something it cannot finish in one run. |
 
-Priority is about **consequence of not doing it**, not effort or excitement. A one-line fix to a
-broken signup path is `High`; a month of pleasant refactoring is `Low`.
+Priority is about the **consequence of not doing it**, not effort or appetite. A one-line fix to a
+broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
+which is exactly why it is a separate field.
+
+```bash
+# locally
+gh api -X PUT repos/$ORG/$REPO/issues/<n>/issue-field-values --input - <<< \
+  '[{"field_id":14337938,"value":"High"},{"field_id":14337941,"value":"Medium"}]'
+```
+
+The `value` must be the option **name**; passing an option id returns 422. Field ids are in
+`loop-config.json` → `issueFields`.
+
+From a cloud run, use `issue_write` with `issue_fields: [{field_name:"Priority", field_option_name:"High"}]`
+— by name, and it validates the option before calling. Read them back with
+`list_issues(fields:["field_values"])`, which returns the whole backlog's priorities in one call.
 
 ### State labels — where it sits in the pipeline
 
@@ -53,25 +71,38 @@ broken signup path is `High`; a month of pleasant refactoring is `Low`.
 
 ### Relationships — what must happen first
 
+GitHub calls these **Relationships**; the REST resource is `dependencies`. Set the real thing
+locally, where `gh` can reach it:
+
 ```bash
-# same repo
-gh issue edit <n> --repo "$ORG/$REPO" --add-blocked-by <m>
-# cross-repo — needs the FULL URL; owner/repo#N is rejected as "invalid issue format"
+gh issue edit <n> --repo "$ORG/$REPO" --add-blocked-by <m>                     # same repo
 gh issue edit <n> --repo "$ORG/$REPO" \
-  --add-blocked-by "https://github.com/$ORG/<other>/issues/<m>"
+  --add-blocked-by "https://github.com/$ORG/<other>/issues/<m>"                # cross-repo: FULL URL
 ```
 
-Always verify — a silent no-op loses the constraint entirely:
+Cross-repo needs the full URL — `owner/repo#N` is rejected as `invalid issue format`. Verify both
+directions, because a silent no-op loses the constraint entirely:
 
 ```bash
 gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by --jq '.[].number'
 ```
 
-Use `--parent` for sub-issues only when the children are parts of one deliverable rather than
-independent consumers reacting to a change. Sub-issues require the same repo owner.
+**Also write the constraint into the body.** This is not redundant bookkeeping:
+
+```markdown
+Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges
+```
+
+**No MCP tool exposes Relationships**, so a cloud routine is blind to them — it reads this line
+instead. A ticket whose blocker exists only in the Relationships panel will be picked up as ready
+and implemented against a shape that does not exist yet. The line is also the version a human
+reads without opening a side panel.
+
+`loop-config.json` → `relationships.recheckProbe` records how to test whether the MCP tools have
+appeared; the day they do, the body line becomes redundant.
 
 **Priority and relationships together decide implementation order**: the loop takes the
-highest-priority ticket whose blockers are all closed. A `Critical` behind an open blocker waits
+highest-priority ticket whose blockers are all closed. An `Urgent` behind an open blocker waits
 behind an unblocked `Medium` — which is correct, and is why recording blockers matters more than
 arguing about priority.
 
@@ -123,9 +154,9 @@ backlog has to be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Exactly one priority label
+- [ ] Priority field set (and Effort, where the size is knowable)
 - [ ] `proposal` if loop-raised
-- [ ] Blockers recorded and verified in both directions
+- [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
 - [ ] Body in the format above; checklist items are executable
 - [ ] Searched for a duplicate first (`gh issue list --search`)
 
@@ -133,5 +164,6 @@ backlog has to be cleaned up by hand.
 
 - **Never** apply `approved`. That label is the user's signal to the loop, and applying it is
   indistinguishable from self-authorizing work.
-- **Never** leave a ticket with two priority labels or none.
+- **Never** leave a ticket without a Priority field value.
+- **Never** record a blocker only as a Relationship — a cloud run cannot see it.
 - **Never** file without searching for a duplicate.

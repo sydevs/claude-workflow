@@ -39,12 +39,13 @@ branch at every decision point below rather than stalling.
    - `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
      bumps, reflection config PRs — which have no issue to carry a label.
 
-   Check blockers before starting, not after:
+   Check blockers before starting, not after. **Locally** the Relationships are authoritative:
    ```bash
    gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by \
      --jq '[.[] | select(.state == "open")] | length'
    ```
-   Non-zero → stop, and say which issue blocks it.
+   **From a cloud run** no MCP tool exposes them, so read the `Blocked by:` line(s) in the body and
+   resolve each with `issue_read`. Either way: an open blocker → stop, and say which issue blocks it.
 
 4. **Plan.** Auto-proceed when the ticket is clear. Pause only on missing criteria, genuine
    ambiguity, deviation from the ticket, or destructive work.

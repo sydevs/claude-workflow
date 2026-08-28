@@ -86,9 +86,14 @@ All of it is defined once in **`/workflow:triage-issue`** — read it and follow
 the *conversation* that produces a good ticket; `triage-issue` owns what the ticket must look like
 when it lands, so a ticket you file by hand is indistinguishable from one the loop files.
 
-The one thing worth repeating here, because it is the most common omission: **acceptance criteria
-say what must be true; the verification checklist says what someone must do to confirm it.** Every
-checklist item must be executable with no additional context.
+Two things worth repeating here, because they are the most common omissions:
+
+**Acceptance criteria say what must be true; the verification checklist says what someone must do to
+confirm it.** Every checklist item must be executable with no additional context.
+
+**A blocker goes in two places** — the Relationships panel *and* a `Blocked by: <url>` line in the
+body. The loop runs in the cloud, where no tool can see Relationships, so a blocker recorded only
+in the panel will be picked up as ready.
 
 ## Cross-repo work
 

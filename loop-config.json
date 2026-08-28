@@ -19,12 +19,7 @@
     "ciFixIterations": 3
   },
   "labels": {
-    "priorities": [
-      "Critical",
-      "High",
-      "Medium",
-      "Low"
-    ],
+    "$comment": "Priority and Effort are FIELDS, not labels \u2014 see issueFields. Labels carry pipeline state only.",
     "approved": "approved",
     "proposal": "proposal",
     "hold": "hold",
@@ -70,5 +65,32 @@
     "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here."
   },
   "journalIssue": 2,
-  "journalIssueNote": "Current month's pinned Ops journal in claude-workflow. loop-run rung 6 opens the next month's issue on the first run of a month and updates this number in the same PR."
+  "journalIssueNote": "Current month's pinned Ops journal in claude-workflow. loop-run rung 6 opens the next month's issue on the first run of a month and updates this number in the same PR.",
+  "issueFields": {
+    "$comment": "GitHub's native org-level issue fields \u2014 NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] \u2014 the value must be the option NAME; an option id returns 422.",
+    "priority": {
+      "fieldId": 14337938,
+      "options": [
+        "Urgent",
+        "High",
+        "Medium",
+        "Low"
+      ]
+    },
+    "effort": {
+      "fieldId": 14337941,
+      "options": [
+        "High",
+        "Medium",
+        "Low"
+      ]
+    }
+  },
+  "relationships": {
+    "$comment": "GitHub calls these Relationships; REST calls them dependencies. Readable and writable LOCALLY via gh, but NO MCP tool exposes them, so a cloud routine cannot see them. github-mcp-server ships issue_dependency_read/write behind the issue_dependencies flag, but every route to enabling it from a routine is closed (see docs/routine-setup.md). Until that changes, the real relationship is set locally AND mirrored into the issue body so a cloud run can read it.",
+    "bodyMarker": "Blocked by:",
+    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> \u2014 <one-line reason>",
+    "cloudReadable": false,
+    "recheckProbe": "select:mcp__github__issue_dependency_read \u2014 if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
+  }
 }

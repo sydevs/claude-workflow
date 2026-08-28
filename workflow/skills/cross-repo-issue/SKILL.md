@@ -71,11 +71,14 @@ copy is updated.
    gh api repos/sydevs/<producer>/issues/<N>/dependencies/blocking   --jq '.[].number'
    ```
 
-   Still restate the constraint in the child's body — someone reading the issue must see it
-   without opening the dependency panel:
+   **Then put the same constraint in the child's body.** This is load-bearing, not decoration:
+   the autonomous loop runs in the cloud, where **no MCP tool can read Relationships**, so a
+   blocker recorded only in the panel is invisible to it and the child gets picked up as ready.
+   Use the exact marker the loop greps for:
 
-   > **Blocked by sydevs/&lt;producer&gt;#N.** Do not start until that PR is merged to `main` —
-   > `pnpm types:cms` reads from `main`, so running it earlier silently pulls the old shape.
+   ```markdown
+   Blocked by: https://github.com/sydevs/<producer>/issues/<N> — `pnpm types:cms` reads from `main`, so running it before that merges silently pulls the old shape
+   ```
 
 5. **Sub-issues** where the work is genuinely one deliverable split across repos (rather than
    independent consumers reacting to a change): `gh issue edit <child> --parent <N>`. Sub-issues
@@ -100,4 +103,5 @@ copy is updated.
 - **Never** file a cross-repo change as independent issues with no parent — the ordering constraint
   is the most important thing being recorded.
 - **Never** file the children before the tracker exists.
-- **Always** restate the blocking condition inside each child issue body.
+- **Always** restate the blocking condition as a `Blocked by: <url>` line in each child's body — a
+  cloud run cannot see the Relationship, only the line.
