@@ -190,13 +190,31 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 ```bash
 #!/bin/bash
 set -e
+
+# gh is NOT preinstalled in the sandbox, despite what the docs imply.
+# Every skill here is written in gh commands, and only gh exposes issue types,
+# sub-issues and blocked-by dependencies — the GitHub MCP tools do not.
+if ! command -v gh >/dev/null 2>&1; then
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+  chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list
+  apt-get update -qq && apt-get install -y -qq gh
+fi
+
 corepack enable pnpm
 service postgresql start
 pg_isready -h localhost -p 5432 -t 30
 ```
 
 Postgres 16 and Docker are pre-installed but **not running** — SahajCloud's integration lane needs
-the service started, which is what that second line does.
+the service started, which is what that line does.
+
+> ⚠ **`gh` is not preinstalled.** A run without it falls back to the GitHub MCP tools, which cover
+> issues and PRs but **not** issue types, sub-issues or `blocked-by` dependencies — exactly the
+> metadata the loop's priority ordering depends on. Verify with `which gh` in a manual session
+> after editing the setup script.
 
 **Network access:** `Full` is the practical setting. A curated allowlist is tighter, but the
 implementation rung does real research — reading changelogs, upstream issues, library docs — and a

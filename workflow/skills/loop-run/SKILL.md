@@ -41,6 +41,19 @@ below comes from it — none are hard-coded here.
 
 ## Rung 0 — Preflight
 
+**Check for `gh` first.** Every recipe below is written in it, and it is the only interface that
+reaches issue **types** and **blocked-by dependencies** — the two fields the priority ladder orders
+work by. The GitHub MCP tools cover issues and PRs but neither of those.
+
+```bash
+command -v gh || echo "NO GH — see below"
+```
+
+Missing → **journal it as a failure and run in reduced mode**: rungs 1, 2, 4 and 6 work through
+`mcp__github__*`, but rung 3 must be skipped entirely, because the unblocked-check cannot run and
+implementing a blocked ticket is worse than implementing nothing. Say so explicitly in the journal
+rather than quietly filing untyped tickets.
+
 ```bash
 gh auth status                                   # fail loudly if unauthenticated
 jq -e . loop-config.json >/dev/null              # config parses

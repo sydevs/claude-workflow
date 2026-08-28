@@ -109,6 +109,16 @@ against, so every item must be executable with no additional context — `pnpm t
 `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.
 
+## When `gh` is unavailable
+
+The GitHub MCP tools can create and comment on issues, but expose no way to set an **issue type**
+or a **blocked-by dependency**. A ticket filed without a type violates the checklist below, and the
+first cloud run did exactly that before anyone noticed.
+
+So: if `gh` is missing, still file the ticket — the finding is worth more than the metadata — but
+**say in the ticket body that its type is unset and why**, so whoever triages it knows it is
+incomplete rather than deliberate.
+
 ## Filing checklist
 
 - [ ] Type set
