@@ -109,15 +109,16 @@ against, so every item must be executable with no additional context — `pnpm t
 `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.
 
-## When `gh` is unavailable
+## If GitHub access is unauthorized
 
-The GitHub MCP tools can create and comment on issues, but expose no way to set an **issue type**
-or a **blocked-by dependency**. A ticket filed without a type violates the checklist below, and the
-first cloud run did exactly that before anyone noticed.
+`gh` is present in every environment we run in, but a cloud session whose GitHub proxy is not
+authorized 403s on every call. **Do not fall back to the GitHub MCP tools to file anyway.** They
+can create issues and comments, but they reach neither issue types nor blocked-by dependencies, so
+what they produce silently fails the checklist below — the first cloud run filed an untyped ticket
+exactly this way, and nobody would have noticed without reading the issue.
 
-So: if `gh` is missing, still file the ticket — the finding is worth more than the metadata — but
-**say in the ticket body that its type is unset and why**, so whoever triages it knows it is
-incomplete rather than deliberate.
+Journal the failure and file nothing. An unfiled finding can be re-derived next run; a malformed
+backlog has to be cleaned up by hand.
 
 ## Filing checklist
 

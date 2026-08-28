@@ -41,18 +41,23 @@ below comes from it — none are hard-coded here.
 
 ## Rung 0 — Preflight
 
-**Check for `gh` first.** Every recipe below is written in it, and it is the only interface that
-reaches issue **types** and **blocked-by dependencies** — the two fields the priority ladder orders
-work by. The GitHub MCP tools cover issues and PRs but neither of those.
+**Verify GitHub access before anything else.** `gh` ships in the sandbox image, but the session's
+GitHub proxy has to be authorized separately, and an unauthorized session fails *every* call with a
+403 rather than an auth prompt:
 
 ```bash
-command -v gh || echo "NO GH — see below"
+gh api repos/$ORG/claude-workflow --jq .full_name
 ```
 
-Missing → **journal it as a failure and run in reduced mode**: rungs 1, 2, 4 and 6 work through
-`mcp__github__*`, but rung 3 must be skipped entirely, because the unblocked-check cannot run and
-implementing a blocked ticket is worse than implementing nothing. Say so explicitly in the journal
-rather than quietly filing untyped tickets.
+- `403 GitHub access is not enabled for this session` → the account's GitHub connection is missing.
+  Fixed by running `/web-setup` locally, or by authorizing the Claude GitHub App. **Journal it and
+  stop the run** — do not fall back to the GitHub MCP tools and carry on. They can read issues and
+  post comments, but they reach neither issue **types** nor **blocked-by dependencies**, so a run
+  that continues on them files untyped tickets and cannot tell a blocked ticket from a ready one.
+  That is worse than not running.
+- `403 This GraphQL query is not enabled for this session` on a specific command → the proxy serves
+  only pinned PR-review GraphQL operations. Use the REST form via `gh api repos/{owner}/{repo}/...`,
+  which the error message itself names.
 
 ```bash
 gh auth status                                   # fail loudly if unauthenticated

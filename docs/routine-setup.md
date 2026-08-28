@@ -190,19 +190,6 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 ```bash
 #!/bin/bash
 set -e
-
-# gh is NOT preinstalled in the sandbox, despite what the docs imply.
-# Every skill here is written in gh commands, and only gh exposes issue types,
-# sub-issues and blocked-by dependencies — the GitHub MCP tools do not.
-if ! command -v gh >/dev/null 2>&1; then
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-  chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list
-  apt-get update -qq && apt-get install -y -qq gh
-fi
-
 corepack enable pnpm
 service postgresql start
 pg_isready -h localhost -p 5432 -t 30
@@ -211,10 +198,31 @@ pg_isready -h localhost -p 5432 -t 30
 Postgres 16 and Docker are pre-installed but **not running** — SahajCloud's integration lane needs
 the service started, which is what that line does.
 
-> ⚠ **`gh` is not preinstalled.** A run without it falls back to the GitHub MCP tools, which cover
-> issues and PRs but **not** issue types, sub-issues or `blocked-by` dependencies — exactly the
-> metadata the loop's priority ordering depends on. Verify with `which gh` in a manual session
-> after editing the setup script.
+`gh` needs no installing: it ships in the image (`/usr/bin/gh`, v2.98.0 as of Aug 2026) alongside
+git, jq, yq and ripgrep. See the GitHub authentication section below for the part that *does* need
+setting up.
+
+**GitHub access** — the piece most likely to be missing, and it fails in a way that looks like
+something else. A session whose GitHub connection is not set up 403s on *every* `gh` call with
+`GitHub access is not enabled for this session`, while `gh auth status` separately reports the
+token invalid because `GH_TOKEN` reads as the literal string `proxy-injected`.
+
+Two ways to connect, per the docs, and **either is sufficient**:
+
+| Method | How |
+| --- | --- |
+| **`/web-setup`** | Run it in a local terminal; it syncs your local `gh` token to your Claude account. Best if you already use `gh` — and the session then acts as *your* GitHub identity |
+| **Claude GitHub App** | Authorize it during web onboarding at claude.ai/code |
+
+> ⚠ **Installing the Claude GitHub App on the organization is not the fix**, however much the error
+> message sounds like it. The docs are explicit: a cloud session "can access any repository the
+> connecting GitHub account can see, not just the repositories the Claude GitHub App is installed
+> on. App installation enables PR webhooks for Auto-fix; **it is not a session-level access
+> control**." We had the App installed org-wide with write permissions and every call still 403'd.
+
+Whichever you choose determines **which GitHub account the loop acts as** — every issue, comment
+and PR it creates is attributed to that identity. Check it from a session with
+`gh api user --jq .login`.
 
 **Network access:** `Full` is the practical setting. A curated allowlist is tighter, but the
 implementation rung does real research — reading changelogs, upstream issues, library docs — and a
@@ -307,6 +315,9 @@ Then set `enabled: true` on both.
 
 | Symptom | Cause |
 | --- | --- |
+| Every `gh` call 403s with "GitHub access is not enabled for this session" | The account's GitHub connection is missing. Run `/web-setup` locally, or authorize the Claude GitHub App. Installing the App **on the org** does not fix this — per the docs it "is not a session-level access control" |
+| `gh` reports "The token in GH_TOKEN is invalid" | Expected when the proxy handles auth: `GH_TOKEN` reads as the literal `proxy-injected`. Only a real 403 on an API call indicates a problem |
+| `gh issue list --json issueType` 403s | It routes through GraphQL, and the proxy serves only pinned PR-review operations. Use the REST form |
 | `railway` exits 1 silently, even `--help` | pnpm blocked the postinstall that downloads the binary. `pnpm approve-builds -g`, or run `npm-install/postinstall.js` by hand |
 | Mailpit UI `502`, container logs healthy | `PORT` not set to `8025` |
 | Mailpit crash-loops on first deploy | Volume not attached at `/data` |
