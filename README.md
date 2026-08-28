@@ -31,9 +31,13 @@ after the folder is trusted:
   "extraKnownMarketplaces": {
     "sydevs": { "source": { "source": "github", "repo": "sydevs/claude-workflow" } }
   },
-  "enabledPlugins": ["workflow@sydevs"]
+  "enabledPlugins": { "workflow@sydevs": true }
 }
 ```
+
+`enabledPlugins` must be an **object map**, not an array. The array form installs the plugin and
+then reports it `disabled`, with no error anywhere — worth knowing, because it looks exactly like
+a working install until you check `claude plugin list`.
 
 Project settings register the marketplace but do not auto-install an external-source plugin, so
 each person runs `claude plugin install` once.
@@ -42,13 +46,39 @@ each person runs `claude plugin install` once.
 
 | Skill | Purpose |
 | --- | --- |
-| `/workflow:draft-ticket` | Draft a GitHub issue — clarify ambiguity first, then acceptance criteria and a verification checklist. The issue is the spec. |
-| `/workflow:implement-issue` | Implement an issue in a worktree, gated by the repo's autonomy allowlist, then ship via `finalize-pr`. |
-| `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. |
+| `/workflow:draft-ticket` | Draft a GitHub issue — clarify ambiguity first, then acceptance criteria and a verification checklist. Your way into the pipeline. |
+| `/workflow:triage-issue` | The metadata rules: type, priority, state labels, relationships, body format. Shared by everything that files a ticket. |
+| `/workflow:implement-issue` | Implement an `approved` issue in a worktree, then ship via `finalize-pr`. |
+| `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
-| `/workflow:dev-server` | One dev server per **git worktree**, with its own port and its own database. |
+| `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
+| `/workflow:loop-run` | One pass of the autonomous ladder. Invoked by the scheduled routines; `--dry-run` locally. |
+| `/workflow:survey-deps` | Monday: vulnerabilities → PRs; monthly routine updates. |
+| `/workflow:survey-sentry` | Tuesday: production errors → tickets. |
+| `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase → proposals. |
+| `/workflow:survey-contracts` | Thursday: do the published contracts still describe reality? |
+| `/workflow:cut-release` | Friday: tag, changelog, GitHub Release where work has accumulated. |
+| `/workflow:reflect` | Sunday: read the week's journal and propose changes to the loop itself. |
 
 Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
+
+## The loop
+
+Two scheduled cloud routines run `loop-run` twice a day across all four repos, working down a fixed
+ladder: merge what you approved, revise what you commented on, implement what you approved, run the
+day's survey, journal it. State lives entirely in GitHub — labels are the queue, PRs are the work,
+a pinned monthly issue is the memory, and `loop-config.json` holds the knobs.
+
+Two properties make it safe to leave running:
+
+- **`approved` is the only gate.** The loop never applies that label and never implements without
+  it. Everything it finds on its own is filed as a `proposal` for you to judge.
+- **Merging needs all three of** an approving review, green CI, and zero unresolved threads.
+
+Ceilings in `loop-config.json` bound what one run can spend — a cloud session cannot read your
+remaining quota, so spend is rationed by work-item counts rather than token math. The Sunday
+reflection rung proposes adjustments to those numbers as a PR, so the loop tunes itself through the
+same review path as everything else.
 
 ## Configuration
 
@@ -61,8 +91,8 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `contractStep` | Migrations, `types:cms`, or the URL-contract diff. |
 | `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
 | `securityReview.contentPattern` / `.contentPaths` | Newly-introduced sinks, regardless of path. |
-| `prAllowlistGlobs` | The autonomy gate — where an automated run may open a draft PR rather than filing an issue. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
+| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). Ticket work is gated on the `approved` label instead. |
 | `worktreeSetup` | Commands run after `EnterWorktree`. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 

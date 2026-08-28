@@ -1,0 +1,67 @@
+{
+  "$comment": "Knobs for the autonomous loop (workflow/skills/loop-run). Read fresh from main on every routine run, so merging a change here changes the next run with no redeploy. The reflection rung proposes edits to this file as a PR.",
+
+  "repos": ["SahajCloud", "SahajAtlasWeb", "WeMeditateWeb", "SahajAtlasWordpress"],
+  "org": "sydevs",
+  "journalRepo": "claude-workflow",
+
+  "ceilings": {
+    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all.",
+    "wipCapPerRepo": 2,
+    "maxImplementationsPerRun": 1,
+    "maxPrRevisionsPerRun": 2,
+    "maxTicketRepliesPerRun": 3,
+    "maxProposalsPerSurvey": 3,
+    "maxOpenProposals": 10,
+    "ciFixIterations": 3
+  },
+
+  "labels": {
+    "priorities": ["Critical", "High", "Medium", "Low"],
+    "approved": "approved",
+    "proposal": "proposal",
+    "hold": "hold",
+    "needsInfo": "needs-info",
+    "blockedUpstream": "blocked-upstream"
+  },
+
+  "surveyCalendar": {
+    "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
+    "monday": "survey-deps",
+    "tuesday": "survey-sentry",
+    "wednesday": "survey-analysis",
+    "thursday": "survey-contracts",
+    "friday": "cut-release",
+    "saturday": null,
+    "sunday": "reflect"
+  },
+
+  "analysisAngles": [
+    "correctness and edge cases",
+    "simplicity and abstraction reduction",
+    "performance",
+    "security",
+    "test quality and coverage gaps",
+    "accessibility",
+    "i18n completeness",
+    "error handling and observability",
+    "UX consistency",
+    "feature research against current best practice"
+  ],
+
+  "sentry": {
+    "$comment": "Slugs filled in during Phase D. SahajAtlasWordpress ships no Sentry.",
+    "org": null,
+    "projects": {
+      "SahajCloud": null,
+      "SahajAtlasWeb": null,
+      "WeMeditateWeb": null
+    }
+  },
+
+  "mailpit": {
+    "url": "https://mailpit-production-db88.up.railway.app",
+    "retentionDays": 7,
+    "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here."
+  }
+}

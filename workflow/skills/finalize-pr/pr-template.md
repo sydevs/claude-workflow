@@ -18,6 +18,23 @@ refactors where the structural change is not apparent from individual diffs.]
 
 - `path/to/file.ts` — [what changed]
 
+## Preview
+
+[Discovered preview URL(s), deep-linked to the routes this PR changes — not just
+the root. Omit the section entirely for repos with no preview deploy
+(SahajAtlasWordpress). Say "preview pending" only if it genuinely had not built
+by the time the body was written, and refresh once it does.]
+
+- [what changed] — <url>
+
+## Email previews
+
+[ONLY when the diff touches `src/plugins/email/` or `src/emails/`. Mailpit links
+from the relevant `scripts/preview-*-emails.ts` run; they stay live 7 days.
+Otherwise delete this section.]
+
+- [scenario] — <mailpit url>
+
 ## Contract impact
 
 [Include ONLY when the diff touches something a consumer observes: the atlas

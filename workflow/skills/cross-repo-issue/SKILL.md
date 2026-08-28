@@ -47,28 +47,40 @@ copy is updated.
    gh issue create --repo sydevs/<producer> --title "<title>" --body-file "$BODY_FILE"
    ```
 
-4. **Create one child issue per consumer**, each stating the blocking relationship in its own body
-   rather than only in the tracker — someone picking up the child must see the constraint without
-   opening the parent.
+4. **Create one child issue per consumer**, then record the dependency natively so GitHub
+   enforces and displays it — not just prose in the body.
 
    ```bash
    BODY_FILE=$(mktemp -t child-body)
-   gh issue create --repo sydevs/<consumer> --title "<title>" --body-file "$BODY_FILE"
+   gh issue create --repo sydevs/<consumer> --title "<title>" --body-file "$BODY_FILE" \
+     --type Feature --label Medium
    ```
 
-   Each child body opens with the constraint, stated as a condition rather than a courtesy:
+   Then link it. **Cross-repo dependencies need the full issue URL** — `owner/repo#N` is
+   rejected with `invalid issue format`:
+
+   ```bash
+   gh issue edit <child> --repo sydevs/<consumer> \
+     --add-blocked-by "https://github.com/sydevs/<producer>/issues/<N>"
+   ```
+
+   Verify both directions, since a silent no-op here loses the ordering constraint entirely:
+
+   ```bash
+   gh api repos/sydevs/<consumer>/issues/<child>/dependencies/blocked_by --jq '.[].number'
+   gh api repos/sydevs/<producer>/issues/<N>/dependencies/blocking   --jq '.[].number'
+   ```
+
+   Still restate the constraint in the child's body — someone reading the issue must see it
+   without opening the dependency panel:
 
    > **Blocked by sydevs/&lt;producer&gt;#N.** Do not start until that PR is merged to `main` —
    > `pnpm types:cms` reads from `main`, so running it earlier silently pulls the old shape.
 
-5. **Edit the tracker** to list the children as a task list, so GitHub renders progress:
-
-   ```markdown
-   ## Downstream
-
-   - [ ] sydevs/SahajAtlasWeb#12 — re-sync types, update event card
-   - [ ] sydevs/WeMeditateWeb#34 — re-sync types
-   ```
+5. **Sub-issues** where the work is genuinely one deliverable split across repos (rather than
+   independent consumers reacting to a change): `gh issue edit <child> --parent <N>`. Sub-issues
+   require the **same repository owner** — fine within `sydevs` — and give the parent a progress
+   bar. Prefer plain blocked-by when the consumers are independently valuable.
 
 6. **Report** all issue URLs and the merge order in one block.
 

@@ -218,6 +218,10 @@ gh pr checks <pr> --watch
   rather than looping.
 - A failure **pre-existing on `main`** → fix it here and note it.
 
+**This skill never merges.** Merge authority belongs to the user's approving review, and the merge
+itself is performed by `/workflow:loop-run` rung 1 once all three of approval, green CI, and zero
+unresolved review threads hold. Finishing here with green CI means *ready for review*, not *done*.
+
 ### 9. Report
 
 PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a human
