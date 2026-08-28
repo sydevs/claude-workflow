@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "github-deps": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "X-MCP-Features": "issue_dependencies"
+      }
+    }
+  }
+}
