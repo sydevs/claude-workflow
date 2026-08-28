@@ -69,18 +69,26 @@ enough resolved detail to survive being picked up cold, possibly by an automated
    which would name a path `mktemp` never created. The file-based form preserves markdown fidelity;
    `--body` mangles backticks and indentation.
 
-9. **Return the issue URL.**
+9. **Return the issue URL**, then ask whether to approve it now.
 
-## Body structure
+   The `approved` label is what puts a ticket into the loop's implementation queue, and this skill
+   is the user's main way in. Ask explicitly — never apply it on your own initiative, and never
+   infer it from enthusiasm in the request:
 
-- `## Summary` — one paragraph: what and why.
-- `## Proposed changes` (feature/refactor) **or** `## Observed behaviour` + `## Expected behaviour` (bug).
-- `## Resolved decisions` — what step 3 settled, and on what basis. Omit only if nothing was ambiguous.
-- `## Acceptance criteria` — a checklist of testable conditions.
-- `## Verification checklist` — the concrete steps that confirm those criteria.
-- `## Open questions` — unresolved ambiguity. Omit if empty.
-- `## Files affected` *(optional)* — where a PR is expected to land.
-- `## References` *(optional)* — related PRs, prior issues, external docs.
+   > Filed as sydevs/SahajCloud#661 (Feature, Medium). Add `approved` so the loop can pick it up,
+   > or leave it for you to review first?
+
+   On a yes: `gh issue edit <n> --repo "$ORG/$REPO" --add-label approved`.
+
+## Body structure, type, priority and relationships
+
+All of it is defined once in **`/workflow:triage-issue`** — read it and follow it. This skill owns
+the *conversation* that produces a good ticket; `triage-issue` owns what the ticket must look like
+when it lands, so a ticket you file by hand is indistinguishable from one the loop files.
+
+The one thing worth repeating here, because it is the most common omission: **acceptance criteria
+say what must be true; the verification checklist says what someone must do to confirm it.** Every
+checklist item must be executable with no additional context.
 
 ## Cross-repo work
 
