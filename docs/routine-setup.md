@@ -30,26 +30,41 @@ The loop's queue **is** GitHub metadata. Without this it has nothing to read.
 Settings → Organization → Planning → Issue types. Three: `Bug`, `Feature`, `Task`. These are
 org-scoped and cannot be set per-repo.
 
-### Labels (every repo, identical)
+### Issue fields (organization level)
+
+Priority and Effort are GitHub's **native org-level issue fields** — not Projects v2, not labels.
+Configure once for the org at **Settings → Organization → Planning → Issue fields**; they then apply
+to every repository with no per-repo setup.
+
+| Field | Type | Options |
+| --- | --- | --- |
+| Priority | single select | Urgent · High · Medium · Low |
+| Effort | single select | High · Medium · Low |
 
 ```bash
-for r in SahajCloud SahajAtlasWeb WeMeditateWeb SahajAtlasWordpress claude-workflow; do
-  gh label create "Critical"         --repo sydevs/$r --color b60205 --description "Drop everything: data loss, outage, or security exposure" --force
-  gh label create "High"             --repo sydevs/$r --color d93f0b --description "Next up: user-visible breakage or blocks other work" --force
-  gh label create "Medium"           --repo sydevs/$r --color fbca04 --description "Normal priority: the default for planned work" --force
-  gh label create "Low"              --repo sydevs/$r --color d4d4d4 --description "Nice to have: do it when nothing above it is waiting" --force
-  gh label create "approved"         --repo sydevs/$r --color 0e8a16 --description "Human-approved for implementation — the loop's gate" --force
-  gh label create "proposal"         --repo sydevs/$r --color c2e0c6 --description "Raised by the loop, awaiting a human verdict" --force
-  gh label create "hold"             --repo sydevs/$r --color e4e669 --description "Approved but paused — do not start" --force
-  gh label create "needs-info"       --repo sydevs/$r --color d876e3 --description "Blocked on an answer from the maintainer" --force
-  gh label create "blocked-upstream" --repo sydevs/$r --color 5319e7 --description "Waiting on an external dependency or upstream fix" --force
-done
+gh api orgs/<org>/issue-fields --jq '.[] | "\(.name) id=\(.id) \([.options[]?.name]|join("/"))"'
 ```
 
-> ⚠ **GitHub label names are case-insensitive.** Deleting a legacy `critical` label also deletes a
-> newly created `Critical` — silently, with no error. If you are also removing old labels, delete
-> them **first**, then create the new set, and verify afterwards. We lost `Critical` from all four
-> repos this way and only noticed on a listing.
+Record the ids in `loop-config.json` → `issueFields`. Setting a value locally:
+
+```bash
+gh api -X PUT repos/OWNER/REPO/issues/N/issue-field-values --input - <<< \
+  '[{"field_id":14337938,"value":"High"}]'
+```
+
+> ⚠ The `value` must be the option **name**. Passing an option id returns
+> `422 must be a string option name`. The endpoint is `issue-field-values` (hyphens) and takes a
+> **top-level array**; `PATCH`ing the issue itself with a `fields` key returns 200 and silently
+> does nothing.
+
+Field values are reachable from a routine: `list_issues(fields:["field_values"])` returns the whole
+backlog's priorities in one call, and `issue_write(issue_fields:[{field_name, field_option_name}])`
+sets them.
+
+### Labels (every repo, identical)
+
+Labels carry **pipeline state only** — priority and effort are fields, and type is a native issue
+type. Keeping a priority label alongside the field is a second source of truth for the same fact.
 
 ### The Ops journal
 
