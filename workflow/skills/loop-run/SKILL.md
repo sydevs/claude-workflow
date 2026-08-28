@@ -162,6 +162,12 @@ missing, add `needs-info`, and pick the next one.
 Ceiling: `maxTicketRepliesPerRun`. Issues where **the user** commented since the last run
 (ignore your own comments).
 
+**Derive this from comment timestamps, never from `updated_at`.** A field write, a label change or
+a bulk metadata pass all bump `updated_at` without anyone having said anything — a single migration
+can make all 38 issues look like fresh feedback, which is exactly what happened on 2026-08-28. Pull
+the issues that have comments at all, then filter each comment by `created_at` against the window
+and by author.
+
 Reply substantively: answer the question, or say what you will change. Then update the ticket
 itself where the comment changes it — title, body, priority, type, relationships. A reply that
 agrees to a change but leaves the ticket saying the old thing has not done the job.
