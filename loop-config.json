@@ -54,14 +54,15 @@
     "feature research against current best practice"
   ],
   "sentry": {
-    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use the regional host \u2014 sentry.io returns 404 for these projects. Token is SENTRY_CLAUDE_WORKFLOW_KEY in the cloud environment; never here. SahajAtlasWordpress ships no Sentry.",
+    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use de.sentry.io \u2014 the global host returns 404 for these projects rather than a useful error. The token authenticates but has no org:read, so /organizations/<slug>/ returns 403; that is expected and harmless, since the loop only reads /projects/<org>/<project>/issues/ and writes PUT /issues/<id>/. SahajAtlasWordpress ships no Sentry.",
     "apiBase": "https://de.sentry.io/api/0",
-    "org": null,
+    "org": "sy-developers",
     "projects": {
       "SahajCloud": "sahajcloud",
       "SahajAtlasWeb": "sahajatlas-web",
       "WeMeditateWeb": "wemeditate-web"
-    }
+    },
+    "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
   "mailpit": {
     "url": "https://mailpit-production-db88.up.railway.app",

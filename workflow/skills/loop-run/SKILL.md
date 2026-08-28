@@ -83,8 +83,9 @@ For every open PR with `reviewDecision == APPROVED`:
 5. **Resolve the Sentry issue** if the merged work closed a ticket carrying a `Sentry:` link (see
    `survey-sentry` for the footer convention):
    ```bash
-   curl -sX PUT "https://sentry.io/api/0/issues/<id>/" \
-     -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+   API=$(jq -r '.sentry.apiBase' loop-config.json)   # DE region — sentry.io 404s here
+   curl -sX PUT "$API/issues/<id>/" \
+     -H "Authorization: Bearer $SENTRY_CLAUDE_WORKFLOW_TOKEN" \
      -H 'Content-Type: application/json' -d '{"status":"resolved"}'
    ```
 
