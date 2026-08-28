@@ -65,10 +65,10 @@ Failure → journal it and stop. Do not improvise.
 
 Census, across all repos in `repos`:
 
-```bash
-gh pr list  --repo "$ORG/$REPO" --state open --json number,title,headRefName,isDraft,reviewDecision,labels
-gh issue list --repo "$ORG/$REPO" --state open --limit 100 \
-  --json number,title,labels,issueType,updatedAt,comments
+```
+mcp__github__list_pull_requests  owner:$ORG repo:$REPO state:open
+mcp__github__list_issues         owner:$ORG repo:$REPO state:OPEN \
+                                 fields:["field_values","labels","body"]
 ```
 
 Read the last journal entry (rung 6) to learn when the previous run ended — "since last run" below
@@ -80,19 +80,21 @@ Count **open loop PRs per repo** (author is this agent, branch `claude/*`) for t
 
 For every open PR with `reviewDecision == APPROVED`:
 
-1. Confirm **green CI** (`gh pr checks <n>`) and **no unresolved threads**. Unresolved threads are
-   not visible in `gh pr view`; query them:
-   ```bash
-   gh api repos/$ORG/$REPO/pulls/<n>/comments --jq '[.[] | select(.in_reply_to_id == null)] | length'
-   gh pr view <n> --json reviewThreads --jq '[.reviewThreads[] | select(.isResolved == false)] | length'
+1. Confirm **green CI** and **no unresolved threads**, both
+   surfaced by:
    ```
+   mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
+   mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
+   ```
+   Threads carry `isResolved`; an unresolved one blocks the merge even with an approval.
 2. **Order before merging.** If several are ready, merge producers before consumers — read
    `dependencies/blocked_by` on each PR's linked issue. A consumer merged first is a consumer
    reviewed against a shape that does not exist yet.
-   ```bash
-   gh api repos/$ORG/$REPO/issues/<linked-issue>/dependencies/blocked_by --jq '.[].number'
    ```
-3. Merge: `gh pr merge <n> --squash --delete-branch`.
+   # Relationships have no MCP tool — read the `Blocked by:` lines from each linked issue's body
+   mcp__github__issue_read  method:get  owner:$ORG repo:$REPO issue_number:<linked-issue>
+   ```
+3. Merge: `mcp__github__merge_pull_request  owner:$ORG repo:$REPO pullNumber:<n>  merge_method:"squash"`.
 4. **Rebase the survivors.** Every other open loop PR in that repo gets rebased onto the new `main`
    so the next review is against current code. Conflicts → leave it, comment saying so, flag in the
    journal. Never force-push someone else's branch.
@@ -112,7 +114,7 @@ then move on. Do not fix CI here; that is rung 2.
 
 Ceiling: `maxPrRevisionsPerRun`. Highest-priority linked ticket first.
 
-**Red CI on our own PR** → diagnose (`gh run view <id> --log-failed`), fix, push. Cap at
+**Red CI on our own PR** → diagnose via `actions_get` on the failing run, fix, push. Cap at
 `ciFixIterations`; on cap-out, comment with the remaining failure and journal it.
 
 **Change-request review** → implement the feedback, then:
@@ -173,9 +175,8 @@ Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → sk
 
 Before filing anything, check the standing proposal ceiling:
 
-```bash
-# open, loop-created, still unreviewed, across all repos
-gh search issues --owner "$ORG" --state open --label proposal --json number | jq length
+```
+mcp__github__search_issues  query:"org:$ORG is:issue is:open label:proposal"
 ```
 
 At or over `maxOpenProposals` → **do not file.** Record what you found in the journal instead and

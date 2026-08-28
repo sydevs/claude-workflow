@@ -2,7 +2,7 @@
 name: cross-repo-issue
 description: File a change that spans two or more sydevs repos as one upstream tracking issue plus linked child issues in each consumer, in dependency order. Use when a SahajCloud schema change, an atlas embed-contract change, or any other producer change forces work in consumer repos.
 disable-model-invocation: true
-allowed-tools: Bash(gh issue create:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh issue comment:*), Bash(gh issue edit:*), Bash(git log:*), Bash(git diff:*), Bash(mktemp:*), Read, Grep, Glob
+allowed-tools: Bash(gh issue edit:*), Bash(gh api:*), Bash(git log:*), Bash(git diff:*), Read, Grep, Glob
 ---
 
 # Cross-Repo Issue
@@ -42,22 +42,24 @@ copy is updated.
 3. **Create the tracking issue first** and capture its URL. Children reference it, so it must exist
    before they do.
 
-   ```bash
-   BODY_FILE=$(mktemp -t tracking-body)
-   gh issue create --repo sydevs/<producer> --title "<title>" --body-file "$BODY_FILE"
+   ```
+   mcp__github__issue_write  method:create  owner:sydevs  repo:<producer>
+     title:"<title>"  body:"<body>"  type:"Feature"
+     issue_fields:[{field_name:"Priority", field_option_name:"<...>"}]
    ```
 
 4. **Create one child issue per consumer**, then record the dependency natively so GitHub
    enforces and displays it — not just prose in the body.
 
-   ```bash
-   BODY_FILE=$(mktemp -t child-body)
-   gh issue create --repo sydevs/<consumer> --title "<title>" --body-file "$BODY_FILE" \
-     --type Feature --label Medium
+   ```
+   mcp__github__issue_write  method:create  owner:sydevs  repo:<consumer>
+     title:"<title>"  body:"<body>"  type:"Feature"
+     issue_fields:[{field_name:"Priority", field_option_name:"<...>"}]
    ```
 
-   Then link it. **Cross-repo dependencies need the full issue URL** — `owner/repo#N` is
-   rejected with `invalid issue format`:
+   Then link it. This is the **one step with no MCP tool**, so it needs `gh` and therefore a local
+   session. **Cross-repo dependencies need the full issue URL** — `owner/repo#N` is rejected with
+   `invalid issue format`:
 
    ```bash
    gh issue edit <child> --repo sydevs/<consumer> \
@@ -81,7 +83,7 @@ copy is updated.
    ```
 
 5. **Sub-issues** where the work is genuinely one deliverable split across repos (rather than
-   independent consumers reacting to a change): `gh issue edit <child> --parent <N>`. Sub-issues
+   independent consumers reacting to a change): `mcp__github__sub_issue_write`. Sub-issues
    require the **same repository owner** — fine within `sydevs` — and give the parent a progress
    bar. Prefer plain blocked-by when the consumers are independently valuable.
 

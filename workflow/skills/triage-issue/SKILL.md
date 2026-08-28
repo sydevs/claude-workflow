@@ -6,6 +6,16 @@ allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 
 # Triage Issue
 
+## Tooling: MCP everywhere, `gh` for one thing
+
+Every GitHub operation in these skills uses `mcp__github__*`. That is not a cloud concession — it
+is simply the better interface in both places: bodies pass as parameters (no `mktemp`, no
+`--body-file`, no markdown mangling), type and fields set in the same call as the create, and one
+set of instructions that reads the same locally and in a routine.
+
+**The single exception is Relationships**, which no MCP tool exposes. Those need `gh`, and
+therefore a local session — see below. `git` itself is of course still `git`.
+
 One definition of what a well-formed sydevs ticket looks like. `draft-ticket`, the survey skills,
 and `loop-run` all read this rather than each carrying their own copy — the divergence that produced
 three forks of the workflow started exactly this way.
@@ -20,8 +30,8 @@ three forks of the workflow started exactly this way.
 | `Feature` | New capability or a visible extension of one. |
 | `Task` | Work with no user-visible behaviour change: refactors, chores, docs, investigations, decisions. |
 
-```bash
-gh issue edit <n> --repo "$ORG/$REPO" --type Bug
+```
+mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>  type:"Bug"
 ```
 
 An investigation whose *outcome* is a decision is a `Task`, even when it may lead to a `Feature`.
@@ -44,18 +54,27 @@ Priority is about the **consequence of not doing it**, not effort or appetite. A
 broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
 which is exactly why it is a separate field.
 
-```bash
-# locally
-gh api -X PUT repos/$ORG/$REPO/issues/<n>/issue-field-values --input - <<< \
-  '[{"field_id":14337938,"value":"High"},{"field_id":14337941,"value":"Medium"}]'
+```
+mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
+  issue_fields:[{field_name:"Priority", field_option_name:"High"},
+                {field_name:"Effort",   field_option_name:"Medium"}]
 ```
 
-The `value` must be the option **name**; passing an option id returns 422. Field ids are in
-`loop-config.json` → `issueFields`.
+By **name**, and it validates the option against the field before calling. Read them back with
+`list_issues(fields:["field_values"])`, which returns the whole backlog's priorities in one call —
+that is how the loop sorts without a request per issue.
 
-From a cloud run, use `issue_write` with `issue_fields: [{field_name:"Priority", field_option_name:"High"}]`
-— by name, and it validates the option before calling. Read them back with
-`list_issues(fields:["field_values"])`, which returns the whole backlog's priorities in one call.
+<details><summary>Raw REST equivalent, if you ever need it</summary>
+
+```bash
+gh api -X PUT repos/$ORG/$REPO/issues/<n>/issue-field-values --input - <<< \
+  '[{"field_id":14337938,"value":"High"}]'
+```
+
+The `value` must be the option **name** — an option id returns `422 must be a string option name`.
+`PATCH`ing the issue with a `fields` key returns 200 and silently does nothing. Field ids are in
+`loop-config.json` → `issueFields`.
+</details>
 
 ### State labels — where it sits in the pipeline
 
@@ -71,8 +90,10 @@ From a cloud run, use `issue_write` with `issue_fields: [{field_name:"Priority",
 
 ### Relationships — what must happen first
 
-GitHub calls these **Relationships**; the REST resource is `dependencies`. Set the real thing
-locally, where `gh` can reach it:
+GitHub calls these **Relationships**; the REST resource is `dependencies`.
+
+**This is the one operation with no MCP tool** — everything else in this skill is `mcp__github__*`.
+So Relationships are set with `gh`, which means they can only be set from a local session:
 
 ```bash
 gh issue edit <n> --repo "$ORG/$REPO" --add-blocked-by <m>                     # same repo
@@ -158,7 +179,7 @@ backlog has to be cleaned up by hand.
 - [ ] `proposal` if loop-raised
 - [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
 - [ ] Body in the format above; checklist items are executable
-- [ ] Searched for a duplicate first (`gh issue list --search`)
+- [ ] Searched for a duplicate first (`search_issues`), including closed ones
 
 ## Hard rules
 

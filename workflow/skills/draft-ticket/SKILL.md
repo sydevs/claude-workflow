@@ -2,7 +2,7 @@
 name: draft-ticket
 description: Draft a GitHub issue from a feature request, bug report, or enhancement — clarify ambiguity first, then produce a body with acceptance criteria and a verification checklist. User-invoked only; does not create the issue without explicit approval.
 disable-model-invocation: true
-allowed-tools: Bash(gh issue create:*), Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh pr list:*), Bash(gh pr view:*), Bash(git log:*), Bash(git diff:*), Bash(mktemp:*), Read, Grep, Glob
+allowed-tools: Bash(git log:*), Bash(git diff:*), Bash(gh issue edit:*), Bash(gh api:*), Read, Grep, Glob
 ---
 
 # Draft Ticket
@@ -15,8 +15,8 @@ enough resolved detail to survive being picked up cold, possibly by an automated
 
 1. **Classify.** Feature / bug / refactor / enhancement / docs / chore.
 
-2. **Gather context.** Read the related code, recent PRs (`gh pr list --limit 20`), and similar past
-   issues (`gh issue list --search "<keyword>"`). Never draft blindly — a ticket that duplicates a
+2. **Gather context.** Read the related code, recent PRs (`list_pull_requests`) and similar past
+   issues (`search_issues`). Never draft blindly — a ticket that duplicates a
    closed issue or contradicts a recent PR costs more than it saves.
 
 3. **Clarify — resolve ambiguity before drafting, not during review.**
@@ -53,21 +53,19 @@ enough resolved detail to survive being picked up cold, possibly by an automated
 
 7. **Plan-mode approval is the sign-off.** This skill runs in plan mode; the user reviews the title
    and body in the plan file and approves via `ExitPlanMode`. No separate "ready to create?" prompt
-   — plan approval authorizes the `gh issue create` call.
+   — plan approval authorizes the create call.
 
-8. **Create the issue.** Stage the body in a session-unique temp file — never a fixed path like
-   `/tmp/gh-issue-body.md`, which collides between parallel Claude instances and has caused data
-   loss here before:
+8. **Create the issue** with `mcp__github__issue_write`, which takes the body directly:
 
-   ```bash
-   BODY_FILE=$(mktemp -t gh-issue-body)
-   # write the body to "$BODY_FILE" with the Write tool, then:
-   gh issue create --title "<title>" --body-file "$BODY_FILE"
+   ```
+   mcp__github__issue_write  method:create  owner:$ORG  repo:$REPO
+     title:"<title>"  body:"<body>"  type:"Feature"
+     issue_fields:[{field_name:"Priority", field_option_name:"Medium"}]
    ```
 
-   `-t` already appends randomness, so no `.XXXXXX` template — and do not append an extension,
-   which would name a path `mktemp` never created. The file-based form preserves markdown fidelity;
-   `--body` mangles backticks and indentation.
+   No temp file and no `--body-file`: the body is a parameter, so the markdown-fidelity problem
+   that made `--body` unusable with `gh` does not arise. Type and fields are set in the same call,
+   which is also what stops a ticket landing untyped.
 
 9. **Return the issue URL**, then ask whether to approve it now.
 
@@ -78,7 +76,8 @@ enough resolved detail to survive being picked up cold, possibly by an automated
    > Filed as sydevs/SahajCloud#661 (Feature, Medium). Add `approved` so the loop can pick it up,
    > or leave it for you to review first?
 
-   On a yes: `gh issue edit <n> --repo "$ORG/$REPO" --add-label approved`.
+   On a yes: `mcp__github__issue_write  method:update  issue_number:<n>  labels:["approved", ...]`
+   (labels replace wholesale, so include the ticket's existing ones).
 
 ## Body structure, type, priority and relationships
 

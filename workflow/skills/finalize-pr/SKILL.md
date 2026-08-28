@@ -183,36 +183,33 @@ Never force-push a shared branch. Never `--no-verify`.
 
 ### 7. Open or refresh the PR
 
-```bash
-gh pr view --json number,url 2>/dev/null
+```
+mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:open
 ```
 
-Stage the body in a session-unique temp file — never a fixed `/tmp/` path, which collides between
-parallel Claude instances and has caused data loss here before:
+Create or refresh with MCP, which takes the body directly — no temp file, and none of the
+markdown-mangling that made `gh --body` unusable:
 
-```bash
-BODY_FILE=$(mktemp -t pr-body)
+```
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main title:"…" body:"…"
+mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-`-t` already appends randomness (`pr-body.ibnrN7v7b8`), so no `.XXXXXX` template. Do not append an
-extension either — that would name a path `mktemp` never created, losing the atomicity guarantee
-and leaking an empty temp file each run. `gh` does not care about the extension.
-
-- **No PR** → `gh pr create --title "<conventional title>" --body-file "$BODY_FILE" --base main`
-- **PR exists** → refresh **title and body**, both re-derived from the current
-  `origin/main...HEAD`. Adjust-phase commits may have changed the story since it was opened.
-  `gh pr edit <pr> --title "…" --body-file "$BODY_FILE"`
+- **No PR** → create it.
+- **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
+  Adjust-phase commits may have changed the story since it was opened.
 
 Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
 
 ### 8. Watch CI, fix, capped at 3
 
-```bash
-gh pr checks <pr> --watch
+```
+mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNumber:<pr>
+mcp__github__actions_get        # for a failing run's logs
 ```
 
 - **Green** → report.
-- **Red** → `gh run view <run-id> --log-failed`, diagnose, fix, re-run the relevant part of the
+- **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part of the
   lean gate, commit, push, re-watch.
 - **Cap at 3 iterations.** Still red after three rounds → stop and summarize the remaining failures
   rather than looping.
@@ -233,7 +230,7 @@ it to memory.
 - **Never** force-push a shared branch; **never** `--no-verify`; **never** commit secrets.
 - **Never** report success while CI is red.
 - **Always** operate on the full branch diff, not the last commit.
-- **Always** use `--body-file` with an `mktemp` path; always refresh a stale PR title **and** body.
+- **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** run the docs sync before pushing.
 - **Cap** the CI fix loop at 3, then hand back.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.

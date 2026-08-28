@@ -16,14 +16,12 @@ change takes effect on the next run with no redeploy.
 
 Read, do not recall — every run starts with no memory of the last:
 
-```bash
+```
 # the week's journal entries
-gh issue view <journal-issue> --repo $ORG/claude-workflow --json comments \
-  --jq '.comments[] | select(.createdAt > "'"$(date -u -v-7d +%Y-%m-%d)"'") | .body'
+mcp__github__issue_read  method:get_comments  owner:$ORG repo:claude-workflow issue_number:<journal>
 
 # what actually happened to the PRs
-gh pr list --repo $ORG/$REPO --state all --limit 40 \
-  --json number,title,createdAt,mergedAt,closedAt,reviewDecision,comments
+mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
 ```
 
 ## What to look for

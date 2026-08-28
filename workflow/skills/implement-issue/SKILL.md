@@ -25,7 +25,7 @@ branch at every decision point below rather than stalling.
 
 1. **Clean tree.** Stop if there are uncommitted changes that are not ours.
 
-2. **Fetch the issue.** `gh issue view <n> --json title,body,labels`. If it has no acceptance
+2. **Fetch the issue.** `mcp__github__issue_read  method:get`. If it has no acceptance
    criteria, ask (locally) or comment on the issue and stop (non-interactively). Do not invent
    criteria — an issue too vague to implement is a `/draft-ticket` problem, not an implementation
    problem.
