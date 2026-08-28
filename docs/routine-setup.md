@@ -232,6 +232,25 @@ Do not improvise around missing credentials or tools: journal the failure and st
 
 Create them **disabled**, via the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.
 
+Two API quirks worth knowing:
+
+- **`environment_id` is not validated at create time.** A nonexistent id is accepted with `HTTP 200`
+  and fails only when the routine runs. Confirm the id from the `/schedule` skill's environment
+  listing rather than assuming it, since it is not shown in the claude.ai UI.
+- **Connectors are attached automatically.** Every MCP connector on the account gets added unless
+  you pass `clear_mcp_connections: true`. The loop needs none of them — GitHub comes from the
+  session proxy, Sentry and Mailpit are plain HTTPS — and each one costs context on every turn.
+
+### Current routine ids
+
+| Routine | Id | Schedule |
+| --- | --- | --- |
+| `sydevs-loop-morning` | `trig_016XeEsVa7dfSCum7t4Vmeuw` | `0 9 * * *` (02:00 PT daily) |
+| `sydevs-loop-evening` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 2 * * 2-6` (19:00 PT Mon–Fri) |
+
+Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
+<https://claude.ai/code/routines> — the API cannot delete a routine.
+
 ---
 
 ## 6. Supervised bootstrap
