@@ -54,12 +54,13 @@
     "feature research against current best practice"
   ],
   "sentry": {
-    "$comment": "Slugs filled in during Phase D. SahajAtlasWordpress ships no Sentry.",
+    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use the regional host \u2014 sentry.io returns 404 for these projects. Token is SENTRY_CLAUDE_WORKFLOW_KEY in the cloud environment; never here. SahajAtlasWordpress ships no Sentry.",
+    "apiBase": "https://de.sentry.io/api/0",
     "org": null,
     "projects": {
-      "SahajCloud": null,
-      "SahajAtlasWeb": null,
-      "WeMeditateWeb": null
+      "SahajCloud": "sahajcloud",
+      "SahajAtlasWeb": "sahajatlas-web",
+      "WeMeditateWeb": "wemeditate-web"
     }
   },
   "mailpit": {
