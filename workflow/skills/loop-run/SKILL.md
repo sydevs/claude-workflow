@@ -164,16 +164,40 @@ then move on. Do not fix CI here; that is rung 2.
 
 ## Rung 2 — PR health
 
-Ceiling: `maxPrRevisionsPerRun`. Highest-priority linked ticket first.
+Ceilings: `maxPrRevisionsPerRun` for your own PRs, `maxHumanPrReviewsPerRun` for the user's.
+Highest-priority linked ticket first.
 
 **Red CI on our own PR** → diagnose via `actions_get` on the failing run, fix, push. Cap at
 `ciFixIterations`; on cap-out, comment with the remaining failure and journal it.
 
-**Change-request review** → implement the feedback, then:
-- Reply to each review comment individually, saying what changed or why it was not done. A silent
-  push leaves the reviewer re-deriving what you did.
+**Change-request review** → what you can do depends on *whose branch it is*, and the difference is
+structural rather than a matter of judgement.
+
+**On a `claude/*` PR — your own.** Implement the feedback, then:
+- Reply to each review comment individually, saying what changed or why it was not done. Append
+  `identity.commentMarker`. A silent push leaves the reviewer re-deriving what you did.
 - Refresh the PR **title and body** from the current `origin/main...HEAD` — the story may have moved.
 - Resolve the threads you actually addressed.
+
+**On a human's PR — you cannot push to it.** A cloud session may only push to `claude/*`, and a
+human's branch additionally carries their commits and backs their open PR. Two of the three
+rejection conditions, so this is a wall, not a permission to ask for.
+
+Do this instead, in order:
+
+1. **Triage every thread and answer it** — adopted, or pushed back with the evidence. One comment
+   summarising, detail in `<details>`. This is the part that has to happen even if nothing else does.
+2. **Open a stacked PR carrying the adopted changes**, from `claude/<type>-<slug>` targeting **their
+   branch**, not `main`. They merge it in one click and their PR updates. Say in the summary comment
+   that it exists and what it contains.
+3. **File a follow-up ticket** for anything the review raised that generalises beyond this PR.
+
+Ceiling: `maxHumanPrReviewsPerRun`, which is **separate from `maxImplementationsPerRun`**. Unblocking
+a PR the user is waiting on should neither starve new work nor be starved by it — a blocked PR often
+holds up several tickets behind it.
+
+⚠ A stacked PR's base is their branch. Confirm that before opening it: based on `main` by mistake,
+it will show every commit of theirs as part of your diff and be unreviewable.
 
 Feedback that is ambiguous or architectural → **ask, do not guess.** Reply with the specific
 question, add `needs-info` to the linked ticket, move on.

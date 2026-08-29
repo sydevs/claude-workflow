@@ -406,4 +406,6 @@ routine, so Priority and Effort are fully usable.
 | Plugin installs but reports `disabled` | `enabledPlugins` written as an array; it must be an object map |
 | Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N` |
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
+| The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
+| A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
 | Loop implements nothing, no error | Correct — nothing carries `approved`. That is the gate working |

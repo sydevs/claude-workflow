@@ -9,14 +9,15 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all.",
+    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all. Note maxHumanPrReviewsPerRun is SEPARATE from maxImplementationsPerRun \u2014 unblocking a PR the user is waiting on should not starve new work, or be starved by it.",
     "wipCapPerRepo": 2,
     "maxImplementationsPerRun": 1,
     "maxPrRevisionsPerRun": 2,
     "maxTicketRepliesPerRun": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
-    "ciFixIterations": 3
+    "ciFixIterations": 3,
+    "maxHumanPrReviewsPerRun": 2
   },
   "labels": {
     "$comment": "Labels gate EFFORT, not attention \u2014 see workflow/skills/triage-issue/SKILL.md for the full table. Priority and Effort are FIELDS, not labels.",
