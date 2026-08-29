@@ -400,13 +400,49 @@ Window since the last entry: ~Nh.
 
 ### Correcting an entry after the fact
 
-If something changes after the entry is posted — a PR merges on a subscription wake, CI turns red —
-**edit the existing comment**, do not append a new one. Add a short `> **Updated <time>:** …`
-line beneath the affected bullet and correct the bullet itself.
+**The GitHub MCP surface cannot edit an existing issue comment** — only create new ones. So a
+correction is a new comment, and the job is to stop it fragmenting the record.
 
-A journal is read top-to-bottom by someone catching up. A correction posted as a second comment
-means the first one is now lying to anyone who stops reading there, which is the failure the journal
-exists to prevent.
+An addendum must:
+
+- **Open by quoting the claim it corrects**, so the two read as one thing:
+  `#### Addendum to <original timestamp> — <what changed in five words>` then
+  `Correcting "**Merged — none by this run**" in the entry above.`
+- **Be short.** One paragraph plus the corrected bullets. Depth goes in `<details>`.
+- **Restate `## 📋 Awaiting you` in full**, because that is the section a reader acts on and a
+  stale copy of it is the most expensive thing to leave lying around.
+
+Then **update the journal issue's body** — issue bodies *are* editable via `issue_write`, unlike
+comments. Keep a short index at the top of the body:
+
+```markdown
+## This month
+| When | Run | Outcome |
+| --- | --- | --- |
+| 29 Aug 21:17 | [morning](<comment url>) | 1 built · 2 replied · ⚠ [addendum](<url>) |
+```
+
+That gives the record one authoritative surface even though the entries themselves are immutable:
+someone catching up reads the body, not eight comments in sequence.
+
+## Ending, and actually ending
+
+Posting the journal is **not** the end of the run. A `subscribe_pr_activity` subscription keeps the
+session alive afterwards, and every later comment or CI change wakes it for a full turn — so a run
+that looks finished can keep spending for hours, and its journal entry silently goes stale.
+
+So, in this order:
+
+1. Finish the ladder.
+2. **Unsubscribe from every PR you subscribed to this run** (`unsubscribe_pr_activity`), unless you
+   are still mid-CI-fix-loop on your own PR — that is the one case where staying awake is doing
+   work rather than waiting for it.
+3. Post the journal.
+4. Stop. Do not poll, do not wait for a review, do not keep a timer alive "in case".
+
+The next scheduled run is hours away at most and re-derives everything. Responsiveness comes from
+the schedule, not from a session that refuses to end — and an ended session cannot post a stale
+addendum against work a later run has already redone.
 
 ## Ending
 

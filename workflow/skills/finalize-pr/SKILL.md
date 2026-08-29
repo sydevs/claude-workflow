@@ -226,6 +226,20 @@ Open as a **draft** when `/implement-issue` passed `--draft` — see its autonom
 
 ### 8. Watch CI, fix, capped at 3
 
+**First confirm CI *can* run.** A conflicted PR has no computable merge commit, so GitHub schedules
+**zero** workflow runs for it — silently. The checks list shows only the non-Actions entries (a
+Railway or Cloudflare deploy still happens, since those build the branch head), and the run list is
+simply empty. It reads as a stuck scheduler, and waiting is futile:
+
+```
+mcp__github__pull_request_read  method:get  →  mergeable, mergeable_state
+```
+
+`CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push.
+
+Also compare the last green run's `head_sha` against the current branch head: a run that predates
+the base moving is stale, and makes a conflicted PR look tested.
+
 ```
 mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNumber:<pr>
 mcp__github__actions_get        # for a failing run's logs
