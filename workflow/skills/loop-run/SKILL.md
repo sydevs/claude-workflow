@@ -26,6 +26,21 @@ beat producing anything new. Descend only while ceilings allow; stop when one is
 Read `loop-config.json` from the `claude-workflow` checkout **first**. Every number and label name
 below comes from it — none are hard-coded here.
 
+## Writing style, everywhere the loop speaks
+
+Comments, PR bodies and journal entries are all read by one busy person. Treat their attention as
+the scarcest thing in this system.
+
+- **Lead with the outcome.** What happened, or what is being asked of them. Not how you got there.
+- **Detail goes in `<details>`.** File lists, measurements, tool limitations, alternatives
+  considered, reasoning behind a judgement call — all real, all worth keeping, none of it worth
+  making someone scroll past. Summarise the block in its `<summary>` so they can judge whether to
+  open it.
+- **A comment that needs a decision says so in its first line**, and names the decision.
+- **Cut the throat-clearing.** No restating the ticket back, no narrating what you are about to do.
+- If a reply runs past roughly fifteen lines outside a `<details>`, it is an essay. Find the three
+  sentences that matter.
+
 ## Non-negotiables
 
 - **Never merge without all three**: an approving review, green CI, and zero unresolved review
@@ -71,9 +86,10 @@ no edit to this skill.
 **Read narrowly. Most of the backlog is irrelevant to any given run**, and reading all of it every
 time is the single largest avoidable cost here. Three rules:
 
-1. **Never fetch issue bodies in the census.** The census needs `number`, `labels`, `field_values`,
-   `comments` (the count) and `updated_at` — nothing else. A body is fetched only for the one
-   ticket actually being implemented, and only at that point.
+1. **Titles yes, bodies no.** The census needs `number`, **`title`**, `labels`, `field_values`,
+   `comments` (the count) and `updated_at`. Titles are what make the backlog legible — to you while
+   deciding, and to the reader of the journal — and they cost almost nothing. Bodies are the
+   expensive part, and only the ticket actually being worked needs one.
 
 2. **Let the server filter.** `search_issues` narrows before anything reaches the context window;
    `list_issues` then reading and discarding does not:
@@ -81,8 +97,12 @@ time is the single largest avoidable cost here. Three rules:
    ```
    mcp__github__search_issues  query:"org:sydevs is:issue is:open label:approved"
    mcp__github__search_issues  query:"org:sydevs is:issue is:open label:proposal"
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:>=<last-run-ISO-date>"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:><last-run-ISO-date>"
    ```
+
+   ⚠ Write the `>` literally. An HTML-escaped `&gt;` is accepted without error and returns **zero
+   results** — a silently-empty search that reads as "nothing to do". If a search returns nothing
+   and you have any reason to expect otherwise, suspect the qualifier before believing the answer.
 
    The third is the only candidate set that can contain new feedback. An issue untouched since the
    last run cannot have a new comment on it.
@@ -90,6 +110,16 @@ time is the single largest avoidable cost here. Three rules:
 3. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the
    issue appears in the `updated:>=` set, *and* its `comments` count is greater than zero. On a
    typical run that is one or two issues, not the whole backlog.
+
+4. **Check mentions.** The user writes `@sydevs-bot` to pull attention to something that other
+   filters would miss — an old ticket, a PR comment, a thread the window does not cover. Search for
+   them explicitly, and treat every hit as a rung-4 candidate regardless of what else it matched:
+
+   ```
+   mcp__github__search_issues  query:"org:sydevs mentions:sydevs-bot is:open updated:><last-run>"
+   ```
+
+   A mention is the user asking directly. Answer it or say why not — never let one pass silently.
 
 The per-repo PR list is cheap and stays full — there are rarely more than a handful open:
 
@@ -160,13 +190,26 @@ so it stays predictable:
 
 - **Re-verify from primary sources.** The event that woke you is a notification, not evidence. Check
   the review state, CI, and threads yourself before merging — the same three gates, no shortcuts.
+- **A section walked earlier in the run is not re-walked when its precondition changes later.** If
+  the session is awake it acts on the wake; if it has ended, the work waits for the next scheduled
+  run. Do not re-enter the whole ladder to catch a condition that turned true afterwards — the
+  next run is minutes-to-hours away and idempotent, and chasing it makes a run's behaviour depend
+  on how long it happened to stay alive.
 - **Edit the journal entry, do not append a new one** (see the journal section). The run's entry is
   now wrong, and a correction filed underneath leaves the original still lying to anyone who stops
   reading there.
 
 ## Rung 3 — Implement
 
-Ceiling: `maxImplementationsPerRun` (1). Skip this rung entirely when:
+**Two kinds of work live here.** Implementation needs `approved`. **Investigation does not** — an
+unlabelled ticket may be investigated, measured and answered, so long as nothing is committed. See
+`/workflow:triage-issue` for the full table; the short version is that the label gates code, not
+thought, and `hold` freezes everything.
+
+Investigations count against `maxImplementationsPerRun` too: they cost a run's attention even
+though they produce no PR.
+
+Ceiling: `maxImplementationsPerRun` (1). Skip the *implementation* path entirely when:
 
 - the repo is at `wipCapPerRepo` open loop PRs, or
 - there are no `approved` tickets that are unblocked.
@@ -280,20 +323,21 @@ Use the section headings below verbatim.
 Window since the last entry: ~Nh.
 
 ## 📋 Awaiting you
-- 👀 [repo#N](url) — ready for review, CI green
-- ❓ [repo#N](url) — question asked, blocked until answered
-- 💡 [repo#N](url) — proposal, awaiting your verdict
+- 👀 [repo#N — <ticket title>](url) — ready for review, CI green
+- ❓ [repo#N — <ticket title>](url) — blocked on your answer
+- 💡 [repo#N — <ticket title>](url) — proposal, awaiting your verdict
 
 ## ✅ Merged
-- 🔀 [repo#N](url) — <what it was> · closed [repo#M](url)
+- 🔀 [repo#N — <title>](url) · closed [repo#M](url)
 
 ## 🔧 Changed
-- ✏️ [repo#N](url) — revised on your feedback: <what changed>
-- 💬 [repo#N](url) — replied to your comment about <topic>
+- ✏️ [repo#N — <title>](url) — <what changed, one clause>
+- 💬 [repo#N — <title>](url) — replied about <topic>
 
 ## 🚀 Built
-- 📦 [repo#N](url) — implemented [repo#M](url) · CI green
-- 🛑 [repo#N](url) — declined, and why in one line
+- 📦 [repo#N — <title>](url) — implements [repo#M](url) · CI green
+- 🔬 [repo#N — <title>](url) — investigated · verdict: <one clause>
+- 🛑 [repo#N — <title>](url) — not started: <why, one clause>
 
 ## 🔍 Surveyed
 - <survey name> — <verdict in one line>
@@ -320,12 +364,15 @@ Window since the last entry: ~Nh.
   reader must never scroll to learn there is nothing to do.
 - **Omit any other section that is empty**, rather than printing "none". Exception: `⚠️ Failed`,
   which always appears, because its absence is indistinguishable from forgetting it.
-- **Every item links.** A bare issue number costs the reader a search.
+- **Every bullet carries the ticket title inside the link.** A bare number forces the reader to
+  open a tab to learn what it was about, which defeats the point of a scannable list.
+- **Full `org/repo#N` for anything outside `journalRepo`** — a bare `#N` resolves against the repo
+  the comment renders in and silently links somewhere wrong.
 - **One line per bullet.** Anything longer belongs in the collapsible block.
 - **The summary line is scannable prose, not a status code.** "declined — the Atlas form it mirrors
   does not exist yet" beats "declined (blocked)".
 - Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
-  🛑 declined · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
+  🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
 
 ### Correcting an entry after the fact
 

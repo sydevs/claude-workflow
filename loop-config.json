@@ -19,12 +19,13 @@
     "ciFixIterations": 3
   },
   "labels": {
-    "$comment": "Priority and Effort are FIELDS, not labels \u2014 see issueFields. Labels carry pipeline state only.",
+    "$comment": "Labels gate EFFORT, not attention \u2014 see workflow/skills/triage-issue/SKILL.md for the full table. Priority and Effort are FIELDS, not labels.",
     "approved": "approved",
     "proposal": "proposal",
     "hold": "hold",
     "needsInfo": "needs-info",
-    "blockedUpstream": "blocked-upstream"
+    "blockedUpstream": "blocked-upstream",
+    "gateNote": "approved gates code, not thought: an unlabelled ticket may be investigated and answered so long as nothing is committed. hold freezes everything, including replies."
   },
   "surveyCalendar": {
     "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
@@ -98,6 +99,7 @@
     "expectedLogin": "sydevs-bot",
     "commentMarker": "<sub>\ud83e\udd16 Written by the sydevs autonomous loop \u2014 see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
     "markerNote": "Appended to every comment the loop writes. Primary filtering is by author; the marker is a second signal and, more importantly, tells a human reading the thread what wrote it.",
-    "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real."
+    "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real.",
+    "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
   }
 }

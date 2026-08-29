@@ -76,17 +76,50 @@ The `value` must be the option **name** — an option id returns `422 must be a 
 `loop-config.json` → `issueFields`.
 </details>
 
-### State labels — where it sits in the pipeline
+### State labels — what the loop may do
 
-| Label | Meaning | Who applies it |
-| --- | --- | --- |
-| `approved` | Cleared for implementation. **The loop's only gate.** | **The user, only.** Never the loop, never inferred from a comment. |
-| `proposal` | Loop-raised, awaiting a verdict. Counts against `maxOpenProposals`. | The loop, on anything it files |
-| `hold` | Approved but paused. | Either |
-| `needs-info` | Blocked on an answer. Removed when answered. | Either |
-| `blocked-upstream` | Waiting on an external dependency or upstream fix. | Either |
+The labels gate **effort**, not attention. Reading a ticket, answering a question, and rewriting it
+for clarity are always allowed. What changes is how much work may be spent and whether code may be
+written.
 
-`approved` + `hold` together means "cleared, but not now" — the loop skips it.
+| Label | Meaning | The loop may | The loop may not |
+| --- | --- | --- | --- |
+| *(none)* | Unreviewed backlog | Reply, revise the ticket, **investigate** — run tests, start a dev server, drive a browser, write and execute throwaway scripts — and report findings | Commit, push, or open a PR |
+| `approved` | Cleared for implementation. **The user applies this, nobody else.** | Everything above, plus implement and open a PR | Apply this label itself |
+| `proposal` | Loop-raised, awaiting a verdict | Everything an unlabelled ticket allows. A proposal most needs investigation to become judgeable | Implement — it is not `approved` |
+| `hold` | A long-term plan, deliberately not now | **Nothing.** Do not reply, do not revise, do not investigate | Anything at all |
+| `needs-info` | The loop is blocked on an answer | Nothing on this ticket until answered | Proceed as though unblocked |
+| `blocked-upstream` | Waiting on an external dependency | Nothing until the dependency moves | — |
+
+**`approved` gates code, not thought.** An "evaluate and decide" ticket ends in a written verdict
+rather than a PR, and that verdict can be produced without the label — investigation is how an
+unreviewed ticket becomes one worth approving. Withholding it until approval inverts the order:
+the user is asked to approve work whose cost nobody has established.
+
+The line is **committing**. Run anything, measure anything, write any script the investigation
+needs; leave no branch, no commit, no PR behind. Findings land as a ticket comment plus a body
+update.
+
+**`hold` is the one true freeze.** It means a human decided "not now", and a reply is still noise
+against that decision.
+
+### `needs-info` is a state, not a record of the last exchange
+
+Add it when a question **blocks progress**. Remove it only when **every** open question is
+answered — answering one while raising another keeps it on. A question that does not block
+progress is just asked in the comment; no label.
+
+The ticket body carries the canonical list:
+
+```markdown
+## Open questions
+- [ ] Does any host we support ship `!important` CSS that breaks the widget?
+- [ ] Eager-load Turnstile at boot, or escalate when a form finds it blocked?
+```
+
+Comments are conversation; **the body is state.** Someone opening the ticket cold must see what is
+outstanding without reconstructing it from a thread. Tick items off in the body as they are
+answered, and clear the label only when the list is empty.
 
 ### Relationships — what must happen first
 
@@ -155,6 +188,15 @@ says what someone must *do* to confirm it. The checklist is what an automated ru
 against, so every item must be executable with no additional context — `pnpm test:unit`, `GET
 /api/atlas/sitemap returns 200 with regions`, "the marker is maroon on sahajayoga.ca". Not
 "check it works".
+
+## Referring to issues in other repositories
+
+**Always write the full `org/repo#N`, every time — never a bare `#N` after a first full mention.**
+GitHub resolves a bare `#171` against the repository the text is *rendered in*, so in a SahajCloud
+comment `#171` silently links to SahajCloud#171 rather than the SahajAtlasWeb ticket meant. It is
+not an error, just a wrong link, which makes it the kind of mistake that survives review.
+
+The shorthand is only safe for issues in the same repository as the comment.
 
 ## Title
 

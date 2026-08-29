@@ -189,6 +189,28 @@ Never force-push a shared branch. Never `--no-verify`.
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:open
 ```
 
+**Read `pr-template.md` and follow its headings.** Not as inspiration — as the structure. A PR that
+invents its own sections is harder to review precisely because every PR then reads differently, and
+the sections most often lost are the ones the reviewer needs most. Omit a section the template says
+to omit; never rename one or add your own in its place.
+
+**The Preview section is mandatory wherever the repo has a preview deploy.** It is the single most
+useful thing in the body: it is how the reviewer sees the change without checking out the branch.
+Discover the URL — never construct it — using the repo's own script:
+
+```bash
+pnpm tsx scripts/get-railway-preview-url.ts     # SahajCloud
+node scripts/get-cloudflare-preview-url.mjs     # WeMeditateWeb / SahajAtlasWeb
+```
+
+SahajAtlasWeb has **two** previews and a UI change should link both: the app
+(`CF_PROJECT=sahajatlas`) and the Ladle component playground (`sahajatlas-design`). Deep-link to
+the routes actually changed, not the root — a reviewer should land on the thing, not hunt for it.
+The preview builds a few minutes after the push, so create the PR, then refresh the body once the
+URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
+
+Only SahajAtlasWordpress has no preview deploy; there the section is omitted.
+
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
 
@@ -199,7 +221,6 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
 
 - **No PR** → create it.
 - **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
-  Adjust-phase commits may have changed the story since it was opened.
 
 Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
 
@@ -233,6 +254,7 @@ it to memory.
 - **Never** report success while CI is red.
 - **Always** operate on the full branch diff, not the last commit.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
+- **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Always** run the docs sync before pushing.
 - **Cap** the CI fix loop at 3, then hand back.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.

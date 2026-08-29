@@ -1,6 +1,11 @@
 # PR body template
 
-Stage this in an `mktemp` file and pass it to `gh pr create --body-file` / `gh pr edit --body-file`.
+**This is the structure, not a suggestion.** Use these headings, in this order. Delete a section
+the notes say to delete; never rename one or substitute your own. A reviewer reading their fifth PR
+of the week should know where to look without reading the whole thing.
+
+Keep the visible body short and put depth in `<details>` — reasoning, alternatives rejected,
+measurements, file-by-file notes. The reviewer decides what to open.
 
 ```markdown
 ## Summary
@@ -64,8 +69,16 @@ automated tests do not reach. Omit when genuinely nothing applies.]
 
 ## Notes for reviewer
 
-[Non-obvious things: alternatives considered, known follow-ups, areas wanting
-extra scrutiny. Include dismissed review findings and why.]
+[Only what changes how they review: a judgement call you want checked, a known
+follow-up, an area wanting extra scrutiny. Dismissed review findings and why.]
+
+<details>
+<summary>Detail</summary>
+
+[Everything true and worth keeping that nobody needs on first read: alternatives
+rejected and why, measurements, file-by-file rationale, tool limitations hit.]
+
+</details>
 
 Closes #NNN
 ```
