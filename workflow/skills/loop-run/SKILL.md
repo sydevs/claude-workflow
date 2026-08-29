@@ -54,6 +54,11 @@ mcp__github__get_me
 
 Failure → journal it and stop. Do not improvise.
 
+**Record the returned `login` as this run's own identity.** Every "did a human do this?" check below
+compares against it. The loop runs as a dedicated machine account (`sydevs-bot`), so author alone is
+a reliable signal — but read it from `get_me` rather than assuming, so a future identity change needs
+no edit to this skill.
+
 **Two capability limits shape the rungs below**, both verified rather than assumed:
 
 - **Priority and Effort are readable and writable** as native issue fields. `list_issues` with
@@ -162,7 +167,11 @@ missing, add `needs-info`, and pick the next one.
 Ceiling: `maxTicketRepliesPerRun`. Issues where **the user** commented since the last run
 (ignore your own comments).
 
-**Derive this from comment timestamps, never from `updated_at`.** A field write, a label change or
+**Filter by author first.** A comment counts as feedback only when
+`comment.author.login != <own login from rung 0>`. This is the whole reason the loop has its own
+account: replying to yourself burns the reply ceiling and produces a thread that argues with itself.
+
+**Derive the time window from comment timestamps, never from `updated_at`.** A field write, a label change or
 a bulk metadata pass all bump `updated_at` without anyone having said anything — a single migration
 can make all 38 issues look like fresh feedback, which is exactly what happened on 2026-08-28. Pull
 the issues that have comments at all, then filter each comment by `created_at` against the window
@@ -171,6 +180,15 @@ and by author.
 Reply substantively: answer the question, or say what you will change. Then update the ticket
 itself where the comment changes it — title, body, priority, type, relationships. A reply that
 agrees to a change but leaves the ticket saying the old thing has not done the job.
+
+**Append the marker** (`identity.commentMarker` in `loop-config.json`) to every comment you write,
+here and in every other rung. It tells a human reading the thread what wrote it, and gives the author
+filter a second signal.
+
+One known wrinkle, accepted deliberately: comments written before 2026-08-29 carry the loop's **old**
+identity, which was a real person's account. Those are indistinguishable from that person's own
+comments, so the loop may reply once to a legacy comment of its own. Bounded and one-time — do not
+add a dated exclusion rule for it.
 
 Remove `needs-info` once answered. If the comment reads as approval ("yes, do it"), say that the
 `approved` label is what actually starts work — **do not add it yourself.**

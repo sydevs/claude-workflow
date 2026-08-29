@@ -21,6 +21,39 @@ dashboards and none of them is discoverable from the repo.
 
 ---
 
+## 0b. A machine account for the loop
+
+**Do this before anything else touches GitHub.** A routine acts as whatever GitHub account is
+connected to the Claude account — the routines docs are explicit: *"Anything a routine does through
+your connected GitHub identity appears as you."* There is no per-routine identity and no GitHub App
+option.
+
+If that connected account is a human's, the loop **cannot tell its own comments from that person's**,
+and the rung that answers maintainer feedback will reply to itself. This is not theoretical: it was
+found on the second supervised run here.
+
+1. Create a GitHub account used only by the loop — `sydevs-bot`. GitHub's Terms permit this
+   explicitly: *"no more than one free machine account in addition to a free personal account"*,
+   set up by a human who accepts the Terms on its behalf.
+2. Enable 2FA on it.
+3. Invite it to the org with **write** access to every repo the loop touches, and accept from the
+   bot account. Public repos consume no seat.
+4. Connect it as the Claude account's GitHub identity — `/web-setup` from a terminal signed in as
+   the bot, or the browser flow at claude.ai/code in a private window.
+5. Verify from a routine: `mcp__github__get_me` must return the bot's login, not a person's.
+
+> ⚠ Every cloud session on that Claude account then acts as the bot, not just routines. Local
+> sessions are unaffected. The resulting split — cloud = bot, local = human — is the intended shape.
+
+> ⚠ A machine account is `type: User`, not `type: Bot`; only a GitHub App gets the `[bot]` suffix,
+> and routines cannot act as one. So filter by **login**, never by `type`.
+
+**Switching identity later leaves residue.** Comments the loop already wrote keep the old login
+permanently, so it will read them as human feedback. Bounded and one-time; not worth a dated
+exclusion rule that would misfire once the previous account comments for real.
+
+## 1. GitHub metadata
+
 ## 1. GitHub metadata
 
 The loop's queue **is** GitHub metadata. Without this it has nothing to read.

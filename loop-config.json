@@ -92,5 +92,12 @@
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> \u2014 <one-line reason>",
     "cloudReadable": false,
     "recheckProbe": "select:mcp__github__issue_dependency_read \u2014 if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
+  },
+  "identity": {
+    "$comment": "The loop runs as a dedicated GitHub machine account, so 'did a human write this?' is answerable by author alone. Never hard-code the login \u2014 read it from mcp__github__get_me at preflight, so a future identity change needs no edit here.",
+    "expectedLogin": "sydevs-bot",
+    "commentMarker": "<sub>\ud83e\udd16 Written by the sydevs autonomous loop \u2014 see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
+    "markerNote": "Appended to every comment the loop writes. Primary filtering is by author; the marker is a second signal and, more importantly, tells a human reading the thread what wrote it.",
+    "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real."
   }
 }

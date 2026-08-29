@@ -99,6 +99,8 @@ Six specialist agents run over the branch diff with confidence scores: `code-rev
 This replaces the single dispatched `/code-review` pass. The toolkit runs its agents in their own
 contexts, so the main thread does not need a wrapper subagent to stay lean.
 
+Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
+
 **Triage every finding — judging, not deferring.** A reviewer's finding can be wrong. Verify each
 claim against the source before acting on it, and reject it with a stated reason when it does not
 hold. Apply the same scepticism to a suggested *simplification*: confirm it does not quietly cost
