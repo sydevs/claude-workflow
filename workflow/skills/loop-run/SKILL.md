@@ -68,13 +68,30 @@ no edit to this skill.
   is unblocked because you could not find a blocker — conclude it only from the body.
 
 
-Census, across all repos in `repos`:
+**Read narrowly. Most of the backlog is irrelevant to any given run**, and reading all of it every
+time is the single largest avoidable cost here. Three rules:
 
-```
-mcp__github__list_pull_requests  owner:$ORG repo:$REPO state:open
-mcp__github__list_issues         owner:$ORG repo:$REPO state:OPEN \
-                                 fields:["field_values","labels","body"]
-```
+1. **Never fetch issue bodies in the census.** The census needs `number`, `labels`, `field_values`,
+   `comments` (the count) and `updated_at` — nothing else. A body is fetched only for the one
+   ticket actually being implemented, and only at that point.
+
+2. **Let the server filter.** `search_issues` narrows before anything reaches the context window;
+   `list_issues` then reading and discarding does not:
+
+   ```
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:approved"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:proposal"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:>=<last-run-ISO-date>"
+   ```
+
+   The third is the only candidate set that can contain new feedback. An issue untouched since the
+   last run cannot have a new comment on it.
+
+3. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the
+   issue appears in the `updated:>=` set, *and* its `comments` count is greater than zero. On a
+   typical run that is one or two issues, not the whole backlog.
+
+The per-repo PR list is cheap and stays full — there are rarely more than a handful open:
 
 Read the last journal entry (rung 6) to learn when the previous run ended — "since last run" below
 means since that timestamp. If there is no journal yet, treat the window as the last 24 hours.
@@ -131,6 +148,22 @@ Ceiling: `maxPrRevisionsPerRun`. Highest-priority linked ticket first.
 Feedback that is ambiguous or architectural → **ask, do not guess.** Reply with the specific
 question, add `needs-info` to the linked ticket, move on.
 
+## Waking outside a run
+
+`subscribe_pr_activity` on a PR keeps **this session** subscribed after the run ends. A later
+approval, review comment or CI change wakes it, and it acts then — independently of the schedule,
+and even while the routines are disabled, because the subscription belongs to the session rather
+than to the routine.
+
+That is useful: an approval gets acted on in minutes instead of waiting for the next run. Two rules
+so it stays predictable:
+
+- **Re-verify from primary sources.** The event that woke you is a notification, not evidence. Check
+  the review state, CI, and threads yourself before merging — the same three gates, no shortcuts.
+- **Edit the journal entry, do not append a new one** (see the journal section). The run's entry is
+  now wrong, and a correction filed underneath leaves the original still lying to anyone who stops
+  reading there.
+
 ## Rung 3 — Implement
 
 Ceiling: `maxImplementationsPerRun` (1). Skip this rung entirely when:
@@ -159,6 +192,15 @@ change (a `types:cms` re-sync, an embed-contract update), open that PR too — i
 and withholding it leaves `main` inconsistent across repos. Use `/workflow:cross-repo-issue` for
 the ordering.
 
+**An investigation is not a code change, and must not be forced into one.** A ticket whose
+deliverable is a *finding* — "evaluate X", "work out whether Y", "investigate Z" — is finished by
+posting the finding as a comment on the ticket and updating its body with what was learned. No
+branch, no PR. Read `Effort` and the acceptance criteria to tell the difference: if the criteria
+describe a decision rather than a behaviour change, the output is prose.
+
+Filing an empty PR to satisfy the shape of the pipeline is worse than no PR — it costs a review slot
+and buries the actual answer in a description.
+
 A ticket too large or too vague to finish in one run → do not start it. Comment with what is
 missing, add `needs-info`, and pick the next one.
 
@@ -171,11 +213,25 @@ Ceiling: `maxTicketRepliesPerRun`. Issues where **the user** commented since the
 `comment.author.login != <own login from rung 0>`. This is the whole reason the loop has its own
 account: replying to yourself burns the reply ceiling and produces a thread that argues with itself.
 
-**Derive the time window from comment timestamps, never from `updated_at`.** A field write, a label change or
+**Start from the `updated:>=` search set, not from the whole backlog** — see the census rules. Then
+fetch comments only for those with a non-zero comment count, and **derive the window from comment
+timestamps, never from `updated_at`.** A field write, a label change or
 a bulk metadata pass all bump `updated_at` without anyone having said anything — a single migration
 can make all 38 issues look like fresh feedback, which is exactly what happened on 2026-08-28. Pull
 the issues that have comments at all, then filter each comment by `created_at` against the window
 and by author.
+
+**First decide what the comment is asking for**, because the three cases have different endings:
+
+| The comment | What to do |
+| --- | --- |
+| **A question** | Answer it. Reply, update the ticket if the answer changes it, done. |
+| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Work needs the `approved` gate like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `approved` to start. |
+| **A correction or new evidence** | Verify it against source before accepting, then rewrite the affected part of the ticket. |
+
+The middle case is the one that goes wrong quietly: a comment asking for work reads like permission
+to do it, and it is not. The label is the gate — a request in prose is a request to *scope* the
+work, not to start it.
 
 Reply substantively: answer the question, or say what you will change. Then update the ticket
 itself where the comment changes it — title, body, priority, type, relationships. A reply that
@@ -208,26 +264,78 @@ move on. The finding is not lost; it waits for review capacity.
 
 ## Rung 6 — Journal
 
-Append one comment to the pinned `Ops journal — YYYY-MM` issue in `journalRepo`. On the first run
-of a calendar month, open the new month's issue, pin it, and close the previous one with a link.
+Append one comment to the pinned `Ops journal — YYYY-MM` issue in `journalRepo`. On the first run of
+a calendar month, open the new month's issue, pin it, close the previous one with a link, and update
+`journalIssue` in `loop-config.json`.
 
-Keep entries scannable — this is read at 6am:
+**Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
+"ladder" — they are this skill's internal scaffolding and mean nothing to a reader in six months.
+Use the section headings below verbatim.
 
-```markdown
-### <ISO timestamp> · <morning|evening> · <session URL>
+### Format
 
-**Merged** — sydevs/SahajCloud#657 · rebased #654 onto main
-**Awaiting you** — sydevs/SahajAtlasWeb#175 (ready for review) · sydevs/SahajCloud#661 (proposal)
-**Revised** — sydevs/WeMeditateWeb#66 (addressed 3 review comments)
-**Implemented** — sydevs/SahajCloud#629 → PR #662
-**Survey** — survey-deps: 1 vulnerability PR, 2 advisories triaged as non-applicable
-**Skipped** — rung 3: SahajAtlasWeb at WIP cap (2 open)
-**Failed** — none
-```
+````markdown
+### <ISO timestamp> · <morning|evening> · [session](<url>)
 
-Rules: every item links. "Awaiting you" is the section the user acts on, so it is never omitted,
-even when empty ("nothing awaiting you"). Failures are stated plainly, never softened — a run that
-hides a failure behind a green status is worse than one that fails visibly.
+Window since the last entry: ~Nh.
+
+## 📋 Awaiting you
+- 👀 [repo#N](url) — ready for review, CI green
+- ❓ [repo#N](url) — question asked, blocked until answered
+- 💡 [repo#N](url) — proposal, awaiting your verdict
+
+## ✅ Merged
+- 🔀 [repo#N](url) — <what it was> · closed [repo#M](url)
+
+## 🔧 Changed
+- ✏️ [repo#N](url) — revised on your feedback: <what changed>
+- 💬 [repo#N](url) — replied to your comment about <topic>
+
+## 🚀 Built
+- 📦 [repo#N](url) — implemented [repo#M](url) · CI green
+- 🛑 [repo#N](url) — declined, and why in one line
+
+## 🔍 Surveyed
+- <survey name> — <verdict in one line>
+
+## ⏭️ Skipped
+- <section> — <why: empty, or which ceiling>
+
+## ⚠️ Failed
+- <plainly, or "none">
+
+<details>
+<summary>Evidence and detail</summary>
+
+<!-- Everything a reader only wants when they doubt a line above:
+     file lists, commit SHAs, CI durations, counts checked, tool
+     limitations hit, reasoning behind a judgement call. -->
+
+</details>
+````
+
+### Rules
+
+- **`## 📋 Awaiting you` is always first and never omitted.** Empty is "nothing awaiting you" — a
+  reader must never scroll to learn there is nothing to do.
+- **Omit any other section that is empty**, rather than printing "none". Exception: `⚠️ Failed`,
+  which always appears, because its absence is indistinguishable from forgetting it.
+- **Every item links.** A bare issue number costs the reader a search.
+- **One line per bullet.** Anything longer belongs in the collapsible block.
+- **The summary line is scannable prose, not a status code.** "declined — the Atlas form it mirrors
+  does not exist yet" beats "declined (blocked)".
+- Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
+  🛑 declined · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
+
+### Correcting an entry after the fact
+
+If something changes after the entry is posted — a PR merges on a subscription wake, CI turns red —
+**edit the existing comment**, do not append a new one. Add a short `> **Updated <time>:** …`
+line beneath the affected bullet and correct the bullet itself.
+
+A journal is read top-to-bottom by someone catching up. A correction posted as a second comment
+means the first one is now lying to anyone who stops reading there, which is the failure the journal
+exists to prevent.
 
 ## Ending
 
