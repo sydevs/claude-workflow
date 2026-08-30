@@ -266,7 +266,8 @@ merge, the gate you want is the approving review.
 
 Once CI is green, **reassign the PR to `assignment.reviewer`**. This is the final action of the run
 and it means *done* — nothing further until someone responds. A PR still assigned to the bot reads as
-an unfinished run.
+the bot's queue, not necessarily a fault — but a PR that is green and reviewed should never sit
+there.
 
 Do **not** hand back while CI is red or a fix loop is still running: that would put a broken PR into
 the reviewer's queue as though it were ready.

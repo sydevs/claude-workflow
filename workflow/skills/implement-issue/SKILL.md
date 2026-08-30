@@ -126,7 +126,8 @@ branch at every decision point below rather than stalling.
 
 13. **Hand the baton back.** Assign the ticket and its PR to `assignment.reviewer` — from
     `loop-config.json`, never hardcoded here. This is the **final action**, and it means *done*, not
-    *replied*: an item still assigned to the bot signals an unfinished run to the recovery pass.
+    *replied*. If the work is genuinely not finished — blocked on another ticket, or out of budget
+    — keep the assignment and say so in the journal. That is the bot's queue, not a fault.
 
 14. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
     manual verification.
