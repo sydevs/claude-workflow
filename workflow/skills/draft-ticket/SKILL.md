@@ -67,17 +67,26 @@ enough resolved detail to survive being picked up cold, possibly by an automated
    that made `--body` unusable with `gh` does not arise. Type and fields are set in the same call,
    which is also what stops a ticket landing untyped.
 
-9. **Return the issue URL**, then ask whether to approve it now.
+9. **Return the issue URL**, then ask whether to hand it to the loop now.
 
-   The `approved` label is what puts a ticket into the loop's implementation queue, and this skill
-   is the user's main way in. Ask explicitly — never apply it on your own initiative, and never
-   infer it from enthusiasm in the request:
+   Two things put a ticket into the implementation queue, and **both** are required: the
+   `ready-to-implement` label, and assigning it to the bot. The label says code may be written; the
+   assignment says now. Ask explicitly — never apply either on your own initiative, and never infer
+   them from enthusiasm in the request:
 
-   > Filed as sydevs/SahajCloud#661 (Feature, Medium). Add `approved` so the loop can pick it up,
-   > or leave it for you to review first?
+   > Filed as sydevs/SahajCloud#661 (Feature, Medium). Hand it to the loop now — label
+   > `ready-to-implement` and assign `sydevs-bot` — or leave it with you to review first?
 
-   On a yes: `mcp__github__issue_write  method:update  issue_number:<n>  labels:["approved", ...]`
-   (labels replace wholesale, so include the ticket's existing ones).
+   On a yes:
+
+   ```
+   mcp__github__issue_write  method:update  issue_number:<n>
+     labels:["ready-to-implement", ...]  assignees:["sydevs-bot"]
+   ```
+
+   Labels replace wholesale, so include the ticket's existing ones. On a no, leave it **unassigned**
+   — unassigned means untriaged backlog, which is exactly what a ticket awaiting the user's verdict
+   is. Do not park it on the user; that queue is for things needing their response.
 
 ## Body structure, type, priority and relationships
 

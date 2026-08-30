@@ -1,0 +1,25 @@
+{
+  "$comment": "Per-repo settings read by the sydevs `workflow` plugin. This repo is unusual: it holds the plugin itself, so a change here changes how every other repo is worked on. It has no package manager and no build.",
+  "packageManager": "none",
+  "packageManagerNote": "There is no package.json. The hooks are plain node .mjs files run by Claude Code directly; nothing is installed or bundled.",
+  "leanGate": {
+    "command": "claude plugin validate ./workflow --strict",
+    "contents": "Plugin manifest + skill frontmatter validation. There is no test suite — the skills are prose, and their real gate is a supervised loop run."
+  },
+  "securityReview": {
+    "triggerPattern": "^workflow/hooks/|^workflow/skills/[^/]+/SKILL\\.md$|^loop-config\\.json$",
+    "rationale": "Hooks execute in a maintainer's session with their credentials, and a SKILL.md is an instruction to an agent holding write access to five repos. A prompt-injection or an over-broad allowed-tools line is this repo's equivalent of an RCE. loop-config.json carries the ceilings and the identity constant."
+  },
+  "worktreeSetup": [],
+  "deployTarget": "Consumed live from `main` by the Claude routines and by `/plugin install workflow@sydevs`. There is no release step: merging to main IS the deploy, and the next routine run picks it up.",
+  "devServer": null,
+  "generatedFiles": [],
+  "prAllowlistGlobs": [
+    "**/*.md",
+    "docs/**",
+    "loop-config.json"
+  ],
+  "prAllowlistNote": "Where a TICKETLESS PR may be opened without a `ready-to-implement` issue: doc corrections and ceiling adjustments proposed by the Sunday reflection rung. Ticket work is gated on the `ready-to-implement` label and assignment instead, never on these globs.",
+  "selfModificationNote": "The loop edits its own instructions here. Two consequences worth stating: a bad merge to main degrades every subsequent run with no rollback other than another PR, and the loop cannot validate a skill change by running it — the change only takes effect on the NEXT run. Prefer small, reversible edits, and never ship a skill change and a ceiling change in the same PR.",
+  "journalNote": "Journal issues live in this repo carrying the `ops-journal` label. They are the loop's own diary, never work. Every worklist query must exclude that label — `-label:ops-journal` — or the loop will pick up its own entries as tickets."
+}

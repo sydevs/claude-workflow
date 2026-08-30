@@ -391,6 +391,41 @@ Issue **fields** have no such problem — `list_issue_fields`, `issue_read.field
 `list_issues(fields:["field_values"])` and `issue_write(issue_fields:[...])` all work from a
 routine, so Priority and Effort are fully usable.
 
+## Webhook triggers were evaluated and rejected
+
+`RemoteTrigger` exposes `create_webhook_trigger`, which can fire a routine from a GitHub event. It
+was tested against a live trigger and **not adopted**. Recorded here so nobody re-derives it.
+
+**The API validates almost nothing.** Only `hook_type` (`app` | `url`), the `plugin_id` /
+`routine_trigger_id` xor, and `source` (`github`, `gitlab`, `bitbucket`, and enterprise variants).
+Field validation runs *before* the trigger lookup, so probing with a nonexistent
+`routine_trigger_id` is side-effect free.
+
+**Everything else is accepted and silently discarded**, including unknown keys and invalid event
+names. A `filter` key was sent and is **absent from the stored object**, with `warnings: []`:
+
+```json
+{"events":["pull_request_review","issue_comment"], "extra_env":{}, "hook_type":"app",
+ "scope_id":"github.com/sydevs/sahajatlasweb", "source":"github",
+ "trigger_id":"a84a3cd8-2f99-4173-a266-1219e6f91f89"}
+```
+
+So **there is no author filtering.** Every matching event fires the routine, including events the
+bot itself generates — which means any infinite-loop guard has to live in the handler, never in the
+trigger. `scope_id` is one repository, normalised to `github.com/org/repo`, so org-wide coverage
+would need four triggers.
+
+**Why rejected.** With no filter, subscribing to `pull_request` or `issues` is all-or-nothing per
+event type: every `synchronize`, `labeled` and `edited` would fire a handler, including the loop's
+own pushes. And a reply typed into a review thread fires `pull_request_review_comment`, not
+`pull_request_review`, so the most common follow-up is the easiest event to miss. The baton model
+makes polling cheap enough that the latency gain does not justify four triggers and a new class of
+silent misconfiguration.
+
+**A live test trigger still exists**: `a84a3cd8-2f99-4173-a266-1219e6f91f89`, pointing at the
+disabled routine `zz-webhook-probe2-DELETEME`. No delete action for webhook triggers is exposed;
+deleting the owning routine is the presumed removal path.
+
 ## Failure modes worth recognising
 
 | Symptom | Cause |
@@ -408,4 +443,4 @@ routine, so Priority and Effort are fully usable.
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
 | The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
-| Loop implements nothing, no error | Correct — nothing carries `approved`. That is the gate working |
+| Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |

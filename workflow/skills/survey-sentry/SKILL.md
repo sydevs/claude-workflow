@@ -9,7 +9,7 @@ allowed-tools: Bash(*), Read, Grep, Glob
 
 Tuesday's survey. Turns production errors into tickets a human can approve — **not** into fixes.
 An error's fix is usually a judgement call about intended behaviour, which is exactly what the
-`approved` gate exists to capture.
+`ready-to-implement` gate exists to capture.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
 `loop-config.json`; the token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. Missing

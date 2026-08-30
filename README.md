@@ -6,7 +6,7 @@ The shared [Claude Code](https://claude.com/claude-code) workflow for the
 
 ## Why this exists
 
-These four repositories are developed in tandem, and for a while they each carried their own copy
+The four product repositories are developed in tandem, and for a while they each carried their own copy
 of the same workflow skills, kept in sync by hand against a spec that required the copies stay
 byte-identical. They did not. By the time this plugin was written the copies had diverged by
 90–250 lines apiece, pipeline steps had been renamed between them, and the audit meant to catch the
@@ -48,7 +48,7 @@ each person runs `claude plugin install` once.
 | --- | --- |
 | `/workflow:draft-ticket` | Draft a GitHub issue — clarify ambiguity first, then acceptance criteria and a verification checklist. Your way into the pipeline. |
 | `/workflow:triage-issue` | The metadata rules: type, priority, state labels, relationships, body format. Shared by everything that files a ticket. |
-| `/workflow:implement-issue` | Implement an `approved` issue in a worktree, then ship via `finalize-pr`. |
+| `/workflow:implement-issue` | Implement an `ready-to-implement` issue in a worktree, then ship via `finalize-pr`. |
 | `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
@@ -64,16 +64,25 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 
 ## The loop
 
-Two scheduled cloud routines run `loop-run` twice a day across all four repos, working down a fixed
-ladder: merge what you approved, revise what you commented on, implement what you approved, run the
-day's survey, journal it. State lives entirely in GitHub — labels are the queue, PRs are the work,
-a pinned monthly issue is the memory, and `loop-config.json` holds the knobs.
+Two scheduled cloud routines run `loop-run` twice a day across all five repos — the four product
+repos and this one — working down a fixed ladder: merge what you approved, revise what you
+commented on, implement what you cleared, run the day's survey, journal it. State lives entirely in GitHub — **the assignee field is the queue**, PRs
+are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.
 
-Two properties make it safe to leave running:
+**The baton.** `assignee:sydevs-bot` is the worklist: one indexed query per repo, rather than a scan
+of every open item. Reassigning to you is the final action on any unit of work and means *done*, so
+your queue is everything waiting on you and nothing else. Unassign the bot on any PR and it stops
+touching that PR — a per-item kill switch that needs no documentation to understand.
 
-- **`approved` is the only gate.** The loop never applies that label and never implements without
-  it. Everything it finds on its own is filed as a `proposal` for you to judge.
-- **Merging needs all three of** an approving review, green CI, and zero unresolved threads.
+Three properties make it safe to leave running:
+
+- **`ready-to-implement` is the only code gate.** Ticket-only. The loop never applies that label and
+  never implements without it. It *may* remove it when a question must be answered first — revoking
+  only ever reduces its own autonomy. Everything it finds on its own is filed as a `proposal` for
+  you to judge.
+- **Merging needs all three of** an approving review, green CI, and zero unresolved threads. No label
+  authorises a merge.
+- **Assignment gates attention.** If it is not assigned to the bot, the bot does not touch it.
 
 Ceilings in `loop-config.json` bound what one run can spend — a cloud session cannot read your
 remaining quota, so spend is rationed by work-item counts rather than token math. The Sunday
@@ -92,7 +101,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
 | `securityReview.contentPattern` / `.contentPaths` | Newly-introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
-| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). Ticket work is gated on the `approved` label instead. |
+| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). Ticket work is gated on the `ready-to-implement` label instead. |
 | `worktreeSetup` | Commands run after `EnterWorktree`. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 

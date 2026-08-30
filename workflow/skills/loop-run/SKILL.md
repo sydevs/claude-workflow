@@ -1,6 +1,6 @@
 ---
 name: loop-run
-description: One run of the autonomous pipeline across the sydevs repos — merge approved PRs, revise PRs and tickets on feedback, implement approved tickets, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
+description: One run of the autonomous pipeline across the sydevs repos — merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
 argument-hint: '[--dry-run] [--kind morning|evening]'
 disable-model-invocation: true
 effort: max
@@ -9,7 +9,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 # Loop Run
 
-One pass down a fixed ladder of work across the four sydevs repos. Runs unattended in a Claude
+One pass down a fixed ladder of work across the five sydevs repos — the four product repos plus
+`claude-workflow`, which holds these very skills. Runs unattended in a Claude
 Routine twice a day, and locally with `--dry-run` for testing.
 
 **The ladder is ordered by how much it respects the user's attention**, not by how interesting the
@@ -45,8 +46,14 @@ the scarcest thing in this system.
 
 - **Never merge without all three**: an approving review, green CI, and zero unresolved review
   threads. Any one missing → comment saying precisely which, and move on.
-- **Never implement a ticket without the `approved` label.** No exceptions, no inference from
-  priority or from the user's tone in a comment.
+- **Never implement a ticket without the `ready-to-implement` label**, and never when it is not
+  assigned to `assignment.bot`. No exceptions, no inference from priority or from the user's tone in
+  a comment. You **may remove** that label when investigation raises a blocking question; you may
+  never add it.
+- **Never implement a ticket that already has an open PR closing it.** The PR holds the baton, and a
+  second implementation duplicates the work against the same acceptance criteria.
+- **Reassigning to `assignment.reviewer` is the final action on any unit of work**, and it means
+  *done* — not *replied*. An item left assigned to the bot signals an unfinished run.
 - **Never exceed a ceiling** to "just finish one more".
 - **Never improvise around a missing credential or tool.** Journal the failure and stop the rung.
   An agent that guesses when it lacks data is worse than one that does nothing.
@@ -95,10 +102,15 @@ time is the single largest avoidable cost here. Three rules:
    `list_issues` then reading and discarding does not:
 
    ```
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:approved"
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:proposal"
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:><last-run-ISO-date>"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:ready-to-implement -label:ops-journal"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:proposal -label:ops-journal"
+   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:><last-run-ISO-date> -label:ops-journal"
    ```
+
+   **`-label:ops-journal` is mandatory on every worklist query.** `claude-workflow` is both a repo
+   the loop works on *and* the home of the journal, so without the exclusion the loop reads its own
+   diary as a backlog item — an entry mentioning a ticket becomes a ticket, and each run's entry
+   looks like fresh activity to the next. Journal issues are never work.
 
    ⚠ Write the `>` literally. An HTML-escaped `&gt;` is accepted without error and returns **zero
    results** — a silently-empty search that reads as "nothing to do". If a search returns nothing
@@ -225,7 +237,7 @@ so it stays predictable:
 
 ## Rung 3 — Implement
 
-**Two kinds of work live here.** Implementation needs `approved`. **Investigation does not** — an
+**Two kinds of work live here.** Implementation needs `ready-to-implement`. **Investigation does not** — an
 unlabelled ticket may be investigated, measured and answered, so long as nothing is committed. See
 `/workflow:triage-issue` for the full table; the short version is that the label gates code, not
 thought, and `hold` freezes everything.
@@ -236,7 +248,7 @@ though they produce no PR.
 Ceiling: `maxImplementationsPerRun` (1). Skip the *implementation* path entirely when:
 
 - the repo is at `wipCapPerRepo` open loop PRs, or
-- there are no `approved` tickets that are unblocked.
+- there are no `ready-to-implement` tickets that are unblocked.
 
 **Unblocked** means: no `Blocked by:` line in the body naming a still-open issue, and the ticket
 carries neither `hold` nor `blocked-upstream`. Resolve each `Blocked by:` URL with `issue_read` and
@@ -246,7 +258,7 @@ Selection: highest **Priority** field (`Urgent` → `Low`), then oldest `updated
 candidate set in one call:
 
 ```
-mcp__github__list_issues  state:OPEN  labels:["approved"]  fields:["field_values","labels","body"]
+mcp__github__list_issues  state:OPEN  labels:["ready-to-implement"]  fields:["field_values","labels","body"]
 ```
 
 Use **Effort** as a tie-break and a sanity check: an `Effort: High` ticket that cannot plausibly
@@ -293,7 +305,7 @@ and by author.
 | The comment | What to do |
 | --- | --- |
 | **A question** | Answer it. Reply, update the ticket if the answer changes it, done. |
-| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Work needs the `approved` gate like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `approved` to start. |
+| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Work needs the `ready-to-implement` gate like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `ready-to-implement` to start. |
 | **A correction or new evidence** | Verify it against source before accepting, then rewrite the affected part of the ticket. |
 
 The middle case is the one that goes wrong quietly: a comment asking for work reads like permission
@@ -314,7 +326,7 @@ comments, so the loop may reply once to a legacy comment of its own. Bounded and
 add a dated exclusion rule for it.
 
 Remove `needs-info` once answered. If the comment reads as approval ("yes, do it"), say that the
-`approved` label is what actually starts work — **do not add it yourself.**
+`ready-to-implement` label is what actually starts work — **do not add it yourself.**
 
 ## Rung 5 — Survey (morning only)
 

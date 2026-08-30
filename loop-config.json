@@ -4,12 +4,13 @@
     "SahajCloud",
     "SahajAtlasWeb",
     "WeMeditateWeb",
-    "SahajAtlasWordpress"
+    "SahajAtlasWordpress",
+    "claude-workflow"
   ],
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all. Note maxHumanPrReviewsPerRun is SEPARATE from maxImplementationsPerRun \u2014 unblocking a PR the user is waiting on should not starve new work, or be starved by it.",
+    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all. Note maxHumanPrReviewsPerRun is SEPARATE from maxImplementationsPerRun — unblocking a PR the user is waiting on should not starve new work, or be starved by it.",
     "wipCapPerRepo": 2,
     "maxImplementationsPerRun": 1,
     "maxPrRevisionsPerRun": 2,
@@ -20,13 +21,20 @@
     "maxHumanPrReviewsPerRun": 2
   },
   "labels": {
-    "$comment": "Labels gate EFFORT, not attention \u2014 see workflow/skills/triage-issue/SKILL.md for the full table. Priority and Effort are FIELDS, not labels.",
-    "approved": "approved",
+    "$comment": "Only the ASSIGNEE field and readyToImplement mean anything to the loop — see workflow/skills/triage-issue/SKILL.md. Every other label here exists for humans to read. Priority and Effort are FIELDS, not labels.",
+    "readyToImplement": "ready-to-implement",
     "proposal": "proposal",
     "hold": "hold",
     "needsInfo": "needs-info",
     "blockedUpstream": "blocked-upstream",
-    "gateNote": "approved gates code, not thought: an unlabelled ticket may be investigated and answered so long as nothing is committed. hold freezes everything, including replies."
+    "journal": "ops-journal",
+    "gateNote": "ready-to-implement is TICKET-ONLY and authorises writing code. The loop may REMOVE it when investigation raises questions that must be answered before implementation — always paired with a comment saying what is unresolved — and may NEVER add it. Merge authority is an approving review plus green CI plus zero unresolved threads, never a label. hold, needs-info and blocked-upstream carry no bot meaning at all: not being assigned is the gate."
+  },
+  "assignment": {
+    "$comment": "The baton. `assignee:<bot>` IS the worklist — one indexed query per repo, replacing the scan-and-diff census. Reassigning to the reviewer is the FINAL action on any unit of work and means 'I am done', so an item assigned to the bot but idle is an unfinished run.",
+    "bot": "sydevs-bot",
+    "reviewer": "Ardnived",
+    "handBackNote": "Reassign to the reviewer after: revising a ticket, revising a PR, reporting an investigation, opening a PR that is ready for review, and filing a new proposal. Unassigned means only genuinely untriaged backlog."
   },
   "surveyCalendar": {
     "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
@@ -51,7 +59,7 @@
     "feature research against current best practice"
   ],
   "sentry": {
-    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use de.sentry.io \u2014 the global host returns 404 for these projects rather than a useful error. The token authenticates but has no org:read, so /organizations/<slug>/ returns 403; that is expected and harmless, since the loop only reads /projects/<org>/<project>/issues/ and writes PUT /issues/<id>/. SahajAtlasWordpress ships no Sentry.",
+    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use de.sentry.io — the global host returns 404 for these projects rather than a useful error. The token authenticates but has no org:read, so /organizations/<slug>/ returns 403; that is expected and harmless, since the loop only reads /projects/<org>/<project>/issues/ and writes PUT /issues/<id>/. SahajAtlasWordpress ships no Sentry.",
     "apiBase": "https://de.sentry.io/api/0",
     "org": "sy-developers",
     "projects": {
@@ -69,7 +77,7 @@
   "journalIssue": 2,
   "journalIssueNote": "Current month's pinned Ops journal in claude-workflow. loop-run rung 6 opens the next month's issue on the first run of a month and updates this number in the same PR.",
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields \u2014 NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] \u2014 the value must be the option NAME; an option id returns 422.",
+    "$comment": "GitHub's native org-level issue fields — NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] — the value must be the option NAME; an option id returns 422.",
     "priority": {
       "fieldId": 14337938,
       "options": [
@@ -91,16 +99,17 @@
   "relationships": {
     "$comment": "GitHub calls these Relationships; REST calls them dependencies. Readable and writable LOCALLY via gh, but NO MCP tool exposes them, so a cloud routine cannot see them. github-mcp-server ships issue_dependency_read/write behind the issue_dependencies flag, but every route to enabling it from a routine is closed (see docs/routine-setup.md). Until that changes, the real relationship is set locally AND mirrored into the issue body so a cloud run can read it.",
     "bodyMarker": "Blocked by:",
-    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> \u2014 <one-line reason>",
+    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>",
     "cloudReadable": false,
-    "recheckProbe": "select:mcp__github__issue_dependency_read \u2014 if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
+    "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
   },
   "identity": {
-    "$comment": "The loop runs as a dedicated GitHub machine account, so 'did a human write this?' is answerable by author alone. Never hard-code the login \u2014 read it from mcp__github__get_me at preflight, so a future identity change needs no edit here.",
+    "$comment": "The loop runs as a dedicated GitHub machine account, so 'did a human write this?' is answerable by author alone. expectedLogin is authoritative and is compared against mcp__github__get_me ONCE per run — journal loudly on mismatch. Any check that cannot confidently attribute an action must EXIT rather than proceed: failing open is the runaway case.",
     "expectedLogin": "sydevs-bot",
-    "commentMarker": "<sub>\ud83e\udd16 Written by the sydevs autonomous loop \u2014 see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
+    "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
     "markerNote": "Appended to every comment the loop writes. Primary filtering is by author; the marker is a second signal and, more importantly, tells a human reading the thread what wrote it.",
     "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real.",
     "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
-  }
+  },
+  "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket."
 }

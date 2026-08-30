@@ -1,6 +1,6 @@
 ---
 name: implement-issue
-description: Implement an approved GitHub issue end-to-end in an isolated worktree, then ship it via /finalize-pr. Gated on the `approved` label; collects preview and email-preview links for the PR. User-invoked only — does not run unless explicitly triggered.
+description: Implement a ready-to-implement GitHub issue end-to-end in an isolated worktree, then ship it via /finalize-pr. Gated on the `ready-to-implement` label; collects preview and email-preview links for the PR. User-invoked only — does not run unless explicitly triggered.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -30,22 +30,38 @@ branch at every decision point below rather than stalling.
    criteria — an issue too vague to implement is a `/draft-ticket` problem, not an implementation
    problem.
 
-3. **Apply the autonomy gate.** For ticket work the gate is the **`approved` label**, applied by
-   the user and by nobody else.
+3. **Apply the gates — all four.** Ticket work needs every one of these. Check them before starting,
+   not after.
 
-   - **`approved` present, no `hold`, no open blockers** → implement, open a PR.
-   - **Not approved** → do not implement. This is not a failure: it is the queue working. Say so
-     and stop.
-   - `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
-     bumps, reflection config PRs — which have no issue to carry a label.
+   | Gate | Pass | Fail |
+   | --- | --- | --- |
+   | **Assigned to the bot** | `assignment.bot` is among the assignees | Not our turn — stop |
+   | **`ready-to-implement`** | Label present | Investigate and reply instead; do not write code |
+   | **No open blockers** | Every `Blocked by:` target is closed | Stop, and name the blocker |
+   | **No open PR already closing it** | Nothing in flight | Stop — the PR carries the baton, not the ticket |
 
-   Check blockers before starting, not after. **Locally** the Relationships are authoritative:
+   Neither of the last two is visible through assignment, which is exactly why they are listed
+   separately. **Never apply `ready-to-implement` yourself.** You *may* remove it — see step 4.
+
+   `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
+   bumps, reflection config PRs — which have no issue to carry a label or an assignee.
+
+   **Blockers.** Locally the Relationships are authoritative:
    ```bash
    gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by \
      --jq '[.[] | select(.state == "open")] | length'
    ```
    **From a cloud run** no MCP tool exposes them, so read the `Blocked by:` line(s) in the body and
-   resolve each with `issue_read`. Either way: an open blocker → stop, and say which issue blocks it.
+   resolve each with `issue_read`.
+
+   **Open PR already closing it.** A ticket whose PR is open is already in flight; implementing it
+   again produces a duplicate PR against the same acceptance criteria:
+   ```
+   mcp__github__search_issues  query:"repo:$ORG/$REPO is:pr is:open linked:issue"
+   ```
+   or resolve directly with the GraphQL `closingIssuesReferences` on each open PR. This is not
+   hypothetical — at backfill time four tickets had open PRs closing them, and all four would have
+   been re-implemented had assignment alone been the gate.
 
 4. **Decide what "done" looks like before planning how.** Most tickets end in a PR. A ticket whose
    acceptance criteria describe a *decision* rather than a behaviour change — "evaluate", "determine
@@ -54,6 +70,18 @@ branch at every decision point below rather than stalling.
 
    An empty PR opened to satisfy the pipeline's shape costs a review slot and hides the answer in a
    description. The pipeline serves the work, not the reverse.
+
+   **If the ticket turns out not to be implementable as written** — the criteria contradict the code,
+   a decision was never made, the scope hides a second ticket — then **revoke rather than guess**:
+
+   1. Remove `ready-to-implement`.
+   2. Comment saying precisely what is unresolved. A label that vanishes without explanation reads
+      as a malfunction.
+   3. Add the questions to the ticket body's `## Open questions` list, which is the canonical record.
+   4. Reassign to `assignment.reviewer` and stop.
+
+   Revoking only ever *reduces* the loop's own autonomy, so it is always safe. Guessing at an
+   ambiguous criterion and shipping it is not.
 
 5. **Plan.** Auto-proceed when the ticket is clear. Pause only on missing criteria, genuine
    ambiguity, deviation from the ticket, or destructive work.
@@ -96,12 +124,18 @@ branch at every decision point below rather than stalling.
     `git rev-parse HEAD` equals `git rev-parse origin/<branch>`. Tear down the worktree's dev server
     and database first: `/dev-server teardown`.
 
-13. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
+13. **Hand the baton back.** Assign the ticket and its PR to `assignment.reviewer` — from
+    `loop-config.json`, never hardcoded here. This is the **final action**, and it means *done*, not
+    *replied*: an item still assigned to the bot signals an unfinished run to the recovery pass.
+
+14. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
     manual verification.
 
 ## Hard rules
 
-- **Never** implement a ticket without the `approved` label, and **never** apply that label yourself.
+- **Never** implement a ticket that is not assigned to the bot, or that lacks `ready-to-implement`.
+- **Never** apply `ready-to-implement` yourself. Removing it is allowed; adding it never is.
+- **Never** implement a ticket that already has an open PR closing it.
 - **Never** edit files in the main checkout while a worktree is active.
 - **Never** hand-roll shipping — `/finalize-pr` is the only path to a PR.
 - **Never** remove a worktree before its branch is pushed and green.
