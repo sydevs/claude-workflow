@@ -219,8 +219,10 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → create it.
+- **No PR** → create it, then **assign it to `assignment.bot`** from `loop-config.json`. The PR is
+  the bot's until it is ready for review; the assignee field is what rung 2 queries.
 - **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
+  Leave the assignee alone here — step 9 decides who holds it.
 
 Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
 
@@ -256,10 +258,21 @@ mcp__github__actions_get        # for a failing run's logs
 itself is performed by `/workflow:loop-run` rung 1 once all three of approval, green CI, and zero
 unresolved review threads hold. Finishing here with green CI means *ready for review*, not *done*.
 
-### 9. Report
+**No label ever authorises a merge.** `ready-to-implement` is ticket-only — it says code may be
+written, never that it may be shipped. If you find yourself reading a label to decide whether to
+merge, the gate you want is the approving review.
 
-PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a human
-should verify by hand. If the session surfaced a durable non-obvious gotcha, nudge the user to save
+### 9. Hand the baton back, then report
+
+Once CI is green, **reassign the PR to `assignment.reviewer`**. This is the final action of the run
+and it means *done* — nothing further until someone responds. A PR still assigned to the bot reads as
+an unfinished run.
+
+Do **not** hand back while CI is red or a fix loop is still running: that would put a broken PR into
+the reviewer's queue as though it were ready.
+
+Then report: PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a
+human should verify by hand. If the session surfaced a durable non-obvious gotcha, nudge the user to save
 it to memory.
 
 ## Hard rules
@@ -271,6 +284,8 @@ it to memory.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Always** run the docs sync before pushing.
 - **Cap** the CI fix loop at 3, then hand back.
+- **Always** assign a new PR to the bot on creation, and reassign to the reviewer only once CI is
+  green — the assignee field is the queue, so a wrong value silently mis-routes the work.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References

@@ -76,40 +76,72 @@ The `value` must be the option **name** — an option id returns `422 must be a 
 `loop-config.json` → `issueFields`.
 </details>
 
-### State labels — what the loop may do
+### The baton — assignment is the queue
 
-The labels gate **effort**, not attention. Reading a ticket, answering a question, and rewriting it
-for clarity are always allowed. What changes is how much work may be spent and whether code may be
-written.
+**The assignee field holds the state.** It is not a hint; it is the worklist.
 
-| Label | Meaning | The loop may | The loop may not |
-| --- | --- | --- | --- |
-| *(none)* | Unreviewed backlog | Reply, revise the ticket, **investigate** — run tests, start a dev server, drive a browser, write and execute throwaway scripts — and report findings | Commit, push, or open a PR |
-| `approved` | Cleared for implementation. **The user applies this, nobody else.** | Everything above, plus implement and open a PR | Apply this label itself |
-| `proposal` | Loop-raised, awaiting a verdict | Everything an unlabelled ticket allows. A proposal most needs investigation to become judgeable | Implement — it is not `approved` |
-| `hold` | A long-term plan, deliberately not now | **Nothing.** Do not reply, do not revise, do not investigate | Anything at all |
-| `needs-info` | The loop is blocked on an answer | Nothing on this ticket until answered | Proceed as though unblocked |
-| `blocked-upstream` | Waiting on an external dependency | Nothing until the dependency moves | — |
+| Assignee | Meaning | The loop |
+| --- | --- | --- |
+| `sydevs-bot` | The bot's turn | Acts on the next run |
+| A human | Their turn | Does not touch it |
+| Nobody | Genuinely untriaged backlog | May propose, may not act |
 
-**`approved` gates code, not thought.** An "evaluate and decide" ticket ends in a written verdict
-rather than a PR, and that verdict can be produced without the label — investigation is how an
-unreviewed ticket becomes one worth approving. Withholding it until approval inverts the order:
-the user is asked to approve work whose cost nobody has established.
+`assignee:sydevs-bot` is one indexed query per repo, and it replaces the old census that scanned
+every open item and diffed `created_at` against the last run. That census had to be narrowed from 38
+issues to 2 for cost, and it broke outright when a bulk issue-field migration bumped every
+`updated_at` in the repo and made the whole backlog look like fresh feedback. Do not reintroduce
+timestamp reasoning to decide what to work on.
 
-The line is **committing**. Run anything, measure anything, write any script the investigation
-needs; leave no branch, no commit, no PR behind. Findings land as a ticket comment plus a body
-update.
+**Reassigning to the reviewer is the FINAL action on any unit of work, and it means "I am done."**
+Not "I replied" — done, with nothing further until someone responds:
 
-**`hold` is the one true freeze.** It means a human decided "not now", and a reply is still noise
-against that decision.
+| The loop finishes… | It assigns to |
+| --- | --- |
+| Revising a ticket after feedback | the reviewer |
+| Revising a PR after review | the reviewer |
+| Investigating and reporting a finding | the reviewer |
+| Opening a PR that is ready for review | the reviewer |
+| Filing a new proposal from a survey | the reviewer — a proposal exists to be judged |
 
-### `needs-info` is a state, not a record of the last exchange
+An item assigned to the bot but sitting idle is therefore an **unfinished run**, which is what the
+recovery pass looks for. Carrying an assignment across runs should be rare; journal it when it
+happens.
 
-Add it when a question **blocks progress**. Remove it only when **every** open question is
-answered — answering one while raising another keeps it on. A question that does not block
-progress is just asked in the comment; no label.
+### Labels: one gates code, the rest are for humans
 
-The ticket body carries the canonical list:
+**Only the assignee field and `ready-to-implement` mean anything to the loop.**
+
+| Label | Bot meaning | What it tells a human |
+| --- | --- | --- |
+| `ready-to-implement` | **Ticket-only.** Authorises writing code | A human cleared this for implementation |
+| `hold` | **None** | Deliberately frozen — keeps it out of the active scan |
+| `blocked-upstream` | **None** | Waiting on an external dependency |
+| `needs-info` | **None** | Open questions outstanding; the body carries the list |
+| `proposal` | **None** | Loop-raised, awaiting a verdict |
+| `ops-journal` | Excluded from every worklist query | A daily journal issue, not real work |
+
+`hold`, `needs-info` and `blocked-upstream` lost their bot meaning because *not being assigned*
+already says it, more reliably and in a field visible in every list view. They are kept because they
+tell a human **why** an item is parked, which assignment alone cannot.
+
+### `ready-to-implement`: the loop may revoke, never grant
+
+- **Never add it.** This is the safety property that makes the loop safe to leave running: it cannot
+  authorise its own code.
+- **You may remove it** when investigation raises a question that must be answered before
+  implementation. Revoking can only ever reduce the loop's own autonomy, so it is safe.
+
+Removing it is never silent. Pair it with a comment saying what is now unresolved, and put the
+questions in the ticket body's `## Open questions` list — otherwise the reviewer sees a label vanish
+with no explanation.
+
+**Merge authority is an approving review**, plus green CI and zero unresolved threads. It is never a
+label; `ready-to-implement` does not apply to PRs at all.
+
+### Open questions live in the body
+
+Comments are conversation; **the body is state.** Someone opening the ticket cold must see what is
+outstanding without reconstructing it from a thread.
 
 ```markdown
 ## Open questions
@@ -117,9 +149,7 @@ The ticket body carries the canonical list:
 - [ ] Eager-load Turnstile at boot, or escalate when a form finds it blocked?
 ```
 
-Comments are conversation; **the body is state.** Someone opening the ticket cold must see what is
-outstanding without reconstructing it from a thread. Tick items off in the body as they are
-answered, and clear the label only when the list is empty.
+Tick items off in the body as they are answered.
 
 ### Relationships — what must happen first
 
@@ -225,7 +255,7 @@ backlog has to be cleaned up by hand.
 
 ## Hard rules
 
-- **Never** apply `approved`. That label is the user's signal to the loop, and applying it is
+- **Never** apply `ready-to-implement`. That label is the user's signal to the loop, and applying it is
   indistinguishable from self-authorizing work.
 - **Never** leave a ticket without a Priority field value.
 - **Never** record a blocker only as a Relationship — a cloud run cannot see it.

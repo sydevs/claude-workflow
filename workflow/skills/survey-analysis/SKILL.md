@@ -22,7 +22,7 @@ fact. Name the angle and the week in the journal.
 
 ## Choosing where to look
 
-Do **not** sweep all four repos — that produces shallow findings everywhere. Pick the one or two
+Do **not** sweep all five repos — that produces shallow findings everywhere. Pick the one or two
 areas where this angle has the most purchase, and say in the journal why. Useful heuristics:
 
 - Where the angle's failure mode would be most expensive (security → public write paths and access
