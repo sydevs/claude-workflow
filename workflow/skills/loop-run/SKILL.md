@@ -343,9 +343,25 @@ move on. The finding is not lost; it waits for review capacity.
 
 ## Rung 6 — Journal
 
-Append one comment to the pinned `Ops journal — YYYY-MM` issue in `journalRepo`. On the first run of
-a calendar month, open the new month's issue, pin it, close the previous one with a link, and update
-`journalIssue` in `loop-config.json`.
+**One journal issue per day**, in `journalRepo`, titled `Ops journal — YYYY-MM-DD` and labelled
+`labels.journal`. The date is a **Vancouver date**, not a UTC one — keying to UTC splits a local day
+across two issues.
+
+Find today's with `search_issues query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal <title>"`.
+Create it lazily if absent: no issue exists for a day the loop does nothing. Leave it **unassigned** —
+a journal is not work, and assigning it puts the loop's own diary into someone's queue.
+
+**Two surfaces, two jobs:**
+
+| Surface | Job |
+| --- | --- |
+| **A new comment**, one per run | Append-only detail. This run's entry, in the format below |
+| **The issue body**, rewritten every run | The rolling summary of the whole day: what is done, and what awaits the reviewer |
+
+The body is rewritten, not appended to, which is the point: **the MCP surface cannot edit a comment,
+but it can edit a body.** That is what makes the summary always current without the addendum
+machinery a comment-only record forces. Never leave a stale `📋 Awaiting you` in the body — it is the
+one section a reader trusts, and a wrong one is worse than none.
 
 **Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
 "ladder" — they are this skill's internal scaffolding and mean nothing to a reader in six months.
@@ -410,24 +426,36 @@ Window since the last entry: ~Nh.
 - Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
   🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
 
-### Correcting an entry after the fact
+### The body: what the rolling summary looks like
 
-**The GitHub MCP surface cannot edit an existing issue comment** — only create new ones. So a
-correction is a new comment, and the job is to stop it fragmenting the record.
+Rewritten in full by every run. Short — it is an index, not a second copy of the entries.
 
-An addendum must:
+````markdown
+**<N> runs today.** Last: <ISO timestamp>.
 
-- **Open by quoting the claim it corrects**, so the two read as one thing:
-  `#### Addendum to <original timestamp> — <what changed in five words>` then
-  `Correcting "**Merged — none by this run**" in the entry above.`
-- **Be short.** One paragraph plus the corrected bullets. Depth goes in `<details>`.
-- **Restate `## 📋 Awaiting you` in full**, because that is the section a reader acts on and a
-  stale copy of it is the most expensive thing to leave lying around.
+## 📋 Awaiting you
+- 👀 [repo#N — <title>](url) — ready for review, CI green
+- ❓ [repo#N — <title>](url) — blocked on your answer
 
-Then **update the journal issue's body** — issue bodies *are* editable via `issue_write`, unlike
-comments. Keep a short index at the top of the body:
+## ✅ Done today
+- 🔀 merged [repo#N — <title>](url)
+- 📦 built [repo#N — <title>](url)
 
-```markdown
+## ⚠️ Failed today
+- <plainly, or omit the section>
+
+| Run | Entry |
+| --- | --- |
+| 04:00 | [detail](<comment url>) |
+| 06:00 | [detail](<comment url>) |
+````
+
+**Correcting an earlier claim** no longer needs an addendum: fix it in the body, where the reader
+looks. The comment stays as the historical record of what that run believed at the time, which is
+what a log is for. Only add a correcting comment when the error would change what someone *did* —
+otherwise the body edit is the correction.
+
+
 ## This month
 | When | Run | Outcome |
 | --- | --- | --- |

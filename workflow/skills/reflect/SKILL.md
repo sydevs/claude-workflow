@@ -17,8 +17,10 @@ change takes effect on the next run with no redeploy.
 Read, do not recall — every run starts with no memory of the last:
 
 ```
-# the week's journal entries
-mcp__github__issue_read  method:get_comments  owner:$ORG repo:claude-workflow issue_number:<journal>
+# the week's journal issues — one per day, all still open
+mcp__github__search_issues  query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal"
+# then, per issue: the body is the day's summary, the comments are the per-run detail
+mcp__github__issue_read  method:get_comments  owner:$ORG repo:claude-workflow issue_number:<n>
 
 # what actually happened to the PRs
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
@@ -53,6 +55,15 @@ without its evidence is a guess, and the reviewer has no way to check it.
 
 If the week gives no clear signal, **say so and open no PR.** A quiet week is a legitimate outcome,
 and an unnecessary change to the machinery is more expensive than none.
+
+## Close the week's journals
+
+After the reflection PR is open, close every `label:ops-journal is:open` issue you read, each with a
+one-line comment linking the reflection PR. They are a week's working memory, not a permanent record;
+leaving them open makes next Sunday's read grow without bound and clutters the repo's issue list.
+
+Close them **last**. A crash midway through the reflection should leave the journals intact, because
+they are the only input that cannot be reconstructed.
 
 ## Hard rules
 

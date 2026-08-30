@@ -74,8 +74,6 @@
     "retentionDays": 7,
     "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here."
   },
-  "journalIssue": 2,
-  "journalIssueNote": "Current month's pinned Ops journal in claude-workflow. loop-run rung 6 opens the next month's issue on the first run of a month and updates this number in the same PR.",
   "issueFields": {
     "$comment": "GitHub's native org-level issue fields — NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] — the value must be the option NAME; an option id returns 422.",
     "priority": {
@@ -111,5 +109,12 @@
     "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real.",
     "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
   },
-  "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket."
+  "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket.",
+  "journal": {
+    "$comment": "One issue per day in journalRepo, created lazily — no issue on a day the loop does nothing. There is no issue NUMBER here on purpose: the run finds today's by title and label, so nothing needs updating when the day rolls over.",
+    "titleFormat": "Ops journal — YYYY-MM-DD",
+    "timezone": "America/Vancouver",
+    "timezoneNote": "The journal day is a LOCAL date. Keying to UTC splits each local day across two issues.",
+    "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them."
+  }
 }
