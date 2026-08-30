@@ -442,5 +442,6 @@ deleting the owning routine is the presumed removal path.
 | Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N` |
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
 | The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
+| A `<details>` block looks like it did not render | It did. Fetched HTML always contains the content — the browser collapses it with CSS. Read the body back through the API, never off the page |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
 | Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |

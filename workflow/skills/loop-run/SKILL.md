@@ -53,7 +53,8 @@ the scarcest thing in this system.
 - **Never implement a ticket that already has an open PR closing it.** The PR holds the baton, and a
   second implementation duplicates the work against the same acceptance criteria.
 - **Reassigning to `assignment.reviewer` is the final action on any unit of work**, and it means
-  *done* — not *replied*. An item left assigned to the bot signals an unfinished run.
+  *done* — not *replied*. Keeping the assignment is correct when the work is blocked or deferred;
+  journal it as queued. A crashed run is identified by a stale `claimLabel`, never by assignment.
 - **Never exceed a ceiling** to "just finish one more".
 - **Never improvise around a missing credential or tool.** Journal the failure and stop the rung.
   An agent that guesses when it lacks data is worse than one that does nothing.
@@ -343,15 +344,48 @@ move on. The finding is not lost; it waits for review capacity.
 
 ## Rung 6 — Journal
 
-**One journal issue per day**, in `journalRepo`, titled `Ops journal — YYYY-MM-DD` and labelled
-`labels.journal`. The date is a **Vancouver date**, not a UTC one — keying to UTC splits a local day
+**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, **pinned**, and carrying
+the day's full date in the **`Start date`** issue field (`journal.startDateFieldId`).
+
+### Finding today's issue — by field, not by title
+
+The title changes on every run (see below), so it cannot be the key. Fetch the open journals — there
+are at most a week of them — and match the field:
+
+```
+mcp__github__search_issues  query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal"
+                            fields:["field_values"]
+```
+
+Pick the one whose `Start date` equals today's **Vancouver** date. Keying to UTC splits a local day
 across two issues.
 
-Find today's with `search_issues query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal <title>"`.
-Create it lazily if absent: no issue exists for a day the loop does nothing. Leave it **unassigned** —
-a journal is not work, and assigning it puts the loop's own diary into someone's queue.
+**Create it lazily** if absent — no issue exists for a day the loop does nothing. On creation:
 
-**Two surfaces, two jobs:**
+1. Set `Start date` to today (`gh api -X PUT .../issue-field-values` with `[{"field_id":<id>,"value":"YYYY-MM-DD"}]`).
+2. Apply `labels.journal`.
+3. Leave it **unassigned** — a journal is not work, and assigning it puts the loop's diary in someone's queue.
+4. **Pin it, and unpin every other pinned issue in the repo.** Exactly one journal is pinned at a
+   time: the current day's. Yesterday's stays open until the weekly reflection closes it, but it is
+   no longer the thing to look at.
+
+### The title is a headline, rewritten every run
+
+```
+<Day> — <what changed today, in a clause or two>
+```
+
+`Sun — Turnstile gated on the atlas; feedback banner handed back`
+
+- **Day of week, not a date.** The reader is looking at a pinned issue and wants to know what
+  happened, not to parse `2026-08-30`. The full date lives in `Start date`, which is sortable and
+  filterable in a way a title string is not.
+- **Rewrite it every run**, so it always describes the day *so far*. An empty day is
+  `Sun — no changes`.
+- **Describe outcomes, not activity.** "Turnstile gated on the atlas" beats "implemented #182".
+  Someone scanning the repo's issue list should learn what the loop did without opening anything.
+
+### Two surfaces, two jobs
 
 | Surface | Job |
 | --- | --- |
@@ -359,9 +393,13 @@ a journal is not work, and assigning it puts the loop's own diary into someone's
 | **The issue body**, rewritten every run | The rolling summary of the whole day: what is done, and what awaits the reviewer |
 
 The body is rewritten, not appended to, which is the point: **the MCP surface cannot edit a comment,
-but it can edit a body.** That is what makes the summary always current without the addendum
-machinery a comment-only record forces. Never leave a stale `📋 Awaiting you` in the body — it is the
-one section a reader trusts, and a wrong one is worse than none.
+but it can edit a body.** That is what makes the summary always current without addendum machinery.
+Never leave a stale `📋 Awaiting you` in the body — it is the one section a reader trusts, and a
+wrong one is worse than none.
+
+**Build `📋 Awaiting you` from a query, not from memory.** It is
+`assignee:<reviewer>` across the five repos, plus open proposals. Writing it from what this run
+believes it did lets the journal and GitHub disagree, and the journal is the half people read.
 
 **Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
 "ladder" — they are this skill's internal scaffolding and mean nothing to a reader in six months.
@@ -425,6 +463,20 @@ Window since the last entry: ~Nh.
   does not exist yet" beats "declined (blocked)".
 - Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
   🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
+
+### `<details>` survives the write path — do not re-investigate this
+
+**`<details>` and `<summary>` written through `mcp__github__*` are stored intact and render
+collapsed.** Verified on 2026-08-30: 8 tag pairs in a PR body, 2 in a journal comment, all present
+when read back.
+
+A previous run concluded the opposite and wrote a long evidence section about it. Its mistake is the
+trap worth naming: it fetched the **rendered HTML page** and found the section text present in the
+DOM, and inferred the block was not collapsed. `<details>` content is *always* in the DOM — the
+browser hides it with CSS. Fetched HTML cannot distinguish collapsed from absent.
+
+If you ever doubt whether a write landed, **read it back through the same API that wrote it**. Do not
+fetch the web page; it answers a different question than the one being asked.
 
 ### The body: what the rolling summary looks like
 

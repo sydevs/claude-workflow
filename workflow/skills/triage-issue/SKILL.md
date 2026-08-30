@@ -103,9 +103,14 @@ Not "I replied" — done, with nothing further until someone responds:
 | Opening a PR that is ready for review | the reviewer |
 | Filing a new proposal from a survey | the reviewer — a proposal exists to be judged |
 
-An item assigned to the bot but sitting idle is therefore an **unfinished run**, which is what the
-recovery pass looks for. Carrying an assignment across runs should be rare; journal it when it
-happens.
+**Staying assigned to the bot is legitimate.** An item the loop is blocked on, or that lost a slot
+to a ceiling, keeps the assignment — handing it back would say "done, over to you", which is false.
+That is the bot's queue for the next run, and the journal should say so.
+
+So **assignment is not the crash signal.** A crashed run is identified by its `labels.claim` still
+being present, never by an item sitting in the bot's queue: those two look identical from outside and
+mean opposite things. The claim label is applied only while a run is actively working an item, and
+removed when it stops.
 
 ### Labels: one gates code, the rest are for humans
 

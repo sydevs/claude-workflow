@@ -28,13 +28,15 @@
     "needsInfo": "needs-info",
     "blockedUpstream": "blocked-upstream",
     "journal": "ops-journal",
-    "gateNote": "ready-to-implement is TICKET-ONLY and authorises writing code. The loop may REMOVE it when investigation raises questions that must be answered before implementation — always paired with a comment saying what is unresolved — and may NEVER add it. Merge authority is an approving review plus green CI plus zero unresolved threads, never a label. hold, needs-info and blocked-upstream carry no bot meaning at all: not being assigned is the gate."
+    "gateNote": "ready-to-implement is TICKET-ONLY and authorises writing code. The loop may REMOVE it when investigation raises questions that must be answered before implementation — always paired with a comment saying what is unresolved — and may NEVER add it. Merge authority is an approving review plus green CI plus zero unresolved threads, never a label. hold, needs-info and blocked-upstream carry no bot meaning at all: not being assigned is the gate.",
+    "claim": "claude:working"
   },
   "assignment": {
     "$comment": "The baton. `assignee:<bot>` IS the worklist — one indexed query per repo, replacing the scan-and-diff census. Reassigning to the reviewer is the FINAL action on any unit of work and means 'I am done', so an item assigned to the bot but idle is an unfinished run.",
     "bot": "sydevs-bot",
     "reviewer": "Ardnived",
-    "handBackNote": "Reassign to the reviewer after: revising a ticket, revising a PR, reporting an investigation, opening a PR that is ready for review, and filing a new proposal. Unassigned means only genuinely untriaged backlog."
+    "handBackNote": "Reassign to the reviewer after: revising a ticket, revising a PR, reporting an investigation, opening a PR that is ready for review, and filing a new proposal. Unassigned means only genuinely untriaged backlog.",
+    "queueNote": "Staying assigned to the bot is legitimate: blocked items and items that lost a slot to a ceiling keep the assignment and are journalled as queued. Assignment is therefore NOT the crash signal — a dead run is identified by a stale labels.claim, which is applied only while a run is actively working an item."
   },
   "surveyCalendar": {
     "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
@@ -112,9 +114,13 @@
   "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket.",
   "journal": {
     "$comment": "One issue per day in journalRepo, created lazily — no issue on a day the loop does nothing. There is no issue NUMBER here on purpose: the run finds today's by title and label, so nothing needs updating when the day rolls over.",
-    "titleFormat": "Ops journal — YYYY-MM-DD",
+    "titleFormat": "<Day> — <what changed today>",
     "timezone": "America/Vancouver",
     "timezoneNote": "The journal day is a LOCAL date. Keying to UTC splits each local day across two issues.",
-    "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them."
+    "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them.",
+    "titleNote": "Rewritten every run. Day of week, not a date — the full date lives in the Start date field, which sorts and filters where a title string does not. Describe outcomes, not activity.",
+    "startDateFieldId": 14337939,
+    "pinned": true,
+    "pinnedNote": "Exactly one journal is pinned at a time: the current day's. Unpin every other pinned issue on creation."
   }
 }
