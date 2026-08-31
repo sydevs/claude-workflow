@@ -10,17 +10,15 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts rather than token math. Never split an implementation across runs: the WIP check decides whether to start one at all. Note maxHumanPrReviewsPerRun is SEPARATE from maxImplementationsPerRun — unblocking a PR the user is waiting on should not starve new work, or be starved by it.",
+    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts. Every cap here is a STOCK cap ('no more than N open/at once') or a per-run backstop — never a per-run flow quota, because those silently multiply with cadence: at 8 runs/day a 'per run' allowance is 8x a daily one. The real bound on implementations is wipCapPerRepo; on total spend, maxWorkItemsPerRun times the schedule.",
     "wipCapPerRepo": 2,
-    "maxImplementationsPerRun": 1,
-    "maxPrRevisionsPerRun": 2,
-    "maxTicketRepliesPerRun": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
-    "maxHumanPrReviewsPerRun": 2,
     "ciPollAttempts": 20,
-    "ciPollNote": "Bounded polling replaces subscribe_pr_activity, which was the only way GitHub could reach a finished run. A run cannot end its own session, so the subscription is the part we control. If CI has not settled within this many checks, report it and hand the PR back."
+    "ciPollNote": "Bounded polling replaces subscribe_pr_activity, which was the only way GitHub could reach a finished run. A run cannot end its own session, so the subscription is the part we control. If CI has not settled within this many checks, report it and hand the PR back.",
+    "maxWorkItemsPerRun": 3,
+    "maxWorkItemsNote": "How many queue items one run may process before stopping — the backstop against a 30-item queue burning a whole run. Blocked-item checks and no-op skips are free; only items actually worked (revised, implemented, investigated, replied-to) count."
   },
   "labels": {
     "$comment": "Only the ASSIGNEE field and readyToImplement mean anything to the loop — see workflow/skills/triage-issue/SKILL.md. Every other label here exists for humans to read. Priority and Effort are FIELDS, not labels.",
@@ -122,7 +120,6 @@
     "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them.",
     "titleNote": "Rewritten every run. Day of week, not a date — the full date lives in the Start date field, which sorts and filters where a title string does not. Describe outcomes, not activity.",
     "startDateFieldId": 14337939,
-    "pinned": true,
-    "pinnedNote": "Exactly one journal is pinned at a time: the current day's. Unpin every other pinned issue on creation."
+    "surfacing": "Journals are not pinned (pinIssue is GraphQL-only and unreachable from a routine). Recency surfaces the current one: the day's journal is the most recently active ops-journal issue."
   }
 }

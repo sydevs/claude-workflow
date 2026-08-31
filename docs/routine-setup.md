@@ -101,15 +101,18 @@ type. Keeping a priority label alongside the field is a second source of truth f
 
 ### The Ops journal
 
-One pinned issue per month in `claude-workflow`, labelled `ops-journal`:
+One issue **per day** in `claude-workflow`, labelled `ops-journal`, created lazily by the first run
+of the day — nothing to pre-create beyond the label:
 
 ```bash
 gh label create "ops-journal" --repo sydevs/claude-workflow --color 0052cc --description "Run log for the autonomous loop" --force
-gh issue create --repo sydevs/claude-workflow --title "Ops journal — $(date -u +%Y-%m)" --label ops-journal --body "..."
-gh issue pin <n> --repo sydevs/claude-workflow
 ```
 
-Record its number in `loop-config.json` → `journalIssue`.
+The run finds today's issue by matching the `Start date` field to the current Vancouver date (the
+title is a rewritten headline, so it is never the key). **Journals are not pinned** — `pinIssue` is
+GraphQL-only and a routine's GraphQL serves only PR-review operations, so the call cannot succeed
+from the loop. Recency surfaces the current journal instead. The weekly reflection closes the
+week's journals.
 
 > **Why an issue and not a Discussion or the Wiki?** Both were evaluated and neither is writable
 > from a cloud session: Discussions is GraphQL-only and the session's GitHub proxy allows only a
@@ -239,12 +242,30 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 #!/bin/bash
 set -e
 corepack enable pnpm
-service postgresql start
-pg_isready -h localhost -p 5432 -t 30
+
+# --- PostgreSQL for SahajCloud's integration lane (67 files, ~4 min) ---
+# Postgres 16 ships in the image at /usr/lib/postgresql/16/bin but is NOT on
+# $PATH, has NO initialised cluster, and refuses to run as root — so
+# `service postgresql start` does nothing useful. Everything runs as the
+# postgres user; the result matches SahajCloud's DEFAULT_TEST_DATABASE_URL
+# (postgresql://postgres:postgres@localhost:5432/payload_test), so the lane
+# needs no env var at all.
+PGBIN=/usr/lib/postgresql/16/bin
+PGDATA=/var/lib/postgresql/16/main
+id postgres >/dev/null 2>&1 || useradd -m postgres
+if [ ! -s "$PGDATA/PG_VERSION" ]; then
+  install -d -o postgres -g postgres "$(dirname "$PGDATA")" "$PGDATA"
+  su postgres -c "$PGBIN/initdb -D $PGDATA --auth=trust -U postgres"
+fi
+su postgres -c "$PGBIN/pg_ctl -D $PGDATA -l /tmp/postgres.log start"
+"$PGBIN/pg_isready" -h 127.0.0.1 -t 30
+su postgres -c "$PGBIN/createdb -U postgres payload_test" 2>/dev/null || true
 ```
 
-Postgres 16 and Docker are pre-installed but **not running** — SahajCloud's integration lane needs
-the service started, which is what that line does.
+`--auth=trust` is deliberate: the cluster lives inside an ephemeral, single-tenant container and
+holds only throwaway test data, and trust auth accepts the URL's `postgres` password without a
+password file. Validated 2026-08-31 by SahajCloud#663's investigation: with this cluster up, the
+integration lane runs unmodified — 67 files, 1135 tests, green.
 
 `gh` needs no installing: it ships in the image (`/usr/bin/gh`, v2.98.0 as of Aug 2026) alongside
 git, jq, yq and ripgrep. See the GitHub authentication section below for the part that *does* need
@@ -283,17 +304,25 @@ preview smoke.
 
 ## 5. The routines
 
-Two, both attaching all five repos, both pointing at the same skill:
+Two, split by **function** rather than by time of day, both attaching all five repos, both
+pointing at the same skill:
 
-| | Morning | Evening |
+| | `sydevs-loop` | `sydevs-survey-nightly` |
 | --- | --- | --- |
-| Cron (UTC) | `0 9 * * *` | `0 2 * * 2-6` |
-| Local (PT) | 02:00 daily | 19:00 Mon–Fri |
-| Rungs | 0–6 (includes the survey) | 0–4, 6 |
+| Cron (UTC) | `0 1,11,13,15,17,19,21,23 * * *` | `0 8 * * *` |
+| Local (PT) | every 2h, 04:00–18:00 | 01:00 |
+| RUN_KIND | `loop` | `nightly` |
+| Rungs | 0–4, 6 | 5, the reconciliation sweeps, 6 |
 | Model | opus | opus |
 
+The split guarantees the survey runs daily — as a rung below merge/revise/implement it could be
+starved for days by a busy queue with nothing looking wrong. The nightly run also carries the
+dropped-baton and stale-claim sweeps, which would re-flag the same items on every pass if they
+lived in the two-hourly loop.
+
 Cron is **always UTC**; the PT equivalents shift by an hour across DST and that is accepted rather
-than corrected. Minimum interval is 1 hour.
+than corrected. Minimum interval is 1 hour. Eight small runs beat two large ones: smaller blast
+radius per failure, fresher context per item, and at most a two-hour wait on any reply.
 
 The prompt is deliberately thin — all behaviour lives in the repo, so a merged change takes effect
 on the next run with no redeploy:
@@ -319,8 +348,8 @@ Two API quirks worth knowing:
 
 | Routine | Id | Schedule |
 | --- | --- | --- |
-| `sydevs-loop-morning` | `trig_016XeEsVa7dfSCum7t4Vmeuw` | `0 9 * * *` (02:00 PT daily) |
-| `sydevs-loop-evening` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 2 * * 2-6` (19:00 PT Mon–Fri) |
+| `sydevs-survey-nightly` | `trig_016XeEsVa7dfSCum7t4Vmeuw` | `0 8 * * *` (01:00 PT daily) |
+| `sydevs-loop` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 1,11,13,15,17,19,21,23 * * *` (every 2h, 04:00–18:00 PT) |
 
 Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 <https://claude.ai/code/routines> — the API cannot delete a routine.
@@ -352,7 +381,7 @@ Then set `enabled: true` on both.
 - [ ] Mailpit UI: `200` with credentials, `401` without
 - [ ] A message sent through the SMTP proxy appears, and its `/view/<id>` link resolves
 - [ ] Sentry: read `200` on every project; `PUT /issues/<id>/` `200`
-- [ ] Cloud session: `service postgresql start` works, `pnpm test:unit` passes in SahajCloud
+- [ ] Cloud session: `pg_isready` reports the cluster up, and `pnpm test:int` passes in SahajCloud (67 files)
 - [ ] `gh issue edit <n> --add-blocked-by "<full URL>"` works from a cloud session
 - [ ] A dry-run of the ladder produces a correct worklist against the real backlog
 - [ ] One full cycle observed: proposal → approve → PR → review → revision → merge
@@ -442,6 +471,6 @@ deleting the owning routine is the presumed removal path.
 | Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N` |
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
 | The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
-| A `<details>` block looks like it did not render | It did. Fetched HTML always contains the content — the browser collapses it with CSS. Read the body back through the API, never off the page |
+| A `<details>` block seems missing when read back through MCP | The write landed. The MCP **read** path strips `<details>`/`<summary>` (while keeping `<table>`, `<sub>`, `<a>`); REST shows the stored tags intact. From a routine, trust the write's 200 — do not re-post or file a bug |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
 | Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |
