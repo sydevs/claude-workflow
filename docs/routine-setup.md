@@ -253,14 +253,24 @@ corepack enable pnpm
 PGBIN=/usr/lib/postgresql/16/bin
 PGDATA=/var/lib/postgresql/16/main
 id postgres >/dev/null 2>&1 || useradd -m postgres
+install -d -o postgres -g postgres /var/run/postgresql "$(dirname "$PGDATA")"
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
-  install -d -o postgres -g postgres "$(dirname "$PGDATA")" "$PGDATA"
+  install -d -o postgres -g postgres "$PGDATA"
   su postgres -c "$PGBIN/initdb -D $PGDATA --auth=trust -U postgres"
 fi
-su postgres -c "$PGBIN/pg_ctl -D $PGDATA -l /tmp/postgres.log start"
+su postgres -c "$PGBIN/pg_ctl -D $PGDATA -l /tmp/postgres.log start" || { cat /tmp/postgres.log; exit 1; }
 "$PGBIN/pg_isready" -h 127.0.0.1 -t 30
 su postgres -c "$PGBIN/createdb -U postgres payload_test" 2>/dev/null || true
 ```
+
+Two lines here exist because their absence killed a run outright:
+
+- **`/var/run/postgresql` must exist and be writable by `postgres`.** Debian-built Postgres has that
+  socket directory compiled in; without it `pg_ctl` reports only *"could not start server"*, the
+  setup script exits 1, and **the whole session is aborted before Claude starts** — zero turns, no
+  journal, nothing.
+- **`cat` the log on failure.** The session-abort message echoes the script's output but the
+  container is gone, so a log that was not printed was never readable by anyone.
 
 `--auth=trust` is deliberate: the cluster lives inside an ephemeral, single-tenant container and
 holds only throwaway test data, and trust auth accepts the URL's `postgres` password without a
@@ -474,5 +484,6 @@ deleting the owning routine is the presumed removal path.
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
 | The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
 | A `<details>` block seems missing when read back through MCP | The write landed. The MCP **read** path strips `<details>`/`<summary>` (while keeping `<table>`, `<sub>`, `<a>`); REST shows the stored tags intact. From a routine, trust the write's 200 — do not re-post or file a bug |
+| A run dies in seconds with `Setup script failed` and zero turns | The environment setup script exited non-zero; the session never starts. `pg_ctl: could not start server` with no detail = `/var/run/postgresql` missing — the socket dir is compiled into Debian Postgres |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
 | Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |
