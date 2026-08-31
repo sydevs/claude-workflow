@@ -244,38 +244,45 @@ set -e
 corepack enable pnpm
 
 # --- PostgreSQL for SahajCloud's integration lane (67 files, ~4 min) ---
-# Postgres 16 ships in the image at /usr/lib/postgresql/16/bin but is NOT on
-# $PATH, has NO initialised cluster, and refuses to run as root — so
-# `service postgresql start` does nothing useful. Everything runs as the
-# postgres user; the result matches SahajCloud's DEFAULT_TEST_DATABASE_URL
-# (postgresql://postgres:postgres@localhost:5432/payload_test), so the lane
-# needs no env var at all.
-PGBIN=/usr/lib/postgresql/16/bin
-PGDATA=/var/lib/postgresql/16/main
-id postgres >/dev/null 2>&1 || useradd -m postgres
-install -d -o postgres -g postgres /var/run/postgresql "$(dirname "$PGDATA")"
-if [ ! -s "$PGDATA/PG_VERSION" ]; then
-  install -d -o postgres -g postgres "$PGDATA"
-  su postgres -c "$PGBIN/initdb -D $PGDATA --auth=trust -U postgres"
+# Best-effort BY DESIGN: a database failure must degrade to "integration lane
+# unavailable this session", never abort the session — a setup script that
+# exits non-zero kills the run at zero turns.
+#
+# The image ships a Debian PACKAGE cluster at /var/lib/postgresql/16/main
+# whose PG_VERSION exists but whose config lives in /etc/postgresql/16/main —
+# a half-cluster that pg_ctl -D cannot start. So we build our own cluster in
+# a directory we fully own and ignore the package one. /var/run/postgresql is
+# Debian's compiled-in socket dir and must exist. The result matches
+# SahajCloud's DEFAULT_TEST_DATABASE_URL
+# (postgresql://postgres:postgres@localhost:5432/payload_test): no env var.
+setup_pg() {
+  set -e
+  PGBIN=/usr/lib/postgresql/16/bin
+  PGDATA=/var/lib/postgresql/loop
+  id postgres >/dev/null 2>&1 || useradd -m postgres
+  install -d -o postgres -g postgres /var/run/postgresql "$PGDATA"
+  [ -s "$PGDATA/PG_VERSION" ] || su postgres -c "$PGBIN/initdb -D $PGDATA --auth=trust -U postgres"
+  su postgres -c "$PGBIN/pg_ctl -D $PGDATA -l /tmp/postgres.log start"
+  "$PGBIN/pg_isready" -h 127.0.0.1 -t 30
+  su postgres -c "$PGBIN/createdb -U postgres payload_test" 2>/dev/null || true
+}
+if ! ( setup_pg ); then
+  echo "WARNING: Postgres bring-up failed — integration lane unavailable this session"
+  cat /tmp/postgres.log 2>/dev/null || true
 fi
-su postgres -c "$PGBIN/pg_ctl -D $PGDATA -l /tmp/postgres.log start" || { cat /tmp/postgres.log; exit 1; }
-"$PGBIN/pg_isready" -h 127.0.0.1 -t 30
-su postgres -c "$PGBIN/createdb -U postgres payload_test" 2>/dev/null || true
 ```
 
-Two lines here exist because their absence killed a run outright:
+Three rules in that script each bought with a dead run:
 
-- **`/var/run/postgresql` must exist and be writable by `postgres`.** Debian-built Postgres has that
-  socket directory compiled in; without it `pg_ctl` reports only *"could not start server"*, the
-  setup script exits 1, and **the whole session is aborted before Claude starts** — zero turns, no
-  journal, nothing.
-- **`cat` the log on failure.** The session-abort message echoes the script's output but the
-  container is gone, so a log that was not printed was never readable by anyone.
-
-`--auth=trust` is deliberate: the cluster lives inside an ephemeral, single-tenant container and
-holds only throwaway test data, and trust auth accepts the URL's `postgres` password without a
-password file. Validated 2026-08-31 by SahajCloud#663's investigation: with this cluster up, the
-integration lane runs unmodified — 67 files, 1135 tests, green.
+- **Best-effort, never `set -e` across the database block.** A setup script that exits non-zero
+  aborts the session at zero turns — no census, no journal. A missing test database is worth a
+  warning, not the whole run.
+- **Own cluster directory, never the package's.** `/var/lib/postgresql/16/main` has `PG_VERSION`
+  but no `postgresql.conf` (Debian keeps config in `/etc/postgresql/16/main`), so any script that
+  checks `PG_VERSION` and then `pg_ctl -D`s the data dir starts a half-cluster and dies.
+- **`/var/run/postgresql` must exist** — the socket directory is compiled into Debian's binaries —
+  and the postgres log is `cat`ed on failure, because the container is gone by the time anyone reads
+  the abort message.
 
 `gh` needs no installing: it ships in the image (`/usr/bin/gh`, v2.98.0 as of Aug 2026) alongside
 git, jq, yq and ripgrep. See the GitHub authentication section below for the part that *does* need
@@ -484,6 +491,6 @@ deleting the owning routine is the presumed removal path.
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
 | The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
 | A `<details>` block seems missing when read back through MCP | The write landed. The MCP **read** path strips `<details>`/`<summary>` (while keeping `<table>`, `<sub>`, `<a>`); REST shows the stored tags intact. From a routine, trust the write's 200 — do not re-post or file a bug |
-| A run dies in seconds with `Setup script failed` and zero turns | The environment setup script exited non-zero; the session never starts. `pg_ctl: could not start server` with no detail = `/var/run/postgresql` missing — the socket dir is compiled into Debian Postgres |
+| A run dies in seconds with `Setup script failed` and zero turns | The setup script exited non-zero; the session never starts. Keep optional dependencies best-effort. Known Postgres traps: `/var/run/postgresql` missing (compiled-in socket dir), and the package's half-cluster at `16/main` — `PG_VERSION` present, config in `/etc` — which `pg_ctl -D` cannot start |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
 | Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |
