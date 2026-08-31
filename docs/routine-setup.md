@@ -71,8 +71,8 @@ to every repository with no per-repo setup.
 
 | Field | Type | Options |
 | --- | --- | --- |
-| Priority | single select | Urgent · High · Medium · Low |
-| Effort | single select | High · Medium · Low |
+| Priority | single select | Critical · High · Medium · Low |
+| Effort | single select | Easy · Moderate · Hard |
 
 ```bash
 gh api orgs/<org>/issue-fields --jq '.[] | "\(.name) id=\(.id) \([.options[]?.name]|join("/"))"'
@@ -108,7 +108,7 @@ of the day — nothing to pre-create beyond the label:
 gh label create "ops-journal" --repo sydevs/claude-workflow --color 0052cc --description "Run log for the autonomous loop" --force
 ```
 
-The run finds today's issue by matching the `Start date` field to the current Vancouver date (the
+The run finds today's issue by matching the issue's **creation date** to the current Vancouver day (the
 title is a rewritten headline, so it is never the key). **Journals are not pinned** — `pinIssue` is
 GraphQL-only and a routine's GraphQL serves only PR-review operations, so the call cannot succeed
 from the loop. Recency surfaces the current journal instead. The weekly reflection closes the

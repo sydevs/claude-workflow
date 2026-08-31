@@ -77,11 +77,11 @@
     "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here."
   },
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields — NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] — the value must be the option NAME; an option id returns 422.",
+    "$comment": "GitHub's native org-level issue fields — NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup; there are no per-repo fields, so options are identical everywhere. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] — the value must be the option NAME (an id 422s), and the PUT REPLACES the issue's whole field-value set: include every field you want kept, or the omitted ones are cleared.",
     "priority": {
       "fieldId": 14337938,
       "options": [
-        "Urgent",
+        "Critical",
         "High",
         "Medium",
         "Low"
@@ -90,9 +90,9 @@
     "effort": {
       "fieldId": 14337941,
       "options": [
-        "High",
-        "Medium",
-        "Low"
+        "Easy",
+        "Moderate",
+        "Hard"
       ]
     }
   },
@@ -118,8 +118,8 @@
     "timezone": "America/Vancouver",
     "timezoneNote": "The journal day is a LOCAL date. Keying to UTC splits each local day across two issues.",
     "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them.",
-    "titleNote": "Rewritten every run. Day of week, not a date — the full date lives in the Start date field, which sorts and filters where a title string does not. Describe outcomes, not activity.",
-    "startDateFieldId": 14337939,
-    "surfacing": "Journals are not pinned (pinIssue is GraphQL-only and unreachable from a routine). Recency surfaces the current one: the day's journal is the most recently active ops-journal issue."
+    "titleNote": "Rewritten every run. Day of week, not a date — the full date is the issue's creation time, which sorts and filters where a title string does not. Describe outcomes, not activity.",
+    "surfacing": "Journals are not pinned (pinIssue is GraphQL-only and unreachable from a routine). Recency surfaces the current one: the day's journal is the most recently active ops-journal issue.",
+    "lookup": "Today's journal is the open ops-journal issue whose created_at falls on today's Vancouver date. No date field — creation time is intrinsic."
   }
 }
