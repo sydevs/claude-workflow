@@ -18,7 +18,9 @@
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
-    "maxHumanPrReviewsPerRun": 2
+    "maxHumanPrReviewsPerRun": 2,
+    "ciPollAttempts": 20,
+    "ciPollNote": "Bounded polling replaces subscribe_pr_activity, which was the only way GitHub could reach a finished run. A run cannot end its own session, so the subscription is the part we control. If CI has not settled within this many checks, report it and hand the PR back."
   },
   "labels": {
     "$comment": "Only the ASSIGNEE field and readyToImplement mean anything to the loop — see workflow/skills/triage-issue/SKILL.md. Every other label here exists for humans to read. Priority and Effort are FIELDS, not labels.",

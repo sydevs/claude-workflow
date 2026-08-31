@@ -247,6 +247,11 @@ mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNum
 mcp__github__actions_get        # for a failing run's logs
 ```
 
+**Poll; never `subscribe_pr_activity`.** A subscription is the only thing that lets GitHub reach a
+finished run, and a run cannot end its own session — so the subscription is the part we control.
+Poll up to `ceilings.ciPollAttempts` times; if CI has not settled by then, report that and hand the
+PR back. An unfinished CI watch is a fact to report, not a reason to stay awake.
+
 - **Green** → report.
 - **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part of the
   lean gate, commit, push, re-watch.
