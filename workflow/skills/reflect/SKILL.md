@@ -49,7 +49,7 @@ previous three-fork workflow decayed.
 One PR to `claude-workflow` per week, at most. Ticketless (`prAllowlistGlobs`). Scope it to changes
 the evidence supports: a ceiling number, a clarified instruction, a removed rule that never fired.
 
-The PR body must show the evidence for each change — "raise `maxPrRevisionsPerRun` to 3: hit the
+The PR body must show the evidence for each change — "raise `maxWorkItemsPerRun` to 3: hit the
 cap on 4 of 6 runs, leaving PRs #12 and #15 waiting a full day for a one-line fix". A proposal
 without its evidence is a guess, and the reviewer has no way to check it.
 

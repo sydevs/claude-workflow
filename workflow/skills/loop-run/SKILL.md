@@ -1,7 +1,7 @@
 ---
 name: loop-run
 description: One run of the autonomous pipeline across the sydevs repos — merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
-argument-hint: '[--dry-run] [--kind morning|evening]'
+argument-hint: '[--dry-run] [--kind loop|nightly]'
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -11,7 +11,7 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 One pass down a fixed ladder of work across the five sydevs repos — the four product repos plus
 `claude-workflow`, which holds these very skills. Runs unattended in a Claude
-Routine twice a day, and locally with `--dry-run` for testing.
+Run by routine — the two-hourly loop and the nightly survey — and locally with `--dry-run`.
 
 **The ladder is ordered by how much it respects the user's attention**, not by how interesting the
 work is. Merging something they already approved, and answering something they already asked, both
@@ -19,7 +19,9 @@ beat producing anything new. Descend only while ceilings allow; stop when one is
 
 ## Inputs
 
-- `RUN_KIND` — `morning` (rungs 0–6) or `evening` (rungs 0–4, then 6). Defaults to `morning`.
+- `RUN_KIND` — `loop` (rungs 0–4, then 6; runs every two hours through the working day) or
+  `nightly` (rung 5's survey, the reconciliation sweeps below, then rung 6; runs once, at night).
+  Defaults to `loop`.
   `--kind` overrides.
 - `--dry-run` — do everything read-only. Print the worklist each rung *would* act on and stop.
   Never comment, commit, push, merge, or label.
@@ -177,7 +179,7 @@ then move on. Do not fix CI here; that is rung 2.
 
 ## Rung 2 — PR health
 
-Ceilings: `maxPrRevisionsPerRun` for your own PRs, `maxHumanPrReviewsPerRun` for the user's.
+Every item processed here counts against `maxWorkItemsPerRun`.
 Highest-priority linked ticket first.
 
 **Red CI on our own PR** → diagnose via `actions_get` on the failing run, fix, push. Cap at
@@ -205,7 +207,7 @@ Do this instead, in order:
    that it exists and what it contains.
 3. **File a follow-up ticket** for anything the review raised that generalises beyond this PR.
 
-Ceiling: `maxHumanPrReviewsPerRun`, which is **separate from `maxImplementationsPerRun`**. Unblocking
+Counts against `maxWorkItemsPerRun` like everything else. Unblocking
 a PR the user is waiting on should neither starve new work nor be starved by it — a blocked PR often
 holds up several tickets behind it.
 
@@ -244,10 +246,11 @@ unlabelled ticket may be investigated, measured and answered, so long as nothing
 `/workflow:triage-issue` for the full table; the short version is that the label gates code, not
 thought, and `hold` freezes everything.
 
-Investigations count against `maxImplementationsPerRun` too: they cost a run's attention even
+Investigations count against `maxWorkItemsPerRun` too: they cost a run's attention even
 though they produce no PR.
 
-Ceiling: `maxImplementationsPerRun` (1). Skip the *implementation* path entirely when:
+The bound on implementations is `wipCapPerRepo` — a stock cap, indifferent to how often the loop
+runs. Skip the *implementation* path entirely when:
 
 - the repo is at `wipCapPerRepo` open loop PRs, or
 - there are no `ready-to-implement` tickets that are unblocked.
@@ -287,7 +290,7 @@ missing, add `needs-info`, and pick the next one.
 
 ## Rung 4 — Ticket feedback
 
-Ceiling: `maxTicketRepliesPerRun`. Issues where **the user** commented since the last run
+Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since the last run
 (ignore your own comments).
 
 **Filter by author first.** A comment counts as feedback only when
@@ -330,7 +333,7 @@ add a dated exclusion rule for it.
 Remove `needs-info` once answered. If the comment reads as approval ("yes, do it"), say that the
 `ready-to-implement` label is what actually starts work — **do not add it yourself.**
 
-## Rung 5 — Survey (morning only)
+## Rung 5 — Survey (nightly run only)
 
 Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
 
@@ -343,9 +346,30 @@ mcp__github__search_issues  query:"org:$ORG is:issue is:open label:proposal"
 At or over `maxOpenProposals` → **do not file.** Record what you found in the journal instead and
 move on. The finding is not lost; it waits for review capacity.
 
+## Nightly reconciliation (nightly run only)
+
+Two sweeps that belong at once-a-day frequency — running them in the two-hourly loop would re-flag
+the same untouched items on every pass.
+
+**Dropped batons.** Items where the reviewer replied but kept the baton:
+
+```
+mcp__github__search_issues  query:"org:$ORG is:open assignee:<reviewer> -label:hold -label:ops-journal"
+```
+
+For each, check whether the **newest comment is the reviewer's own** — that shape means they
+answered and forgot to reassign. **Do not pick these up.** Name them in tonight's journal under a
+`### Possibly awaiting a handoff` line so the reviewer sees what they forgot. Anything with `hold`
+is excluded; scope the query to the five workflow repos.
+
+**Stale claims.** Any item still carrying `labels.claim` older than an hour is a crashed run's
+residue — no live run holds a claim across the nightly boundary. Remove the label, journal which
+items were cleared, and leave the item assigned as found: assignment is the queue, not the crash
+signal.
+
 ## Rung 6 — Journal
 
-**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, **pinned**, and carrying
+**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, carrying
 the day's full date in the **`Start date`** issue field (`journal.startDateFieldId`).
 
 ### Finding today's issue — by field, not by title
@@ -366,9 +390,9 @@ across two issues.
 1. Set `Start date` to today (`gh api -X PUT .../issue-field-values` with `[{"field_id":<id>,"value":"YYYY-MM-DD"}]`).
 2. Apply `labels.journal`.
 3. Leave it **unassigned** — a journal is not work, and assigning it puts the loop's diary in someone's queue.
-4. **Pin it, and unpin every other pinned issue in the repo.** Exactly one journal is pinned at a
-   time: the current day's. Yesterday's stays open until the weekly reflection closes it, but it is
-   no longer the thing to look at.
+4. **Do not pin it** — `pinIssue` is GraphQL-only and this session's GraphQL serves only PR-review
+   operations, so the call cannot succeed. Recency does the job instead: the day's journal is the
+   most recently active `ops-journal` issue, so it sorts to the top of the issue list on its own.
 
 ### The title is a headline, rewritten every run
 
@@ -378,7 +402,7 @@ across two issues.
 
 `Sun — Turnstile gated on the atlas; feedback banner handed back`
 
-- **Day of week, not a date.** The reader is looking at a pinned issue and wants to know what
+- **Day of week, not a date.** The reader is scanning the issue list and wants to know what
   happened, not to parse `2026-08-30`. The full date lives in `Start date`, which is sortable and
   filterable in a way a title string is not.
 - **Rewrite it every run**, so it always describes the day *so far*. An empty day is
@@ -409,7 +433,7 @@ Use the section headings below verbatim.
 ### Format
 
 ````markdown
-### <ISO timestamp> · <morning|evening> · [session](<url>)
+### <ISO timestamp> · <loop|nightly> · [session](<url>)
 
 Window since the last entry: ~Nh.
 
@@ -465,19 +489,24 @@ Window since the last entry: ~Nh.
 - Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
   🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
 
-### `<details>` survives the write path — do not re-investigate this
+### `<details>` survives the write path — but MCP readback lies about it
 
-**`<details>` and `<summary>` written through `mcp__github__*` are stored intact and render
-collapsed.** Verified on 2026-08-30: 8 tag pairs in a PR body, 2 in a journal comment, all present
-when read back.
+**Writes are stored intact and render collapsed.** REST (`gh api`) shows every tag: 8 pairs in a PR
+body, 2 in a journal comment, verified 2026-08-31. **But the MCP *read* path strips
+`<details>`/`<summary>` from what it returns** — in the same responses where `<table>`, `<a>` and
+`<sub>` come back verbatim. So:
 
-A previous run concluded the opposite and wrote a long evidence section about it. Its mistake is the
-trap worth naming: it fetched the **rendered HTML page** and found the section text present in the
-DOM, and inferred the block was not collapsed. `<details>` content is *always* in the DOM — the
-browser hides it with CSS. Fetched HTML cannot distinguish collapsed from absent.
+- A run that verifies its own write via `pull_request_read` / `issue_read` will see its collapsible
+  sections missing and **wrongly conclude the write failed.** It did not. Do not "fix" it, do not
+  re-post, do not file a ticket about it.
+- WebFetch compounds the illusion: its markdown conversion renders `<details>` content as visible
+  text, so "the public page shows plain prose" is the conversion, not the page.
+- The only faithful readback for these tags is REST — which a cloud session does not have. From a
+  routine, **trust the write**: a 200 from `issue_write`/`pull_request_write` means the tags are
+  stored, whatever a subsequent MCP read shows.
 
-If you ever doubt whether a write landed, **read it back through the same API that wrote it**. Do not
-fetch the web page; it answers a different question than the one being asked.
+One run concluded "the write path drops them" from exactly this evidence and wrote a long case for
+it. The evidence was real; the inference was wrong at the read layer, not the write layer.
 
 ### The body: what the rolling summary looks like
 
