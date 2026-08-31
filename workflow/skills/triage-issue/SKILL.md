@@ -44,11 +44,11 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 
 | Field | Options | Means |
 | --- | --- | --- |
-| **Priority** | `Urgent` | Data loss, outage, or security exposure. Drop other work. |
+| **Priority** | `Critical` | Data loss, outage, or security exposure. Drop other work. |
 | | `High` | User-visible breakage, or it blocks other work. |
 | | `Medium` | Planned work. **The default** — most tickets are this. |
 | | `Low` | Do when nothing above it waits. Deferred or speculative. |
-| **Effort** | `High` / `Medium` / `Low` | Rough size. Set it honestly — the loop uses it to avoid starting something it cannot finish in one run. |
+| **Effort** | `Easy` / `Moderate` / `Hard` | Rough size. Set it honestly — the loop uses it to avoid starting something it cannot finish in one run. |
 
 Priority is about the **consequence of not doing it**, not effort or appetite. A one-line fix to a
 broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
@@ -57,7 +57,7 @@ which is exactly why it is a separate field.
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
   issue_fields:[{field_name:"Priority", field_option_name:"High"},
-                {field_name:"Effort",   field_option_name:"Medium"}]
+                {field_name:"Effort",   field_option_name:"Moderate"}]
 ```
 
 By **name**, and it validates the option against the field before calling. Read them back with
@@ -72,8 +72,10 @@ gh api -X PUT repos/$ORG/$REPO/issues/<n>/issue-field-values --input - <<< \
 ```
 
 The `value` must be the option **name** — an option id returns `422 must be a string option name`.
-`PATCH`ing the issue with a `fields` key returns 200 and silently does nothing. Field ids are in
-`loop-config.json` → `issueFields`.
+`PATCH`ing the issue with a `fields` key returns 200 and silently does nothing. **And the PUT
+replaces the issue's entire field-value set** — a PUT carrying only Priority silently clears an
+existing Effort. Include every field you want kept. Field ids are in `loop-config.json` →
+`issueFields`.
 </details>
 
 ### The baton — assignment is the queue
@@ -191,7 +193,7 @@ reads without opening a side panel.
 appeared; the day they do, the body line becomes redundant.
 
 **Priority and relationships together decide implementation order**: the loop takes the
-highest-priority ticket whose blockers are all closed. An `Urgent` behind an open blocker waits
+highest-priority ticket whose blockers are all closed. A `Critical` behind an open blocker waits
 behind an unblocked `Medium` — which is correct, and is why recording blockers matters more than
 arguing about priority.
 

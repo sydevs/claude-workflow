@@ -260,7 +260,7 @@ runs. Skip the *implementation* path entirely when:
 carries neither `hold` nor `blocked-upstream`. Resolve each `Blocked by:` URL with `issue_read` and
 check its state — a closed blocker does not block.
 
-Selection: highest **Priority** field (`Urgent` → `Low`), then oldest `updatedAt`. Pull the whole
+Selection: highest **Priority** field (`Critical` → `Low`), then oldest `updatedAt`. Pull the whole
 candidate set in one call:
 
 ```
@@ -370,28 +370,28 @@ signal.
 
 ## Rung 6 — Journal
 
-**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, carrying
-the day's full date in the **`Start date`** issue field (`journal.startDateFieldId`).
+**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, created lazily by the
+day's first run.
 
-### Finding today's issue — by field, not by title
+### Finding today's issue — by creation date, not by title
 
 The title changes on every run (see below), so it cannot be the key. Fetch the open journals — there
-are at most a week of them — and match the field:
+are at most a week of them — and match on when each was created:
 
 ```
 mcp__github__search_issues  query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal"
-                            fields:["field_values"]
 ```
 
-Pick the one whose `Start date` equals today's **Vancouver** date. Keying to UTC splits a local day
-across two issues.
+Pick the one whose `created_at`, converted to **Vancouver time**, falls on today's Vancouver date.
+Keying to UTC splits a local day across two issues — the nightly run creates the issue at 1am
+Vancouver, which is 08:00Z, so the UTC date matches only by coincidence. There is no date field to
+set or read: creation time is intrinsic and cannot drift from the truth.
 
 **Create it lazily** if absent — no issue exists for a day the loop does nothing. On creation:
 
-1. Set `Start date` to today (`gh api -X PUT .../issue-field-values` with `[{"field_id":<id>,"value":"YYYY-MM-DD"}]`).
-2. Apply `labels.journal`.
-3. Leave it **unassigned** — a journal is not work, and assigning it puts the loop's diary in someone's queue.
-4. **Do not pin it** — `pinIssue` is GraphQL-only and this session's GraphQL serves only PR-review
+1. Apply `labels.journal`.
+2. Leave it **unassigned** — a journal is not work, and assigning it puts the loop's diary in someone's queue.
+3. **Do not pin it** — `pinIssue` is GraphQL-only and this session's GraphQL serves only PR-review
    operations, so the call cannot succeed. Recency does the job instead: the day's journal is the
    most recently active `ops-journal` issue, so it sorts to the top of the issue list on its own.
 
@@ -404,7 +404,7 @@ across two issues.
 `Sun — Turnstile gated on the atlas; feedback banner handed back`
 
 - **Day of week, not a date.** The reader is scanning the issue list and wants to know what
-  happened, not to parse `2026-08-30`. The full date lives in `Start date`, which is sortable and
+  happened, not to parse `2026-08-30`. The full date is the issue's creation time, which is sortable and
   filterable in a way a title string is not.
 - **Rewrite it every run**, so it always describes the day *so far*. An empty day is
   `Sun — no changes`.
