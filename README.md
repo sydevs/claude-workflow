@@ -65,8 +65,9 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 ## The loop
 
 Two scheduled cloud routines run `loop-run` across all five repos — the four product repos and
-this one. `sydevs-loop` runs every two hours through the Vancouver working day (rungs: merge what
-you approved, revise what you commented on, implement what you cleared, journal it);
+this one. `sydevs-loop` runs hourly through the Vancouver morning and every two hours in the
+afternoon (rungs: merge what you approved, revise what you commented on, implement what you
+cleared, journal it);
 `sydevs-survey-nightly` runs once at night (the day's survey, the dropped-baton and stale-claim
 sweeps, journal). Splitting the survey out guarantees it runs even on days the queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
 are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.

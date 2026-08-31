@@ -11,7 +11,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 One pass down a fixed ladder of work across the five sydevs repos — the four product repos plus
 `claude-workflow`, which holds these very skills. Runs unattended in a Claude
-Run by routine — the two-hourly loop and the nightly survey — and locally with `--dry-run`.
+Run by routine — the working-day loop (hourly mornings, two-hourly afternoons, Vancouver time)
+and the nightly survey — and locally with `--dry-run`.
 
 **The ladder is ordered by how much it respects the user's attention**, not by how interesting the
 work is. Merging something they already approved, and answering something they already asked, both
@@ -19,8 +20,8 @@ beat producing anything new. Descend only while ceilings allow; stop when one is
 
 ## Inputs
 
-- `RUN_KIND` — `loop` (rungs 0–4, then 6; runs every two hours through the working day) or
-  `nightly` (rung 5's survey, the reconciliation sweeps below, then rung 6; runs once, at night).
+- `RUN_KIND` — `loop` (rungs 0–4, then 6; hourly through the Vancouver morning, two-hourly afternoons) or
+  `nightly` (rung 5's survey, the reconciliation sweeps, then rung 6; runs once, at night).
   Defaults to `loop`.
   `--kind` overrides.
 - `--dry-run` — do everything read-only. Print the worklist each rung *would* act on and stop.
@@ -348,7 +349,7 @@ move on. The finding is not lost; it waits for review capacity.
 
 ## Nightly reconciliation (nightly run only)
 
-Two sweeps that belong at once-a-day frequency — running them in the two-hourly loop would re-flag
+Two sweeps that belong at once-a-day frequency — running them in the working-day loop would re-flag
 the same untouched items on every pass.
 
 **Dropped batons.** Items where the reviewer replied but kept the baton:
