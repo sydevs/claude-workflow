@@ -309,8 +309,8 @@ pointing at the same skill:
 
 | | `sydevs-loop` | `sydevs-survey-nightly` |
 | --- | --- | --- |
-| Cron (UTC) | `0 1,11,13,15,17,19,21,23 * * *` | `0 8 * * *` |
-| Local (PT) | every 2h, 04:00–18:00 | 01:00 |
+| Cron (UTC) | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` | `0 8 * * *` |
+| Local (PT) | hourly 05:00–12:00, then 14:00 · 16:00 · 18:00 | 01:00 |
 | RUN_KIND | `loop` | `nightly` |
 | Rungs | 0–4, 6 | 5, the reconciliation sweeps, 6 |
 | Model | opus | opus |
@@ -321,8 +321,10 @@ dropped-baton and stale-claim sweeps, which would re-flag the same items on ever
 lived in the two-hourly loop.
 
 Cron is **always UTC**; the PT equivalents shift by an hour across DST and that is accepted rather
-than corrected. Minimum interval is 1 hour. Eight small runs beat two large ones: smaller blast
-radius per failure, fresher context per item, and at most a two-hour wait on any reply.
+than corrected. Minimum interval is 1 hour. The morning is hourly because that is when the
+maintainer reviews — replies land within the hour while the conversation is warm; afternoons drop
+to every two hours. Eleven small runs beat two large ones: smaller blast radius per failure,
+fresher context per item, and most runs find an empty queue and exit cheaply.
 
 The prompt is deliberately thin — all behaviour lives in the repo, so a merged change takes effect
 on the next run with no redeploy:
@@ -349,7 +351,7 @@ Two API quirks worth knowing:
 | Routine | Id | Schedule |
 | --- | --- | --- |
 | `sydevs-survey-nightly` | `trig_016XeEsVa7dfSCum7t4Vmeuw` | `0 8 * * *` (01:00 PT daily) |
-| `sydevs-loop` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 1,11,13,15,17,19,21,23 * * *` (every 2h, 04:00–18:00 PT) |
+| `sydevs-loop` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` (hourly 05:00–12:00 PT, then 14/16/18) |
 
 Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 <https://claude.ai/code/routines> — the API cannot delete a routine.
