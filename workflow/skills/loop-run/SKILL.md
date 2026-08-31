@@ -215,26 +215,27 @@ it will show every commit of theirs as part of your diff and be unreviewable.
 Feedback that is ambiguous or architectural → **ask, do not guess.** Reply with the specific
 question, add `needs-info` to the linked ticket, move on.
 
-## Waking outside a run
+## Never subscribe to PR activity
 
-`subscribe_pr_activity` on a PR keeps **this session** subscribed after the run ends. A later
-approval, review comment or CI change wakes it, and it acts then — independently of the schedule,
-and even while the routines are disabled, because the subscription belongs to the session rather
-than to the routine.
+**Do not call `subscribe_pr_activity`.** It is the only thing that lets GitHub reach a finished run,
+and a run cannot end its own session — sessions observed `active` a full day after their work
+completed, including ones that unsubscribed exactly as instructed. So the subscription, not the
+session, is the part we control.
 
-That is useful: an approval gets acted on in minutes instead of waiting for the next run. Two rules
-so it stays predictable:
+Watch CI by **polling instead**, bounded, in `/finalize-pr` step 8:
 
-- **Re-verify from primary sources.** The event that woke you is a notification, not evidence. Check
-  the review state, CI, and threads yourself before merging — the same three gates, no shortcuts.
-- **A section walked earlier in the run is not re-walked when its precondition changes later.** If
-  the session is awake it acts on the wake; if it has ended, the work waits for the next scheduled
-  run. Do not re-enter the whole ladder to catch a condition that turned true afterwards — the
-  next run is minutes-to-hours away and idempotent, and chasing it makes a run's behaviour depend
-  on how long it happened to stay alive.
-- **Edit the journal entry, do not append a new one** (see the journal section). The run's entry is
-  now wrong, and a correction filed underneath leaves the original still lying to anyone who stops
-  reading there.
+```
+mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNumber:<n>
+```
+
+Up to `ceilings.ciPollAttempts` checks. If CI has not settled by then, say so in the journal and hand
+the PR back — an unfinished CI watch is a fact to report, not a reason to stay awake.
+
+**The baton is the backstop, and it is why this is now safe.** If a lingering session is ever woken
+by something else, its first act is to re-derive the worklist from `assignee:sydevs-bot` — and the
+item it was working on has been handed back to the reviewer, so it finds nothing and exits. Under the
+old timestamp census a woken session would have seen fresh `updated_at` values and found real work to
+do. Handing back the baton is what makes re-entry a no-op.
 
 ## Rung 3 — Implement
 
@@ -517,24 +518,17 @@ otherwise the body edit is the correction.
 That gives the record one authoritative surface even though the entries themselves are immutable:
 someone catching up reads the body, not eight comments in sequence.
 
-## Ending, and actually ending
+## Ending
 
-Posting the journal is **not** the end of the run. A `subscribe_pr_activity` subscription keeps the
-session alive afterwards, and every later comment or CI change wakes it for a full turn — so a run
-that looks finished can keep spending for hours, and its journal entry silently goes stale.
+Post the journal, then stop. Do not poll, do not wait for a review, do not keep a timer alive "in
+case".
 
-So, in this order:
+**Do not attempt to end the session** — a run has no way to, and `persist_session: false` governs
+whether the *next* fire reuses a session, not whether this one dies. Sessions linger; that is the
+platform's behaviour, not a fault to work around. What matters is that a lingering session has
+nothing to wake it (never subscribe) and nothing to do if it does wake (the baton was handed back).
 
-1. Finish the ladder.
-2. **Unsubscribe from every PR you subscribed to this run** (`unsubscribe_pr_activity`), unless you
-   are still mid-CI-fix-loop on your own PR — that is the one case where staying awake is doing
-   work rather than waiting for it.
-3. Post the journal.
-4. Stop. Do not poll, do not wait for a review, do not keep a timer alive "in case".
-
-The next scheduled run is hours away at most and re-derives everything. Responsiveness comes from
-the schedule, not from a session that refuses to end — and an ended session cannot post a stale
-addendum against work a later run has already redone.
+Responsiveness comes from the schedule, which is hours away at most and re-derives everything.
 
 ## Ending
 
