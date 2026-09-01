@@ -226,7 +226,7 @@ whole candidate set in one call:
 mcp__github__list_issues  state:OPEN  labels:["ready-to-implement"]  fields:["field_values","labels","body"]
 ```
 
-Use **Effort** as a tie-break and a sanity check: an `Effort: High` ticket that cannot plausibly
+Use **Effort** as a tie-break and a sanity check: an `Effort: Hard` ticket that cannot plausibly
 finish within one run should be **split rather than started**, since an implementation is never
 carried across runs. Then hand to `/workflow:implement-issue`, which owns worktree, contract step,
 and shipping.
