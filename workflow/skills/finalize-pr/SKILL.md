@@ -158,12 +158,24 @@ Documentation ships in the same push as the code it describes. Sweep the branch 
 ```bash
 git diff --name-only origin/main...HEAD
 grep -rn "<changed setting / env var / command / behaviour>" \
-  .claude/docs/ .claude/rules/ CLAUDE.md AGENTS.md .env.example docs/
+  docs/ AGENTS.md .env.example $(git ls-files '**/AGENTS.md')
 ```
 
-Check every surface that could describe what changed: `.claude/rules/`, `.claude/docs/`,
-`CLAUDE.md` / `AGENTS.md`, `.env.example`, deployment docs, and any skill whose workflow the change
-alters. Update what the diff makes stale and document what it introduces.
+Check every surface that could describe what changed: the root `AGENTS.md`, the nested `AGENTS.md`
+guide for each directory you touched, `docs/`, `.env.example`, deployment docs, and any skill whose
+workflow the change alters. Update what the diff makes stale and document what it introduces.
+
+**Documentation now lives outside `.claude/`, deliberately.** Writes under `.claude/` hit Claude
+Code's Protected Paths guard, which requires interactive approval and runs *before* `permissions.allow`
+— so an unattended run stalls there indefinitely and cannot even perceive that it is blocked. Guides
+are nested `AGENTS.md` files (with a `CLAUDE.md` symlink beside each), which load when Claude reads
+files in that directory and are freely editable. If a docs-sync ever wants to edit something under
+`.claude/`, that is a signal the content is in the wrong place: propose the move rather than
+attempting the edit.
+
+**Grep beyond `.md` and `.json`.** References to guide paths hide in `.env`, CSS, test files and
+`.distignore`; a sweep restricted to markdown will miss them and leave links pointing at deleted
+files.
 
 **Contract surfaces are mandatory, not discretionary.** In SahajAtlasWeb, anything a host site can
 observe — script-URL parameters, CSP or Permissions-Policy requirements, sizing, the URL shape —
