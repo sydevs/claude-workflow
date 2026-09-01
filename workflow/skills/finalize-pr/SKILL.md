@@ -20,6 +20,9 @@ Every analysis step delegates to something maintained elsewhere. What is left he
 the docs-sync commit, PR create/refresh, and the capped CI loop — is the part that is genuinely
 ours.
 
+Rules here are imperatives. The failure each one prevents lives in **`docs/why.md`** in the
+`sydevs/claude-workflow` repo, cited as `(why: …)`.
+
 ## Configuration
 
 Read `.claude/workflow.json` from the **worktree root** first. It supplies everything that used to
@@ -80,10 +83,8 @@ altitude. It does not hunt for bugs.
 
 - Let it apply fixes, then review them as one unit and revert anything undesirable.
 - If it changed anything, re-run the lean gate and commit `refactor: simplify per /simplify pass`.
-- **`/simplify` edits the working tree and it fans out.** Fixes can land minutes after dispatch,
-  well after its first message. **Do not edit the same files while it runs** — wait for its report,
-  then read `git diff` as one unit. Editing in parallel makes a patch fail an assertion or a file
-  read back unexpectedly, and the first suspicion is a corrupted edit rather than a second writer.
+- **Do not edit the same files while `/simplify` runs.** Wait for its report, then read `git diff`
+  as one unit. (why: docs/why.md#simplify-fans-out)
 
 ### 2. Review — one pass, six lenses
 
@@ -108,13 +109,10 @@ something, such as dropping a "redundant" generic that was carrying type inferen
 findings each in its own commit, then re-run the lean gate. Record dismissals with one-line reasons
 for the report.
 
-**A clean report must carry its evidence.** If a lens returns nothing, check that it names the
-files and code paths it actually read. Treat a clean report that shows little or no reading as
-*not yet reviewed* — re-run that lens, or read the highest-risk paths yourself. This has already
-cost a real bug here: a reviewer returned "no correctness bugs, production ready" after a single
-tool call over a ~2,800-line diff, and a manual re-read then found a relationship's stored order
-being silently dropped, so `og:image` unfurled the wrong photo. An empty result is harder to notice
-than a wrong one — nothing about it looks like a failure.
+**A clean report must carry its evidence.** If a lens returns nothing, check that it names the files
+and code paths it actually read. **Treat a clean report that shows little or no reading as *not yet
+reviewed*** — re-run that lens, or read the highest-risk paths yourself.
+(why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
 For a deeper pass, note that the user can run the billed `/code-review ultra` themselves. Claude
 cannot launch it.
@@ -161,28 +159,21 @@ grep -rn "<changed setting / env var / command / behaviour>" \
   docs/ AGENTS.md .env.example $(git ls-files '**/AGENTS.md')
 ```
 
-Check every surface that could describe what changed: the root `AGENTS.md`, the nested `AGENTS.md`
-guide for each directory you touched, `docs/`, `.env.example`, deployment docs, and any skill whose
-workflow the change alters. Update what the diff makes stale and document what it introduces.
-
-**Documentation now lives outside `.claude/`, deliberately.** Writes under `.claude/` hit Claude
-Code's Protected Paths guard, which requires interactive approval and runs *before* `permissions.allow`
-— so an unattended run stalls there indefinitely and cannot even perceive that it is blocked. Guides
-are nested `AGENTS.md` files (with a `CLAUDE.md` symlink beside each), which load when Claude reads
-files in that directory and are freely editable. If a docs-sync ever wants to edit something under
-`.claude/`, that is a signal the content is in the wrong place: propose the move rather than
-attempting the edit.
-
-**Grep beyond `.md` and `.json`.** References to guide paths hide in `.env`, CSS, test files and
-`.distignore`; a sweep restricted to markdown will miss them and leave links pointing at deleted
-files.
-
-**Contract surfaces are mandatory, not discretionary.** In SahajAtlasWeb, anything a host site can
-observe — script-URL parameters, CSP or Permissions-Policy requirements, sizing, the URL shape —
-changes in `docs/embedding.md` and `CHANGELOG.md` in this same PR. Those are the only documents an
-embedding site ever reads, and the README once spent months telling hosts to load a filename the
-build had never emitted. When a contract changes, also check its two in-tree consumers:
-`WeMeditateWeb/lib/atlas-embed.ts` and the WordPress plugin's templates.
+- **Check every surface that could describe what changed**: the root `AGENTS.md`, the nested
+  `AGENTS.md` guide for each directory you touched, `docs/`, `.env.example`, deployment docs, and
+  any skill whose workflow the change alters. Update what the diff makes stale and document what it
+  introduces.
+- **Grep beyond `.md` and `.json`** — references to guide paths hide in `.env`, CSS, test files and
+  `.distignore`. (why: docs/why.md#contract-surfaces-are-mandatory)
+- **Never attempt a docs edit under `.claude/`.** Guides are nested `AGENTS.md` files (with a
+  `CLAUDE.md` symlink beside each). If a docs-sync wants to edit something under `.claude/`, that is
+  a signal the content is in the wrong place: propose the move rather than attempting the edit.
+  (why: docs/why.md#documentation-lives-outside-claude)
+- **Contract surfaces are mandatory, not discretionary.** In SahajAtlasWeb, anything a host site can
+  observe — script-URL parameters, CSP or Permissions-Policy requirements, sizing, the URL shape —
+  changes in `docs/embedding.md` and `CHANGELOG.md` in this same PR. When a contract changes, also
+  check its two in-tree consumers: `WeMeditateWeb/lib/atlas-embed.ts` and the WordPress plugin's
+  templates.
 
 Commit as its own `docs(<scope>):` commit — the final commit before pushing. If nothing is stale,
 say "docs checked, nothing stale" in the report.
@@ -201,18 +192,15 @@ Never force-push a shared branch. Never `--no-verify`.
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:open
 ```
 
-**Read `pr-template.md` and follow its headings.** Not as inspiration — as the structure. A PR that
-invents its own sections is harder to review precisely because every PR then reads differently, and
-the sections most often lost are the ones the reviewer needs most. Omit a section the template says
+**Read `pr-template.md` and follow its headings.** Not as inspiration — as the structure: a PR that
+invents its own sections loses exactly the ones the reviewer needs. Omit a section the template says
 to omit; never rename one or add your own in its place.
 
-**The Preview section is mandatory wherever the repo has a preview deploy.** It is the single most
-useful thing in the body: it is how the reviewer sees the change without checking out the branch.
+**The Preview section is mandatory wherever the repo has a preview deploy.** It is how the reviewer
+sees the change without checking out the branch.
 
-**Always link the BRANCH alias, never a per-commit alias.** A commit alias is pinned to the SHA it
-was built from, so every later push silently strips the body of its value — a reviewer opening it
-sees old code and has no way to tell. This has already happened: #181 carried links three pushes
-stale, including one to a component the review had asked be deleted.
+**Always link the BRANCH alias, never a per-commit alias.**
+(why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 
 For Cloudflare Pages the branch alias is `https://<slug>.<project>.pages.dev`, where `<slug>` is the
 branch name with every non-alphanumeric character replaced by `-` and then **truncated to 28
@@ -224,10 +212,9 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://$SLUG.<project>.pages.dev"
 ```
 
 `claude/feat-post-event-feedback` → `claude-feat-post-event-feedb`. **Verify the alias returns 200
-before putting it in the body** — the truncation boundary is easy to get wrong by a character, and a
-404 in the Preview section is worse than no section.
+before putting it in the body.**
 
-Discover the URL — never construct it — using the repo's own script when it gives you a branch
+**Discover the URL — never construct it** — using the repo's own script when it gives you a branch
 alias; construct-and-verify only for the branch alias itself:
 
 ```bash
@@ -235,17 +222,16 @@ pnpm tsx scripts/get-railway-preview-url.ts     # SahajCloud
 node scripts/get-cloudflare-preview-url.mjs     # WeMeditateWeb / SahajAtlasWeb
 ```
 
-SahajAtlasWeb has **two** previews and a UI change should link both: the app
-(`CF_PROJECT=sahajatlas`) and the Ladle component playground (`sahajatlas-design`). Deep-link to
-the routes actually changed, not the root — a reviewer should land on the thing, not hunt for it.
-The preview builds a few minutes after the push, so create the PR, then refresh the body once the
-URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
-
-**Re-verify every deep link when you revise a PR.** A link that pointed at a real story or route
-can be invalidated by your own revision — if the review asked you to delete a component, its Ladle
-story went with it. Branch aliases keep the *host* current; they do not keep the *path* valid.
-
-Only SahajAtlasWordpress has no preview deploy; there the section is omitted.
+- SahajAtlasWeb has **two** previews and a UI change should link both: the app
+  (`CF_PROJECT=sahajatlas`) and the Ladle component playground (`sahajatlas-design`).
+- **Deep-link to the routes actually changed, not the root** — a reviewer should land on the thing,
+  not hunt for it.
+- The preview builds a few minutes after the push, so create the PR, then refresh the body once the
+  URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
+- **Re-verify every deep link when you revise a PR.** Your own revision can invalidate a link — if
+  the review asked you to delete a component, its Ladle story went with it. Branch aliases keep the
+  *host* current; they do not keep the *path* valid.
+- Only SahajAtlasWordpress has no preview deploy; there the section is omitted.
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
@@ -265,32 +251,28 @@ Open as a **draft** when `/implement-issue` passed `--draft` — see its autonom
 ### 8. Watch CI, fix, capped at 3
 
 **First confirm CI *can* run.** A conflicted PR has no computable merge commit, so GitHub schedules
-**zero** workflow runs for it — silently. The checks list shows only the non-Actions entries (a
-Railway or Cloudflare deploy still happens, since those build the branch head), and the run list is
-simply empty. It reads as a stuck scheduler, and waiting is futile:
+**zero** workflow runs for it — silently, and waiting is futile.
+(why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 
 ```
 mcp__github__pull_request_read  method:get  →  mergeable, mergeable_state
 ```
 
-`CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push.
-
-Also compare the last green run's `head_sha` against the current branch head: a run that predates
-the base moving is stale, and makes a conflicted PR look tested.
+- `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push.
+- **Compare the last green run's `head_sha` against the current branch head** — a run that predates
+  the base moving is stale.
 
 ```
 mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNumber:<pr>
 mcp__github__actions_get        # for a failing run's logs
 ```
 
-**Poll; never `subscribe_pr_activity`.** A subscription is the only thing that lets GitHub reach a
-finished run, and a run cannot end its own session — so the subscription is the part we control.
-Poll up to `ceilings.ciPollAttempts` times; if CI has not settled by then, report that and hand the
-PR back. An unfinished CI watch is a fact to report, not a reason to stay awake.
-
+- **Poll; never `subscribe_pr_activity`.** Poll up to `ceilings.ciPollAttempts` times; if CI has not
+  settled by then, report that and hand the PR back. An unfinished CI watch is a fact to report, not
+  a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
 - **Green** → report.
-- **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part of the
-  lean gate, commit, push, re-watch.
+- **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part
+  of the lean gate, commit, push, re-watch.
 - **Cap at 3 iterations.** Still red after three rounds → stop and summarize the remaining failures
   rather than looping.
 - A failure **pre-existing on `main`** → fix it here and note it.
@@ -305,19 +287,15 @@ merge, the gate you want is the approving review.
 
 ### 9. Hand the baton back, then report
 
-Once CI is green, **reassign the PR to `assignment.reviewer`**. This is the final action of the run
-and it means *done* — nothing further until someone responds. A PR still assigned to the bot reads as
-the bot's queue, not necessarily a fault — but a PR that is green and reviewed should never sit
-there.
-
-Do **not** hand back while CI is red or a fix loop is still running: that would put a broken PR into
-the reviewer's queue as though it were ready.
-
-**But an unsettled CI is not a reason to keep the baton.** If the poll budget runs out with CI still
-in progress, hand back anyway and say so plainly — "handed over with CI unsettled after N polls;
-last seen lint/typecheck green". An item with an uncertain status is still someone's; an item
-assigned to nobody has fallen out of the system entirely, because every worklist query is keyed on
-an assignee. Never end a run leaving a PR you opened unassigned.
+- **Once CI is green, reassign the PR to `assignment.reviewer`.** This is the final action of the
+  run and it means *done* — nothing further until someone responds.
+- **Do not hand back while CI is red or a fix loop is still running** — that would put a broken PR
+  into the reviewer's queue as though it were ready.
+- **But an unsettled CI is not a reason to keep the baton.** If the poll budget runs out with CI
+  still in progress, hand back anyway and say so plainly — "handed over with CI unsettled after N
+  polls; last seen lint/typecheck green".
+- **Never end a run leaving a PR you opened unassigned.**
+  (why: docs/why.md#hand-the-baton-back-even-with-ci-unsettled)
 
 Then report: PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a
 human should verify by hand. If the session surfaced a durable non-obvious gotcha, nudge the user to save
@@ -340,4 +318,5 @@ it to memory.
 
 - PR body template: `pr-template.md`
 - Per-repo settings: `<worktree>/.claude/workflow.json`
+- Why each rule exists: `docs/why.md` in `sydevs/claude-workflow`
 - Lean gate implementation: `<repo>/.claude/skills/pr-prep/check.sh`

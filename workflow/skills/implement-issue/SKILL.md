@@ -42,6 +42,7 @@ branch at every decision point below rather than stalling.
 
    Neither of the last two is visible through assignment, which is exactly why they are listed
    separately. **Never apply `ready-to-implement` yourself.** You *may* remove it — see step 4.
+   (why: docs/why.md#assignment-alone-is-not-the-implementation-gate)
 
    `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
    bumps, reflection config PRs — which have no issue to carry a label or an assignee.
@@ -59,9 +60,7 @@ branch at every decision point below rather than stalling.
    ```
    mcp__github__search_issues  query:"repo:$ORG/$REPO is:pr is:open linked:issue"
    ```
-   or resolve directly with the GraphQL `closingIssuesReferences` on each open PR. This is not
-   hypothetical — at backfill time four tickets had open PRs closing them, and all four would have
-   been re-implemented had assignment alone been the gate.
+   or resolve directly with the GraphQL `closingIssuesReferences` on each open PR.
 
 4. **Decide what "done" looks like before planning how.** Most tickets end in a PR. A ticket whose
    acceptance criteria describe a *decision* rather than a behaviour change — "evaluate", "determine
@@ -102,6 +101,14 @@ branch at every decision point below rather than stalling.
 9. **Tests.** Write them for what changed. Coverage adequacy is judged in `/finalize-pr` by
    `pr-test-analyzer`, so do not duplicate that analysis here.
 
+   **Fixture pre-mortem — before you write a test fixture, not after.** State in **one line** what
+   the fixture assumes about the real configuration, then **open the real config and verify that
+   assumption.** Name the file and the path you checked, in the PR body or the commit message.
+
+   A fixture defines the world its tests live in, so a wrong fixture cannot be caught by adding more
+   tests — every assertion in the file is evaluated against it, and they all pass.
+   (why: docs/why.md#a-test-fixture-defines-the-world-the-test-lives-in)
+
 10. **Collect the review aids** the PR body needs, so the reviewer does not have to reproduce the
    change to see it.
 
@@ -140,3 +147,8 @@ branch at every decision point below rather than stalling.
 - **Never** edit files in the main checkout while a worktree is active.
 - **Never** hand-roll shipping — `/finalize-pr` is the only path to a PR.
 - **Never** remove a worktree before its branch is pushed and green.
+- **Never** write a test fixture without verifying its shape against the real configuration.
+
+## References
+
+- Why each rule exists: `docs/why.md` in `sydevs/claude-workflow`
