@@ -195,13 +195,7 @@ step no-ops.
 > page. The Client Secret authenticates as `401 Invalid token`, which looks like a typo rather than
 > the wrong field. We lost time to this.
 
-4. Store it in the cloud environment as `SENTRY_CLAUDE_WORKFLOW_TOKEN` — or as
-   `SENTRY_CLAUDE_WORKFLOW_KEY`, which `loop-config.json` also accepts via `tokenEnvVarAliases`.
-
-> ⚠ **A name mismatch presents as "Sentry not configured", which is a legitimate state.** So the
-> survey skips quietly and a whole night is lost. The alias list exists to absorb exactly this; if
-> you add a third name, add it there too. `survey-sentry` now enumerates any `SENTRY*` variable it
-> finds when no configured name resolves, so the mismatch is reported rather than silently skipped.
+4. Store as `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment.
 5. Fill in `loop-config.json` → `sentry.org`, `sentry.projects`, and **`sentry.apiBase`**.
 
 > ⚠ **Use the regional API host.** If the DSN reads `…ingest.de.sentry.io`, the org is on Sentry's
