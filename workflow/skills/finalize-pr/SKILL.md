@@ -196,7 +196,27 @@ to omit; never rename one or add your own in its place.
 
 **The Preview section is mandatory wherever the repo has a preview deploy.** It is the single most
 useful thing in the body: it is how the reviewer sees the change without checking out the branch.
-Discover the URL — never construct it — using the repo's own script:
+
+**Always link the BRANCH alias, never a per-commit alias.** A commit alias is pinned to the SHA it
+was built from, so every later push silently strips the body of its value — a reviewer opening it
+sees old code and has no way to tell. This has already happened: #181 carried links three pushes
+stale, including one to a component the review had asked be deleted.
+
+For Cloudflare Pages the branch alias is `https://<slug>.<project>.pages.dev`, where `<slug>` is the
+branch name with every non-alphanumeric character replaced by `-` and then **truncated to 28
+characters**:
+
+```bash
+SLUG=$(git branch --show-current | tr -c 'a-zA-Z0-9' '-' | cut -c1-28)
+curl -s -o /dev/null -w '%{http_code}\n' "https://$SLUG.<project>.pages.dev"
+```
+
+`claude/feat-post-event-feedback` → `claude-feat-post-event-feedb`. **Verify the alias returns 200
+before putting it in the body** — the truncation boundary is easy to get wrong by a character, and a
+404 in the Preview section is worse than no section.
+
+Discover the URL — never construct it — using the repo's own script when it gives you a branch
+alias; construct-and-verify only for the branch alias itself:
 
 ```bash
 pnpm tsx scripts/get-railway-preview-url.ts     # SahajCloud
@@ -208,6 +228,10 @@ SahajAtlasWeb has **two** previews and a UI change should link both: the app
 the routes actually changed, not the root — a reviewer should land on the thing, not hunt for it.
 The preview builds a few minutes after the push, so create the PR, then refresh the body once the
 URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
+
+**Re-verify every deep link when you revise a PR.** A link that pointed at a real story or route
+can be invalidated by your own revision — if the review asked you to delete a component, its Ladle
+story went with it. Branch aliases keep the *host* current; they do not keep the *path* valid.
 
 Only SahajAtlasWordpress has no preview deploy; there the section is omitted.
 
@@ -276,6 +300,12 @@ there.
 
 Do **not** hand back while CI is red or a fix loop is still running: that would put a broken PR into
 the reviewer's queue as though it were ready.
+
+**But an unsettled CI is not a reason to keep the baton.** If the poll budget runs out with CI still
+in progress, hand back anyway and say so plainly — "handed over with CI unsettled after N polls;
+last seen lint/typecheck green". An item with an uncertain status is still someone's; an item
+assigned to nobody has fallen out of the system entirely, because every worklist query is keyed on
+an assignee. Never end a run leaving a PR you opened unassigned.
 
 Then report: PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a
 human should verify by hand. If the session surfaced a durable non-obvious gotcha, nudge the user to save

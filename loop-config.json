@@ -16,7 +16,7 @@
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
     "ciPollAttempts": 20,
-    "ciPollNote": "Bounded polling replaces subscribe_pr_activity, which was the only way GitHub could reach a finished run. A run cannot end its own session, so the subscription is the part we control. If CI has not settled within this many checks, report it and hand the PR back.",
+    "ciPollNote": "Bounded polling replaces subscribe_pr_activity for CI. NOTE the loop does NOT fully control its subscriptions: opening a PR auto-subscribes the session (subscription.created, from=system, at PR-open time), so a run can be woken even though it never called subscribe. That is tolerated rather than fought — the baton is the real defence: a woken session re-derives assignee:<bot>, finds the work handed back, and exits. If a run is woken, it may act on what the wake shows, then unsubscribe to restore the standing no-subscription state.",
     "maxWorkItemsPerRun": 3,
     "maxWorkItemsNote": "How many queue items one run may process before stopping — the backstop against a 30-item queue burning a whole run. Blocked-item checks and no-op skips are free; only items actually worked (revised, implemented, investigated, replied-to) count."
   },

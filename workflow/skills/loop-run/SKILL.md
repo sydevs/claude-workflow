@@ -64,6 +64,19 @@ the scarcest thing in this system.
 - **Every rung is idempotent.** Re-derive the worklist from GitHub each time; check for an existing
   PR/comment before creating one. A re-run after a crash must not double-post.
 - Work only on branches named `claude/*` — cloud sessions cannot push anywhere else.
+- **Report anomalies; do not explain them.** When something about your own environment looks wrong
+  — a tool refuses, a readback disagrees with a write, time appears to have jumped — record the
+  observation and move on. Do **not** diagnose the platform, and never let such a theory become the
+  stated evidence for a code change. Four separate runs have now reasoned soundly from an unmeasured
+  premise: a permission refusal read as absence, an MCP readback read as a failed write, a rendered
+  page read as an uncollapsed block, and a time gap read as clock skew. Each explanation was
+  coherent, detailed, and wrong. Diagnosis of the harness is a human's job.
+- **You cannot detect having been blocked.** An approval prompt in an unattended run does not fail —
+  it waits, invisibly, and you resume with no memory of the gap. So if wall-clock time seems to have
+  jumped, **that is the explanation**: say "roughly N minutes are unaccounted for" and continue.
+  Never theorise about clock skew or a hung job. Where you need a trustworthy clock, wake events
+  carry an authoritative `current-time` in GitHub's own frame; prefer it over the local clock for
+  anything you compare against a GitHub timestamp.
 
 ## Rung 0 — Preflight
 
@@ -220,7 +233,16 @@ question, add `needs-info` to the linked ticket, move on.
 
 ## Never subscribe to PR activity
 
-**Do not call `subscribe_pr_activity`.** It is the only thing that lets GitHub reach a finished run,
+**Do not call `subscribe_pr_activity`.** But know that declining to call it is not sufficient:
+**opening a PR auto-subscribes the session** — a `subscription.created` event with `from="system"`,
+at PR-open time, before you do anything else. So a run *can* be woken having never subscribed. That
+was measured, not assumed, after the skill claimed otherwise.
+
+Tolerate it rather than fight it. If a wake arrives: re-derive the worklist as always, act on
+anything the wake genuinely surfaces, then **unsubscribe** to restore the standing state. The baton
+is what makes this safe — a woken session finds its work already handed back and exits.
+
+The subscription is not the only thing that lets GitHub reach a finished run,
 and a run cannot end its own session — sessions observed `active` a full day after their work
 completed, including ones that unsubscribed exactly as instructed. So the subscription, not the
 session, is the part we control.
