@@ -54,6 +54,22 @@ Priority is about the **consequence of not doing it**, not effort or appetite. A
 broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
 which is exactly why it is a separate field.
 
+**The two fields have different owners, and this is not the `ready-to-implement` asymmetry.**
+
+| Field | Owner | Why |
+| --- | --- | --- |
+| **Priority** | the reviewer | It encodes consequence to the product, which is a judgement about the business, not the code |
+| **Effort** | **you, always** | It is an estimate of work. Whoever just read the code is best placed to make it, and that is you |
+
+**Always set Effort. It is never "the reviewer's to set".** If you have understood a ticket well
+enough to write or revise it, you have understood it well enough to size it — and if you truly
+cannot, say what makes it unsizable rather than leaving the field empty.
+
+This is a real failure, not a hypothetical: a run once wrote *"I would call it **Moderate** — one
+field, one branch in the sitemap endpoint, one lazy memoized read — but Effort is yours to set"*,
+having done the entire estimation and then discarded it. Writing the estimate into the field costs
+one more parameter on a call you are already making.
+
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
   issue_fields:[{field_name:"Priority", field_option_name:"High"},
@@ -254,7 +270,7 @@ backlog has to be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Priority field set (and Effort, where the size is knowable)
+- [ ] Priority field set (reviewer's, so leave an existing value alone) **and Effort set — always, by you**
 - [ ] `proposal` if loop-raised
 - [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
 - [ ] Body in the format above; checklist items are executable
