@@ -69,7 +69,11 @@
       "SahajAtlasWeb": "sahajatlas-web",
       "WeMeditateWeb": "wemeditate-web"
     },
-    "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
+    "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN",
+    "tokenEnvVarAliases": [
+      "SENTRY_CLAUDE_WORKFLOW_KEY"
+    ],
+    "tokenNote": "Resolve the credential from tokenEnvVar first, then each alias, and use the first that is set. The aliases exist because the deployed environment names it ..._KEY while this config historically read ..._TOKEN, and the mismatch cost a night's survey: the run reported 'not configured', which is indistinguishable from Sentry being legitimately absent. A Sentry variable present under an unread name is a MISCONFIGURATION and must be journalled loudly with the name found — never with the value."
   },
   "mailpit": {
     "url": "https://mailpit-production-db88.up.railway.app",
