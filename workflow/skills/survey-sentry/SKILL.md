@@ -12,37 +12,8 @@ An error's fix is usually a judgement call about intended behaviour, which is ex
 `ready-to-implement` gate exists to capture.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
-`loop-config.json`.
-
-### Resolving the token, and the failure that hid for a night
-
-Read the credential from the first of `sentry.tokenEnvVar` or `sentry.tokenEnvVarAliases` that is
-set:
-
-```bash
-TOKEN=""
-for V in $(jq -r '.sentry.tokenEnvVar, .sentry.tokenEnvVarAliases[]?' loop-config.json); do
-  eval "CANDIDATE=\$$V"
-  [ -n "$CANDIDATE" ] && { TOKEN="$CANDIDATE"; TOKEN_VAR="$V"; break; }
-done
-```
-
-**Distinguish the two failures, because they look identical and mean opposite things:**
-
-- **No Sentry variable set at all** → Sentry is genuinely not configured. Journal "not configured"
-  and skip. This is a legitimate state; the surveys degrade rather than fail.
-- **A Sentry-ish variable exists under a name nothing reads** → this is a *misconfiguration*, not
-  an absence, and it must be journalled loudly with the variable name found. An overnight run
-  reported "not configured" while a perfectly valid 64-character token sat in
-  `SENTRY_CLAUDE_WORKFLOW_KEY`, because the config read `..._TOKEN`. A whole night's survey was
-  lost to a name.
-
-```bash
-[ -z "$TOKEN" ] && env | grep -o '^SENTRY[A-Z_0-9]*' | sort
-```
-
-Report any name that turns up there. **Never print a value** — only names, lengths and status
-codes. A token echoed into a run log is a leaked credential.
+`loop-config.json`; the token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. Missing
+token → journal the failure and stop. Do not silently skip.
 
 **Use `apiBase`, never `sentry.io` directly.** This org lives on Sentry's **DE** region, and the
 global host answers `404` for these projects — which reads like a wrong project slug and sends you
@@ -55,7 +26,7 @@ chasing the wrong problem. The token also has no `org:read`, so `/organizations/
 API=$(jq -r '.sentry.apiBase' loop-config.json)
 ORG=$(jq -r '.sentry.org' loop-config.json)
 curl -s "$API/projects/$ORG/$PROJECT/issues/?query=is:unresolved&statsPeriod=14d" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $SENTRY_CLAUDE_WORKFLOW_TOKEN" \
   | jq '.[] | {id, title, culprit, count, userCount, firstSeen, lastSeen, permalink}'
 ```
 
