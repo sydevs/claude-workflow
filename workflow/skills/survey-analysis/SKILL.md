@@ -29,7 +29,7 @@ areas where this angle has the most purchase, and say in the journal why. Useful
   control; i18n → anything user-facing with a locale).
 - What changed recently (`git log --since='3 months ago' --name-only`) — new code has had the least
   scrutiny.
-- What the repo's own docs flag as delicate: `.claude/rules/`, `docs/embedding.md`, `CLAUDE.md`.
+- What the repo's own docs flag as delicate: nested `AGENTS.md` guides, `docs/`, the root `AGENTS.md`.
 
 ## The bar for filing
 
@@ -44,8 +44,8 @@ Specifically, do not file:
 - Refactors whose only argument is that the code is old.
 - Anything already covered by an open ticket — search first.
 
-Deliberate decisions are not findings. These repos record their reasoning in `.claude/rules/`,
-`.claude/docs/`, and ticket bodies; read before proposing. The split between `auto.js` and
+Deliberate decisions are not findings. These repos record their reasoning in their nested
+`AGENTS.md` guides, `docs/`, and ticket bodies; read before proposing. The split between `auto.js` and
 `embed.js`, the CSS reset rather than shadow DOM, `push: true` in dev — all are argued positions
 with open tickets. Re-proposing one as a discovery wastes review time and erodes trust in the rest
 of the findings.
