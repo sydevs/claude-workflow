@@ -12,8 +12,10 @@
  * yarn as well as npm.
  */
 
+import { execFileSync } from 'child_process'
+import { existsSync, statSync } from 'fs'
 import { homedir } from 'os'
-import { isAbsolute, resolve, sep } from 'path'
+import { dirname, isAbsolute, resolve } from 'path'
 import { readInput, loadConfig, worktreeRoot, deny } from './lib/workflow-config.mjs'
 
 const input = readInput()
@@ -36,19 +38,54 @@ function resolvePath(raw) {
   return isAbsolute(p) ? resolve(p) : resolve(ROOT, p)
 }
 
+/** A directory's git top-level, or null when it is not inside a repository. */
+function gitTopLevel(dir) {
+  if (!dir || !existsSync(dir)) return null
+  try {
+    return (
+      execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        cwd: dir,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() || null
+    )
+  } catch {
+    return null
+  }
+}
+
 /**
- * True when a captured path points outside this worktree — i.e. a sibling repo.
+ * True when a captured path belongs to a DIFFERENT repository than this session.
  *
  * The two git rules exist because *within* a repo the cwd is already its root,
  * so `git -C` and `cd … && git` are redundant and trigger permission prompts.
  * That rationale does not hold for a sibling checkout, and cross-repo work is
- * now routine (`/cross-repo-issue`, the shared workspace). Siblings are exempt;
- * anything inside this worktree stays blocked.
+ * routine here (`/cross-repo-issue`, the shared workspace).
+ *
+ * This compares REPOSITORIES, not directory containment, because containment
+ * gets the multi-root case exactly backwards. `worktreeRoot()` falls back to the
+ * project dir when `git rev-parse` fails, so a session rooted at the workspace
+ * folder — which is not itself a repo — takes ROOT to be that folder, and every
+ * sibling checkout then sits *under* it. The old containment test therefore read
+ * each sibling as "inside this worktree" and fired the very rules the exemption
+ * exists to lift, blocking all cross-repo git in the one session shape that
+ * needs it most.
  */
 function targetsSiblingRepo(match) {
   const p = resolvePath(match?.[1])
   if (!p) return false
-  return p !== ROOT && !p.startsWith(ROOT + sep)
+
+  const ownRepo = gitTopLevel(ROOT)
+  // Session root is not a repository at all (the multi-root workspace): there is
+  // no "this repo" for the rules to be about, so every target is a sibling.
+  if (!ownRepo) return true
+
+  const dir = existsSync(p) && statSync(p).isDirectory() ? p : dirname(p)
+  const targetRepo = gitTopLevel(dir)
+  // Outside any repo — the rules have nothing to say about it.
+  if (!targetRepo) return true
+
+  return targetRepo !== ownRepo
 }
 
 const rules = [
