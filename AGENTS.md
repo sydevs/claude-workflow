@@ -86,6 +86,7 @@ hook is doing too much.
 | `loop-config.json` | Every knob the loop reads: `ceilings`, `labels`, `assignment`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each run. |
 | `.claude/workflow.json` | This repo's own per-repo settings, in the same shape every product repo uses. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
+| `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
 
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
@@ -104,6 +105,14 @@ if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-confi
 - **Write for one reader who is busy.** The loop's own writing rules (lead with the outcome, detail
   in `<details>`, no throat-clearing) are in `loop-run/SKILL.md` and apply to the skill bodies
   themselves as much as to what they emit.
+- **The rule lives in the skill; the story lives in [`docs/why.md`](docs/why.md).** `loop-run` is
+  re-read on every run — roughly eleven times a day — so length there costs tokens each time *and*
+  dilutes the rules it carries. Retrospective justification ("a run once concluded X, wrongly",
+  "this cost us a night") earns its keep, but one hop away: add a heading in `docs/why.md` named
+  after the rule and cite it as `(why: docs/why.md#anchor)`.
+  **Never let a story be a rule's only statement.** Before moving narrative, check that what it
+  asks for survives inline as an imperative — if the instruction exists only inside the anecdote,
+  write the imperative first, then move the anecdote.
 
 ## Editing a hook
 
