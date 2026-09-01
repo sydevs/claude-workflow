@@ -140,6 +140,10 @@ claude --plugin-dir ./workflow    # load without installing
 claude plugin validate ./workflow --strict
 ```
 
+**[`AGENTS.md`](AGENTS.md) is the contributor guide** (`CLAUDE.md` is a symlink to it) — what is
+hazardous about editing a repo whose `main` branch is consumed live, the layout, and the
+conventions for skills and hooks.
+
 ## Licence
 
 MIT

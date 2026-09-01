@@ -1,0 +1,146 @@
+# claude-workflow — contributor guide
+
+Guidance for AI coding agents — Claude Code, OpenAI Codex, Cursor, and other
+AGENTS.md-compatible tools — working in this repository.
+
+> `CLAUDE.md` is a symlink to this file, so both tool ecosystems read one guide that cannot
+> drift. This matches SahajCloud, WeMeditateWeb and SahajAtlasWordpress.
+
+[`README.md`](README.md) explains what the plugin *is* and what each skill does — read it first,
+and do not restate it here. This file covers only what is dangerous or surprising about **editing**
+this repo.
+
+## What makes this repo different from the other four
+
+The other four sydevs repos ship a product. This one ships **the instructions the agent is running
+right now**, to all five repos including itself. Everything below follows from that.
+
+### ⚠ Merging to `main` IS the deploy
+
+There is no release step, no version bump that matters, no artifact. `main` is consumed live:
+
+- the two scheduled cloud routines read `loop-config.json` and the skills fresh from `main` on every
+  run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json);
+- `/plugin install workflow@sydevs` installs from `main` via
+  [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json).
+
+So the blast radius of a merge is *the next run of everything*. There is no rollback other than
+another PR, and a routine may fire before you have written it.
+
+### ⚠ You cannot validate a change by running it
+
+A skill edit takes effect on the **next** session, never the current one — the loaded skill body is
+already in context. So the usual "make the change, run it, see it work" loop does not exist here.
+The consequences:
+
+- **Prefer small, reversible edits.** One behaviour per PR.
+- **Never ship a skill change and a ceiling change in the same PR.** When the next run behaves
+  oddly, you need to know which one did it.
+- **Reason about the failure the change prevents**, and say so in the PR body. That reasoning is the
+  only evidence available before merge.
+
+`selfModificationNote` in [.claude/workflow.json](.claude/workflow.json) states the same rule; keep
+the two in agreement if you change either.
+
+### ⚠ The journal lives here too
+
+`claude-workflow` is both a worked repo *and* the home of the loop's daily journal — issues carrying
+the `ops-journal` label (`labels.journal` in `loop-config.json`). They are a diary, never work. Any
+query that builds a worklist must exclude them (`-label:ops-journal`), or the loop picks up its own
+entries as tickets. If you add a query anywhere in a skill, check it carries the exclusion.
+
+## The gate
+
+```bash
+claude plugin validate ./workflow --strict     # leanGate.command
+claude --plugin-dir ./workflow                 # load the plugin without installing it
+```
+
+**That validator is the entire automated gate.** There is no test suite and no CI — no
+`.github/workflows/` here at all. `validate` checks the plugin manifest and the skill frontmatter;
+it cannot check whether the prose is *right*, because the skills are prose.
+
+The real gate is a **supervised loop run**: `/workflow:loop-run --dry-run` locally, or a manually
+fired routine whose journal entry *and* transcript you then read. `docs/routine-setup.md` §6
+describes the supervised-bootstrap procedure, and its warning generalises — a green run status only
+means no infrastructure error; task-level failures appear only in the transcript.
+
+## No package manager
+
+There is no `package.json`, no lockfile, no `node_modules`, and nothing to install. The hooks are
+plain node `.mjs` files that Claude Code executes directly, so they may use **only** the node
+standard library. `packageManager` is `"none"` in `.claude/workflow.json` — the shared hooks read
+that key to name the right command, and here there is no right command to name.
+
+Do not add a dependency. If a hook needs something it cannot get from `node:*`, that is a signal the
+hook is doing too much.
+
+## Layout
+
+| Path | Holds |
+| --- | --- |
+| `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
+| `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
+| `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
+| `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
+| `loop-config.json` | Every knob the loop reads: `ceilings`, `labels`, `assignment`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each run. |
+| `.claude/workflow.json` | This repo's own per-repo settings, in the same shape every product repo uses. |
+| `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
+
+**Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
+that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
+if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-config.json` instead.
+
+## Writing a skill
+
+- **Frontmatter is a security surface.** `allowed-tools` on a `SKILL.md` is an instruction to an
+  agent holding write access to five repositories; an over-broad line here is this repo's equivalent
+  of an RCE, which is why `securityReview.triggerPattern` covers every `SKILL.md` and every hook.
+  Grant the narrowest set that works — compare `cross-repo-issue` (`Bash(gh issue edit:*)`,
+  `Bash(gh api:*)`, …) against the pipeline skills that genuinely need `Bash(*)`.
+- **`disable-model-invocation: true` unless the skill is a helper.** Every user- or routine-invoked
+  skill carries it, so nothing fires on inference from a stray phrase. Only `dev-server` and
+  `triage-issue` — both invoked *by* other skills — omit it.
+- **Write for one reader who is busy.** The loop's own writing rules (lead with the outcome, detail
+  in `<details>`, no throat-clearing) are in `loop-run/SKILL.md` and apply to the skill bodies
+  themselves as much as to what they emit.
+
+## Editing a hook
+
+Hooks run in a maintainer's own session with their credentials, on every matching tool call.
+
+- Resolve paths against the **git worktree root**, not `CLAUDE_PROJECT_DIR` — `/implement-issue`
+  works in a worktree by default. `worktreeRoot()` in `hooks/lib/workflow-config.mjs` is the one
+  place that decides this; use it.
+- **Never break a session on bad input.** `loadConfig()` returns `{}` for a missing or malformed
+  `workflow.json`, and `readInput()` returns `null` on anything unparseable. A repo that has not
+  been onboarded must still be usable.
+- A blocking hook is a false-positive risk that costs someone a working session. `block-wrong-bash`
+  has already inverted once against the exact cross-repo shape it exists to permit (#16) — test the
+  session shapes, not just the happy path.
+
+## ⚠ Protected paths, and why the docs are where they are
+
+Claude Code's **Protected Paths** guard makes any write under `.claude/` require interactive
+approval, and that guard runs *before* `permissions.allow` — so no allowlist entry can pre-empt it.
+An unattended run does not fail on the prompt; it **waits, invisibly**, and cannot perceive that it
+is blocked. One WeMeditateWeb run burned ~75 minutes that way.
+
+That is the reason documentation lives **outside** `.claude/` across all five repos: this file, the
+nested `AGENTS.md` guides in the product repos, and `docs/`. Here the only protected file is
+`.claude/workflow.json` — note that `.claude-plugin/` and `workflow/.claude-plugin/` are *not* under
+`.claude/` and are freely writable.
+
+When a change genuinely needs `.claude/workflow.json` edited, expect the prompt and do it
+attended.
+
+## Conventions
+
+- **Conventional commits**; derive the scopes actually in use from `git log --oneline -30`
+  (`loop`, `hooks`, `docs`, `fields`, …). The body carries the *reasoning* — read a few, they are
+  long on purpose, because the reasoning is the only artifact a prose change leaves behind.
+- **Branches are `claude/*`.** Cloud sessions cannot push anywhere else.
+- **Open the PR; never merge it.** Merge authority is an approving review plus zero unresolved
+  threads — never a label, and there is no CI here to be green.
+- A ticketless PR is fine for `**/*.md`, `docs/**` and `loop-config.json` (`prAllowlistGlobs`);
+  anything else wants a `ready-to-implement` issue.
