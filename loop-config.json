@@ -11,7 +11,7 @@
   "journalRepo": "claude-workflow",
   "ceilings": {
     "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts. Every cap here is a STOCK cap ('no more than N open/at once') or a per-run backstop — never a per-run flow quota, because those silently multiply with cadence: at 8 runs/day a 'per run' allowance is 8x a daily one. The real bound on implementations is wipCapPerRepo; on total spend, maxWorkItemsPerRun times the schedule.",
-    "wipCapPerRepo": 2,
+    "wipCapPerRepo": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
@@ -94,7 +94,8 @@
         "Moderate",
         "Hard"
       ]
-    }
+    },
+    "ownershipNote": "Priority is the REVIEWER's field — it encodes consequence to the product. Effort is the LOOP's, always: it is an estimate of work, and whoever just read the code is best placed to make it. Never leave Effort unset on a ticket you wrote or revised."
   },
   "relationships": {
     "$comment": "GitHub calls these Relationships; REST calls them dependencies. Readable and writable LOCALLY via gh, but NO MCP tool exposes them, so a cloud routine cannot see them. github-mcp-server ships issue_dependency_read/write behind the issue_dependencies flag, but every route to enabling it from a routine is closed (see docs/routine-setup.md). Until that changes, the real relationship is set locally AND mirrored into the issue body so a cloud run can read it.",
