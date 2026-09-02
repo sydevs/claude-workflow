@@ -219,6 +219,17 @@ is unblocked.
 carries neither `hold` nor `blocked-upstream`. Resolve each `Blocked by:` URL with `issue_read` and
 check its state — a closed blocker does not block.
 
+**When you find a blocker closed, strike the line.** Rewrite it in the body as:
+
+```markdown
+~~Blocked by: <url> — <original reason>~~ — cleared <YYYY-MM-DD>, that issue is closed
+```
+
+A live `Blocked by:` line against a closed issue is a standing cost and a standing trap. Every
+future run pays an `issue_read` to re-derive the same answer, and the line reads as a blocker to
+anyone — human or run — who does not resolve it. Three consecutive journals described one such
+ticket as "blocked" when its blocker had already merged. Striking it costs one edit, once.
+
 **Selection:** highest **Priority** field (`Critical` → `Low`), then oldest `updatedAt`. Pull the
 whole candidate set in one call:
 
@@ -285,6 +296,23 @@ Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → sk
 Before filing anything, check the standing proposal ceiling with
 `search_issues query:"org:$ORG is:issue is:open label:proposal"`. At or over `maxOpenProposals` →
 **do not file.** Record what you found in the journal instead; it waits for review capacity.
+
+**The ceiling governs proposals you went looking for, not defects you tripped over.**
+
+| Where it came from | Capped? |
+| --- | --- |
+| A survey — you set out to find candidates | **Yes.** Respect `maxOpenProposals` and `maxProposalsPerSurvey` |
+| Work on something else — a real defect surfaced while implementing, reviewing or investigating | **No. File it, every time, even over the ceiling** |
+
+The two differ in kind. A survey manufactures candidates on demand and will produce more whenever
+asked, so a stock cap is the right governor. An incidental finding is evidence you already hold:
+you were in the code, something was wrong, and the alternative to filing is that the knowledge dies
+with the run. **Never discard a real finding to respect a number**, and never ask permission to file
+one — a `proposal` commits nobody to anything, which is the whole point of the label.
+
+Say where it came from, and keep the bar: what is wrong, what it costs, and what to do. A finding
+you cannot point at a line for is a journal note, not a ticket — that bar is about evidence, not
+about the ceiling.
 
 ## Nightly reconciliation (nightly run only)
 
