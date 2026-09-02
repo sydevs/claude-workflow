@@ -150,7 +150,13 @@ export function mergeVerdict(pr, repo, policy = {}) {
  * Inputs are the three documented calls:
  *   get               → draft, mergeable, mergeable_state, requested_reviewers
  *   get_check_runs    → { check_runs: [{ name, status, conclusion }] }
- *   get_review_comments → { review_threads: [{ isResolved }] }
+ *   get_review_comments → { review_threads: [{ is_resolved }] }
+ *
+ * ⚠ That key is snake_case. The MCP tool returns `is_resolved`; GraphQL returns
+ * `isResolved`. Reading only the camelCase spelling made EVERY thread read as
+ * unresolved, so any PR that had ever been reviewed inline was held forever —
+ * fail-safe, and silent. Both spellings are accepted; absent, a thread counts
+ * as unresolved, which is the safe direction.
  *
  * `reviewDecision` has no MCP call of its own, so it is derived from
  * `list_pull_requests`' reviewDecision where available, or passed explicitly.
@@ -179,7 +185,13 @@ export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviewDec
     mergeable: pr?.mergeable === false ? 'CONFLICTING' : pr?.mergeable === true ? 'MERGEABLE' : 'UNKNOWN',
     mergeStateStatus: (pr?.mergeable_state || pr?.mergeStateStatus || '').toUpperCase(),
     reviewDecision: reviewDecision || pr?.reviewDecision || null,
-    reviewThreads: { nodes: (reviewThreads?.review_threads || []).map((t) => ({ isResolved: t.isResolved })) },
+    reviewThreads: {
+      nodes: (reviewThreads?.review_threads || []).map((t) => ({
+        // MCP says `is_resolved`, GraphQL says `isResolved`. Take either;
+        // neither present means unresolved, which is the safe direction.
+        isResolved: Boolean(t.is_resolved ?? t.isResolved),
+      })),
+    },
     commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: checks } } } }] },
   }
 }
