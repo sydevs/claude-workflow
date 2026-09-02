@@ -113,6 +113,11 @@
     "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real.",
     "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
   },
+  "review": {
+    "$comment": "Rung 5 / /workflow:adversarial-review — the critic-side pass on loop-authored PRs. Advisory only: approval stays with assignment.reviewer. bodyHeader is the fixed title line of every adversarial review body, and doubles as the existence-check key ONLY in the no-review-tools fallback — the primary key is structural, an own-login entry in get_reviews. profilePath is read at review time; missing means review on the stance alone and say so.",
+    "bodyHeader": "## 🧐 Adversarial review",
+    "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md"
+  },
   "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket.",
   "journal": {
     "$comment": "One issue per day in journalRepo, created lazily — no issue on a day the loop does nothing. There is no issue NUMBER here on purpose: the run finds today's by title and label, so nothing needs updating when the day rolls over.",

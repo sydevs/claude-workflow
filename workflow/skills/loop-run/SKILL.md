@@ -1,6 +1,6 @@
 ---
 name: loop-run
-description: One run of the autonomous pipeline across the sydevs repos — merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
+description: One run of the autonomous pipeline across the sydevs repos — merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, adversarially review the loop's own PRs, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
 argument-hint: '[--dry-run] [--kind loop|nightly]'
 disable-model-invocation: true
 effort: max
@@ -19,8 +19,8 @@ when a rule seems not to fit the case in front of you — never to decide whethe
 
 ## Inputs
 
-- `RUN_KIND` — `loop` (rungs 0–4, then 6; hourly through the Vancouver morning, two-hourly
-  afternoons) or `nightly` (rung 5's survey, the reconciliation sweeps, then rung 6; once, at
+- `RUN_KIND` — `loop` (rungs 0–5, then 7; hourly through the Vancouver morning, two-hourly
+  afternoons) or `nightly` (rung 6's survey, the reconciliation sweeps, then rung 7; once, at
   night). Defaults to `loop`; `--kind` overrides.
 - `--dry-run` — do everything read-only. Print the worklist each rung *would* act on and stop.
   Never comment, commit, push, merge, or label.
@@ -126,7 +126,7 @@ compares against it. Read it from `get_me` rather than assuming.
    mcp__github__search_issues  query:"org:sydevs mentions:sydevs-bot is:open updated:><last-run>"
    ```
 
-The per-repo PR list is cheap and stays full. **Read the last journal entry** (rung 6) to learn when
+The per-repo PR list is cheap and stays full. **Read the last journal entry** (rung 7) to learn when
 the previous run ended — "since last run" below means since that timestamp; with no journal yet, the
 last 24 hours. **Count open loop PRs per repo** (author is this agent, branch `claude/*`) for the
 WIP gate.
@@ -207,6 +207,14 @@ Every item here counts against `maxWorkItemsPerRun`. Highest-priority linked tic
 | **Change request on a `claude/*` PR — ours** | Implement the feedback. Then: reply to **each** review comment individually, saying what changed or why it was not done, with `identity.commentMarker` appended; refresh the PR **title and body** from the current `origin/main...HEAD`; resolve the threads you actually addressed |
 | **Change request on a human's PR** | **You cannot push to it** — a cloud session may only push to `claude/*`. This is a wall, not a permission to ask for. Take the three steps below instead |
 | **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question, add `needs-info` to the linked ticket, move on |
+| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body, reassign to `assignment.reviewer` |
+
+**The author filter has exactly one exception.** Everywhere else, a comment counts as feedback only
+when its author is not the own login — but a review thread whose **root comment** the loop itself
+wrote exists only because rung 5's adversarial review created it, and it is work, not self-chatter.
+A bot reply inside a human's thread keeps a human root and stays excluded; no marker string is
+involved, the comment's type and its thread's root author are the whole key.
+(why: docs/why.md#the-author-filters-one-exception)
 
 On a human's PR, in order:
 
@@ -317,7 +325,62 @@ Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since t
 - **Remove `needs-info` once answered.** If the comment reads as approval ("yes, do it"), say that
   the `ready-to-implement` label is what actually starts work — **do not add it yourself.**
 
-## Rung 5 — Survey (nightly run only)
+## Rung 5 — Adversarial review (loop runs only)
+
+Counts against `maxWorkItemsPerRun`, and runs **only on leftover budget**: if rungs 2–4 spent the
+run's slots, skip the whole rung and journal it under `⏭️ Skipped`. Going reviewless on a busy day
+is the design, not a failure. (why: docs/why.md#the-adversarial-review-runs-last-and-may-starve)
+
+Every eligible loop-authored PR gets **one adversarial review, ever**, before the reviewer reads
+it. The review is advisory — approval stays with `assignment.reviewer`, and a run can neither
+approve nor request changes on its own PR anyway, so every review submits as `COMMENT`.
+(why: docs/why.md#reviews-are-comment-only)
+
+One server-side query derives the candidates — `reviewed-by:` matches reviews of every state, so
+the census needs no per-PR review fetch:
+
+```
+mcp__github__search_issues  query:"org:$ORG is:pr is:open draft:false author:<own login> -reviewed-by:<own login> -label:ops-journal"
+```
+
+Work the candidates in two groups, oldest `created_at` first within each:
+
+1. **PRs not assigned to `assignment.bot`** — already handed to the reviewer; a review that lands
+   before they read the PR is the whole point of the rung.
+2. **Bot-assigned PRs**, skipping any with `reviewDecision == CHANGES_REQUESTED` — those are
+   mid-revision, and the once-ever review is better spent after rung 2 hands them back.
+
+PRs opened earlier in this same run are eligible: isolation comes from the subagent below, never
+from waiting a run.
+
+Per candidate, until the leftover budget is spent:
+
+- `pull_request_read method:get` — still open, still not draft.
+- **Green by rung 1's definition** (check runs, statuses, at least one check run). claude-workflow
+  is the one exception: it has no CI, so zero check runs count as green there. Not green → skip;
+  a no-op skip is free.
+- **Re-check for an existing review immediately before writing** — `pull_request_read
+  method:get_reviews`, filtered to the own login. Search is a derived index and can lag; this read
+  is authoritative. Any own-login review of any state → skip silently. An own-login **`PENDING`**
+  review is a crashed run's residue: delete it if a delete tool resolves, otherwise submit it
+  as-is; journal either way. (why: docs/why.md#one-review-per-pr-ever)
+- **Spawn a fresh subagent (Task) to conduct the review.** Its prompt carries only the repo, the
+  PR number, the checkout path, and the instruction to read
+  `workflow/skills/adversarial-review/SKILL.md` in the claude-workflow checkout and follow it
+  exactly. Never review in this session — a PR built here would be judged by the mind that built
+  it. (why: docs/why.md#the-review-never-shares-the-implementers-context)
+- One completed review = one work item. A findings review leaves the PR assigned to
+  `assignment.bot` (the subagent does this); a clean review touches nothing.
+
+**Starting a review thread is this rung's exclusive privilege.** No other rung may create an
+inline review comment — the structural key above (own-login root = adversarial review) is only
+sound while that holds. Replying inside an existing thread is not creating one, and stays allowed
+everywhere. (why: docs/why.md#the-author-filters-one-exception)
+
+`--dry-run`: print both groups with each candidate's verdict — eligibility, CI state, deferral
+reason — and stop before spawning anything.
+
+## Rung 6 — Survey (nightly run only)
 
 Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
 
@@ -362,7 +425,7 @@ five workflow repos.
 residue. Remove the label, journal which items were cleared, and **leave the item assigned as
 found** — assignment is the queue, not the crash signal.
 
-## Rung 6 — Journal
+## Rung 7 — Journal
 
 **One journal issue per day**, in `journalRepo`, labelled `labels.journal`, created lazily by the
 day's first run.
@@ -440,6 +503,7 @@ Window since the last entry: ~Nh.
 ## 🔧 Changed
 - ✏️ [repo#N — <title>](url) — <what changed, one clause>
 - 💬 [repo#N — <title>](url) — replied about <topic>
+- 🧐 [repo#N — <title>](url) — reviewed: <clean, or "N findings, handed back">
 
 ## 🚀 Built
 - 📦 [repo#N — <title>](url) — implements [repo#M](url) · CI green
@@ -479,7 +543,8 @@ Window since the last entry: ~Nh.
 - **The summary line is scannable prose, not a status code.** "declined — the Atlas form it mirrors
   does not exist yet" beats "declined (blocked)".
 - Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
-  🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed.
+  🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed ·
+  🧐 reviewed.
 
 ### `<details>` survives the write path — MCP readback lies about it
 

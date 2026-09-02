@@ -58,7 +58,8 @@ each person runs `claude plugin install` once.
 | `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase → proposals. |
 | `/workflow:survey-contracts` | Thursday: do the published contracts still describe reality? |
 | `/workflow:cut-release` | Friday: tag, changelog, GitHub Release where work has accumulated. |
-| `/workflow:reflect` | Sunday: read the week's journal and propose changes to the loop itself. |
+| `/workflow:reflect` | Sunday: read the week's journal and the reviewer's review activity; refine the reviewer profile and propose changes to the loop itself. |
+| `/workflow:adversarial-review` | Critic-side adversarial pass on one loop-authored PR — advisory, profile-driven, always in a fresh context; the human stays the approver. |
 
 Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
 
@@ -67,7 +68,7 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 Two scheduled cloud routines run `loop-run` across all five repos — the four product repos and
 this one. `sydevs-loop` runs hourly through the Vancouver morning and every two hours in the
 afternoon (rungs: merge what you approved, revise what you commented on, implement what you
-cleared, journal it);
+cleared, adversarially review what it built, journal it);
 `sydevs-survey-nightly` runs once at night (the day's survey, the dropped-baton and stale-claim
 sweeps, journal). Splitting the survey out guarantees it runs even on days the queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
 are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.
