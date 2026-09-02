@@ -298,6 +298,12 @@ Measured in a routine on 2026-09-02:
 | `curl https://api.github.com/repos/<any in-session repo>` | **403** |
 | `curl https://api.github.com/graphql` | **403** — *"only the pinned set of PR-review operations is served"* |
 | `mcp__github__*` | **works**, and is scoped to the session's configured repositories |
+| `curl` to `example.com`, `de.sentry.io`, Railway, `raw.githubusercontent.com`, `codeload.github.com` | **all reachable** — only GitHub's API is gated |
+
+`api.github.com` connects to `peer=127.0.0.1` behind a certificate issued by `CN=CCR Upstream Proxy
+CA (staging); O=Anthropic` — a TLS-intercepting proxy (`CCR_AGENT_PROXY_ENABLED`,
+`NODE_EXTRA_CA_CERTS`) that allowlists by **path, not credential**. Bringing your own PAT does not
+change the answer; it was tested with a deliberately invalid one and drew the identical 403.
 
 So a routine reaches GitHub **only through the MCP tools**. `/user` answering 200 while every
 `repos/...` path 403s is the trap: it makes the token look fine and the repo look missing, when the

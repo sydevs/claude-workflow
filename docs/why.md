@@ -261,6 +261,22 @@ Not "should not" — *cannot*, by any client. Measured in a routine on 2026-09-0
 | `curl https://api.github.com/user` | **200** |
 | `mcp__github__*` | works, scoped to the session's configured repositories |
 
+The mechanism, since knowing it stops the next person re-testing the same dead ends: `api.github.com`
+resolves to GitHub's real address but connects to `peer=127.0.0.1`, and the certificate is issued by
+`CN=CCR Upstream Proxy CA (staging); O=Anthropic`, trusted through `NODE_EXTRA_CA_CERTS`
+(`CCR_AGENT_PROXY_ENABLED`, `CCR_UPSTREAM_PROXY_ENABLED`). It is a TLS-intercepting proxy that
+allowlists **by path, regardless of credential** — a deliberately invalid PAT draws the same 403 as
+the harness token, under both `Bearer` and `token` schemes, on REST and on GraphQL. **A
+self-managed PAT therefore buys nothing**, and defeating the interception is defeating a sandbox
+control.
+
+What is NOT gated is everything else: `example.com`, `de.sentry.io`, Railway apps,
+`raw.githubusercontent.com` and `codeload.github.com` all answer. Arbitrary HTTPS egress works — which
+is how the Sentry and Mailpit rungs already work, and the only route by which a script could ever
+reach GitHub state directly (a self-hosted relay holding its own token). That is a real option with a
+real cost, not a workaround: it re-grants, under our own credential, access the proxy deliberately
+gates.
+
 The identical 403 with and without an auth header is the part that settles it: the proxy is refusing
 the *path*, not the credential, so installing a binary or finding a better token cannot help.
 
