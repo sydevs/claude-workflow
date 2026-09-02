@@ -361,11 +361,11 @@ Two, split by **function** rather than by time of day, both attaching all five r
 pointing at its own skill — both skills start with `/workflow:preflight` and end with
 `/workflow:journal`:
 
-| | `sydevs-loop` | `sydevs-survey-nightly` |
+| | `sydevs-work-hourly` | `sydevs-survey-nightly` |
 | --- | --- | --- |
 | Cron (UTC) | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` | `0 8 * * *` |
 | Local (PT) | hourly 05:00–12:00, then 14:00 · 16:00 · 18:00 | 01:00 |
-| Skill | `queue-routine` (the ladder, rungs 1–5) | `survey-routine` (survey, reconciliation sweeps) |
+| Skill | `work-routine` (the ladder, rungs 1–5) | `survey-routine` (survey, reconciliation sweeps) |
 | Model | opus | opus |
 
 The split guarantees the survey runs daily — as a low rung of the ladder it could be starved for
@@ -381,17 +381,26 @@ to every two hours. Eleven small runs beat two large ones: smaller blast radius 
 fresher context per item, and most runs find an empty queue and exit cheaply.
 
 The prompt is deliberately thin — all behaviour lives in the repo, so a merged change takes effect
-on the next run with no redeploy:
+on the next run with no redeploy. It names the skill, warns that restated rules go stale, and says
+how to end; it enumerates nothing:
 
 ```
-Read claude-workflow/workflow/skills/queue-routine/SKILL.md and follow it exactly.
-Do not improvise around missing credentials or tools: journal the failure and stop.
+Read `claude-workflow/workflow/skills/work-routine/SKILL.md` and follow it exactly. It is the
+single source of truth for this run — the complete specification, including every hard rule — and
+it begins with the shared `preflight` skill and ends with the shared `journal` skill.
+`claude-workflow/loop-config.json` holds the ceilings, labels, assignment and identity it refers
+to. Read both before acting.
+
+This prompt deliberately restates none of the rules. Earlier versions did, and the copies went
+stale twice — once naming a config key that had been deleted, once retaining an instruction after
+the rule changed. If this prompt and the skill ever disagree, **the skill wins, and journal the
+discrepancy.**
+
+Then stop. Do not try to end the session — you cannot, and lingering is expected. Just do not
+leave anything that could wake you.
 ```
 
-— with `survey-routine/SKILL.md` in the `sydevs-survey-nightly` prompt. A stored prompt that still
-points the nightly routine at `queue-routine` (the pre-split shape, including one with a stray
-`RUN_KIND` line) keeps working: `queue-routine` redirects a nightly invocation to `survey-routine` — but
-update the prompt anyway; the redirect is a shim, not the design.
+— identical for `sydevs-survey-nightly` with `survey-routine/SKILL.md` as the path.
 
 Create them **disabled**, via the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.
 
@@ -408,8 +417,13 @@ Two API quirks worth knowing:
 
 | Routine | Id | Schedule |
 | --- | --- | --- |
-| `sydevs-survey-nightly` | `trig_016XeEsVa7dfSCum7t4Vmeuw` | `0 8 * * *` (01:00 PT daily) |
-| `sydevs-loop` | `trig_01GyUCMWmPLekwTzYL7Xzobi` | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` (hourly 05:00–12:00 PT, then 14/16/18) |
+| `sydevs-survey-nightly` | `trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6` | `0 8 * * *` (01:00 PT daily) |
+| `sydevs-work-hourly` | `trig_01BUwH4WjazMXjG2bnC3TVRL` | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` (hourly 05:00–12:00 PT, then 14/16/18) |
+
+The predecessors — `sydevs-loop` (`trig_01GyUCMWmPLekwTzYL7Xzobi`) and the original
+`sydevs-survey-nightly` (`trig_016XeEsVa7dfSCum7t4Vmeuw`) — pointed at the pre-split
+`loop-run/SKILL.md` path and were replaced, not updated, when the runs were renamed; delete them
+once the replacements are enabled.
 
 Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 <https://claude.ai/code/routines> — the API cannot delete a routine.

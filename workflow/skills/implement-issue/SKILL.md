@@ -55,7 +55,7 @@ branch at every decision point below rather than stalling.
    gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by \
      --jq '[.[] | select(.state == "open")] | length'
    ```
-   **When a blocker turns out to be closed, strike the line in the body** — see `/workflow:queue-routine`.
+   **When a blocker turns out to be closed, strike the line in the body** — see `/workflow:work-routine`.
    Leaving it live makes every future run re-derive the same answer and reads as a blocker to anyone
    who does not.
 

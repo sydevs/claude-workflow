@@ -3,7 +3,7 @@
 The rules live in the skills. **This file holds the failure that produced each one**, and nothing
 else — no rule appears here that is not already stated as an imperative in a `SKILL.md`.
 
-The split is deliberate. `queue-routine/SKILL.md` is read fresh on every run, roughly eleven times a day
+The split is deliberate. `work-routine/SKILL.md` is read fresh on every run, roughly eleven times a day
 across five repos; length there costs tokens on every run *and* dilutes the rules it carries. But a
 rule with no story behind it is a rule a model talks itself out of when it meets a case the wording
 did not anticipate. So the story keeps its place — one hop away, cited from the rule as
@@ -17,13 +17,13 @@ This file lives in the `sydevs/claude-workflow` checkout, beside `loop-config.js
 
 ---
 
-# The runs — queue-routine, survey-routine, preflight, journal
+# The runs — work-routine, survey-routine, preflight, journal
 
 ## The routine prompt is not the specification
 
 The two scheduled routine prompts are set through an API, not stored as files in this repo, so they
 cannot be reviewed in a PR and cannot be diffed against the skills. For a while they restated about
-a dozen of `queue-routine`'s hard rules "for safety". That duplication has gone stale twice:
+a dozen of `work-routine`'s hard rules "for safety". That duplication has gone stale twice:
 
 - a prompt referred to a `journalIssue` config key months after it was deleted from
   `loop-config.json` and replaced by the `journal` object;
@@ -225,7 +225,7 @@ it. The evidence was real; the inference was wrong at the read layer, not the wr
 `persist_session: false` governs whether the *next* fire reuses a session, not whether this one dies.
 Lingering is the platform's behaviour, not a fault to work around.
 
-## The nightly run is not a ladder
+## The survey routine is not a ladder
 
 The two routines diverged — the survey was split out precisely so a busy queue could not starve
 it — but for a while both kept sharing one skill file and one rung numbering. That numbering

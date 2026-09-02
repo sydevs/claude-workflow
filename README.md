@@ -52,7 +52,7 @@ each person runs `claude plugin install` once.
 | `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
-| `/workflow:queue-routine` | One pass down the working-day ladder: merge, revise, implement, adversarially review. Invoked by the `sydevs-loop` routine; `--dry-run` locally. |
+| `/workflow:work-routine` | One pass down the working-day ladder: merge, revise, implement, adversarially review. Invoked by the `sydevs-work-hourly` routine; `--dry-run` locally. |
 | `/workflow:survey-routine` | The once-a-night run: the day's survey and the reconciliation sweeps. Invoked by the `sydevs-survey-nightly` routine; `--dry-run` locally. |
 | `/workflow:preflight` | Ground rules and run start shared by both runs — auth, identity, the census. Invoked by the two run skills, not on its own. |
 | `/workflow:journal` | The run's journal entry and ending, shared by both runs. Invoked by the two run skills, not on its own. |
@@ -69,8 +69,8 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 ## The loop
 
 Two scheduled cloud routines work all five repos — the four product repos and this one — each with
-its own run skill, both starting with `preflight` and ending with `journal`. `sydevs-loop` runs
-`queue-routine` hourly through the Vancouver morning and every two hours in the afternoon — one pass
+its own run skill, both starting with `preflight` and ending with `journal`. `sydevs-work-hourly` runs
+`work-routine` hourly through the Vancouver morning and every two hours in the afternoon — one pass
 down a ladder of rungs ordered by how much they respect your attention: merge what you approved,
 revise what you commented on, implement what you cleared, adversarially review what it built.
 `sydevs-survey-nightly` runs `survey-routine` once at night — no ladder, just the day's survey and the

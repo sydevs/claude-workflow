@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Invoked by queue-routine rung 5 in a fresh subagent; runnable locally against a PR number.
+description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Invoked by work-routine rung 5 in a fresh subagent; runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 context: fork
