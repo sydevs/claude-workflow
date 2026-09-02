@@ -225,6 +225,57 @@ it. The evidence was real; the inference was wrong at the read layer, not the wr
 `persist_session: false` governs whether the *next* fire reuses a session, not whether this one dies.
 Lingering is the platform's behaviour, not a fault to work around.
 
+## The adversarial review runs last and may starve
+
+A pre-filter for the reviewer is worth exactly the budget nothing else claimed. Every rung above it
+serves the reviewer more directly — merging what they approved, fixing what they flagged,
+implementing what they green-lit — so reserving a slot for reviews would tax the very work the
+reviews exist to smooth. On a saturated day the rung goes without, the reviewer reads unreviewed
+PRs as they always did, and nothing is lost that was ever promised. Starving is the design working.
+
+## One review per PR, ever
+
+A bot that re-reviews argues with itself across revisions and doubles the reviewer's reading — the
+second opinion of the same critic is noise, and the human is the approver anyway, so revision
+quality gets its judgement at approval time. Ever-once also makes the rung cheap to make idempotent:
+the key is an existing own-login review read directly from GitHub just before writing, never search
+(a derived index that lags) and never memory (a crashed run has none).
+
+## Reviews are COMMENT-only
+
+Two reasons, one mechanical and one about authority. GitHub rejects `APPROVE` and `REQUEST_CHANGES`
+on your own pull request, and the loop authors the PRs it reviews. And even where the API would
+allow it, an approving bot review could be read — by a human skimming, or by a future rule — as
+merge authority, which belongs to the reviewer's approving review alone.
+
+## The author filter's one exception
+
+The filter (why: #filter-feedback-by-author) exists so the loop never treats its own words as
+instructions. The adversarial review is the one deliberately self-addressed artifact in the system,
+so it needs a key the filter can honour without a carve-out swallowing the rule: **comment type
+plus thread root**. GitHub already separates review threads from conversation comments, and the
+loop starts review threads in exactly one place — so "unresolved thread rooted by the own login"
+identifies the adversarial review with no marker string to drift, leak, or forget. The invariant
+that holds this together is exclusivity: the moment any other rung starts a review thread, the key
+stops meaning anything, which is why starting one is rung 5's exclusive privilege.
+
+## The review never shares the implementer's context
+
+A critic that inherits the builder's reasoning inherits its blind spots — the assumptions that made
+a bug invisible while writing it make the same bug invisible while reviewing it, and a session that
+just argued a design into existence cannot be adversarial toward it. A fresh subagent with an empty
+context, handed nothing but the PR's coordinates, is the closest available thing to independent
+eyes. The isolation is also why PRs opened earlier in the same run are eligible: waiting a run was
+only ever a proxy for fresh eyes, and the subagent is the real thing.
+
+## The reviewer profile is the learning surface
+
+The skill is read on every review, so it must stay short, stable, and philosophical; taste accretes
+instead in a document the Sunday reflection can edit ticketlessly. The profile was seeded from the
+full backfilled history of the reviewer's review comments across the five repos and shipped in the
+PR that introduced the rung — the reviewer correcting their own portrait in that review was its
+first calibration pass.
+
 ---
 
 # finalize-pr
@@ -304,3 +355,16 @@ This is the failure mode more tests cannot fix. Every other kind of bug is, in p
 another assertion; a wrong fixture is not, because it defines the world every assertion in that file
 is evaluated against. The one-line pre-mortem is cheap precisely because it happens before the
 fixture exists, when the assumption is still conscious.
+
+---
+
+# reflect
+
+## Reflect edits the profile only on recurrence
+
+One comment is weather; two PRs with the same theme is a pattern. A profile that absorbs every
+remark verbatim converges on exactly the long DO/DON'T checklist the profile-plus-stance design
+was chosen to avoid — a document the review skims instead of weighs. The gate keeps the profile a
+model of the reviewer's *intent*, which generalises to cases the week never showed, rather than a
+transcript of their incidents, which does not. It also keeps the weekly diff small enough that the
+reviewer can actually audit their own portrait.
