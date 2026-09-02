@@ -18,10 +18,23 @@
  *     loop would comment "checks unfinished" every run about checks that do not
  *     exist, on its own self-improvement PRs. (#29)
  *
- * GraphQL's `statusCheckRollup` merges both surfaces into one list, so the split
- * that caused #26 does not exist here. The "no CI" case is DERIVED from the
- * repo's workflow count rather than configured, so it cannot go stale the day
- * someone adds a workflow.
+ * ## Why it does no fetching
+ *
+ * **A routine cannot reach the GitHub API by any client.** Measured 2026-09-02:
+ * `gh` is absent from the image; installing it does not help, because
+ * `gh api repos/...` returns `403 GitHub access is not enabled for this session`
+ * — byte-identical with and without an auth header, so the proxy is refusing the
+ * path rather than the credential. `curl` to the same path, and to GraphQL, 403s
+ * the same way. Only `mcp__github__*` has a route.
+ *
+ * So the verdict functions here are PURE: they take data the caller already
+ * fetched — with MCP in a routine, with `gh` locally — and return a decision.
+ * That split is the right one anyway. The bugs above were never in the fetching;
+ * they were in deciding what the fetched values meant, which is the half that had
+ * no single home.
+ *
+ * `normalizeMcp()` accepts exactly what the three documented MCP calls return, so
+ * the loop's cloud path and a maintainer's local path reach the same code.
  */
 
 import { api, graphql } from './gh.mjs'
@@ -33,16 +46,26 @@ const BAD_CONCLUSIONS = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_RE
 
 const workflowCache = new Map()
 
-/** Does this repo run GitHub Actions at all? Derived, so it cannot go stale. */
+/**
+ * Does this repo run GitHub Actions at all? Derived rather than configured, so it
+ * cannot go stale the day someone adds a workflow.
+ *
+ * Pre-seed it with `setRepoWorkflows()` where there is no fetch path — a routine
+ * reads the count with `mcp__github__list_workflows` and passes it in. Unknown
+ * defaults to TRUE: assuming a repo has CI makes a missing check block a merge,
+ * where assuming it has none would call an untested PR green.
+ */
+export function setRepoWorkflows(repo, hasWorkflows) {
+  workflowCache.set(repo, Boolean(hasWorkflows))
+}
+
 export function repoHasWorkflows(repo) {
   if (!workflowCache.has(repo)) {
-    let count = 0
     try {
-      count = api(`repos/${repo}/actions/workflows`)?.total_count ?? 0
+      workflowCache.set(repo, (api(`repos/${repo}/actions/workflows`)?.total_count ?? 0) > 0)
     } catch {
-      count = 0
+      return true
     }
-    workflowCache.set(repo, count > 0)
   }
   return workflowCache.get(repo)
 }
@@ -159,4 +182,46 @@ export function mergeVerdict(pr, repo, policy = {}) {
     return { verdict: 'HOLD', reason: 'conflicts with the base branch', ci, unresolved }
   if (!ci.green) return { verdict: 'HOLD', reason: ci.reason, ci, unresolved }
   return { verdict: 'MERGE', reason: ci.reason, ci, unresolved }
+}
+
+
+/**
+ * Build the shape `mergeVerdict` wants from what the MCP tools return, so a
+ * routine reaches the same decision code a local `gh` run does.
+ *
+ * Inputs are the three documented calls:
+ *   get               → draft, mergeable, mergeable_state, requested_reviewers
+ *   get_check_runs    → { check_runs: [{ name, status, conclusion }] }
+ *   get_review_comments → { review_threads: [{ isResolved }] }
+ *
+ * `reviewDecision` has no MCP call of its own, so it is derived from
+ * `list_pull_requests`' reviewDecision where available, or passed explicitly.
+ * Absent, it is treated as NOT approved — the safe direction, since the only
+ * error that can merge something is one that invents an approval.
+ */
+export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviewDecision }) {
+  const checks = [
+    ...(checkRuns?.check_runs || []).map((c) => ({
+      __typename: 'CheckRun',
+      name: c.name,
+      conclusion: (c.conclusion || '').toUpperCase() || null,
+      status: (c.status || '').toUpperCase(),
+    })),
+    ...(statuses?.statuses || []).map((s) => ({
+      __typename: 'StatusContext',
+      context: s.context,
+      state: (s.state || '').toUpperCase(),
+    })),
+  ]
+
+  return {
+    number: pr?.number,
+    title: pr?.title,
+    isDraft: Boolean(pr?.draft ?? pr?.isDraft),
+    mergeable: pr?.mergeable === false ? 'CONFLICTING' : pr?.mergeable === true ? 'MERGEABLE' : 'UNKNOWN',
+    mergeStateStatus: (pr?.mergeable_state || pr?.mergeStateStatus || '').toUpperCase(),
+    reviewDecision: reviewDecision || pr?.reviewDecision || null,
+    reviewThreads: { nodes: (reviewThreads?.review_threads || []).map((t) => ({ isResolved: t.isResolved })) },
+    commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: checks } } } }] },
+  }
 }

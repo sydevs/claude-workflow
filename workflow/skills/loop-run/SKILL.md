@@ -82,9 +82,17 @@ thing here.
 
 ## Rung 0 — Preflight
 
-**This runs on the GitHub MCP tools, not `gh`.** A routine sandbox has no `gh` binary and its
-session prompt mandates `mcp__github__*`. `gh` remains correct when a skill is invoked locally as a
-slash command.
+**This runs on the GitHub MCP tools, not `gh`.** A routine reaches GitHub *only* through
+`mcp__github__*`. Verified rather than assumed, because `docs/routine-setup.md` once claimed the
+opposite and cost a day: `gh` is absent from the image, **installing it does not help** — `gh api
+repos/...` returns `403 GitHub access is not enabled for this session`, byte-identical with and
+without an auth header, so the proxy refuses the path rather than the credential — and `curl` to
+REST and to GraphQL 403s the same way. `git` fetch and push still work; they do not use the API.
+
+**So a script in this plugin never fetches.** The scripts below take data *you* fetched with MCP and
+return a decision. `gh` remains correct when a skill is invoked locally as a slash command, and the
+scripts accept that path too — but the rules they apply are the same code either way.
+(why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
 **Confirm access first with `mcp__github__get_me`** — an unauthorized session fails every call with
 a 403 rather than an auth prompt. Failure → journal it and stop; do not improvise.
@@ -100,22 +108,20 @@ compares against it. Read it from `get_me` rather than assuming.
   `Blocked by:` line in the issue body (see `/workflow:triage-issue`). **Never conclude a ticket is
   unblocked because you could not find a blocker** — conclude it only from the body.
 
-**Build the queue with one call, not a dozen searches:**
+**Build the queue from the assignee field — it IS the worklist.** One indexed search per shape,
+scoped to the five repos in `repos` (never a bare `org:` — that drags in retired repositories):
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --since <last-run-ISO>
-${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --json --since <last-run-ISO>
+```
+mcp__github__search_issues  query:"repo:sydevs/A repo:sydevs/B … is:pr is:open assignee:<bot>"
+mcp__github__search_issues  query:"repo:… is:issue is:open assignee:<bot> -label:ops-journal"
+mcp__github__search_issues  query:"repo:… mentions:<bot> is:open updated:>=<last-run-ISO>"
 ```
 
-It prints every rung's candidates, per-repo WIP against `wipCapPerRepo`, a merge verdict for each PR
-the bot holds, resolved blockers for every `ready-to-implement` ticket, and any cleared blocker whose
-line still needs striking. `--since` bounds the mention sweep; get the timestamp from the last
-journal entry (rung 6), or use the last 24 hours when there is no journal yet.
+> Locally — and only locally, where `gh` works —
+> `${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --since <ISO>` runs all of this in one call
+> and prints the whole queue with merge verdicts and resolved blockers. It cannot run in a routine.
 
-**Take its output as the queue.** It reports what the queries found; it does not decide. Which item
-to work, and how, is the rest of this skill.
-
-**Read narrowly beyond that. Most of the backlog is irrelevant to any given run.**
+**Read narrowly. Most of the backlog is irrelevant to any given run.**
 
 1. **Titles yes, bodies no.** The worklist deliberately carries no bodies. Fetch one only for the
    item you are actually working. (why: docs/why.md#titles-yes-bodies-no)
@@ -142,31 +148,46 @@ call. Rationing it would leave approved, green work sitting while the run spent 
 which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
 work and does count.
 
-**Candidates are the `Rung 1 — merge` rows of the worklist.** That verdict is the gate — it reads
-the approving review, every unresolved thread, conflict state, and CI, and it is the only place the
-definition of "green" is written down.
+**Never decide mergeability yourself.** Gather, then ask `merge-verdict.mjs`:
 
-**Do not re-derive it, and never substitute `pull_request_read method:get_status`.** That call
-returns commit statuses; our CI reports check runs. Reading it alone had SahajCloud#672 green for
-seventeen minutes while `Lint, Test & Smoke` was still running, and had SahajAtlasWeb#181 — five of
-five checks green — reading as `pending` forever.
-(why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+```
+mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__list_workflows     owner:$ORG repo:$REPO        # total_count > 0 → hasWorkflows
+```
 
-| Worklist row | Verdict |
+```bash
+echo '{"repo":"'$ORG/$REPO'","reviewDecision":"…","hasWorkflows":true,
+       "pr":{…},"checkRuns":{…},"reviewThreads":{…}}' \
+  | ${CLAUDE_PLUGIN_ROOT}/skills/loop-run/merge-verdict.mjs
+```
+
+**Exit `0` merges; exit `1` does not, and prints the reason to put in the comment.**
+
+**Never substitute `method:get_status` for the check runs.** That call returns commit statuses; our
+CI reports check runs. Reading it alone had SahajCloud#672 green for seventeen minutes while
+`Lint, Test & Smoke` was still running, and had SahajAtlasWeb#181 — five of five checks green —
+reading as `pending` forever. Pass `statuses` too if you have it; the script reads both surfaces and
+requires **at least one check run**, so a deploy status cannot stand in for a test job that was
+never scheduled. (why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+
+| Verdict | Do |
 | --- | --- |
-| `Rung 1 — merge` | **Merge**, then the merge sequence below |
-| `Rung 2 — PR health`, reason `no approving review` | Not a rung-1 item at all. Leave it — it is waiting on the reviewer, not on you |
-| `Rung 2 — PR health`, any other reason | **Do not merge.** One comment naming the reason the script gave, then move on. Fixing red CI is rung 2 |
-| Several rung-1 rows in one repo | **Order before merging: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
+| `MERGE` | Merge, then the merge sequence below |
+| `HOLD — no approving review` | Not a rung-1 item at all. Leave it: it waits on the reviewer, not on you |
+| `HOLD — <anything else>` | One comment naming that exact reason, then move on. Fixing red CI is rung 2 |
+| Two or more `MERGE` in one repo | **Order first: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
 
-**A repo with no CI is not a repo with unfinished CI.** `claude-workflow` runs no Actions, so its
-PRs carry zero checks; the script says `no CI configured in this repo` rather than treating the
-absence as pending. Commenting "checks have not finished" every run about checks that do not exist
-is what #29 was filed for. The gate there is the approving review and zero unresolved threads —
-which is exactly what the script applies.
+**Omissions fail safe, never open.** A missing `reviewDecision` reads as *not approved*; an unknown
+`hasWorkflows` reads as *this repo has CI*, so a missing check blocks rather than passes. Pass what
+you actually fetched and let it refuse — never fill a field in to get a merge.
 
-Ordering reads the `closes` field on each rung-1 row, and the `Blocked by:` lines the worklist
-already resolved.
+Repos in `mergePolicy.loopMayNotMerge` are held whatever the gate says. `claude-workflow` is one:
+merging there is the deploy of the instructions the next run executes, and since that repo is also
+ticketless, a human reading the PR is the only gate its changes pass.
+
+Ordering reads each PR's linked issue and the `Blocked by:` lines on it.
 
 The merge sequence, in order:
 
@@ -424,7 +445,17 @@ when a number looks wrong — it is cheaper than re-deriving the queries.
 - **Never leave a stale `📋 Awaiting you` in the body** — it is the one section a reader trusts, and
   a wrong one is worse than none.
 - **Build `📋 Awaiting you` from a query, not from memory**: `assignee:<reviewer>` across the five
-  repos, plus open proposals.
+  repos in `repos`, plus open `proposal` issues. **Scope by `repo:` qualifiers, never `org:`** — the
+  org still holds retired repositories, and a bare org scope put seven-year-old `Atlas` and
+  `WeMeditate` issues in the reviewer's queue the first time this was run as a query.
+- **It is a table, not a list.** This is a triage surface: the reviewer is scanning for *what needs
+  me and how long has it waited*, which reads down a column and does not read out of a sentence.
+  `Since` is the column a bullet list could not carry at all — an item waiting nine days and one
+  waiting an hour look identical when both are prose. **Oldest first.**
+- **One row per work item.** An issue and the PR that closes it are one thing; link the PR, since
+  that is where the reviewing happens.
+- Locally, `${CLAUDE_PLUGIN_ROOT}/skills/loop-run/awaiting-review.mjs` prints this table ready to
+  paste. It needs `gh`, so a routine builds it from the searches above.
 - **Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
   "ladder". Use the section headings below verbatim.
 
@@ -436,9 +467,12 @@ when a number looks wrong — it is cheaper than re-deriving the queries.
 Window since the last entry: ~Nh.
 
 ## 📋 Awaiting you
-- 👀 [repo#N — <ticket title>](url) — ready for review, CI green
-- ❓ [repo#N — <ticket title>](url) — blocked on your answer
-- 💡 [repo#N — <ticket title>](url) — proposal, awaiting your verdict
+
+| | Item | Waiting for | Since |
+| --- | --- | --- | --- |
+| 👀 | [repo#N — <ticket title>](url) | Review — CI green | 2d |
+| ❓ | [repo#N — <ticket title>](url) | Your answer | 4h |
+| 💡 | [repo#N — <ticket title>](url) | Verdict on the proposal | today |
 
 ## ✅ Merged
 - 🔀 [repo#N — <title>](url) · closed [repo#M](url)

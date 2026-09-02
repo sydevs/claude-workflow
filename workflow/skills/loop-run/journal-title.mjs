@@ -3,6 +3,9 @@
 /**
  * Compute today's ops-journal title from what the loop actually did:
  *
+ * ⚠ **LOCAL ONLY** — it shells out to `gh`, which a routine cannot use. A cloud run computes the
+ * same four counts from the MCP searches the skill lists. The definitions live here either way.
+ *
  *   Wed — 2 new, 1 revised, 2 merged, 1 closed
  *
  * Zero terms are omitted; a day with nothing to show is `Wed — no changes`.
@@ -95,6 +98,7 @@ if (!configPath) {
 const config = JSON.parse(readFileSync(configPath, 'utf-8'))
 
 const ORG = config.org
+const SCOPE = config.repos.map((r) => `repo:${config.org}/${r}`).join(' ')
 const BOT = config.assignment?.bot
 const REVIEWER = config.assignment?.reviewer
 const JOURNAL_LABEL = config.labels?.journal
@@ -277,22 +281,22 @@ const journalFilter = JOURNAL_LABEL ? ` -label:${JOURNAL_LABEL}` : ''
 
 // ── new ─────────────────────────────────────────────────────────────────────
 const newIssues = search(
-  `org:${ORG} is:issue author:${BOT} created:${FROM}..${TO}${journalFilter}`,
+  `${SCOPE} is:issue author:${BOT} created:${FROM}..${TO}${journalFilter}`,
 )
 const newKeys = new Set(newIssues.map(keyOf))
 
 // ── merged ──────────────────────────────────────────────────────────────────
-const mergedPrs = search(`org:${ORG} is:pr author:${BOT} merged:${FROM}..${TO}`)
+const mergedPrs = search(`${SCOPE} is:pr author:${BOT} merged:${FROM}..${TO}`)
 const mergedIssueKeys = new Set(mergedPrs.flatMap(closesFrom))
 
 // ── closed (without merging) ────────────────────────────────────────────────
 const closedPrs = search(
-  `org:${ORG} is:pr author:${BOT} is:unmerged is:closed closed:${FROM}..${TO}`,
+  `${SCOPE} is:pr author:${BOT} is:unmerged is:closed closed:${FROM}..${TO}`,
 )
 const closedPrIssueKeys = new Set(closedPrs.flatMap(closesFrom))
 
 const closedIssues = search(
-  `org:${ORG} is:issue author:${BOT} is:closed closed:${FROM}..${TO}${journalFilter}`,
+  `${SCOPE} is:issue author:${BOT} is:closed closed:${FROM}..${TO}${journalFilter}`,
 )
 // An issue already accounted for by a PR — merged or closed — is that PR's pair,
 // not a second item. Everything else closed today stands alone.

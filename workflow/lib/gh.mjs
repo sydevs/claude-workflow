@@ -74,6 +74,18 @@ export function loadLoopConfig(explicit = null) {
   throw new Error('loop-config.json not found — run from the claude-workflow checkout or pass --config.')
 }
 
+/**
+ * Search qualifiers restricting a query to the workflow repos.
+ *
+ * NOT `org:<org>` — the org holds long-retired repositories, and a bare org scope
+ * dragged seven-year-old issues out of `Atlas` and `WeMeditate` into the
+ * reviewer's queue on the first run of `awaiting-review`. The five repos are
+ * enumerated in config for exactly this reason; use them.
+ */
+export function repoScope(config) {
+  return config.repos.map((r) => `repo:${config.org}/${r}`).join(' ')
+}
+
 /** `--name value` from argv, with a default. */
 export function flag(argv, name, fallback = null) {
   const i = argv.indexOf(`--${name}`)

@@ -3,6 +3,11 @@
 /**
  * The run's whole queue, in one call.
  *
+ * ⚠ **LOCAL ONLY.** This shells out to `gh`, which a routine cannot use — see
+ * `lib/merge-gate.mjs` for the measurement. In a routine, rung 0 issues the searches with MCP
+ * directly and rung 1 asks `merge-verdict.mjs` for each PR. This exists so a maintainer running
+ * `/workflow:loop-run` locally gets the whole queue in one call.
+ *
  * Rung 0 was a dozen MCP searches, a per-repo PR list, a comment fetch per
  * candidate and a blocker read per ticket — every result crossing the context
  * window, nine times a day, so the run could re-derive a queue the assignee field
@@ -31,14 +36,14 @@
  * written re-surfaces on every pass.
  */
 
-import { api, search, loadLoopConfig, flag } from '../../lib/gh.mjs'
+import { api, search, loadLoopConfig, flag, repoScope } from '../../lib/gh.mjs'
 import { readPr, mergeVerdict } from '../../lib/merge-gate.mjs'
 
 const argv = process.argv.slice(2)
 const JSON_OUT = argv.includes('--json')
 const config = loadLoopConfig(flag(argv, 'config'))
 
-const ORG = config.org
+const SCOPE = repoScope(config)
 const BOT = config.assignment.bot
 const REVIEWER = config.assignment.reviewer
 const READY = config.labels.readyToImplement
@@ -78,7 +83,7 @@ function blockersOf(body) {
 }
 
 // ── PRs the bot holds ───────────────────────────────────────────────────────
-const botPrs = search(`org:${ORG} is:pr is:open assignee:${BOT}`).map((item) => {
+const botPrs = search(`${SCOPE} is:pr is:open assignee:${BOT}`).map((item) => {
   const repo = repoOf(item)
   const pr = readPr(repo, numOf(item))
   const gate = mergeVerdict(pr, repo, config.mergePolicy)
@@ -101,7 +106,7 @@ const botPrs = search(`org:${ORG} is:pr is:open assignee:${BOT}`).map((item) => 
 })
 
 // ── Tickets the bot holds ───────────────────────────────────────────────────
-const botIssues = search(`org:${ORG} is:issue is:open assignee:${BOT} -label:${JOURNAL}`).map(
+const botIssues = search(`${SCOPE} is:issue is:open assignee:${BOT} -label:${JOURNAL}`).map(
   (item) => {
     const labels = labelsOf(item)
     const ready = labels.includes(READY)
@@ -122,9 +127,8 @@ const botIssues = search(`org:${ORG} is:issue is:open assignee:${BOT} -label:${J
 
 // ── Direct mentions — always a rung-4 candidate, whatever else matched ──────
 const since = flag(argv, 'since')
-const mentions = search(
-  since ? `${config.identity.mentionQuery} updated:>=${since}` : config.identity.mentionQuery,
-).map((item) => ({
+const mentionBase = `${SCOPE} mentions:${BOT} is:open`
+const mentions = search(since ? `${mentionBase} updated:>=${since}` : mentionBase).map((item) => ({
   key: key(item),
   title: item.title,
   isPr: Boolean(item.pull_request),
@@ -133,7 +137,7 @@ const mentions = search(
 // ── WIP, against ceilings.wipCapPerRepo ─────────────────────────────────────
 const wip = {}
 for (const repo of config.repos) wip[repo] = 0
-for (const pr of search(`org:${ORG} is:pr is:open author:${BOT}`)) {
+for (const pr of search(`${SCOPE} is:pr is:open author:${BOT}`)) {
   const r = repoOf(pr)?.split('/')[1]
   if (r && r in wip) wip[r] += 1
 }

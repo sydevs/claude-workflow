@@ -3,6 +3,9 @@
 /**
  * One PR's CI verdict, for the bounded watch in `/finalize-pr` step 8.
  *
+ * ⚠ **LOCAL ONLY** — it shells out to `gh`, which a routine cannot use. `merge-verdict.mjs` is
+ * the routine-side equivalent, fed by MCP, and shares this definition of green.
+ *
  * Shares `lib/merge-gate.mjs` with the loop's rung 1 ON PURPOSE. The same wrong
  * reading — commit statuses standing in for check runs — was live in both places,
  * and a second prose copy of "what green means" is how it stayed wrong in both.

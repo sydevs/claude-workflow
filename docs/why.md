@@ -247,6 +247,35 @@ and it is not merely fragile at the boundary: two branches agreeing in their fir
 produce one alias, which answers 200 while serving the other branch. A wrong link that 404s is a bad
 Preview section; a wrong link that works is a bad review.
 
+## A routine cannot reach the GitHub API
+
+Not "should not" — *cannot*, by any client. Measured in a routine on 2026-09-02:
+
+| Call | Result |
+| --- | --- |
+| `command -v gh` · `ls /usr/bin/gh` · `find / -name gh -type f` | absent |
+| `gh` downloaded and run from `/tmp` | installs fine, `gh version 2.63.2` |
+| `gh api repos/<in-session repo>` | **403** — "GitHub access is not enabled for this session" |
+| `curl https://api.github.com/repos/…`, with the token **and** without it | **403**, byte-identical |
+| `curl https://api.github.com/graphql` | **403** — "only the pinned set of PR-review operations is served" |
+| `curl https://api.github.com/user` | **200** |
+| `mcp__github__*` | works, scoped to the session's configured repositories |
+
+The identical 403 with and without an auth header is the part that settles it: the proxy is refusing
+the *path*, not the credential, so installing a binary or finding a better token cannot help.
+
+Two traps in that table. `/user` answering 200 while every `repos/...` path 403s makes the token look
+healthy and the repository look missing, when neither is true — and `git` fetch and push work
+throughout, because they go through the credential helper rather than the API, which makes a session
+feel far more capable than it is.
+
+**The consequence for this plugin: a script never fetches.** It takes data the run already has and
+returns a decision. That split is the right one regardless — the merge gate's two failures were never
+in the fetching, they were in deciding what the fetched values meant, and that half had no single
+home. `docs/routine-setup.md` asserted the opposite for weeks (`gh` "ships in the image,
+`/usr/bin/gh`, v2.98.0"), which is exactly the licence needed to write four scripts that pass every
+local test and fail silently where it counts.
+
 ## CI is check runs, not commit statuses
 
 `pull_request_read method:get_status` returns **commit statuses**. Every repo here runs GitHub

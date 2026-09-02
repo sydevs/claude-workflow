@@ -43,15 +43,27 @@
  * labelled alias, and even then it derives the host from the COMMIT alias we did
  * observe rather than from a hardcoded project name.
  *
+ * ## Two input paths, one parser
+ *
+ * A routine cannot reach the GitHub API by any client — `gh` is absent, and
+ * installing it does not help because the proxy 403s `repos/...` regardless of
+ * credential (see `lib/merge-gate.mjs`). So the cloud path fetches with MCP and
+ * pipes the text in; the local path fetches with `gh` itself. The PARSING — which
+ * is where the bug was — is the same code either way.
+ *
  * ## Usage
  *
  *   branch-preview-url.mjs [--repo owner/name] [--pr N] [--wait SECONDS] [--json]
+ *   branch-preview-url.mjs --stdin   < {"bodies": ["<comment body>", "<check summary>"]}
  *
- * Defaults come from `gh` and the current branch. Exits 1 when no alias can be
+ * Local defaults come from `gh` and the current branch. In a routine, pass
+ * `--stdin` with the bodies of `mcp__github__get_comments` and the
+ * `output.summary` of each Cloudflare check run. Exits 1 when no alias can be
  * resolved, so a run cannot quietly paste a pinned URL instead.
  */
 
 import { execFileSync } from 'child_process'
+import { readFileSync } from 'fs'
 
 const args = process.argv.slice(2)
 const flag = (name, fallback = null) => {
@@ -180,7 +192,58 @@ async function probe(url) {
   }
 }
 
+/** Render the rows both paths produce. */
+async function report(results) {
+  const rows = []
+  for (const row of results.values()) rows.push({ ...row, status: await probe(row.url) })
+
+  if (JSON_OUT) console.log(JSON.stringify(rows, null, 2))
+  else {
+    for (const r of rows) {
+      const note = r.constructed ? '  (constructed — verify before use)' : ''
+      console.log(
+        `${(r.project || '?').padEnd(20)} ${String(r.status ?? 'unreachable').padEnd(12)} ${r.url}${note}`,
+      )
+    }
+  }
+  return rows.some((r) => r.status !== null)
+}
+
+/** Parse a set of blobs into `{url → row}`. Shared by both input paths. */
+function collect(blobs, branch) {
+  const results = new Map()
+  for (const { source, body } of blobs) {
+    const commit = commitAliasFrom(body)
+    const labelled = branchAliasFrom(body)
+    const alias = labelled || constructFrom(commit, branch)
+    if (!alias || results.has(alias)) continue
+    results.set(alias, {
+      url: alias,
+      project: projectFrom(commit),
+      source,
+      constructed: !labelled,
+    })
+  }
+  return results
+}
+
+async function fromStdin() {
+  const input = JSON.parse(readFileSync(0, 'utf-8'))
+  const blobs = (input.bodies || []).map((body, i) => ({ source: `stdin[${i}]`, body }))
+  const results = collect(blobs, input.branch || '')
+  if (!results.size) {
+    console.error(
+      'No branch preview alias in the supplied bodies. Pass the Cloudflare bot comment bodies and ' +
+        'each Cloudflare check run\'s output.summary; if the deploy is still building, say "preview pending".',
+    )
+    process.exit(1)
+  }
+  process.exit((await report(results)) ? 0 : 1)
+}
+
 async function main() {
+  if (args.includes('--stdin')) return fromStdin()
+
   const repo = flag('repo') || gh(['repo', 'view', '--json', 'nameWithOwner'])?.nameWithOwner
   const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf-8' }).trim()
 
@@ -195,34 +258,12 @@ async function main() {
 
   const deadline = Date.now() + WAIT_MS
   for (;;) {
-    const results = new Map()
-
-    for (const { source, body } of sources(repo, prView.number, prView.headRefOid)) {
-      const commit = commitAliasFrom(body)
-      const alias = branchAliasFrom(body) || constructFrom(commit, prView.headRefName || branch)
-      if (!alias || results.has(alias)) continue
-      results.set(alias, {
-        url: alias,
-        project: projectFrom(commit),
-        source,
-        constructed: !branchAliasFrom(body),
-      })
-    }
-
-    if (results.size) {
-      const rows = []
-      for (const row of results.values()) rows.push({ ...row, status: await probe(row.url) })
-
-      if (JSON_OUT) console.log(JSON.stringify(rows, null, 2))
-      else {
-        for (const r of rows) {
-          const note = r.constructed ? '  (constructed — verify before use)' : ''
-          console.log(`${(r.project || '?').padEnd(20)} ${String(r.status ?? 'unreachable').padEnd(12)} ${r.url}${note}`)
-        }
-      }
-      // A host that answers nothing at all is not a link worth pasting.
-      process.exit(rows.some((r) => r.status !== null) ? 0 : 1)
-    }
+    const results = collect(
+      sources(repo, prView.number, prView.headRefOid),
+      prView.headRefName || branch,
+    )
+    // A host that answers nothing at all is not a link worth pasting.
+    if (results.size) process.exit((await report(results)) ? 0 : 1)
 
     if (Date.now() >= deadline) break
     console.error('No branch alias yet — Cloudflare has not posted one. Waiting…')

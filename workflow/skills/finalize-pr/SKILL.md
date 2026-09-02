@@ -203,13 +203,20 @@ sees the change without checking out the branch.
 Cloudflare projects and both platforms:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs            # after the PR exists
-${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --wait 300 # poll while it builds
+# In a routine: fetch with MCP, then pipe the text in.
+#   mcp__github__get_comments  → the cloudflare bot's comment bodies
+#   mcp__github__list_workflow_runs / the PR's Cloudflare check runs → output.summary
+echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
+  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --stdin
+
+# Locally, where gh works, it fetches for itself:
+${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --wait 300
 ```
 
 It prints one `project  status  url` line per preview, reading the alias out of the label Cloudflare
-itself writes. It exits non-zero when there is no alias yet — that is the "preview pending" case,
-**not** a cue to fall back to something else.
+itself writes — `Branch Preview URL`, in both the Pages check-run summary and the Workers comment.
+It exits non-zero when there is no alias yet: that is the "preview pending" case, **not** a cue to
+fall back to something else.
 
 **Do not use `scripts/get-cloudflare-preview-url.mjs` for the body.** That script ranks per-commit
 aliases *above* branch aliases on purpose, because it feeds the CI smoke gate, which must test the
@@ -267,16 +274,19 @@ Open as a **draft** when `/implement-issue` passed `--draft` — see its autonom
 **zero** workflow runs for it — silently, and waiting is futile.
 (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs          # polls to ceilings.ciPollAttempts
-${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs --json   # names every check
+```
+mcp__github__pull_request_read  method:get_check_runs  owner:$ORG repo:$REPO pullNumber:<pr>
 ```
 
-**Exit code is the answer: `0` green · `1` red · `2` still running or gave up waiting.** Do not
-re-derive green from a status call — `pull_request_read method:get_status` returns commit statuses,
-our CI reports check runs, and reading only the first once had an approved SahajCloud PR green for
-seventeen minutes while its test job was still running.
-(why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+**Green means every check run has `conclusion: success` (or `neutral`/`skipped`), every commit
+status is `success`, and there is at least one CHECK RUN.** Do not read `method:get_status` alone —
+it returns commit statuses, our CI reports check runs, and reading only the first once had an
+approved SahajCloud PR green for seventeen minutes while its test job was still running. A deploy
+status is not a test signal. (why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+
+> Locally, `${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs` polls and applies exactly that
+> definition — exit `0` green · `1` red · `2` still running. It needs `gh` and so cannot run in a
+> routine; `merge-verdict.mjs` is the routine-side equivalent, fed by MCP.
 
 - `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push. The
   script reports this as "no check runs — usually a merge conflict", because a conflicted PR

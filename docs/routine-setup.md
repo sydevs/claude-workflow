@@ -284,9 +284,28 @@ Three rules in that script each bought with a dead run:
   and the postgres log is `cat`ed on failure, because the container is gone by the time anyone reads
   the abort message.
 
-`gh` needs no installing: it ships in the image (`/usr/bin/gh`, v2.98.0 as of Aug 2026) alongside
-git, jq, yq and ripgrep. See the GitHub authentication section below for the part that *does* need
-setting up.
+⚠ **`gh` is NOT in the routine image, and neither is raw GitHub HTTP.** An earlier revision of this
+line claimed it ships at `/usr/bin/gh` v2.98.0; that was wrong, and it is the kind of wrong that
+costs a day — it reads as a licence to write scripts that shell out to `gh`, which then pass every
+local test and fail silently in the only environment that matters.
+
+Measured in a routine on 2026-09-02:
+
+| Call | Result |
+| --- | --- |
+| `command -v gh`, `ls /usr/bin/gh`, `find / -name gh -type f` | absent; nothing on the filesystem |
+| `curl https://api.github.com/user` | **200** — returns the bot's login |
+| `curl https://api.github.com/repos/<any in-session repo>` | **403** |
+| `curl https://api.github.com/graphql` | **403** — *"only the pinned set of PR-review operations is served"* |
+| `mcp__github__*` | **works**, and is scoped to the session's configured repositories |
+
+So a routine reaches GitHub **only through the MCP tools**. `/user` answering 200 while every
+`repos/...` path 403s is the trap: it makes the token look fine and the repo look missing, when the
+proxy is refusing the path. `git` fetch and push do work — those go through the credential helper,
+not the API.
+
+`git`, `jq`, `yq`, `ripgrep` and `node` (v22) **are** present. Anything a script needs from GitHub
+must therefore be handed to it, not fetched by it.
 
 **GitHub access** — the piece most likely to be missing, and it fails in a way that looks like
 something else. A session whose GitHub connection is not set up 403s on *every* `gh` call with
