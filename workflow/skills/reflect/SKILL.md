@@ -28,7 +28,8 @@ mcp__github__issue_read  method:get_comments  owner:$ORG repo:$JOURNAL_REPO issu
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
 
 # what the reviewer actually said — the loop's only window into their judgement
-mcp__github__search_issues  query:"org:$ORG is:pr author:$BOT reviewed-by:$REVIEWER updated:>$WINDOW"
+# $SCOPE = repo: qualifiers built from `repos` — never a bare org:, which reaches retired repositories
+mcp__github__search_issues  query:"$SCOPE is:pr author:$BOT reviewed-by:$REVIEWER updated:>$WINDOW"
 # per hit: pull_request_read method:get_reviews + method:get_review_comments,
 # keep author == $REVIEWER and created_at inside the window — and READ THE TEXT, not the count
 ```

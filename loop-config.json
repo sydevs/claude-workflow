@@ -1,5 +1,5 @@
 {
-  "$comment": "Knobs for the autonomous loop (workflow/skills/loop-run). Read fresh from main on every routine run, so merging a change here changes the next run with no redeploy. The reflection rung proposes edits to this file as a PR.",
+  "$comment": "VALUES the loop reads, nothing else. A tuning change should be a data edit reviewable on its own, so this file holds numbers, names and ids — never rules and never rationale. The rule lives in the skill that enforces it; the story lives in docs/why.md. Read fresh from main on every routine run, so merging a change here changes the next run with no redeploy.",
   "repos": [
     "SahajCloud",
     "SahajAtlasWeb",
@@ -10,34 +10,34 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Structural rationing. A cloud session cannot read the account's remaining quota, so spend is bounded by work-item counts. Every cap here is a STOCK cap ('no more than N open/at once') or a per-run backstop — never a per-run flow quota, because those silently multiply with cadence: at 8 runs/day a 'per run' allowance is 8x a daily one. The real bound on implementations is wipCapPerRepo; on total spend, maxWorkItemsPerRun times the schedule.",
+    "$comment": "Stock caps and per-run backstops. Never a per-run flow quota: at 8 runs/day a 'per run' allowance is 8x a daily one. Rules in loop-run/SKILL.md.",
     "wipCapPerRepo": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
     "ciPollAttempts": 20,
-    "ciPollNote": "Bounded polling replaces subscribe_pr_activity for CI. NOTE the loop does NOT fully control its subscriptions: opening a PR auto-subscribes the session (subscription.created, from=system, at PR-open time), so a run can be woken even though it never called subscribe. That is tolerated rather than fought — the baton is the real defence: a woken session re-derives assignee:<bot>, finds the work handed back, and exits. If a run is woken, it may act on what the wake shows, then unsubscribe to restore the standing no-subscription state.",
-    "maxWorkItemsPerRun": 3,
-    "maxWorkItemsNote": "How many queue items one run may process before stopping — the backstop against a 30-item queue burning a whole run. Free, and never counted: MERGES (rung 1), blocked-item checks, and no-op skips. Counted: items actually worked — revised, implemented, investigated, replied-to. A merge spends a review decision already made rather than doing work, so rationing it would strand approved green PRs while the budget went elsewhere. Conflict resolution or a rebase following a merge IS work and does count.",
-    "maxOpenProposalsNote": "Governs proposals a SURVEY went looking for. A defect tripped over during other work is filed regardless of this number: the survey manufactures candidates on demand, whereas an incidental finding is evidence already held, and the alternative to filing it is that the knowledge dies with the run."
+    "maxWorkItemsPerRun": 3
   },
   "labels": {
-    "$comment": "Only the ASSIGNEE field and readyToImplement mean anything to the loop — see workflow/skills/triage-issue/SKILL.md. Every other label here exists for humans to read. Priority and Effort are FIELDS, not labels.",
+    "$comment": "Only the assignee field and readyToImplement mean anything to the loop; the rest are for humans. Gate rules in triage-issue/SKILL.md.",
     "readyToImplement": "ready-to-implement",
     "proposal": "proposal",
     "hold": "hold",
     "needsInfo": "needs-info",
     "blockedUpstream": "blocked-upstream",
     "journal": "ops-journal",
-    "gateNote": "ready-to-implement is TICKET-ONLY and authorises writing code. The loop may REMOVE it when investigation raises questions that must be answered before implementation — always paired with a comment saying what is unresolved — and may NEVER add it. Merge authority is an approving review plus green CI plus zero unresolved threads, never a label. hold, needs-info and blocked-upstream carry no bot meaning at all: not being assigned is the gate.",
     "claim": "claude:working"
   },
   "assignment": {
-    "$comment": "The baton. `assignee:<bot>` IS the worklist — one indexed query per repo, replacing the scan-and-diff census. Reassigning to the reviewer is the FINAL action on any unit of work and means 'I am done', so an item assigned to the bot but idle is an unfinished run.",
+    "$comment": "The baton: assignee:<bot> IS the worklist. Hand-back rules in loop-run/SKILL.md.",
     "bot": "sydevs-bot",
-    "reviewer": "Ardnived",
-    "handBackNote": "Reassign to the reviewer after: revising a ticket, revising a PR, reporting an investigation, opening a PR that is ready for review, and filing a new proposal. Unassigned means only genuinely untriaged backlog.",
-    "queueNote": "Staying assigned to the bot is legitimate: blocked items and items that lost a slot to a ceiling keep the assignment and are journalled as queued. Assignment is therefore NOT the crash signal — a dead run is identified by a stale labels.claim, which is applied only while a run is actively working an item."
+    "reviewer": "Ardnived"
+  },
+  "mergePolicy": {
+    "$comment": "Repos where the loop may open and revise PRs but must never merge them, whatever the gate says. claude-workflow ships the instructions every run is executing, so merging there is the deploy and belongs to a human — and now that the repo is ticketless, review is the ONLY gate its changes pass.",
+    "loopMayNotMerge": [
+      "claude-workflow"
+    ]
   },
   "surveyCalendar": {
     "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
@@ -62,7 +62,7 @@
     "feature research against current best practice"
   ],
   "sentry": {
-    "$comment": "Region is DE (the DSN host is *.ingest.de.sentry.io), so API calls must use de.sentry.io — the global host returns 404 for these projects rather than a useful error. The token authenticates but has no org:read, so /organizations/<slug>/ returns 403; that is expected and harmless, since the loop only reads /projects/<org>/<project>/issues/ and writes PUT /issues/<id>/. SahajAtlasWordpress ships no Sentry.",
+    "$comment": "DE region: the global sentry.io host 404s for these projects. Token has no org:read, so /organizations/ 403s — expected. SahajAtlasWordpress ships no Sentry.",
     "apiBase": "https://de.sentry.io/api/0",
     "org": "sy-developers",
     "projects": {
@@ -73,12 +73,12 @@
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
   "mailpit": {
+    "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here.",
     "url": "https://mailpit-production-db88.up.railway.app",
-    "retentionDays": 7,
-    "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here."
+    "retentionDays": 7
   },
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields — NOT Projects v2, and not labels. Available on every repo in the org with no per-repo setup; there are no per-repo fields, so options are identical everywhere. Read via list_issues(fields:['field_values']) or issue_read; write via issue_write(issue_fields:[{field_name, field_option_name}]). Locally, gh api PUT /repos/{o}/{r}/issues/{n}/issue-field-values with [{\"field_id\":N,\"value\":\"<option name>\"}] — the value must be the option NAME (an id 422s), and the PUT REPLACES the issue's whole field-value set: include every field you want kept, or the omitted ones are cleared.",
+    "$comment": "GitHub's native org-level issue fields — not Projects v2, not labels. Read/write rules and the PUT-replaces-everything gotcha are in triage-issue/SKILL.md.",
     "priority": {
       "fieldId": 14337938,
       "options": [
@@ -95,38 +95,28 @@
         "Moderate",
         "Hard"
       ]
-    },
-    "ownershipNote": "Priority is the REVIEWER's field — it encodes consequence to the product. Effort is the LOOP's, always: it is an estimate of work, and whoever just read the code is best placed to make it. Never leave Effort unset on a ticket you wrote or revised."
+    }
   },
   "relationships": {
-    "$comment": "GitHub calls these Relationships; REST calls them dependencies. Readable and writable LOCALLY via gh, but NO MCP tool exposes them, so a cloud routine cannot see them. github-mcp-server ships issue_dependency_read/write behind the issue_dependencies flag, but every route to enabling it from a routine is closed (see docs/routine-setup.md). Until that changes, the real relationship is set locally AND mirrored into the issue body so a cloud run can read it.",
+    "$comment": "No MCP tool reads blocked_by, so a cloud run reads this marker from the issue body instead. Set the real relationship locally AND mirror it here.",
     "bodyMarker": "Blocked by:",
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>",
     "cloudReadable": false,
     "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
   },
   "identity": {
-    "$comment": "The loop runs as a dedicated GitHub machine account, so 'did a human write this?' is answerable by author alone. expectedLogin is authoritative and is compared against mcp__github__get_me ONCE per run — journal loudly on mismatch. Any check that cannot confidently attribute an action must EXIT rather than proceed: failing open is the runaway case.",
+    "$comment": "expectedLogin is authoritative and is checked against get_me once per run. Attribution rules in loop-run/SKILL.md.",
     "expectedLogin": "sydevs-bot",
-    "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
-    "markerNote": "Appended to every comment the loop writes. Primary filtering is by author; the marker is a second signal and, more importantly, tells a human reading the thread what wrote it.",
-    "legacyNote": "Comments written before 2026-08-29 carry the old identity antontcymbal and are indistinguishable from that person's own. Deliberately NOT special-cased: the loop may reply once to a legacy comment of its own on the few affected issues. Bounded, one-time, and cheaper than a dated exclusion rule that would misfire the moment that person comments for real.",
-    "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
+    "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
   "review": {
-    "$comment": "Rung 5 / /workflow:adversarial-review — the critic-side pass on loop-authored PRs. Advisory only: approval stays with assignment.reviewer. bodyHeader is the fixed title line of every adversarial review body, and doubles as the existence-check key ONLY in the no-review-tools fallback — the primary key is structural, an own-login entry in get_reviews. profilePath is read at review time; missing means review on the stance alone and say so.",
+    "$comment": "Rung 5 / adversarial-review. Advisory only. Rules in adversarial-review/SKILL.md.",
     "bodyHeader": "## 🧐 Adversarial review",
     "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md"
   },
-  "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket.",
   "journal": {
-    "$comment": "One issue per day in journalRepo, created lazily — no issue on a day the loop does nothing. There is no issue NUMBER here on purpose: the run finds today's by title and label, so nothing needs updating when the day rolls over.",
-    "titleFormat": "<Day> — <what changed today>",
-    "timezone": "America/Vancouver",
-    "timezoneNote": "The journal day is a LOCAL date. Keying to UTC splits each local day across two issues.",
-    "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them.",
-    "titleNote": "Rewritten every run. Day of week, not a date — the full date is the issue's creation time, which sorts and filters where a title string does not. Describe outcomes, not activity.",
-    "surfacing": "Journals are not pinned (pinIssue is GraphQL-only and unreachable from a routine). Recency surfaces the current one: the day's journal is the most recently active ops-journal issue.",
-    "lookup": "Today's journal is the open ops-journal issue whose created_at falls on today's Vancouver date. No date field — creation time is intrinsic."
+    "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
+    "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
+    "timezone": "America/Vancouver"
   }
 }

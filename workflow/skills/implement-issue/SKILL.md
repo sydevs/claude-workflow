@@ -44,8 +44,11 @@ branch at every decision point below rather than stalling.
    separately. **Never apply `ready-to-implement` yourself.** You *may* remove it — see step 4.
    (why: docs/why.md#assignment-alone-is-not-the-implementation-gate)
 
-   `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
-   bumps, reflection config PRs — which have no issue to carry a label or an assignee.
+   `prAllowlistGlobs` in `.claude/workflow.json` gates the **ticketless** paths — dependency bumps,
+   reflection config PRs, and **every change in `claude-workflow`, where the glob is `**`**. A
+   ticketless change has no issue to carry a label or an assignee, so this whole table is skipped:
+   branch, change, and hand to `/finalize-pr`, whose PR body carries the reasoning a ticket would
+   have. `wipCapPerRepo` still applies, and merging still needs an approving review.
 
    **Blockers.** Locally the Relationships are authoritative:
    ```bash
@@ -123,12 +126,16 @@ branch at every decision point below rather than stalling.
 10. **Collect the review aids** the PR body needs, so the reviewer does not have to reproduce the
    change to see it.
 
-   **Preview URLs are discovered, never constructed.** Each repo already has a script that knows
-   where to look, and CI uses the same ones:
+   **Preview URLs are discovered, never constructed, and always the BRANCH alias** — a per-commit
+   alias goes stale on your next push and the reviewer cannot tell:
    ```bash
-   pnpm tsx scripts/get-railway-preview-url.ts        # SahajCloud — reads the Railway commit status
-   node scripts/get-cloudflare-preview-url.mjs        # WeMeditateWeb / SahajAtlasWeb — reads the CF bot comment
+   ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs   # Cloudflare: SahajAtlasWeb / WeMeditateWeb
+   pnpm tsx scripts/get-railway-preview-url.ts                       # SahajCloud — per-PR host, already stable
    ```
+   `scripts/get-cloudflare-preview-url.mjs` is the CI smoke gate's tool and prefers commit-pinned
+   aliases by design — not for the body.
+   (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
+
    Deep-link to the routes actually changed, not just the root. A preview appears minutes after the
    push, so run this after `finalize-pr` has pushed, and refresh the body once it resolves.
 

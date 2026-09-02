@@ -81,9 +81,11 @@ hook is doing too much.
 | --- | --- |
 | `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
 | `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
+| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv) and `merge-gate.mjs` (the one definition of "green" and "mergeable"). |
+| `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
 | `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every knob the loop reads: `ceilings`, `labels`, `assignment`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each run. |
+| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
 | `.claude/workflow.json` | This repo's own per-repo settings, in the same shape every product repo uses. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
@@ -91,6 +93,24 @@ hook is doing too much.
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
 if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-config.json` instead.
+
+**And nothing but values goes in it.** The file once carried 7.9KB of prose in 27 `$comment` and
+`*Note` keys — 72% of its bytes — and every one of those rules was *also* stated in a skill or in
+`docs/why.md`. That is two sources of truth for every rule, in the repo whose entire failure history
+is duplication drifting apart. Three homes, no overlap: the **value** here, the **rule** in the skill
+that enforces it, the **story** in `docs/why.md`. A `$comment` earns its place only when a bare value
+is ambiguous on sight, and then it is one line.
+
+**No script here talks to GitHub.** A routine cannot reach the API by any client — not `curl`, not
+`gh` even after installing it, not with any credential — so a fetching script would run only on a
+maintainer's laptop, and a rule with a local implementation and a separate cloud one is precisely the
+shape of the bug that made the merge gate unsafe. The run gathers with MCP; the script decides.
+Scripts take JSON on stdin and return a verdict. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
+
+**A script beats a prose rule wherever the rule is mechanical.** `workflow/lib/merge-gate.mjs` exists
+because the merge gate's table was wrong in two directions at once and nobody could see it; the
+scripts under `skills/*/` exist because a computation re-derived nine times a day is nine chances to
+derive it differently. Prose is for judgment. If a rule can be evaluated, evaluate it.
 
 ## Writing a skill
 
@@ -151,5 +171,12 @@ attended.
 - **Branches are `claude/*`.** Cloud sessions cannot push anywhere else.
 - **Open the PR; never merge it.** Merge authority is an approving review plus zero unresolved
   threads — never a label, and there is no CI here to be green.
-- A ticketless PR is fine for `**/*.md`, `docs/**` and `loop-config.json` (`prAllowlistGlobs`);
-  anything else wants a `ready-to-implement` issue.
+- **No ticket is needed for anything in this repo.** `prAllowlistGlobs` is `**`: open the PR. The
+  ticket gate exists so the loop does not write code nobody asked for, and it buys nothing here —
+  this repo ships prose and config, so the PR body *is* the proposal, and a ticket restating it only
+  adds a round trip before the same reviewer reads the same argument. File one anyway when the change
+  needs a **decision** before code: competing designs, or a cost worth agreeing before it is paid.
+- What still gates the work is the part that matters, and is unchanged: **merge authority is an
+  approving review**, `wipCapPerRepo` bounds how many loop PRs may be open here at once, and the
+  two rules above — one behaviour per PR, never a skill change and a ceiling change together — bind
+  harder now that nothing upstream forces a pause.

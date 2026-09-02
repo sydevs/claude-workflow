@@ -25,8 +25,10 @@ refactors where the structural change is not apparent from individual diffs.]
 
 ## Preview
 
-[Discovered preview URL(s), deep-linked to the routes this PR changes — not just
-the root. Omit the section entirely for repos with no preview deploy
+[BRANCH-alias preview URL(s) from `branch-preview-url.mjs`, deep-linked to the
+routes this PR changes — not just the root. Never a per-commit alias: an eight-hex
+first label (`c76da223.…`) means the link freezes at this push and the reviewer
+cannot tell. Omit the section entirely for repos with no preview deploy
 (SahajAtlasWordpress). Say "preview pending" only if it genuinely had not built
 by the time the body was written, and refresh once it does.]
 

@@ -314,8 +314,95 @@ A commit alias is pinned to the SHA it was built from, so every later push silen
 its value — a reviewer opening it sees old code and has no way to tell. #181 carried links three
 pushes stale, including one to a component the review had asked be deleted.
 
-The Cloudflare truncation boundary is easy to get wrong by a character, and a 404 in the Preview
-section is worse than no section.
+**Telling a run this was not enough, twice.** The rule was already written here, and the body was
+still fixed and re-broken, the second time with a confident rationale: "these are per-deployment
+aliases, so they stay pinned to this commit." That reasoning came from
+`get-cloudflare-preview-url.mjs`, whose docblock argues — correctly, for its own consumer — that a
+per-deployment alias beats a branch alias because it "names one immutable build." That script feeds
+the CI smoke gate, which must test the exact SHA it was handed. The PR body wants the opposite. A run
+handed one tool for two requirements will satisfy the one the tool argues for, so the fix is a second
+tool, not a firmer instruction.
+
+**And the alias is discovered, not constructed.** Cloudflare labels it — `Branch Preview URL` in both
+the Pages check-run summary and the Workers comment — so there is no reason to derive it. The
+documented slug rule (non-alphanumerics to `-`, truncate to 28) is a guess about a host we do not own,
+and it is not merely fragile at the boundary: two branches agreeing in their first 28 characters
+produce one alias, which answers 200 while serving the other branch. A wrong link that 404s is a bad
+Preview section; a wrong link that works is a bad review.
+
+## A routine cannot reach the GitHub API
+
+Not "should not" — *cannot*, by any client. Measured in a routine on 2026-09-02:
+
+| Call | Result |
+| --- | --- |
+| `command -v gh` · `ls /usr/bin/gh` · `find / -name gh -type f` | absent |
+| `gh` downloaded and run from `/tmp` | installs fine, `gh version 2.63.2` |
+| `gh api repos/<in-session repo>` | **403** — "GitHub access is not enabled for this session" |
+| `curl https://api.github.com/repos/…`, with the token **and** without it | **403**, byte-identical |
+| `curl https://api.github.com/graphql` | **403** — "only the pinned set of PR-review operations is served" |
+| `curl https://api.github.com/user` | **200** |
+| `mcp__github__*` | works, scoped to the session's configured repositories |
+
+The mechanism, since knowing it stops the next person re-testing the same dead ends: `api.github.com`
+resolves to GitHub's real address but connects to `peer=127.0.0.1`, and the certificate is issued by
+`CN=CCR Upstream Proxy CA (staging); O=Anthropic`, trusted through `NODE_EXTRA_CA_CERTS`
+(`CCR_AGENT_PROXY_ENABLED`, `CCR_UPSTREAM_PROXY_ENABLED`). It is a TLS-intercepting proxy that
+allowlists **by path, regardless of credential** — a deliberately invalid PAT draws the same 403 as
+the harness token, under both `Bearer` and `token` schemes, on REST and on GraphQL. **A
+self-managed PAT therefore buys nothing**, and defeating the interception is defeating a sandbox
+control.
+
+What is NOT gated is everything else: `example.com`, `de.sentry.io`, Railway apps,
+`raw.githubusercontent.com` and `codeload.github.com` all answer. Arbitrary HTTPS egress works — which
+is how the Sentry and Mailpit rungs already work, and the only route by which a script could ever
+reach GitHub state directly (a self-hosted relay holding its own token). That is a real option with a
+real cost, not a workaround: it re-grants, under our own credential, access the proxy deliberately
+gates.
+
+The community recipe for this (`gh-setup-hooks`, dev.to) installs `gh` and sets `GH_TOKEN` to a
+personal token. Its first half works here — `gh` downloads and runs. Its second cannot: the proxy
+answers before it considers a credential, so the token is never read. That recipe targets Claude Code
+*on the web*, which evidently has a laxer proxy than Routines; it is not wrong, it does not transfer.
+
+**Decided 2026-09-02: we are not building that relay.** The gate that could merge untested code
+already works in a routine — the run fetches with MCP, `merge-verdict.mjs` decides — so a relay would
+only move counting and formatting into scripts. Against that it means a service to keep alive and a
+five-repo PAT living in an environment with no secret store, which would undo the per-session repo
+scoping the proxy exists to enforce. A cosmetic win is not worth a standing credential. Revisit only
+if the token cost of the census becomes the binding constraint; the finding above is what makes it a
+decision rather than an assumption.
+
+The identical 403 with and without an auth header is the part that settles it: the proxy is refusing
+the *path*, not the credential, so installing a binary or finding a better token cannot help.
+Connecting the **Claude GitHub App for the org** — which is what the 403 itself asks for — was tried
+and changed nothing.
+
+**Three different refusals, and the other two are the real ceiling.** They matter more than the first,
+because they would survive any widening of repo access:
+
+| Path | Message |
+| --- | --- |
+| `repos/…` | "GitHub access is not enabled for this session. An org admin must connect the Claude GitHub App" |
+| `search/issues` | "sessions are bound to their configured repositories. Use repository-scoped endpoints" |
+| `graphql` | "only the pinned set of PR-review operations is served" |
+
+**Search is refused by design, not by configuration** — a session is bound to its repositories, and
+search is inherently cross-repository. The loop's worklist *is* a search (`assignee:<bot>` over five
+repos), as are the journal counts and the awaiting-you table. So even if `repos/…` opened tomorrow,
+those three could not become scripts. Only per-repo reads and pure decisions can.
+
+Two traps in that table. `/user` answering 200 while every `repos/...` path 403s makes the token look
+healthy and the repository look missing, when neither is true — and `git` fetch and push work
+throughout, because they go through the credential helper rather than the API, which makes a session
+feel far more capable than it is.
+
+**The consequence for this plugin: a script never fetches.** It takes data the run already has and
+returns a decision. That split is the right one regardless — the merge gate's two failures were never
+in the fetching, they were in deciding what the fetched values meant, and that half had no single
+home. `docs/routine-setup.md` asserted the opposite for weeks (`gh` "ships in the image,
+`/usr/bin/gh`, v2.98.0"), which is exactly the licence needed to write four scripts that pass every
+local test and fail silently where it counts.
 
 ## A conflicted PR schedules zero CI runs
 
@@ -355,6 +442,24 @@ This is the failure mode more tests cannot fix. Every other kind of bug is, in p
 another assertion; a wrong fixture is not, because it defines the world every assertion in that file
 is evaluated against. The one-line pre-mortem is cheap precisely because it happens before the
 fixture exists, when the assumption is still conscious.
+
+## A script here never fetches
+
+Every script under `workflow/` takes JSON on stdin and returns a decision. None opens a connection to
+GitHub, and that is a rule rather than a convenience.
+
+The alternative was tried and abandoned within a day. Four scripts shipped calling `gh`; all four
+passed every local test and none could run in a routine, where the loop does nearly all its work.
+Keeping them would have meant two implementations of every rule they encoded — a local one that gets
+exercised while developing, and a prose one in the skill that executes eight times a day. That is the
+exact shape of the defect that made the merge gate unsafe: `get_status` versus check runs was never a
+fetching bug, it was two readings of "green" with no single home.
+
+So the boundary is: **the run gathers, the script decides.** It costs the token savings a scripted
+census would have given, and buys the only thing that was ever load-bearing — one implementation,
+exercised identically everywhere. A script earns its place when its input is small enough to hand
+over and its logic is subtle enough to get wrong in prose. `merge-gate` and `branch-preview-url`
+clear both bars. A census, a count and a markdown table clear neither.
 
 ---
 

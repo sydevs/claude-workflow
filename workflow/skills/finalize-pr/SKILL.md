@@ -199,35 +199,41 @@ to omit; never rename one or add your own in its place.
 **The Preview section is mandatory wherever the repo has a preview deploy.** It is how the reviewer
 sees the change without checking out the branch.
 
-**Always link the BRANCH alias, never a per-commit alias.**
+**Always link the BRANCH alias, never a per-commit alias.** One script produces it, for both
+Cloudflare projects and both platforms:
+
+```bash
+# Gather with MCP, then pipe the text in:
+#   mcp__github__get_comments   → the Cloudflare bot's comment bodies
+#   the PR's Cloudflare check runs → each output.summary
+echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
+  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
+```
+
+It prints one `project  status  url` line per preview, reading the alias out of the label Cloudflare
+itself writes — `Branch Preview URL`, in both the Pages check-run summary and the Workers comment.
+It exits non-zero when there is no alias yet: that is the "preview pending" case, **not** a cue to
+fall back to something else.
+
+**Do not use `scripts/get-cloudflare-preview-url.mjs` for the body.** That script ranks per-commit
+aliases *above* branch aliases on purpose, because it feeds the CI smoke gate, which must test the
+exact SHA. Its reasoning is sound and does not transfer: a body written from it goes stale on the
+next push, and its docblock will talk you into it.
 (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 
-For Cloudflare Pages the branch alias is `https://<slug>.<project>.pages.dev`, where `<slug>` is the
-branch name with every non-alphanumeric character replaced by `-` and then **truncated to 28
-characters**:
+**A per-commit alias in a PR body is a defect, not a fallback.** Its first hostname label is eight
+hex characters — `c76da223.sahajatlas.pages.dev`,
+`c14f4e66-wemeditate-web.contact-c66.workers.dev`. If you are about to write one, the answer is
+"preview pending".
 
-```bash
-SLUG=$(git branch --show-current | tr -c 'a-zA-Z0-9' '-' | cut -c1-28)
-curl -s -o /dev/null -w '%{http_code}\n' "https://$SLUG.<project>.pages.dev"
-```
-
-`claude/feat-post-event-feedback` → `claude-feat-post-event-feedb`. **Verify the alias returns 200
-before putting it in the body.**
-
-**Discover the URL — never construct it** — using the repo's own script when it gives you a branch
-alias; construct-and-verify only for the branch alias itself:
-
-```bash
-pnpm tsx scripts/get-railway-preview-url.ts     # SahajCloud
-node scripts/get-cloudflare-preview-url.mjs     # WeMeditateWeb / SahajAtlasWeb
-```
-
-- SahajAtlasWeb has **two** previews and a UI change should link both: the app
-  (`CF_PROJECT=sahajatlas`) and the Ladle component playground (`sahajatlas-design`).
+- **SahajCloud** uses Railway, whose preview host is per-PR and already stable across pushes:
+  `pnpm tsx scripts/get-railway-preview-url.ts`. Nothing to correct there.
+- SahajAtlasWeb has **two** previews and a UI change should link both: the app (`sahajatlas`) and the
+  Ladle component playground (`sahajatlas-design`). The script returns both.
 - **Deep-link to the routes actually changed, not the root** — a reviewer should land on the thing,
   not hunt for it.
 - The preview builds a few minutes after the push, so create the PR, then refresh the body once the
-  URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
+  URL resolves.
 - **Re-verify every deep link when you revise a PR.** Your own revision can invalidate a link — if
   the review asked you to delete a component, its Ladle story went with it. Branch aliases keep the
   *host* current; they do not keep the *path* valid.
@@ -241,10 +247,21 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → create it, then **assign it to `assignment.bot`** from `loop-config.json`. The PR is
-  the bot's until it is ready for review; the assignee field is what rung 2 queries.
+- **No PR** → create it, then two follow-ups, both from `loop-config.json`:
+  ```bash
+  gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
+  ```
+  and **assign it to `assignment.bot`**. The PR is the bot's until it is ready for review; the
+  assignee field is what rung 2 queries.
+
+  **Always request the review, on every PR, at the moment it is opened** — including drafts, where it
+  costs nothing and means the request is already in place at ready-for-review. Assignment and review
+  request answer different questions: the assignee is *who is working on it*, the reviewer is *who
+  must look*. Handing the PR back sets the first; only this sets the second, and a PR that never
+  requests one waits in a list the reviewer has no reason to open.
 - **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
-  Leave the assignee alone here — step 9 decides who holds it.
+  Leave the assignee alone here — step 9 decides who holds it. Re-add the reviewer if the request was
+  dismissed by a completed review and the PR has since changed.
 
 Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
 
@@ -255,10 +272,22 @@ Open as a **draft** when `/implement-issue` passed `--draft` — see its autonom
 (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 
 ```
-mcp__github__pull_request_read  method:get  →  mergeable, mergeable_state
+mcp__github__pull_request_read  method:get_check_runs  owner:$ORG repo:$REPO pullNumber:<pr>
 ```
 
-- `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push.
+**Green means every check run has `conclusion: success` (or `neutral`/`skipped`), every commit
+status is `success`, and there is at least one CHECK RUN.** Do not read `method:get_status` alone —
+it returns commit statuses, our CI reports check runs, and reading only the first once had an
+approved SahajCloud PR green for seventeen minutes while its test job was still running. A deploy
+status is not a test signal. (why: docs/why.md#ci-truth-lives-in-check-runs)
+
+`merge-verdict.mjs` applies exactly that definition — pipe it the same three calls and read its exit
+code rather than restating the rule here.
+
+- `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push. The
+  script reports this as "no check runs — usually a merge conflict", because a conflicted PR
+  schedules **zero** workflow runs, silently.
+  (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 - **Compare the last green run's `head_sha` against the current branch head** — a run that predates
   the base moving is stale.
 
@@ -277,6 +306,9 @@ mcp__github__actions_get        # for a failing run's logs
 - **Poll; never `subscribe_pr_activity`.** Poll up to `ceilings.ciPollAttempts` times; if CI has not
   settled by then, report that and hand the PR back. An unfinished CI watch is a fact to report, not
   a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
+- **`workflow/lib/merge-gate.mjs` implements exactly that definition**, and rung 1 reaches it through
+  `merge-verdict.mjs`. If you ever find yourself refining the rule here, change it there too — or
+  better, change it there only.
 - **Green** → report.
 - **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part
   of the lean gate, commit, push, re-watch.
