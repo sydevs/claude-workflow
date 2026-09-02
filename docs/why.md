@@ -79,6 +79,38 @@ next run. The failure compounds rather than showing up once.
 An HTML-escaped `&gt;` in a search qualifier is accepted without error and returns **zero results** —
 a silently-empty search that reads as "nothing to do".
 
+## CI truth lives in check runs
+
+Rung 1 read CI with `get_status` alone for the loop's first week. That call returns commit statuses,
+and no repo here posts a commit status for its tests — GitHub Actions reports as check runs, a
+separate surface `get_status` cannot see. Measured on two live PRs on 2 September, it was wrong in
+both directions at once:
+
+- **sydevs/SahajAtlasWeb#181** — `get_status` returned `state: "pending"`, `total_count: 0`,
+  `statuses: []`, while `get_check_runs` returned five check runs all `conclusion: "success"`. A
+  fully green PR that the loop would have called "still running" on every run, forever.
+- **sydevs/SahajCloud#672** — `get_status` returned one status, `success`: Railway's deploy
+  (`context: "sahajcloud - SahajCloud"`, `created_at: 21:14:17Z`). The test job, `Lint, Test &
+  Smoke`, is a check run that did not complete until `21:31:40Z`. For those seventeen minutes the
+  gate said green while the tests were still running.
+
+The second is the one that matters. A rung-1 run waking in that window on an approved PR would have
+merged untested code **while following the skill exactly** — the failure mode a safety gate exists to
+make impossible.
+
+The "at least one check run" clause was added at the same time and is not decoration: a merge
+conflict makes GitHub schedule zero workflow runs, so `check_runs` comes back empty. Without the
+clause, "every check run succeeded" is vacuously true of nothing and a conflicted PR reads as green.
+The mirror-image clause for statuses is deliberately absent — a repo with no deploy integration
+legitimately has none.
+
+`skipped` and `neutral` count as passing because a strict `conclusion == "success"` test would
+reproduce the SahajAtlasWeb failure one level down: a conditionally-skipped job would read as
+not-green forever, and the loop would comment on a healthy PR on every run rather than merging it.
+Whether a skip is *legitimate* is CI's own problem, and the repos already solve it — SahajAtlasWeb's
+smoke lane fails a same-repo PR outright rather than skipping quietly, precisely so that a skip on
+that job cannot be mistaken for a pass.
+
 ## Never subscribe to PR activity
 
 Declining to call `subscribe_pr_activity` is not sufficient. **Opening a PR auto-subscribes the
