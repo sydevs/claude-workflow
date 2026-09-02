@@ -52,8 +52,8 @@ each person runs `claude plugin install` once.
 | `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
-| `/workflow:loop-run` | One pass down the working-day ladder: merge, revise, implement, adversarially review. Invoked by the `sydevs-loop` routine; `--dry-run` locally. |
-| `/workflow:nightly-run` | The once-a-night run: the day's survey and the reconciliation sweeps. Invoked by the `sydevs-survey-nightly` routine; `--dry-run` locally. |
+| `/workflow:queue-routine` | One pass down the working-day ladder: merge, revise, implement, adversarially review. Invoked by the `sydevs-loop` routine; `--dry-run` locally. |
+| `/workflow:survey-routine` | The once-a-night run: the day's survey and the reconciliation sweeps. Invoked by the `sydevs-survey-nightly` routine; `--dry-run` locally. |
 | `/workflow:preflight` | Ground rules and run start shared by both runs — auth, identity, the census. Invoked by the two run skills, not on its own. |
 | `/workflow:journal` | The run's journal entry and ending, shared by both runs. Invoked by the two run skills, not on its own. |
 | `/workflow:survey-deps` | Monday: vulnerabilities → PRs; monthly routine updates. |
@@ -70,10 +70,10 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 
 Two scheduled cloud routines work all five repos — the four product repos and this one — each with
 its own run skill, both starting with `preflight` and ending with `journal`. `sydevs-loop` runs
-`loop-run` hourly through the Vancouver morning and every two hours in the afternoon — one pass
+`queue-routine` hourly through the Vancouver morning and every two hours in the afternoon — one pass
 down a ladder of rungs ordered by how much they respect your attention: merge what you approved,
 revise what you commented on, implement what you cleared, adversarially review what it built.
-`sydevs-survey-nightly` runs `nightly-run` once at night — no ladder, just the day's survey and the
+`sydevs-survey-nightly` runs `survey-routine` once at night — no ladder, just the day's survey and the
 dropped-baton and stale-claim sweeps. Splitting the survey out guarantees it runs even on days the
 queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
 are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.

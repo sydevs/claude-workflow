@@ -365,12 +365,12 @@ pointing at its own skill — both skills start with `/workflow:preflight` and e
 | --- | --- | --- |
 | Cron (UTC) | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` | `0 8 * * *` |
 | Local (PT) | hourly 05:00–12:00, then 14:00 · 16:00 · 18:00 | 01:00 |
-| Skill | `loop-run` (the ladder, rungs 1–5) | `nightly-run` (survey, reconciliation sweeps) |
+| Skill | `queue-routine` (the ladder, rungs 1–5) | `survey-routine` (survey, reconciliation sweeps) |
 | Model | opus | opus |
 
 The split guarantees the survey runs daily — as a low rung of the ladder it could be starved for
-days by a busy queue with nothing looking wrong, which is why the nightly run is **not** a ladder
-and has no rungs (`docs/why.md#the-nightly-run-is-not-a-ladder`). It also carries the
+days by a busy queue with nothing looking wrong, which is why the survey routine is **not** a ladder
+and has no rungs (`docs/why.md#the-survey-routine-is-not-a-ladder`). It also carries the
 dropped-baton and stale-claim sweeps, which would re-flag the same items on every pass if they
 lived in the two-hourly loop.
 
@@ -384,13 +384,13 @@ The prompt is deliberately thin — all behaviour lives in the repo, so a merged
 on the next run with no redeploy:
 
 ```
-Read claude-workflow/workflow/skills/loop-run/SKILL.md and follow it exactly.
+Read claude-workflow/workflow/skills/queue-routine/SKILL.md and follow it exactly.
 Do not improvise around missing credentials or tools: journal the failure and stop.
 ```
 
-— with `nightly-run/SKILL.md` in the `sydevs-survey-nightly` prompt. A stored prompt that still
-points the nightly routine at `loop-run` (the pre-split shape, including one with a stray
-`RUN_KIND` line) keeps working: `loop-run` redirects a nightly invocation to `nightly-run` — but
+— with `survey-routine/SKILL.md` in the `sydevs-survey-nightly` prompt. A stored prompt that still
+points the nightly routine at `queue-routine` (the pre-split shape, including one with a stray
+`RUN_KIND` line) keeps working: `queue-routine` redirects a nightly invocation to `survey-routine` — but
 update the prompt anyway; the redirect is a shim, not the design.
 
 Create them **disabled**, via the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.

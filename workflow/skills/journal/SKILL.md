@@ -1,6 +1,6 @@
 ---
 name: journal
-description: Write the run's journal entry and end the run — the closing step shared by /workflow:loop-run and /workflow:nightly-run; not a standalone workflow.
+description: Write the run's journal entry and end the run — the closing step shared by /workflow:queue-routine and /workflow:survey-routine; not a standalone workflow.
 allowed-tools: Read, Grep, Glob
 ---
 

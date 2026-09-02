@@ -61,7 +61,7 @@ claude --plugin-dir ./workflow                 # load the plugin without install
 `.github/workflows/` here at all. `validate` checks the plugin manifest and the skill frontmatter;
 it cannot check whether the prose is *right*, because the skills are prose.
 
-The real gate is a **supervised loop run**: `/workflow:loop-run --dry-run` locally, or a manually
+The real gate is a **supervised loop run**: `/workflow:queue-routine --dry-run` locally, or a manually
 fired routine whose journal entry *and* transcript you then read. `docs/routine-setup.md` §6
 describes the supervised-bootstrap procedure, and its warning generalises — a green run status only
 means no infrastructure error; task-level failures appear only in the transcript.
@@ -126,7 +126,7 @@ derive it differently. Prose is for judgment. If a rule can be evaluated, evalua
 - **Write for one reader who is busy.** The loop's own writing rules (lead with the outcome, detail
   in `preflight/SKILL.md` and apply to the skill bodies
   themselves as much as to what they emit.
-- **The rule lives in the skill; the story lives in [`docs/why.md`](docs/why.md).** `loop-run` is
+- **The rule lives in the skill; the story lives in [`docs/why.md`](docs/why.md).** `queue-routine` is
   re-read on every run — roughly eleven times a day — so length there costs tokens each time *and*
   dilutes the rules it carries. Retrospective justification ("a run once concluded X, wrongly",
   "this cost us a night") earns its keep, but one hop away: add a heading in `docs/why.md` named

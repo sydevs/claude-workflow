@@ -10,7 +10,7 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps and per-run backstops. Never a per-run flow quota: at 8 runs/day a 'per run' allowance is 8x a daily one. Rules in loop-run/SKILL.md.",
+    "$comment": "Stock caps and per-run backstops. Never a per-run flow quota: at 8 runs/day a 'per run' allowance is 8x a daily one. Rules in queue-routine/SKILL.md.",
     "wipCapPerRepo": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
@@ -29,7 +29,7 @@
     "claim": "claude:working"
   },
   "assignment": {
-    "$comment": "The baton: assignee:<bot> IS the worklist. Hand-back rules in loop-run/SKILL.md.",
+    "$comment": "The baton: assignee:<bot> IS the worklist. Hand-back rules in queue-routine/SKILL.md.",
     "bot": "sydevs-bot",
     "reviewer": "Ardnived"
   },
@@ -40,7 +40,7 @@
     ]
   },
   "surveyCalendar": {
-    "$comment": "Weekday -> survey skill, dispatched by nightly-run only. Saturday runs no survey. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
+    "$comment": "Weekday -> survey skill, dispatched by survey-routine only. Saturday runs no survey. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
     "monday": "survey-deps",
     "tuesday": "survey-sentry",
     "wednesday": "survey-analysis",
@@ -102,10 +102,10 @@
     "bodyMarker": "Blocked by:",
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>",
     "cloudReadable": false,
-    "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch loop-run to the tool and retire the body-marker fallback"
+    "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch queue-routine to the tool and retire the body-marker fallback"
   },
   "identity": {
-    "$comment": "expectedLogin is authoritative and is checked against get_me once per run. Attribution rules in loop-run/SKILL.md.",
+    "$comment": "expectedLogin is authoritative and is checked against get_me once per run. Attribution rules in queue-routine/SKILL.md.",
     "expectedLogin": "sydevs-bot",
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },

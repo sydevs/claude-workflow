@@ -1,14 +1,14 @@
 ---
 name: preflight
-description: Ground rules and run start shared by the loop run and the nightly run — auth, identity, capability limits, and the census. Invoked by /workflow:loop-run and /workflow:nightly-run before anything else; not a standalone workflow.
+description: Ground rules and run start shared by the queue routine and the survey routine — auth, identity, capability limits, and the census. Invoked by /workflow:queue-routine and /workflow:survey-routine before anything else; not a standalone workflow.
 allowed-tools: Read, Grep, Glob
 ---
 
 # Preflight
 
-Every run of either routine — `/workflow:loop-run` or `/workflow:nightly-run` — starts here: the
+Every run of either routine — `/workflow:queue-routine` or `/workflow:survey-routine` — starts here: the
 ground rules both obey, then the census both read. Nothing below is optional for either run; a
-nightly run needs identity and ceilings exactly as much as a loop run does.
+survey routine needs identity and ceilings exactly as much as the queue routine does.
 
 Read `loop-config.json` from the `claude-workflow` checkout **first**. Every number and label name
 in any run skill comes from it — none are hard-coded.
@@ -126,8 +126,8 @@ mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last
 2. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the item
    is on the worklist, *and* its comment count is greater than zero.
 3. **A mention is the user asking directly.** Every hit on the mention query is feedback for the
-   loop run's rung 4, whatever else it matched — the nightly run does not process feedback, so it
-   leaves mention hits for the next loop run rather than answering them. Never let one pass
+   queue routine's rung 4, whatever else it matched — the survey routine does not process feedback,
+   so it leaves mention hits for the next queue-routine run rather than answering them. Never let one pass
    silently: it is answered by rung 4 or named in the journal, one of the two.
 4. **`-label:ops-journal` is mandatory on every worklist query** you write by hand. Journal issues are
    never work. (why: docs/why.md#the-ops-journal-exclusion-is-mandatory)
@@ -138,4 +138,4 @@ mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last
 The per-repo PR list is cheap and stays full. **Read the last journal entry** (see
 `/workflow:journal`) to learn when the previous run ended — "since last run" means since that
 timestamp; with no journal yet, the last 24 hours. **Count open loop PRs per repo** (author is this
-agent, branch `claude/*`) for the loop run's WIP gate.
+agent, branch `claude/*`) for the queue routine's WIP gate.

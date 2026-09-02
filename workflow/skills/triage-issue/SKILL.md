@@ -17,7 +17,7 @@ set of instructions that reads the same locally and in a routine.
 therefore a local session — see below. `git` itself is of course still `git`.
 
 One definition of what a well-formed sydevs ticket looks like. `draft-ticket`, the survey skills,
-and `loop-run` all read this rather than each carrying their own copy — the divergence that produced
+and `queue-routine` all read this rather than each carrying their own copy — the divergence that produced
 three forks of the workflow started exactly this way.
 
 ## The four fields

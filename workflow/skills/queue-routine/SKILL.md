@@ -1,5 +1,5 @@
 ---
-name: loop-run
+name: queue-routine
 description: One run of the working-day routine — a pass down the ladder across the sydevs repos: merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, adversarially review what the loop built, and journal it. Invoked by the sydevs-loop routine; runnable locally with --dry-run.
 argument-hint: '[--dry-run]'
 disable-model-invocation: true
@@ -7,16 +7,16 @@ effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 ---
 
-# Loop Run
+# Queue Routine
 
 One pass down a fixed ladder of work across the five sydevs repos — the four product repos plus
 `claude-workflow`, which holds these very skills. **The ladder is ordered by how much it respects
 the user's attention.** Descend only while ceilings allow; stop when one is hit and say so.
 
-**"Rung" means one thing: a step of this ladder.** The nightly routine is not a ladder and has no
+**"Rung" means one thing: a step of this ladder.** The survey routine is not a ladder and has no
 rungs — if the routine prompt says `RUN_KIND=nightly` (or `--kind nightly`), you are the nightly
-routine: read `workflow/skills/nightly-run/SKILL.md` and follow it instead of this file.
-(why: docs/why.md#the-nightly-run-is-not-a-ladder)
+routine: read `workflow/skills/survey-routine/SKILL.md` and follow it instead of this file.
+(why: docs/why.md#the-survey-routine-is-not-a-ladder)
 
 Every rule here is an imperative and stands on its own. The failure that produced each one lives in
 **`docs/why.md`** in the `sydevs/claude-workflow` checkout, cited as `(why: …)`. Read a `why` entry
@@ -50,7 +50,7 @@ mcp__github__list_workflows     owner:$ORG repo:$REPO        # total_count > 0 �
 ```bash
 echo '{"repo":"'$ORG/$REPO'","reviewDecision":"…","hasWorkflows":true,
        "pr":{…},"checkRuns":{…},"statuses":{…},"reviewThreads":{…}}' \
-  | ${CLAUDE_PLUGIN_ROOT}/skills/loop-run/merge-verdict.mjs
+  | ${CLAUDE_PLUGIN_ROOT}/skills/queue-routine/merge-verdict.mjs
 ```
 
 **The definition of green lives in `workflow/lib/merge-gate.mjs`, and only there.** It was wrong in

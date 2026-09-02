@@ -1,19 +1,19 @@
 ---
-name: nightly-run
-description: One run of the nightly routine — the day's survey, the dropped-baton and stale-claim sweeps, and the journal. Invoked by the sydevs-survey-nightly routine; runnable locally with --dry-run.
+name: survey-routine
+description: The once-a-night run — the day's survey, the dropped-baton and stale-claim sweeps, and the journal. Invoked by the sydevs-survey-nightly routine; runnable locally with --dry-run.
 argument-hint: '[--dry-run]'
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 ---
 
-# Nightly Run
+# Survey Routine
 
 The once-a-night pass across the five sydevs repos. **This is not a ladder** — nothing here
 competes for budget or descends by priority. It is a fixed set of once-a-day tasks that were split
 out of the working-day loop precisely so a busy queue can never starve them, plus two sweeps that
 would re-flag the same untouched items on every pass if they ran hourly.
-(why: docs/why.md#the-nightly-run-is-not-a-ladder)
+(why: docs/why.md#the-survey-routine-is-not-a-ladder)
 
 **Begin with `/workflow:preflight`** — the ground rules and the census apply to this run in full —
 **and end with `/workflow:journal`.** In between, the three tasks below, in order.
