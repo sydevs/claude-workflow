@@ -133,6 +133,13 @@ WIP gate.
 
 ## Rung 1 — Merge and sequence
 
+**Merges do not count against `maxWorkItemsPerRun`. Merge every PR that qualifies.** The ceiling
+governs work you *do* to an item — revising, implementing, investigating, replying. A merge consumes
+a review decision that was already made: the gates are read, and if all three hold it is one API
+call. Rationing it would leave approved, green work sitting while the run spent its budget elsewhere,
+which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
+work and does count.
+
 Candidates are the open PRs with `reviewDecision == APPROVED`. Read both before deciding — threads
 carry `isResolved`, and an unresolved one blocks the merge even with an approval:
 
