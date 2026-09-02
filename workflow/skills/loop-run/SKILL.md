@@ -140,19 +140,40 @@ call. Rationing it would leave approved, green work sitting while the run spent 
 which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
 work and does count.
 
-Candidates are the open PRs with `reviewDecision == APPROVED`. Read both before deciding — threads
-carry `isResolved`, and an unresolved one blocks the merge even with an approval:
+Candidates are the open PRs with `reviewDecision == APPROVED`. Read all three before deciding —
+threads carry `isResolved`, and an unresolved one blocks the merge even with an approval:
 
 ```
+mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
 ```
 
+**CI truth lives in check runs, not commit statuses.** Every repo here tests on GitHub Actions, which
+reports as **check runs**. `get_status` returns **commit statuses** — a separate GitHub surface that
+cannot see check runs at all — and in these repos a commit status is a *deploy* signal (Railway,
+Cloudflare Pages), which goes green long before the test job finishes. **Never decide mergeability
+from `get_status` alone.**
+
+**Green means all three of:** `get_check_runs` returns **at least one** check run; every check run
+has finished, with `conclusion` one of `success`, `skipped` or `neutral`; every entry in
+`get_status`'s `statuses` array has `state: "success"`.
+
+Three clauses in that carry weight:
+
+- **Read the individual `statuses` entries, never `get_status`'s combined `state`** — with no
+  statuses at all the combined field reads `pending` forever.
+- **At least one check run**, because "every check run succeeded" is vacuously true of none, and a
+  merge conflict makes GitHub schedule zero runs.
+- `skipped` and `neutral` pass; **`null` (still running), `cancelled`, `timed_out`,
+  `failure` and `action_required` do not.** An empty `statuses` array is not a failure — a repo with
+  no deploy integration simply has none. (why: docs/why.md#ci-truth-lives-in-check-runs)
+
 | Condition | Verdict |
 | --- | --- |
 | `reviewDecision != APPROVED` | Not a rung-1 candidate. Leave it — PR health is rung 2 |
-| Approved · CI green · every thread `isResolved` | **Merge**, then the merge sequence below |
-| Approved · CI red or still running | **Do not merge.** One comment naming the failing check, then move on. Do not fix CI here — that is rung 2 |
+| Approved · green by the definition above · every thread `isResolved` | **Merge**, then the merge sequence below |
+| Approved · not green — a check failing, still running, or none scheduled at all | **Do not merge.** One comment naming which of the three clauses failed and for which check, then move on. Do not fix CI here — that is rung 2 |
 | Approved · any thread with `isResolved: false` | **Do not merge.** One comment naming the unresolved thread(s), then move on |
 | Approved · not mergeable for any other reason | **Do not merge.** One comment naming the blocker, then move on |
 | Several approved and mergeable in one repo | **Order before merging: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
@@ -207,7 +228,7 @@ On a human's PR, in order:
   **unsubscribe** to restore the standing state.
 - **A woken session that finds its work already handed back exits.**
 - **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — up to `ceilings.ciPollAttempts`
-  of `mcp__github__pull_request_read method:get_status`. If CI has not settled by then, say so in
+  of `mcp__github__pull_request_read method:get_check_runs`. If CI has not settled by then, say so in
   the journal and hand the PR back; an unfinished CI watch is a fact to report, not a reason to stay
   awake. (why: docs/why.md#never-subscribe-to-pr-activity)
 
