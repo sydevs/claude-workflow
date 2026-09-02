@@ -317,7 +317,7 @@ mcp__github__actions_get        # for a failing run's logs
 - A failure **pre-existing on `main`** → fix it here and note it.
 
 **This skill never merges.** Merge authority belongs to the user's approving review, and the merge
-itself is performed by `/workflow:loop-run` rung 1 once all three of approval, green CI, and zero
+itself is performed by `/workflow:work-routine` rung 1 once all three of approval, green CI, and zero
 unresolved review threads hold. Finishing here with green CI means *ready for review*, not *done*.
 
 **No label ever authorises a merge.** `ready-to-implement` is ticket-only — it says code may be

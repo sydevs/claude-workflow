@@ -1,7 +1,7 @@
 # Reviewer profile — how Ardnived reviews
 
 > Living document, read at review time by `/workflow:adversarial-review` and refined only by the
-> Sunday `reflect` rung, only on recurring evidence. Seeded 2026-09-02 from the full history of
+> Sunday `reflect` survey, only on recurring evidence. Seeded 2026-09-02 from the full history of
 > the reviewer's review activity across the five sydevs repos: 55 inline review comments, 32
 > reviews, 33 PR-conversation comments. Two corpus caveats, permanent: `claude-workflow` PRs are
 > merged **without formal reviews** (feedback arrives as ticket comments), and comments from

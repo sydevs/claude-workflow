@@ -60,7 +60,7 @@ previous three-fork workflow decayed.
 ## Refining the reviewer profile
 
 `review.profilePath` is the adversarial review's model of how $REVIEWER reviews. Refining it is
-this rung's job, and the gate is recurrence: edit it only when **the same theme appears in the
+this survey's job, and the gate is recurrence: edit it only when **the same theme appears in the
 reviewer's comments on two or more distinct PRs in the window**, or when **they caught something
 substantive that the adversarial review had passed clean**. One comment is weather.
 (why: docs/why.md#reflect-edits-the-profile-only-on-recurrence)

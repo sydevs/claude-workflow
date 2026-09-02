@@ -52,7 +52,10 @@ each person runs `claude plugin install` once.
 | `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
-| `/workflow:loop-run` | One pass of the autonomous ladder. Invoked by the scheduled routines; `--dry-run` locally. |
+| `/workflow:work-routine` | One pass down the working-day ladder: merge, revise, implement, adversarially review. Invoked by the `sydevs-work-hourly` routine; `--dry-run` locally. |
+| `/workflow:survey-routine` | The once-a-night run: the day's survey and the reconciliation sweeps. Invoked by the `sydevs-survey-nightly` routine; `--dry-run` locally. |
+| `/workflow:preflight` | Ground rules and run start shared by both runs — auth, identity, the census. Invoked by the two run skills, not on its own. |
+| `/workflow:journal` | The run's journal entry and ending, shared by both runs. Invoked by the two run skills, not on its own. |
 | `/workflow:survey-deps` | Monday: vulnerabilities → PRs; monthly routine updates. |
 | `/workflow:survey-sentry` | Tuesday: production errors → tickets. |
 | `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase → proposals. |
@@ -65,12 +68,14 @@ Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
 
 ## The loop
 
-Two scheduled cloud routines run `loop-run` across all five repos — the four product repos and
-this one. `sydevs-loop` runs hourly through the Vancouver morning and every two hours in the
-afternoon (rungs: merge what you approved, revise what you commented on, implement what you
-cleared, adversarially review what it built, journal it);
-`sydevs-survey-nightly` runs once at night (the day's survey, the dropped-baton and stale-claim
-sweeps, journal). Splitting the survey out guarantees it runs even on days the queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
+Two scheduled cloud routines work all five repos — the four product repos and this one — each with
+its own run skill, both starting with `preflight` and ending with `journal`. `sydevs-work-hourly` runs
+`work-routine` hourly through the Vancouver morning and every two hours in the afternoon — one pass
+down a ladder of rungs ordered by how much they respect your attention: merge what you approved,
+revise what you commented on, implement what you cleared, adversarially review what it built.
+`sydevs-survey-nightly` runs `survey-routine` once at night — no ladder, just the day's survey and the
+dropped-baton and stale-claim sweeps. Splitting the survey out guarantees it runs even on days the
+queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
 are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.
 
 **The baton.** `assignee:sydevs-bot` is the worklist: one indexed query per repo, rather than a scan
@@ -90,7 +95,7 @@ Three properties make it safe to leave running:
 
 Ceilings in `loop-config.json` bound what one run can spend — a cloud session cannot read your
 remaining quota, so spend is rationed by work-item counts rather than token math. The Sunday
-reflection rung proposes adjustments to those numbers as a PR, so the loop tunes itself through the
+reflection survey proposes adjustments to those numbers as a PR, so the loop tunes itself through the
 same review path as everything else.
 
 ## Configuration
