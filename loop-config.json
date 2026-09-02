@@ -18,7 +18,7 @@
     "ciPollAttempts": 20,
     "ciPollNote": "Bounded polling replaces subscribe_pr_activity for CI. NOTE the loop does NOT fully control its subscriptions: opening a PR auto-subscribes the session (subscription.created, from=system, at PR-open time), so a run can be woken even though it never called subscribe. That is tolerated rather than fought — the baton is the real defence: a woken session re-derives assignee:<bot>, finds the work handed back, and exits. If a run is woken, it may act on what the wake shows, then unsubscribe to restore the standing no-subscription state.",
     "maxWorkItemsPerRun": 3,
-    "maxWorkItemsNote": "How many queue items one run may process before stopping — the backstop against a 30-item queue burning a whole run. Blocked-item checks and no-op skips are free; only items actually worked (revised, implemented, investigated, replied-to) count.",
+    "maxWorkItemsNote": "How many queue items one run may process before stopping — the backstop against a 30-item queue burning a whole run. Free, and never counted: MERGES (rung 1), blocked-item checks, and no-op skips. Counted: items actually worked — revised, implemented, investigated, replied-to. A merge spends a review decision already made rather than doing work, so rationing it would strand approved green PRs while the budget went elsewhere. Conflict resolution or a rebase following a merge IS work and does count.",
     "maxOpenProposalsNote": "Governs proposals a SURVEY went looking for. A defect tripped over during other work is filed regardless of this number: the survey manufactures candidates on demand, whereas an incidental finding is evidence already held, and the alternative to filing it is that the knowledge dies with the run."
   },
   "labels": {
