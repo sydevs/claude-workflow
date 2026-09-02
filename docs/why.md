@@ -225,6 +225,18 @@ it. The evidence was real; the inference was wrong at the read layer, not the wr
 `persist_session: false` governs whether the *next* fire reuses a session, not whether this one dies.
 Lingering is the platform's behaviour, not a fault to work around.
 
+## The nightly run is not a ladder
+
+The two routines diverged — the survey was split out precisely so a busy queue could not starve
+it — but for a while both kept sharing one skill file and one rung numbering. That numbering
+implied a ladder no run ever descended: the nightly run executed "rung 6" without climbing rungs
+1–5, the loop run stepped over 6 on its way to 7, and the shared bookends (preflight, journal)
+wore rung numbers despite being priority steps of nothing. The costs were concrete: inserting one
+loop rung forced a renumbering sweep across four files for a nightly run that had not changed, and
+the nightly run's spec silently omitted preflight — identity, auth, ceilings — because "rung 0"
+read as the ladder's business rather than every run's. So the runs are now two skills over shared
+bookends, and **rung means one thing**: a step of the loop run's ladder.
+
 ## The adversarial review runs last and may starve
 
 A pre-filter for the reviewer is worth exactly the budget nothing else claimed. Every rung above it

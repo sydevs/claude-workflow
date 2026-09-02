@@ -54,8 +54,6 @@ exclusion rule that would misfire once the previous account comments for real.
 
 ## 1. GitHub metadata
 
-## 1. GitHub metadata
-
 The loop's queue **is** GitHub metadata. Without this it has nothing to read.
 
 ### Issue types (organization level)
@@ -359,19 +357,20 @@ preview smoke.
 
 ## 5. The routines
 
-Two, split by **function** rather than by time of day, both attaching all five repos, both
-pointing at the same skill:
+Two, split by **function** rather than by time of day, both attaching all five repos, each
+pointing at its own skill — both skills start with `/workflow:preflight` and end with
+`/workflow:journal`:
 
 | | `sydevs-loop` | `sydevs-survey-nightly` |
 | --- | --- | --- |
 | Cron (UTC) | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` | `0 8 * * *` |
 | Local (PT) | hourly 05:00–12:00, then 14:00 · 16:00 · 18:00 | 01:00 |
-| RUN_KIND | `loop` | `nightly` |
-| Rungs | 0–5, 7 | 6, the reconciliation sweeps, 7 |
+| Skill | `loop-run` (the ladder, rungs 1–5) | `nightly-run` (survey, reconciliation sweeps) |
 | Model | opus | opus |
 
-The split guarantees the survey runs daily — as a rung below merge/revise/implement it could be
-starved for days by a busy queue with nothing looking wrong. The nightly run also carries the
+The split guarantees the survey runs daily — as a low rung of the ladder it could be starved for
+days by a busy queue with nothing looking wrong, which is why the nightly run is **not** a ladder
+and has no rungs (`docs/why.md#the-nightly-run-is-not-a-ladder`). It also carries the
 dropped-baton and stale-claim sweeps, which would re-flag the same items on every pass if they
 lived in the two-hourly loop.
 
@@ -386,9 +385,13 @@ on the next run with no redeploy:
 
 ```
 Read claude-workflow/workflow/skills/loop-run/SKILL.md and follow it exactly.
-RUN_KIND=morning
 Do not improvise around missing credentials or tools: journal the failure and stop.
 ```
+
+— with `nightly-run/SKILL.md` in the `sydevs-survey-nightly` prompt. A stored prompt that still
+points the nightly routine at `loop-run` (the pre-split shape, including one with a stray
+`RUN_KIND` line) keeps working: `loop-run` redirects a nightly invocation to `nightly-run` — but
+update the prompt anyway; the redirect is a shim, not the design.
 
 Create them **disabled**, via the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.
 
@@ -426,7 +429,7 @@ a survey.
 
 > **A green run status only means no infrastructure error.** Task-level failures, blocked network
 > requests and missing tools appear *only* in the transcript and the journal. That asymmetry is why
-> rung 7 exists and why its "Failed" line is never softened.
+> the journal exists and why its "Failed" line is never softened.
 
 Then set `enabled: true` on both.
 

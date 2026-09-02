@@ -40,7 +40,7 @@
     ]
   },
   "surveyCalendar": {
-    "$comment": "Weekday -> survey skill, morning runs only. Weekends run no surveys. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
+    "$comment": "Weekday -> survey skill, dispatched by nightly-run only. Saturday runs no survey. Keys are lowercase UTC weekday names as produced by `date -u +%A | tr A-Z a-z`.",
     "monday": "survey-deps",
     "tuesday": "survey-sentry",
     "wednesday": "survey-analysis",

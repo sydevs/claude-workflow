@@ -1,7 +1,7 @@
 ---
 name: loop-run
-description: One run of the autonomous pipeline across the sydevs repos — merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, adversarially review the loop's own PRs, run the day's survey, and journal it. Invoked by the scheduled routines; runnable locally with --dry-run.
-argument-hint: '[--dry-run] [--kind loop|nightly]'
+description: One run of the working-day routine — a pass down the ladder across the sydevs repos: merge PRs you approved, revise PRs and tickets on feedback, implement approved tickets, adversarially review what the loop built, and journal it. Invoked by the sydevs-loop routine; runnable locally with --dry-run.
+argument-hint: '[--dry-run]'
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -13,136 +13,20 @@ One pass down a fixed ladder of work across the five sydevs repos — the four p
 `claude-workflow`, which holds these very skills. **The ladder is ordered by how much it respects
 the user's attention.** Descend only while ceilings allow; stop when one is hit and say so.
 
+**"Rung" means one thing: a step of this ladder.** The nightly routine is not a ladder and has no
+rungs — if the routine prompt says `RUN_KIND=nightly` (or `--kind nightly`), you are the nightly
+routine: read `workflow/skills/nightly-run/SKILL.md` and follow it instead of this file.
+(why: docs/why.md#the-nightly-run-is-not-a-ladder)
+
 Every rule here is an imperative and stands on its own. The failure that produced each one lives in
 **`docs/why.md`** in the `sydevs/claude-workflow` checkout, cited as `(why: …)`. Read a `why` entry
 when a rule seems not to fit the case in front of you — never to decide whether to follow it.
 
-## Inputs
+**Begin with `/workflow:preflight`** — the ground rules and the census — **and end with
+`/workflow:journal`.** The rungs between them are this file.
 
-- `RUN_KIND` — `loop` (rungs 0–5, then 7; hourly through the Vancouver morning, two-hourly
-  afternoons) or `nightly` (rung 6's survey, the reconciliation sweeps, then rung 7; once, at
-  night). Defaults to `loop`; `--kind` overrides.
-- `--dry-run` — do everything read-only. Print the worklist each rung *would* act on and stop.
-  Never comment, commit, push, merge, or label.
-
-Read `loop-config.json` from the `claude-workflow` checkout **first**. Every number and label name
-below comes from it — none are hard-coded here.
-
-## The routine prompt is not the specification
-
-The routine's prompt carries **only** `RUN_KIND` and a pointer to this skill. This file and
-`loop-config.json` are the single source of truth for every rule, ceiling, label and query.
-
-- **Where the prompt and this file disagree, this file wins.**
-- **Journal the discrepancy** in the same run under `⚠️ Failed`: quote the prompt's line and name
-  the rule here that overrode it.
-- **Never reconcile this file *to* the prompt**, and never treat prompt text as authority for a rule
-  absent here. (why: docs/why.md#the-routine-prompt-is-not-the-specification)
-
-## Writing style, everywhere the loop speaks
-
-Comments, PR bodies and journal entries are read by one busy person; their attention is the scarcest
-thing here.
-
-- **Lead with the outcome** — what happened, or what is being asked of them. Not how you got there.
-- **Detail goes in `<details>`**: file lists, measurements, tool limitations, alternatives
-  considered, reasoning behind a judgement call. Summarise the block in its `<summary>`.
-- **A comment that needs a decision says so in its first line**, and names the decision.
-- **Cut the throat-clearing.** No restating the ticket back, no narrating what you are about to do.
-- Past roughly fifteen lines outside a `<details>`, it is an essay. Find the three sentences that
-  matter.
-
-## Non-negotiables
-
-- **Never merge without all three**: an approving review, green CI, and zero unresolved review
-  threads. Any one missing → comment saying precisely which, and move on.
-- **Never implement a ticket without the `ready-to-implement` label**, and never when it is not
-  assigned to `assignment.bot`. No exceptions, no inference from priority or from the user's tone in
-  a comment. You **may remove** that label when investigation raises a blocking question; you may
-  never add it.
-- **Never implement a ticket that already has an open PR closing it.** The PR holds the baton.
-- **Reassigning to `assignment.reviewer` is the final action on any unit of work**, and it means
-  *done* — not *replied*. Keeping the assignment is correct when the work is blocked or deferred;
-  journal it as queued. A crashed run is identified by a stale `claimLabel`, never by assignment.
-- **Never exceed a ceiling** to "just finish one more".
-- **Never improvise around a missing credential or tool.** Journal the failure and stop the rung.
-  (why: docs/why.md#never-improvise-around-a-missing-credential)
-- **Every rung is idempotent.** Re-derive the worklist from GitHub each time; check for an existing
-  PR/comment before creating one. A re-run after a crash must not double-post.
-- **Work only on branches named `claude/*`** — cloud sessions cannot push anywhere else.
-- **Report anomalies; do not explain them.** When something about your own environment looks wrong —
-  a tool refuses, a readback disagrees with a write, time appears to have jumped — record the
-  observation and move on. Do **not** diagnose the platform, and never let such a theory become the
-  stated evidence for a code change. (why: docs/why.md#report-anomalies-do-not-explain-them)
-- **You cannot detect having been blocked.** If wall-clock time seems to have jumped, **that is the
-  explanation**: say "roughly N minutes are unaccounted for" and continue. Never theorise about
-  clock skew or a hung job. Where you need a trustworthy clock, prefer a wake event's authoritative
-  `current-time` (GitHub's own frame) over the local clock for anything compared against a GitHub
-  timestamp. (why: docs/why.md#you-cannot-detect-having-been-blocked)
-
-## Rung 0 — Preflight
-
-**This runs on the GitHub MCP tools, not `gh`.** A routine reaches GitHub *only* through
-`mcp__github__*`. Verified rather than assumed, because `docs/routine-setup.md` once claimed the
-opposite and cost a day: `gh` is absent from the image, **installing it does not help** — `gh api
-repos/...` returns `403 GitHub access is not enabled for this session`, byte-identical with and
-without an auth header, so the proxy refuses the path rather than the credential — and `curl` to
-REST and to GraphQL 403s the same way. `git` fetch and push still work; they do not use the API.
-
-**So a script in this plugin never fetches.** The scripts below take data *you* fetched with MCP and
-return a decision. `gh` remains correct when a skill is invoked locally as a slash command, and the
-scripts accept that path too — but the rules they apply are the same code either way.
-(why: docs/why.md#a-routine-cannot-reach-the-github-api)
-
-**Confirm access first with `mcp__github__get_me`** — an unauthorized session fails every call with
-a 403 rather than an auth prompt. Failure → journal it and stop; do not improvise.
-
-**Record the returned `login` as this run's own identity.** Every "did a human do this?" check below
-compares against it. Read it from `get_me` rather than assuming.
-
-**Two capability limits, both verified rather than assumed:**
-
-- **Priority and Effort are readable and writable** as native issue fields. `list_issues` with
-  `fields: ["field_values"]` returns the whole backlog's priorities in one call.
-- **Relationships are invisible.** No MCP tool reads `blocked_by`. Determine blocked-ness from the
-  `Blocked by:` line in the issue body (see `/workflow:triage-issue`). **Never conclude a ticket is
-  unblocked because you could not find a blocker** — conclude it only from the body.
-
-**Build the queue from the assignee field — it IS the worklist.** One indexed search per shape.
-
-⚠ **Scope every search with `repo:` qualifiers built from `repos`, never a bare `org:`.** Call that
-string `$SCOPE` below. The org still holds retired repositories, and an `org:` scope pulled
-seven-year-old `Atlas` and `WeMeditate` issues into the reviewer's queue the first time this was run
-as a real query. Every search in this skill uses `$SCOPE`.
-
-```
-mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot>"
-mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
-mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last-run-ISO>"
-```
-
-**Read narrowly. Most of the backlog is irrelevant to any given run.**
-
-1. **Titles yes, bodies no.** The census carries no bodies. Fetch one only for the item you are
-   actually working. (why: docs/why.md#titles-yes-bodies-no)
-2. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the item
-   is on the worklist, *and* its comment count is greater than zero.
-3. **A mention is the user asking directly.** Every hit on the mention query is a rung-4 candidate
-   whatever else it matched: answer it or say why not, but never let one pass silently.
-4. **`-label:ops-journal` is mandatory on every worklist query** you write by hand. Journal issues are
-   never work. (why: docs/why.md#the-ops-journal-exclusion-is-mandatory)
-5. ⚠ **In a hand-written `search_issues` query, write `>` literally.** An HTML-escaped `&gt;` is
-   accepted without error and returns **zero results**. If a search returns nothing where you expect
-   otherwise, suspect the qualifier before believing the answer.
-
-**Relationships are still invisible to MCP.** No tool reads `blocked_by`, so resolve the
-`Blocked by:` lines from the ticket body with `issue_read`. **Never conclude a ticket is unblocked
-because you could not find a blocker** — conclude it only from those lines.
-
-The per-repo PR list is cheap and stays full. **Read the last journal entry** (rung 7) to learn when
-the previous run ended — "since last run" below means since that timestamp; with no journal yet, the
-last 24 hours. **Count open loop PRs per repo** (author is this agent, branch `claude/*`) for the
-WIP gate.
+`--dry-run`: do everything read-only. Print the worklist each rung *would* act on and stop. Never
+comment, commit, push, merge, or label.
 
 ## Rung 1 — Merge and sequence
 
@@ -186,13 +70,6 @@ check runs carry the test signal, commit statuses carry deploy signals, and both
 `hasWorkflows` reads as *this repo has CI*, so a missing check blocks rather than passes. Pass what
 you actually fetched and let it refuse — never fill a field in to get a merge.
 
-Repos in `mergePolicy.loopMayNotMerge` are held whatever the gate says. `claude-workflow` is one:
-merging there is the deploy of the instructions the next run executes, and since that repo is also
-ticketless, a human reading the PR is the only gate its changes pass.
-
-**This is the same code path in a routine and on a laptop.** No script under `workflow/` fetches
-anything; you gather, it decides. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
-
 **Exit `0` merges; exit `1` does not, and prints the reason to put in the comment.**
 
 **Never substitute `method:get_status` for the check runs.** That call returns commit statuses; our
@@ -202,20 +79,12 @@ reading as `pending` forever. Pass `statuses` too if you have it; the script rea
 requires **at least one check run**, so a deploy status cannot stand in for a test job that was
 never scheduled. (why: docs/why.md#ci-truth-lives-in-check-runs)
 
-| Verdict | Do |
-| --- | --- |
-| `MERGE` | Merge, then the merge sequence below |
-| `HOLD — no approving review` | Not a rung-1 item at all. Leave it: it waits on the reviewer, not on you |
-| `HOLD — <anything else>` | One comment naming that exact reason, then move on. Fixing red CI is rung 2 |
-| Two or more `MERGE` in one repo | **Order first: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
-
-**Omissions fail safe, never open.** A missing `reviewDecision` reads as *not approved*; an unknown
-`hasWorkflows` reads as *this repo has CI*, so a missing check blocks rather than passes. Pass what
-you actually fetched and let it refuse — never fill a field in to get a merge.
-
 Repos in `mergePolicy.loopMayNotMerge` are held whatever the gate says. `claude-workflow` is one:
 merging there is the deploy of the instructions the next run executes, and since that repo is also
 ticketless, a human reading the PR is the only gate its changes pass.
+
+**This is the same code path in a routine and on a laptop.** No script under `workflow/` fetches
+anything; you gather, it decides. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
 Ordering reads each PR's linked issue and the `Blocked by:` lines on it.
 
@@ -264,19 +133,6 @@ On a human's PR, in order:
 
 ⚠ **A stacked PR's base is their branch — confirm that before opening it.**
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)
-
-## Never subscribe to PR activity
-
-- **Never call `subscribe_pr_activity`.**
-- **Declining to call it is not sufficient**: opening a PR auto-subscribes the session, so a run can
-  be woken having never subscribed. Tolerate that rather than fighting it.
-- **On a wake:** re-derive the worklist as always, act on anything the wake genuinely surfaces, then
-  **unsubscribe** to restore the standing state.
-- **A woken session that finds its work already handed back exits.**
-- **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — up to `ceilings.ciPollAttempts`
-  of `mcp__github__pull_request_read method:get_check_runs`. If CI has not settled by then, say so in
-  the journal and hand the PR back; an unfinished CI watch is a fact to report, not a reason to stay
-  awake. (why: docs/why.md#never-subscribe-to-pr-activity)
 
 ## Rung 3 — Implement
 
@@ -335,7 +191,7 @@ missing, add `needs-info`, and pick the next one.
 Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since the last run.
 
 - **Filter by author first.** A comment counts as feedback only when
-  `comment.author.login != <own login from rung 0>`. (why: docs/why.md#filter-feedback-by-author)
+  `comment.author.login != <own login from preflight>`. (why: docs/why.md#filter-feedback-by-author)
 - **Start from the `updated:>=` search set, not the whole backlog**, then fetch comments only for
   those with a non-zero comment count.
 - **Derive the window from comment timestamps, never from `updated_at`.** Pull the issues that have
@@ -363,7 +219,7 @@ Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since t
 - **Remove `needs-info` once answered.** If the comment reads as approval ("yes, do it"), say that
   the `ready-to-implement` label is what actually starts work — **do not add it yourself.**
 
-## Rung 5 — Adversarial review (loop runs only)
+## Rung 5 — Adversarial review
 
 Counts against `maxWorkItemsPerRun`, and runs **only on leftover budget**: if rungs 2–4 spent the
 run's slots, skip the whole rung and journal it under `⏭️ Skipped`. Going reviewless on a busy day
@@ -420,269 +276,7 @@ everywhere. (why: docs/why.md#the-author-filters-one-exception)
 `--dry-run`: print both groups with each candidate's verdict — eligibility, CI state, deferral
 reason — and stop before spawning anything.
 
-## Rung 6 — Survey (nightly run only)
+## Journal
 
-Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
-
-Before filing anything, check the standing proposal ceiling with
-`search_issues query:"$SCOPE is:issue is:open label:proposal"`. At or over `maxOpenProposals` →
-**do not file.** Record what you found in the journal instead; it waits for review capacity.
-
-**The ceiling governs proposals you went looking for, not defects you tripped over.**
-
-| Where it came from | Capped? |
-| --- | --- |
-| A survey — you set out to find candidates | **Yes.** Respect `maxOpenProposals` and `maxProposalsPerSurvey` |
-| Work on something else — a real defect surfaced while implementing, reviewing or investigating | **No. File it, every time, even over the ceiling** |
-
-The two differ in kind. A survey manufactures candidates on demand and will produce more whenever
-asked, so a stock cap is the right governor. An incidental finding is evidence you already hold:
-you were in the code, something was wrong, and the alternative to filing is that the knowledge dies
-with the run. **Never discard a real finding to respect a number**, and never ask permission to file
-one — a `proposal` commits nobody to anything, which is the whole point of the label.
-
-Say where it came from, and keep the bar: what is wrong, what it costs, and what to do. A finding
-you cannot point at a line for is a journal note, not a ticket — that bar is about evidence, not
-about the ceiling.
-
-## Nightly reconciliation (nightly run only)
-
-Two sweeps at once-a-day frequency — in the working-day loop they would re-flag the same untouched
-items on every pass.
-
-**Dropped batons.** Items where the reviewer replied but kept the baton:
-
-```
-mcp__github__search_issues  query:"$SCOPE is:open assignee:<reviewer> -label:hold -label:ops-journal"
-```
-
-For each, check whether the **newest comment is the reviewer's own** — that shape means they
-answered and forgot to reassign. **Do not pick these up.** Name them in tonight's journal under a
-`### Possibly awaiting a handoff` line. Anything with `hold` is excluded; scope the query to the
-five workflow repos.
-
-**Stale claims.** Any item still carrying `labels.claim` older than an hour is a crashed run's
-residue. Remove the label, journal which items were cleared, and **leave the item assigned as
-found** — assignment is the queue, not the crash signal.
-
-## Rung 7 — Journal
-
-**One journal issue per day**, in `journalRepo`, labelled `labels.journal`, created lazily by the
-day's first run.
-
-### Every claim names the call that produced it
-
-A journal entry is read as measured fact, so **every factual claim about system state either names
-the tool call or query that produced it, or is explicitly marked as inference.**
-
-- **Scope: claims of fact about system state** — counts, statuses, timestamps, what a tool returned,
-  what a PR or repo contains, whether something ran. Not every sentence.
-- **Cite in the `<details>` block**: the query string, the tool name, a PR/issue URL, or a command
-  and its exit status. One citation may cover several bullets from the same call.
-- **Mark inference as inference** ("appears to", "inferred from"). If you cannot name a call for a
-  claim of fact, either make the call or delete the claim.
-- **Never diagnose the harness in a journal entry** — the anomaly rule in Non-negotiables applies
-  here in full. (why: docs/why.md#every-claim-names-the-call-that-produced-it)
-
-### Finding today's issue — by creation date, not by title
-
-The title changes on every run, so it cannot be the key. Fetch the open journals — at most a week of
-them — with `search_issues query:"repo:sydevs/claude-workflow is:issue is:open label:ops-journal"`,
-and pick the one whose `created_at`, converted to **Vancouver time** (`journal.timezone`), falls on
-today's Vancouver date. (why: docs/why.md#the-journal-day-is-a-local-date)
-
-**Create it lazily** if absent — no issue exists for a day the loop does nothing. On creation:
-apply `labels.journal`; leave it **unassigned**, because a journal is not work; and **do not pin
-it** (why: docs/why.md#do-not-pin-the-journal).
-
-### The title is computed, not written
-
-```
-Wed — 2 new, 1 revised, 2 merged, 1 closed
-```
-
-**Counts, never prose.** A sentence costs a re-read of the whole day on every run and describes what
-the run *believes* happened; four numbers describe what the queries returned. Derive them from the
-searches below and nothing else — never from memory of what this run did.
-
-| Term | Counts |
-| --- | --- |
-| `new` | Issues the bot opened today. Never PRs; journals excluded |
-| `revised` | Work items handed back to the reviewer today — the hand-back *is* the revision |
-| `merged` | PRs the bot authored that merged today |
-| `closed` | Work items closed today without merging |
-
-- **A work item is an issue and its PR together**, paired through
-  `closingIssuesReferences`, so a ticket and its PR never count twice.
-- **The buckets are exclusive.** An item that merged or closed today is not also `revised` — the
-  terminal outcome is the one that ended its story.
-- **Zero terms are dropped**; a day with nothing is `Wed — no changes`.
-- **Day of week, not a date.** The full date is the issue's creation time, which is sortable and
-  filterable in a way a title string is not.
-
-Each count is one search, scoped by `repo:` qualifiers over `repos`, with `<from>..<to>` spanning the
-Vancouver day (use the zone's real UTC offset — `-07:00` or `-08:00` — since a bare date means UTC and
-splits the day across two journals):
-
-```
-is:issue author:<bot> created:<from>..<to> -label:ops-journal      → new
-is:pr    author:<bot> merged:<from>..<to>                          → merged
-is:pr    author:<bot> is:unmerged is:closed closed:<from>..<to>  ┐
-is:issue author:<bot> is:closed closed:<from>..<to>              ┘ → closed, deduped
-```
-
-`revised` is the hand-backs: items where an `assigned` event named the reviewer today with the bot as
-actor. **Read it from each item's own timeline, not from a repo-level event feed** — the repo feed
-reports `actor` as the *assignee* on an `assigned` event, so it would count the reviewer's own triage
-as the loop's work, silently and only ever upward.
-
-### Two surfaces, two jobs
-
-| Surface | Job |
-| --- | --- |
-| **A new comment**, one per run | Append-only detail. This run's entry, in the format below |
-| **The issue body**, rewritten every run | The rolling summary of the whole day: what is done, and what awaits the reviewer |
-
-- **Rewrite the body in full every run; never append to it.**
-  (why: docs/why.md#the-body-is-rewritten-not-appended)
-- **Never leave a stale `📋 Awaiting you` in the body** — it is the one section a reader trusts, and
-  a wrong one is worse than none.
-- **Build `📋 Awaiting you` from a query, not from memory**: `assignee:<reviewer>` across the five
-  repos in `repos`, plus open `proposal` issues. **Scope by `repo:` qualifiers, never `org:`** — the
-  org still holds retired repositories, and a bare org scope put seven-year-old `Atlas` and
-  `WeMeditate` issues in the reviewer's queue the first time this was run as a query.
-- **It is a table, not a list.** This is a triage surface: the reviewer is scanning for *what needs
-  me and how long has it waited*, which reads down a column and does not read out of a sentence.
-  `Since` is the column a bullet list could not carry at all — an item waiting nine days and one
-  waiting an hour look identical when both are prose. **Oldest first.**
-- **One row per work item.** An issue and the PR that closes it are one thing; link the PR, since
-  that is where the reviewing happens.
-- **Oldest first**, so what has waited longest is read first.
-- **Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
-  "ladder". Use the section headings below verbatim.
-
-### Format
-
-````markdown
-### <ISO timestamp> · <loop|nightly> · [session](<url>)
-
-Window since the last entry: ~Nh.
-
-## 📋 Awaiting you
-
-| | Item | Waiting for | Since |
-| --- | --- | --- | --- |
-| 👀 | [repo#N — <ticket title>](url) | Review — CI green | 2d |
-| ❓ | [repo#N — <ticket title>](url) | Your answer | 4h |
-| 💡 | [repo#N — <ticket title>](url) | Verdict on the proposal | today |
-
-## ✅ Merged
-- 🔀 [repo#N — <title>](url) · closed [repo#M](url)
-
-## 🔧 Changed
-- ✏️ [repo#N — <title>](url) — <what changed, one clause>
-- 💬 [repo#N — <title>](url) — replied about <topic>
-- 🧐 [repo#N — <title>](url) — reviewed: <clean, or "N findings, handed back">
-
-## 🚀 Built
-- 📦 [repo#N — <title>](url) — implements [repo#M](url) · CI green
-- 🔬 [repo#N — <title>](url) — investigated · verdict: <one clause>
-- 🛑 [repo#N — <title>](url) — not started: <why, one clause>
-
-## 🔍 Surveyed
-- <survey name> — <verdict in one line>
-
-## ⏭️ Skipped
-- <section> — <why: empty, or which ceiling>
-
-## ⚠️ Failed
-- <plainly, or "none">
-
-<details>
-<summary>Evidence and detail</summary>
-
-<!-- The queries and tool calls behind each claim above, plus file lists,
-     commit SHAs, CI durations, counts checked, tool limitations hit, and
-     the reasoning behind a judgement call. -->
-
-</details>
-````
-
-### Rules
-
-- **`## 📋 Awaiting you` is always first and never omitted.** Empty is "nothing awaiting you" — a
-  reader must never scroll to learn there is nothing to do.
-- **Omit any other section that is empty**, rather than printing "none". Exception: `⚠️ Failed`,
-  which always appears, because its absence is indistinguishable from forgetting it.
-- **Every bullet carries the ticket title inside the link.** A bare number forces the reader to open
-  a tab to learn what it was about.
-- **Full `org/repo#N` for anything outside `journalRepo`** — a bare `#N` resolves against the repo
-  the comment renders in and silently links somewhere wrong.
-- **One line per bullet.** Anything longer belongs in the collapsible block.
-- **The summary line is scannable prose, not a status code.** "declined — the Atlas form it mirrors
-  does not exist yet" beats "declined (blocked)".
-- Emoji are a fixed vocabulary, not decoration: 🔀 merged · ✏️ revised · 💬 replied · 📦 built ·
-  🔬 investigated · 🛑 not started · 👀 needs review · ❓ needs an answer · 💡 proposal · 🔍 surveyed ·
-  🧐 reviewed.
-
-### `<details>` survives the write path — MCP readback lies about it
-
-- **Trust the write.** A 200 from `issue_write` / `pull_request_write` means the tags are stored,
-  whatever a subsequent MCP read shows.
-- **The MCP read path strips `<details>`/`<summary>`** from what it returns, so a run verifying its
-  own write via `pull_request_read` / `issue_read` sees its collapsible sections missing. It did not
-  fail. **Do not "fix" it, do not re-post, do not file a ticket about it.**
-- **WebFetch is not a check either** — its markdown conversion renders `<details>` content as
-  visible text, so "the public page shows plain prose" is the conversion, not the page.
-- The only faithful readback is REST, which a cloud session does not have.
-  (why: docs/why.md#details-survives-the-write-path)
-
-### The body: what the rolling summary looks like
-
-Rewritten in full by every run. Short — it is an index, not a second copy of the entries.
-
-````markdown
-**<N> runs today.** Last: <ISO timestamp>.
-
-## 📋 Awaiting you
-
-| | Item | Waiting for | Since |
-| --- | --- | --- | --- |
-| 👀 | [repo#N — <title>](url) | Review — CI green | 2d |
-| ❓ | [repo#N — <title>](url) | Your answer | 4h |
-| 💡 | [repo#N — <title>](url) | Verdict on the proposal | today |
-
-## ✅ Done today
-- 🔀 merged [repo#N — <title>](url)
-- 📦 built [repo#N — <title>](url)
-
-## ⚠️ Failed today
-- <plainly, or omit the section>
-
-| Run | Entry |
-| --- | --- |
-| 04:00 | [detail](<comment url>) |
-| 06:00 | [detail](<comment url>) |
-````
-
-**The body's `📋 Awaiting you` is the one the reviewer reads**, so it is the table in full — the
-comment's copy is a snapshot of one run, this is the current state of the queue. `Since` is why it is
-a table at all: an item waiting nine days and one waiting an hour are indistinguishable in prose.
-
-There is **no month table.** The journal is one issue per day; a month's worth of runs is what the
-Sunday `reflect` rung reads across issues, not something a single day's body carries.
-
-**Correct an earlier claim in the body, not with an addendum comment.** The comment stays as the
-historical record of what that run believed at the time. Only add a correcting comment when the
-error would change what someone *did*. (why: docs/why.md#correcting-an-earlier-claim)
-
-## Ending
-
-Post the journal, then stop. Do not poll, do not wait for a review, do not keep a timer alive "in
-case". **Do not attempt to end the session** — a run has no way to. What matters is that a lingering
-session has nothing to wake it (never subscribe) and nothing to do if it does wake (the baton was
-handed back). Responsiveness comes from the schedule. (why: docs/why.md#sessions-linger)
-
-Close with a two-line summary: what awaits the user, and what the next run will pick up. If the run
-hit a ceiling every rung, say so — that is the signal to retune `loop-config.json`, which the Sunday
-`reflect` rung acts on.
+Hand off to `/workflow:journal` — this run's entry is marked `loop`. If a ceiling stopped every
+rung, the closing summary says so plainly; that is the signal the Sunday `reflect` survey acts on.

@@ -124,7 +124,7 @@ derive it differently. Prose is for judgment. If a rule can be evaluated, evalua
   skill carries it, so nothing fires on inference from a stray phrase. Only `dev-server` and
   `triage-issue` — both invoked *by* other skills — omit it.
 - **Write for one reader who is busy.** The loop's own writing rules (lead with the outcome, detail
-  in `<details>`, no throat-clearing) are in `loop-run/SKILL.md` and apply to the skill bodies
+  in `preflight/SKILL.md` and apply to the skill bodies
   themselves as much as to what they emit.
 - **The rule lives in the skill; the story lives in [`docs/why.md`](docs/why.md).** `loop-run` is
   re-read on every run — roughly eleven times a day — so length there costs tokens each time *and*
