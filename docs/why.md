@@ -277,6 +277,14 @@ reach GitHub state directly (a self-hosted relay holding its own token). That is
 real cost, not a workaround: it re-grants, under our own credential, access the proxy deliberately
 gates.
 
+**Decided 2026-09-02: we are not building that relay.** The gate that could merge untested code
+already works in a routine — the run fetches with MCP, `merge-verdict.mjs` decides — so a relay would
+only move counting and formatting into scripts. Against that it means a service to keep alive and a
+five-repo PAT living in an environment with no secret store, which would undo the per-session repo
+scoping the proxy exists to enforce. A cosmetic win is not worth a standing credential. Revisit only
+if the token cost of the census becomes the binding constraint; the finding above is what makes it a
+decision rather than an assumption.
+
 The identical 403 with and without an auth header is the part that settles it: the proxy is refusing
 the *path*, not the credential, so installing a binary or finding a better token cannot help.
 
