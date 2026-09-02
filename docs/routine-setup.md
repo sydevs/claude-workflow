@@ -367,7 +367,7 @@ pointing at the same skill:
 | Cron (UTC) | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` | `0 8 * * *` |
 | Local (PT) | hourly 05:00–12:00, then 14:00 · 16:00 · 18:00 | 01:00 |
 | RUN_KIND | `loop` | `nightly` |
-| Rungs | 0–4, 6 | 5, the reconciliation sweeps, 6 |
+| Rungs | 0–5, 7 | 6, the reconciliation sweeps, 7 |
 | Model | opus | opus |
 
 The split guarantees the survey runs daily — as a rung below merge/revise/implement it could be
@@ -421,11 +421,12 @@ Do not schedule straight away. For ~3 days:
 2. Read the journal entry **and** the transcript (`list_runs` → `get_run_log`).
 3. Fix what it got wrong; merge; the next run picks it up.
 
-Cover one of each deliberately: a merge, a PR revision, an implementation, a survey.
+Cover one of each deliberately: a merge, a PR revision, an implementation, an adversarial review,
+a survey.
 
 > **A green run status only means no infrastructure error.** Task-level failures, blocked network
 > requests and missing tools appear *only* in the transcript and the journal. That asymmetry is why
-> rung 6 exists and why its "Failed" line is never softened.
+> rung 7 exists and why its "Failed" line is never softened.
 
 Then set `enabled: true` on both.
 

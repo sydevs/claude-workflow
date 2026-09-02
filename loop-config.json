@@ -107,11 +107,15 @@
   "identity": {
     "$comment": "expectedLogin is authoritative and is checked against get_me once per run. Attribution rules in loop-run/SKILL.md.",
     "expectedLogin": "sydevs-bot",
-    "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>",
-    "mentionQuery": "org:sydevs mentions:sydevs-bot is:open"
+    "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
+  },
+  "review": {
+    "$comment": "Rung 5 / adversarial-review. Advisory only. Rules in adversarial-review/SKILL.md.",
+    "bodyHeader": "## 🧐 Adversarial review",
+    "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md"
   },
   "journal": {
-    "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date. Title is computed by loop-run/journal-title.mjs.",
+    "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
     "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
     "timezone": "America/Vancouver"
   }

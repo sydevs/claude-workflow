@@ -279,7 +279,7 @@ mcp__github__pull_request_read  method:get_check_runs  owner:$ORG repo:$REPO pul
 status is `success`, and there is at least one CHECK RUN.** Do not read `method:get_status` alone —
 it returns commit statuses, our CI reports check runs, and reading only the first once had an
 approved SahajCloud PR green for seventeen minutes while its test job was still running. A deploy
-status is not a test signal. (why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+status is not a test signal. (why: docs/why.md#ci-truth-lives-in-check-runs)
 
 `merge-verdict.mjs` applies exactly that definition — pipe it the same three calls and read its exit
 code rather than restating the rule here.
@@ -290,10 +290,25 @@ code rather than restating the rule here.
   (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 - **Compare the last green run's `head_sha` against the current branch head** — a run that predates
   the base moving is stale.
-- `mcp__github__actions_get` for a failing run's logs.
-- **Poll; never `subscribe_pr_activity`.** The script polls for you; if CI has not settled by the
-  time it exits `2`, report that and hand the PR back. An unfinished CI watch is a fact to report,
-  not a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
+
+```
+mcp__github__pull_request_read  method:get_check_runs  owner:$ORG repo:$REPO pullNumber:<pr>
+mcp__github__pull_request_read  method:get_status      owner:$ORG repo:$REPO pullNumber:<pr>
+mcp__github__actions_get        # for a failing run's logs
+```
+
+- **Read CI from `get_check_runs`.** Our test jobs are GitHub Actions and report as **check runs**;
+  `get_status` returns **commit statuses**, a separate surface that cannot see them, carrying only
+  deploy signals here. Green is all three of: at least one check run; every check run finished with
+  `conclusion` in `success`/`skipped`/`neutral`; every entry in the `statuses` array at
+  `state: "success"` — the entries, not the combined `state`, which reads `pending` when there are
+  none. (why: docs/why.md#ci-truth-lives-in-check-runs)
+- **Poll; never `subscribe_pr_activity`.** Poll up to `ceilings.ciPollAttempts` times; if CI has not
+  settled by then, report that and hand the PR back. An unfinished CI watch is a fact to report, not
+  a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
+- **`workflow/lib/merge-gate.mjs` implements exactly that definition**, and rung 1 reaches it through
+  `merge-verdict.mjs`. If you ever find yourself refining the rule here, change it there too — or
+  better, change it there only.
 - **Green** → report.
 - **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part
   of the lean gate, commit, push, re-watch.

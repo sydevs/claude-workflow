@@ -79,6 +79,38 @@ next run. The failure compounds rather than showing up once.
 An HTML-escaped `&gt;` in a search qualifier is accepted without error and returns **zero results** —
 a silently-empty search that reads as "nothing to do".
 
+## CI truth lives in check runs
+
+Rung 1 read CI with `get_status` alone for the loop's first week. That call returns commit statuses,
+and no repo here posts a commit status for its tests — GitHub Actions reports as check runs, a
+separate surface `get_status` cannot see. Measured on two live PRs on 2 September, it was wrong in
+both directions at once:
+
+- **sydevs/SahajAtlasWeb#181** — `get_status` returned `state: "pending"`, `total_count: 0`,
+  `statuses: []`, while `get_check_runs` returned five check runs all `conclusion: "success"`. A
+  fully green PR that the loop would have called "still running" on every run, forever.
+- **sydevs/SahajCloud#672** — `get_status` returned one status, `success`: Railway's deploy
+  (`context: "sahajcloud - SahajCloud"`, `created_at: 21:14:17Z`). The test job, `Lint, Test &
+  Smoke`, is a check run that did not complete until `21:31:40Z`. For those seventeen minutes the
+  gate said green while the tests were still running.
+
+The second is the one that matters. A rung-1 run waking in that window on an approved PR would have
+merged untested code **while following the skill exactly** — the failure mode a safety gate exists to
+make impossible.
+
+The "at least one check run" clause was added at the same time and is not decoration: a merge
+conflict makes GitHub schedule zero workflow runs, so `check_runs` comes back empty. Without the
+clause, "every check run succeeded" is vacuously true of nothing and a conflicted PR reads as green.
+The mirror-image clause for statuses is deliberately absent — a repo with no deploy integration
+legitimately has none.
+
+`skipped` and `neutral` count as passing because a strict `conclusion == "success"` test would
+reproduce the SahajAtlasWeb failure one level down: a conditionally-skipped job would read as
+not-green forever, and the loop would comment on a healthy PR on every run rather than merging it.
+Whether a skip is *legitimate* is CI's own problem, and the repos already solve it — SahajAtlasWeb's
+smoke lane fails a same-repo PR outright rather than skipping quietly, precisely so that a skip on
+that job cannot be mistaken for a pass.
+
 ## Never subscribe to PR activity
 
 Declining to call `subscribe_pr_activity` is not sufficient. **Opening a PR auto-subscribes the
@@ -192,6 +224,57 @@ it. The evidence was real; the inference was wrong at the read layer, not the wr
 
 `persist_session: false` governs whether the *next* fire reuses a session, not whether this one dies.
 Lingering is the platform's behaviour, not a fault to work around.
+
+## The adversarial review runs last and may starve
+
+A pre-filter for the reviewer is worth exactly the budget nothing else claimed. Every rung above it
+serves the reviewer more directly — merging what they approved, fixing what they flagged,
+implementing what they green-lit — so reserving a slot for reviews would tax the very work the
+reviews exist to smooth. On a saturated day the rung goes without, the reviewer reads unreviewed
+PRs as they always did, and nothing is lost that was ever promised. Starving is the design working.
+
+## One review per PR, ever
+
+A bot that re-reviews argues with itself across revisions and doubles the reviewer's reading — the
+second opinion of the same critic is noise, and the human is the approver anyway, so revision
+quality gets its judgement at approval time. Ever-once also makes the rung cheap to make idempotent:
+the key is an existing own-login review read directly from GitHub just before writing, never search
+(a derived index that lags) and never memory (a crashed run has none).
+
+## Reviews are COMMENT-only
+
+Two reasons, one mechanical and one about authority. GitHub rejects `APPROVE` and `REQUEST_CHANGES`
+on your own pull request, and the loop authors the PRs it reviews. And even where the API would
+allow it, an approving bot review could be read — by a human skimming, or by a future rule — as
+merge authority, which belongs to the reviewer's approving review alone.
+
+## The author filter's one exception
+
+The filter (why: #filter-feedback-by-author) exists so the loop never treats its own words as
+instructions. The adversarial review is the one deliberately self-addressed artifact in the system,
+so it needs a key the filter can honour without a carve-out swallowing the rule: **comment type
+plus thread root**. GitHub already separates review threads from conversation comments, and the
+loop starts review threads in exactly one place — so "unresolved thread rooted by the own login"
+identifies the adversarial review with no marker string to drift, leak, or forget. The invariant
+that holds this together is exclusivity: the moment any other rung starts a review thread, the key
+stops meaning anything, which is why starting one is rung 5's exclusive privilege.
+
+## The review never shares the implementer's context
+
+A critic that inherits the builder's reasoning inherits its blind spots — the assumptions that made
+a bug invisible while writing it make the same bug invisible while reviewing it, and a session that
+just argued a design into existence cannot be adversarial toward it. A fresh subagent with an empty
+context, handed nothing but the PR's coordinates, is the closest available thing to independent
+eyes. The isolation is also why PRs opened earlier in the same run are eligible: waiting a run was
+only ever a proxy for fresh eyes, and the subagent is the real thing.
+
+## The reviewer profile is the learning surface
+
+The skill is read on every review, so it must stay short, stable, and philosophical; taste accretes
+instead in a document the Sunday reflection can edit ticketlessly. The profile was seeded from the
+full backfilled history of the reviewer's review comments across the five repos and shipped in the
+PR that introduced the rung — the reviewer correcting their own portrait in that review was its
+first calibration pass.
 
 ---
 
@@ -321,28 +404,6 @@ home. `docs/routine-setup.md` asserted the opposite for weeks (`gh` "ships in th
 `/usr/bin/gh`, v2.98.0"), which is exactly the licence needed to write four scripts that pass every
 local test and fail silently where it counts.
 
-## CI is check runs, not commit statuses
-
-`pull_request_read method:get_status` returns **commit statuses**. Every repo here runs GitHub
-Actions, which report **check runs**. They are separate GitHub surfaces and the first cannot see the
-second, so the gate failed in both directions at once.
-
-The dangerous direction: on SahajCloud#672 the only commit status was Railway's deploy, green at
-21:14:17Z, while `Lint, Test & Smoke` — a check run — ran until 21:31:40Z. For seventeen minutes an
-approved PR read as green with its test suite still running, and a run that merged in that window
-would have been following the skill exactly.
-
-The harmless direction, same call: SahajAtlasWeb#181 with five of five check runs green read as
-`pending` forever, so the loop declined a healthy PR on every pass.
-
-Two further clauses the merged reading still needs. **At least one check run**, not merely one
-context — a Railway or Cloudflare deploy posts its own status and would otherwise stand in for a test
-job that was never scheduled. And **a repo with no Actions at all is not a repo with unfinished
-CI**: `claude-workflow` has no `.github/workflows/`, so its PRs carry zero checks, and treating that
-as pending meant commenting "checks have not finished" on the loop's own PRs every run, forever.
-That case is derived from the repo's workflow count rather than configured, so it cannot go stale the
-day someone adds a workflow.
-
 ## A conflicted PR schedules zero CI runs
 
 A conflicted PR has no computable merge commit, so GitHub schedules **zero** workflow runs for it —
@@ -399,3 +460,16 @@ census would have given, and buys the only thing that was ever load-bearing — 
 exercised identically everywhere. A script earns its place when its input is small enough to hand
 over and its logic is subtle enough to get wrong in prose. `merge-gate` and `branch-preview-url`
 clear both bars. A census, a count and a markdown table clear neither.
+
+---
+
+# reflect
+
+## Reflect edits the profile only on recurrence
+
+One comment is weather; two PRs with the same theme is a pattern. A profile that absorbs every
+remark verbatim converges on exactly the long DO/DON'T checklist the profile-plus-stance design
+was chosen to avoid — a document the review skims instead of weighs. The gate keeps the profile a
+model of the reviewer's *intent*, which generalises to cases the week never showed, rather than a
+transcript of their incidents, which does not. It also keeps the weekly diff small enough that the
+reviewer can actually audit their own portrait.

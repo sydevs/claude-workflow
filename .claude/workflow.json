@@ -7,8 +7,8 @@
     "contents": "Plugin manifest + skill frontmatter validation. There is no test suite — the skills are prose, and their real gate is a supervised loop run."
   },
   "securityReview": {
-    "triggerPattern": "^workflow/hooks/|^workflow/skills/[^/]+/SKILL\\.md$|^loop-config\\.json$",
-    "rationale": "Hooks execute in a maintainer's session with their credentials, and a SKILL.md is an instruction to an agent holding write access to five repos. A prompt-injection or an over-broad allowed-tools line is this repo's equivalent of an RCE. loop-config.json carries the ceilings and the identity constant."
+    "triggerPattern": "^workflow/hooks/|^workflow/skills/[^/]+/[^/]+\\.md$|^loop-config\\.json$",
+    "rationale": "Hooks execute in a maintainer's session with their credentials, and a SKILL.md is an instruction to an agent holding write access to five repos. A prompt-injection or an over-broad allowed-tools line is this repo's equivalent of an RCE. loop-config.json carries the ceilings and the identity constant. The pattern covers every .md in a skill directory, not just SKILL.md — sibling files like the reviewer profile and pr-template are instruction surfaces too."
   },
   "worktreeSetup": [],
   "deployTarget": "Consumed live from `main` by the Claude routines and by `/plugin install workflow@sydevs`. There is no release step: merging to main IS the deploy, and the next routine run picks it up.",
