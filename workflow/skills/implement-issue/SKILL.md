@@ -52,6 +52,10 @@ branch at every decision point below rather than stalling.
    gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by \
      --jq '[.[] | select(.state == "open")] | length'
    ```
+   **When a blocker turns out to be closed, strike the line in the body** — see `/workflow:loop-run`.
+   Leaving it live makes every future run re-derive the same answer and reads as a blocker to anyone
+   who does not.
+
    **From a cloud run** no MCP tool exposes them, so read the `Blocked by:` line(s) in the body and
    resolve each with `issue_read`.
 
@@ -78,6 +82,13 @@ branch at every decision point below rather than stalling.
       as a malfunction.
    3. Add the questions to the ticket body's `## Open questions` list, which is the canonical record.
    4. Reassign to `assignment.reviewer` and stop.
+
+   **File what you trip over.** Implementation is where real defects surface — a failing test that
+   exposes a pre-existing gap, a shortcut that turns out to be actively wrong. **File it as a
+   `proposal` and keep going.** Do not ask permission, and do not let `maxOpenProposals` stop you:
+   that ceiling governs proposals a survey went looking for, not evidence you already hold. Do not
+   fix it here either, unless it is genuinely part of this ticket — say what is wrong, what it costs
+   and what to do, then carry on with the work you were sent to do.
 
    Revoking only ever *reduces* the loop's own autonomy, so it is always safe. Guessing at an
    ambiguous criterion and shipping it is not.
