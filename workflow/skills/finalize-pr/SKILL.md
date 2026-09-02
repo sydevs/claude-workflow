@@ -199,35 +199,37 @@ to omit; never rename one or add your own in its place.
 **The Preview section is mandatory wherever the repo has a preview deploy.** It is how the reviewer
 sees the change without checking out the branch.
 
-**Always link the BRANCH alias, never a per-commit alias.**
+**Always link the BRANCH alias, never a per-commit alias.** One script produces it, for both
+Cloudflare projects and both platforms:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs            # after the PR exists
+${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --wait 300 # poll while it builds
+```
+
+It prints one `project  status  url` line per preview, reading the alias out of the label Cloudflare
+itself writes. It exits non-zero when there is no alias yet — that is the "preview pending" case,
+**not** a cue to fall back to something else.
+
+**Do not use `scripts/get-cloudflare-preview-url.mjs` for the body.** That script ranks per-commit
+aliases *above* branch aliases on purpose, because it feeds the CI smoke gate, which must test the
+exact SHA. Its reasoning is sound and does not transfer: a body written from it goes stale on the
+next push, and its docblock will talk you into it.
 (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 
-For Cloudflare Pages the branch alias is `https://<slug>.<project>.pages.dev`, where `<slug>` is the
-branch name with every non-alphanumeric character replaced by `-` and then **truncated to 28
-characters**:
+**A per-commit alias in a PR body is a defect, not a fallback.** Its first hostname label is eight
+hex characters — `c76da223.sahajatlas.pages.dev`,
+`c14f4e66-wemeditate-web.contact-c66.workers.dev`. If you are about to write one, the answer is
+"preview pending".
 
-```bash
-SLUG=$(git branch --show-current | tr -c 'a-zA-Z0-9' '-' | cut -c1-28)
-curl -s -o /dev/null -w '%{http_code}\n' "https://$SLUG.<project>.pages.dev"
-```
-
-`claude/feat-post-event-feedback` → `claude-feat-post-event-feedb`. **Verify the alias returns 200
-before putting it in the body.**
-
-**Discover the URL — never construct it** — using the repo's own script when it gives you a branch
-alias; construct-and-verify only for the branch alias itself:
-
-```bash
-pnpm tsx scripts/get-railway-preview-url.ts     # SahajCloud
-node scripts/get-cloudflare-preview-url.mjs     # WeMeditateWeb / SahajAtlasWeb
-```
-
-- SahajAtlasWeb has **two** previews and a UI change should link both: the app
-  (`CF_PROJECT=sahajatlas`) and the Ladle component playground (`sahajatlas-design`).
+- **SahajCloud** uses Railway, whose preview host is per-PR and already stable across pushes:
+  `pnpm tsx scripts/get-railway-preview-url.ts`. Nothing to correct there.
+- SahajAtlasWeb has **two** previews and a UI change should link both: the app (`sahajatlas`) and the
+  Ladle component playground (`sahajatlas-design`). The script returns both.
 - **Deep-link to the routes actually changed, not the root** — a reviewer should land on the thing,
   not hunt for it.
 - The preview builds a few minutes after the push, so create the PR, then refresh the body once the
-  URL resolves. If it genuinely has not built yet, say "preview pending" and come back to it.
+  URL resolves.
 - **Re-verify every deep link when you revise a PR.** Your own revision can invalidate a link — if
   the review asked you to delete a component, its Ladle story went with it. Branch aliases keep the
   *host* current; they do not keep the *path* valid.

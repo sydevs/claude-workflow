@@ -116,11 +116,11 @@
   "journalRepoNote": "claude-workflow is BOTH a worked repo and the journal's home. Journal issues carry labels.journal and must be excluded from every worklist query, or the loop will treat its own diary as a ticket.",
   "journal": {
     "$comment": "One issue per day in journalRepo, created lazily — no issue on a day the loop does nothing. There is no issue NUMBER here on purpose: the run finds today's by title and label, so nothing needs updating when the day rolls over.",
-    "titleFormat": "<Day> — <what changed today>",
+    "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
     "timezone": "America/Vancouver",
     "timezoneNote": "The journal day is a LOCAL date. Keying to UTC splits each local day across two issues.",
     "closePolicy": "The weekly reflection reads `label:ops-journal is:open`, analyses the week, and closes them.",
-    "titleNote": "Rewritten every run. Day of week, not a date — the full date is the issue's creation time, which sorts and filters where a title string does not. Describe outcomes, not activity.",
+    "titleNote": "COMPUTED, not written: workflow/skills/loop-run/journal-title.mjs prints it and the run sets the title to exactly that, every run. Zero terms are omitted; an empty day is '<Day> — no changes'. A work item is an issue and its PR together (paired via closingIssuesReferences), the buckets are mutually exclusive with the terminal outcome winning, and everything is scoped to the bot's own authorship — the journal is the loop's record, not the org's. Day of week, not a date: the full date is the issue's creation time, which sorts and filters where a title string does not.",
     "surfacing": "Journals are not pinned (pinIssue is GraphQL-only and unreachable from a routine). Recency surfaces the current one: the day's journal is the most recently active ops-journal issue.",
     "lookup": "Today's journal is the open ops-journal issue whose created_at falls on today's Vancouver date. No date field — creation time is intrinsic."
   }

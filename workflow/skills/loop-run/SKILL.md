@@ -371,19 +371,38 @@ today's Vancouver date. (why: docs/why.md#the-journal-day-is-a-local-date)
 apply `labels.journal`; leave it **unassigned**, because a journal is not work; and **do not pin
 it** (why: docs/why.md#do-not-pin-the-journal).
 
-### The title is a headline, rewritten every run
+### The title is computed, not written
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/loop-run/journal-title.mjs          # the title
+${CLAUDE_PLUGIN_ROOT}/skills/loop-run/journal-title.mjs --json   # and the items behind each count
+```
 
 ```
-<Day> — <what changed today, in a clause or two>
+Wed — 2 new, 1 revised, 2 merged, 1 closed
 ```
 
-`Sun — Turnstile gated on the atlas; feedback banner handed back`
+**Set the title to exactly what the script prints, on every run.** Do not edit it, pad it, or write
+one yourself — a hand-written title costs a re-read of the day nine times over and describes what the
+run believes happened, where a count describes what the queries found.
 
+| Term | Counts |
+| --- | --- |
+| `new` | Issues the bot opened today. Never PRs; journals excluded |
+| `revised` | Work items handed back to the reviewer today — the hand-back *is* the revision |
+| `merged` | PRs the bot authored that merged today |
+| `closed` | Work items closed today without merging |
+
+- **A work item is an issue and its PR together**, paired through
+  `closingIssuesReferences`, so a ticket and its PR never count twice.
+- **The buckets are exclusive.** An item that merged or closed today is not also `revised` — the
+  terminal outcome is the one that ended its story.
+- **Zero terms are dropped**; a day with nothing is `Wed — no changes`.
 - **Day of week, not a date.** The full date is the issue's creation time, which is sortable and
   filterable in a way a title string is not.
-- **Rewrite it every run**, so it always describes the day *so far*. An empty day is
-  `Sun — no changes`.
-- **Describe outcomes, not activity.** "Turnstile gated on the atlas" beats "implemented #182".
+
+The `--json` form lists the items behind every count. Use it when the body needs to name them, and
+when a number looks wrong — it is cheaper than re-deriving the queries.
 
 ### Two surfaces, two jobs
 

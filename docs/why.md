@@ -231,8 +231,21 @@ A commit alias is pinned to the SHA it was built from, so every later push silen
 its value — a reviewer opening it sees old code and has no way to tell. #181 carried links three
 pushes stale, including one to a component the review had asked be deleted.
 
-The Cloudflare truncation boundary is easy to get wrong by a character, and a 404 in the Preview
-section is worse than no section.
+**Telling a run this was not enough, twice.** The rule was already written here, and the body was
+still fixed and re-broken, the second time with a confident rationale: "these are per-deployment
+aliases, so they stay pinned to this commit." That reasoning came from
+`get-cloudflare-preview-url.mjs`, whose docblock argues — correctly, for its own consumer — that a
+per-deployment alias beats a branch alias because it "names one immutable build." That script feeds
+the CI smoke gate, which must test the exact SHA it was handed. The PR body wants the opposite. A run
+handed one tool for two requirements will satisfy the one the tool argues for, so the fix is a second
+tool, not a firmer instruction.
+
+**And the alias is discovered, not constructed.** Cloudflare labels it — `Branch Preview URL` in both
+the Pages check-run summary and the Workers comment — so there is no reason to derive it. The
+documented slug rule (non-alphanumerics to `-`, truncate to 28) is a guess about a host we do not own,
+and it is not merely fragile at the boundary: two branches agreeing in their first 28 characters
+produce one alias, which answers 200 while serving the other branch. A wrong link that 404s is a bad
+Preview section; a wrong link that works is a bad review.
 
 ## A conflicted PR schedules zero CI runs
 
