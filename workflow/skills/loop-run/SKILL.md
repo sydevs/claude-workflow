@@ -100,36 +100,38 @@ compares against it. Read it from `get_me` rather than assuming.
   `Blocked by:` line in the issue body (see `/workflow:triage-issue`). **Never conclude a ticket is
   unblocked because you could not find a blocker** — conclude it only from the body.
 
-**Read narrowly. Most of the backlog is irrelevant to any given run.** Four rules:
+**Build the queue with one call, not a dozen searches:**
 
-1. **Titles yes, bodies no.** The census needs `number`, **`title`**, `labels`, `field_values`,
-   `comments` (the count) and `updated_at`. Only the ticket actually being worked needs a body.
-   (why: docs/why.md#titles-yes-bodies-no)
-2. **Let the server filter.** `search_issues` narrows before anything reaches the context window;
-   `list_issues` then reading and discarding does not:
-   ```
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:ready-to-implement -label:ops-journal"
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open label:proposal -label:ops-journal"
-   mcp__github__search_issues  query:"org:sydevs is:issue is:open updated:><last-run-ISO-date> -label:ops-journal"
-   ```
-   - **`-label:ops-journal` is mandatory on every worklist query.** Journal issues are never work.
-   - ⚠ **Write the `>` literally.** An HTML-escaped `&gt;` is accepted without error and returns
-     **zero results**. If a search returns nothing and you have reason to expect otherwise, suspect
-     the qualifier before believing the answer.
-   - The third is the only candidate set that can contain new feedback.
-     (why: docs/why.md#the-ops-journal-exclusion-is-mandatory)
-3. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the
-   issue is in the `updated:>=` set, *and* its `comments` count is greater than zero.
-4. **Check mentions**, and treat every hit as a rung-4 candidate regardless of what else it matched.
-   A mention is the user asking directly: answer it or say why not, but never let one pass silently.
-   ```
-   mcp__github__search_issues  query:"org:sydevs mentions:sydevs-bot is:open updated:><last-run>"
-   ```
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --since <last-run-ISO>
+${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --json --since <last-run-ISO>
+```
 
-The per-repo PR list is cheap and stays full. **Read the last journal entry** (rung 6) to learn when
-the previous run ended — "since last run" below means since that timestamp; with no journal yet, the
-last 24 hours. **Count open loop PRs per repo** (author is this agent, branch `claude/*`) for the
-WIP gate.
+It prints every rung's candidates, per-repo WIP against `wipCapPerRepo`, a merge verdict for each PR
+the bot holds, resolved blockers for every `ready-to-implement` ticket, and any cleared blocker whose
+line still needs striking. `--since` bounds the mention sweep; get the timestamp from the last
+journal entry (rung 6), or use the last 24 hours when there is no journal yet.
+
+**Take its output as the queue.** It reports what the queries found; it does not decide. Which item
+to work, and how, is the rest of this skill.
+
+**Read narrowly beyond that. Most of the backlog is irrelevant to any given run.**
+
+1. **Titles yes, bodies no.** The worklist deliberately carries no bodies. Fetch one only for the
+   item you are actually working. (why: docs/why.md#titles-yes-bodies-no)
+2. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the item
+   is on the worklist, *and* its comment count is greater than zero.
+3. **A mention is the user asking directly.** Every row under `Mentions` is a rung-4 candidate
+   whatever else it matched: answer it or say why not, but never let one pass silently.
+4. **`-label:ops-journal` is mandatory on every worklist query** you write by hand. Journal issues are
+   never work. (why: docs/why.md#the-ops-journal-exclusion-is-mandatory)
+5. ⚠ **In a hand-written `search_issues` query, write `>` literally.** An HTML-escaped `&gt;` is
+   accepted without error and returns **zero results**. If a search returns nothing where you expect
+   otherwise, suspect the qualifier before believing the answer.
+
+**Relationships are still invisible to MCP.** No tool reads `blocked_by`; the worklist resolves the
+`Blocked by:` lines from the body instead. **Never conclude a ticket is unblocked because you could
+not find a blocker** — conclude it only from that output.
 
 ## Rung 1 — Merge and sequence
 
@@ -140,25 +142,31 @@ call. Rationing it would leave approved, green work sitting while the run spent 
 which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
 work and does count.
 
-Candidates are the open PRs with `reviewDecision == APPROVED`. Read both before deciding — threads
-carry `isResolved`, and an unresolved one blocks the merge even with an approval:
+**Candidates are the `Rung 1 — merge` rows of the worklist.** That verdict is the gate — it reads
+the approving review, every unresolved thread, conflict state, and CI, and it is the only place the
+definition of "green" is written down.
 
-```
-mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
-mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
-```
+**Do not re-derive it, and never substitute `pull_request_read method:get_status`.** That call
+returns commit statuses; our CI reports check runs. Reading it alone had SahajCloud#672 green for
+seventeen minutes while `Lint, Test & Smoke` was still running, and had SahajAtlasWeb#181 — five of
+five checks green — reading as `pending` forever.
+(why: docs/why.md#ci-is-check-runs-not-commit-statuses)
 
-| Condition | Verdict |
+| Worklist row | Verdict |
 | --- | --- |
-| `reviewDecision != APPROVED` | Not a rung-1 candidate. Leave it — PR health is rung 2 |
-| Approved · CI green · every thread `isResolved` | **Merge**, then the merge sequence below |
-| Approved · CI red or still running | **Do not merge.** One comment naming the failing check, then move on. Do not fix CI here — that is rung 2 |
-| Approved · any thread with `isResolved: false` | **Do not merge.** One comment naming the unresolved thread(s), then move on |
-| Approved · not mergeable for any other reason | **Do not merge.** One comment naming the blocker, then move on |
-| Several approved and mergeable in one repo | **Order before merging: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
+| `Rung 1 — merge` | **Merge**, then the merge sequence below |
+| `Rung 2 — PR health`, reason `no approving review` | Not a rung-1 item at all. Leave it — it is waiting on the reviewer, not on you |
+| `Rung 2 — PR health`, any other reason | **Do not merge.** One comment naming the reason the script gave, then move on. Fixing red CI is rung 2 |
+| Several rung-1 rows in one repo | **Order before merging: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
 
-Ordering reads the `Blocked by:` lines on each PR's linked issue (`mcp__github__issue_read
-method:get`), since relationships have no MCP tool of their own.
+**A repo with no CI is not a repo with unfinished CI.** `claude-workflow` runs no Actions, so its
+PRs carry zero checks; the script says `no CI configured in this repo` rather than treating the
+absence as pending. Commenting "checks have not finished" every run about checks that do not exist
+is what #29 was filed for. The gate there is the approving review and zero unresolved threads —
+which is exactly what the script applies.
+
+Ordering reads the `closes` field on each rung-1 row, and the `Blocked by:` lines the worklist
+already resolved.
 
 The merge sequence, in order:
 
@@ -206,10 +214,10 @@ On a human's PR, in order:
 - **On a wake:** re-derive the worklist as always, act on anything the wake genuinely surfaces, then
   **unsubscribe** to restore the standing state.
 - **A woken session that finds its work already handed back exits.**
-- **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — up to `ceilings.ciPollAttempts`
-  of `mcp__github__pull_request_read method:get_status`. If CI has not settled by then, say so in
-  the journal and hand the PR back; an unfinished CI watch is a fact to report, not a reason to stay
-  awake. (why: docs/why.md#never-subscribe-to-pr-activity)
+- **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — `ci-status.mjs`, up to
+  `ceilings.ciPollAttempts`. If CI has not settled by then, say so in the journal and hand the PR
+  back; an unfinished CI watch is a fact to report, not a reason to stay awake.
+  (why: docs/why.md#never-subscribe-to-pr-activity)
 
 ## Rung 3 — Implement
 

@@ -243,10 +243,21 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → create it, then **assign it to `assignment.bot`** from `loop-config.json`. The PR is
-  the bot's until it is ready for review; the assignee field is what rung 2 queries.
+- **No PR** → create it, then two follow-ups, both from `loop-config.json`:
+  ```bash
+  gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
+  ```
+  and **assign it to `assignment.bot`**. The PR is the bot's until it is ready for review; the
+  assignee field is what rung 2 queries.
+
+  **Always request the review, on every PR, at the moment it is opened** — including drafts, where it
+  costs nothing and means the request is already in place at ready-for-review. Assignment and review
+  request answer different questions: the assignee is *who is working on it*, the reviewer is *who
+  must look*. Handing the PR back sets the first; only this sets the second, and a PR that never
+  requests one waits in a list the reviewer has no reason to open.
 - **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
-  Leave the assignee alone here — step 9 decides who holds it.
+  Leave the assignee alone here — step 9 decides who holds it. Re-add the reviewer if the request was
+  dismissed by a completed review and the PR has since changed.
 
 Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
 
@@ -256,22 +267,27 @@ Open as a **draft** when `/implement-issue` passed `--draft` — see its autonom
 **zero** workflow runs for it — silently, and waiting is futile.
 (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 
-```
-mcp__github__pull_request_read  method:get  →  mergeable, mergeable_state
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs          # polls to ceilings.ciPollAttempts
+${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs --json   # names every check
 ```
 
-- `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push.
+**Exit code is the answer: `0` green · `1` red · `2` still running or gave up waiting.** Do not
+re-derive green from a status call — `pull_request_read method:get_status` returns commit statuses,
+our CI reports check runs, and reading only the first once had an approved SahajCloud PR green for
+seventeen minutes while its test job was still running.
+(why: docs/why.md#ci-is-check-runs-not-commit-statuses)
+
+- `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push. The
+  script reports this as "no check runs — usually a merge conflict", because a conflicted PR
+  schedules **zero** workflow runs, silently.
+  (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 - **Compare the last green run's `head_sha` against the current branch head** — a run that predates
   the base moving is stale.
-
-```
-mcp__github__pull_request_read  method:get_status  owner:$ORG repo:$REPO pullNumber:<pr>
-mcp__github__actions_get        # for a failing run's logs
-```
-
-- **Poll; never `subscribe_pr_activity`.** Poll up to `ceilings.ciPollAttempts` times; if CI has not
-  settled by then, report that and hand the PR back. An unfinished CI watch is a fact to report, not
-  a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
+- `mcp__github__actions_get` for a failing run's logs.
+- **Poll; never `subscribe_pr_activity`.** The script polls for you; if CI has not settled by the
+  time it exits `2`, report that and hand the PR back. An unfinished CI watch is a fact to report,
+  not a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
 - **Green** → report.
 - **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part
   of the lean gate, commit, push, re-watch.

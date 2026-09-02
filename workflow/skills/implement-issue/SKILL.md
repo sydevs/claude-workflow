@@ -44,8 +44,11 @@ branch at every decision point below rather than stalling.
    separately. **Never apply `ready-to-implement` yourself.** You *may* remove it — see step 4.
    (why: docs/why.md#assignment-alone-is-not-the-implementation-gate)
 
-   `prAllowlistGlobs` in `.claude/workflow.json` still gates the **ticketless** paths — dependency
-   bumps, reflection config PRs — which have no issue to carry a label or an assignee.
+   `prAllowlistGlobs` in `.claude/workflow.json` gates the **ticketless** paths — dependency bumps,
+   reflection config PRs, and **every change in `claude-workflow`, where the glob is `**`**. A
+   ticketless change has no issue to carry a label or an assignee, so this whole table is skipped:
+   branch, change, and hand to `/finalize-pr`, whose PR body carries the reasoning a ticket would
+   have. `wipCapPerRepo` still applies, and merging still needs an approving review.
 
    **Blockers.** Locally the Relationships are authoritative:
    ```bash

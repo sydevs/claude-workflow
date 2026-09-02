@@ -104,7 +104,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
 | `securityReview.contentPattern` / `.contentPaths` | Newly-introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
-| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). Ticket work is gated on the `ready-to-implement` label instead. |
+| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). `**` in `claude-workflow`, where the PR body is itself the proposal. Everywhere else, ticket work is gated on the `ready-to-implement` label instead. |
 | `worktreeSetup` | Commands run after `EnterWorktree`. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 

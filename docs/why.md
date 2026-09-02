@@ -247,6 +247,28 @@ and it is not merely fragile at the boundary: two branches agreeing in their fir
 produce one alias, which answers 200 while serving the other branch. A wrong link that 404s is a bad
 Preview section; a wrong link that works is a bad review.
 
+## CI is check runs, not commit statuses
+
+`pull_request_read method:get_status` returns **commit statuses**. Every repo here runs GitHub
+Actions, which report **check runs**. They are separate GitHub surfaces and the first cannot see the
+second, so the gate failed in both directions at once.
+
+The dangerous direction: on SahajCloud#672 the only commit status was Railway's deploy, green at
+21:14:17Z, while `Lint, Test & Smoke` — a check run — ran until 21:31:40Z. For seventeen minutes an
+approved PR read as green with its test suite still running, and a run that merged in that window
+would have been following the skill exactly.
+
+The harmless direction, same call: SahajAtlasWeb#181 with five of five check runs green read as
+`pending` forever, so the loop declined a healthy PR on every pass.
+
+Two further clauses the merged reading still needs. **At least one check run**, not merely one
+context — a Railway or Cloudflare deploy posts its own status and would otherwise stand in for a test
+job that was never scheduled. And **a repo with no Actions at all is not a repo with unfinished
+CI**: `claude-workflow` has no `.github/workflows/`, so its PRs carry zero checks, and treating that
+as pending meant commenting "checks have not finished" on the loop's own PRs every run, forever.
+That case is derived from the repo's workflow count rather than configured, so it cannot go stale the
+day someone adds a workflow.
+
 ## A conflicted PR schedules zero CI runs
 
 A conflicted PR has no computable merge commit, so GitHub schedules **zero** workflow runs for it —

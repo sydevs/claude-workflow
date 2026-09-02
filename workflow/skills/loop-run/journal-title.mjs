@@ -42,7 +42,7 @@
  * Ranges are built with the zone's real UTC offset, so the query means the same
  * thing in August and December. GitHub's search date qualifiers take an ISO8601
  * offset; without one they mean UTC, which splits each local day across two
- * journals — the bug `journal.timezoneNote` already warns about.
+ * journals, which is why `journal.timezone` exists at all.
  *
  * ## Usage
  *
