@@ -39,8 +39,9 @@ The consequences:
 - **Reason about the failure the change prevents**, and say so in the PR body. That reasoning is the
   only evidence available before merge.
 
-`selfModificationNote` in [.claude/workflow.json](.claude/workflow.json) states the same rule; keep
-the two in agreement if you change either.
+This rule lived here *and* in `.claude/workflow.json`, with an instruction to keep the two copies in
+agreement — which is a maintenance task the values-only rule below exists to abolish. The copy is
+gone; this is the statement.
 
 ### ⚠ The journal lives here too
 
@@ -86,7 +87,7 @@ hook is doing too much.
 | `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
 | `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
 | `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
-| `.claude/workflow.json` | This repo's own per-repo settings, in the same shape every product repo uses. |
+| `.claude/workflow.json` | This repo's own per-repo **values**, in the same shape every product repo uses. Values only, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
 
