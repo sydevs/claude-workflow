@@ -117,10 +117,6 @@ mcp__github__search_issues  query:"repo:… is:issue is:open assignee:<bot> -lab
 mcp__github__search_issues  query:"repo:… mentions:<bot> is:open updated:>=<last-run-ISO>"
 ```
 
-> Locally — and only locally, where `gh` works —
-> `${CLAUDE_PLUGIN_ROOT}/skills/loop-run/worklist.mjs --since <ISO>` runs all of this in one call
-> and prints the whole queue with merge verdicts and resolved blockers. It cannot run in a routine.
-
 **Read narrowly. Most of the backlog is irrelevant to any given run.**
 
 1. **Titles yes, bodies no.** The worklist deliberately carries no bodies. Fetch one only for the
@@ -159,9 +155,12 @@ mcp__github__list_workflows     owner:$ORG repo:$REPO        # total_count > 0 �
 
 ```bash
 echo '{"repo":"'$ORG/$REPO'","reviewDecision":"…","hasWorkflows":true,
-       "pr":{…},"checkRuns":{…},"reviewThreads":{…}}' \
+       "pr":{…},"checkRuns":{…},"statuses":{…},"reviewThreads":{…}}' \
   | ${CLAUDE_PLUGIN_ROOT}/skills/loop-run/merge-verdict.mjs
 ```
+
+**This is the same code path in a routine and on a laptop.** No script under `workflow/` fetches
+anything; you gather, it decides. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
 **Exit `0` merges; exit `1` does not, and prints the reason to put in the comment.**
 
@@ -235,8 +234,8 @@ On a human's PR, in order:
 - **On a wake:** re-derive the worklist as always, act on anything the wake genuinely surfaces, then
   **unsubscribe** to restore the standing state.
 - **A woken session that finds its work already handed back exits.**
-- **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — `ci-status.mjs`, up to
-  `ceilings.ciPollAttempts`. If CI has not settled by then, say so in the journal and hand the PR
+- **Watch CI by polling instead**, bounded, in `/finalize-pr` step 8 — up to
+  `ceilings.ciPollAttempts` reads of `pull_request_read method:get_check_runs`. If CI has not settled by then, say so in the journal and hand the PR
   back; an unfinished CI watch is a fact to report, not a reason to stay awake.
   (why: docs/why.md#never-subscribe-to-pr-activity)
 
@@ -402,18 +401,13 @@ it** (why: docs/why.md#do-not-pin-the-journal).
 
 ### The title is computed, not written
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/loop-run/journal-title.mjs          # the title
-${CLAUDE_PLUGIN_ROOT}/skills/loop-run/journal-title.mjs --json   # and the items behind each count
-```
-
 ```
 Wed — 2 new, 1 revised, 2 merged, 1 closed
 ```
 
-**Set the title to exactly what the script prints, on every run.** Do not edit it, pad it, or write
-one yourself — a hand-written title costs a re-read of the day nine times over and describes what the
-run believes happened, where a count describes what the queries found.
+**Counts, never prose.** A sentence costs a re-read of the whole day on every run and describes what
+the run *believes* happened; four numbers describe what the queries returned. Derive them from the
+searches below and nothing else — never from memory of what this run did.
 
 | Term | Counts |
 | --- | --- |
@@ -430,8 +424,21 @@ run believes happened, where a count describes what the queries found.
 - **Day of week, not a date.** The full date is the issue's creation time, which is sortable and
   filterable in a way a title string is not.
 
-The `--json` form lists the items behind every count. Use it when the body needs to name them, and
-when a number looks wrong — it is cheaper than re-deriving the queries.
+Each count is one search, scoped by `repo:` qualifiers over `repos`, with `<from>..<to>` spanning the
+Vancouver day (use the zone's real UTC offset — `-07:00` or `-08:00` — since a bare date means UTC and
+splits the day across two journals):
+
+```
+is:issue author:<bot> created:<from>..<to> -label:ops-journal      → new
+is:pr    author:<bot> merged:<from>..<to>                          → merged
+is:pr    author:<bot> is:unmerged is:closed closed:<from>..<to>  ┐
+is:issue author:<bot> is:closed closed:<from>..<to>              ┘ → closed, deduped
+```
+
+`revised` is the hand-backs: items where an `assigned` event named the reviewer today with the bot as
+actor. **Read it from each item's own timeline, not from a repo-level event feed** — the repo feed
+reports `actor` as the *assignee* on an `assigned` event, so it would count the reviewer's own triage
+as the loop's work, silently and only ever upward.
 
 ### Two surfaces, two jobs
 
@@ -454,8 +461,7 @@ when a number looks wrong — it is cheaper than re-deriving the queries.
   waiting an hour look identical when both are prose. **Oldest first.**
 - **One row per work item.** An issue and the PR that closes it are one thing; link the PR, since
   that is where the reviewing happens.
-- Locally, `${CLAUDE_PLUGIN_ROOT}/skills/loop-run/awaiting-review.mjs` prints this table ready to
-  paste. It needs `gh`, so a routine builds it from the searches above.
+- **Oldest first**, so what has waited longest is read first.
 - **Write for someone reading at 6am who was not here yesterday.** Never use the words "rung" or
   "ladder". Use the section headings below verbatim.
 

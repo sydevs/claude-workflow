@@ -303,7 +303,20 @@ Measured in a routine on 2026-09-02:
 `api.github.com` connects to `peer=127.0.0.1` behind a certificate issued by `CN=CCR Upstream Proxy
 CA (staging); O=Anthropic` — a TLS-intercepting proxy (`CCR_AGENT_PROXY_ENABLED`,
 `NODE_EXTRA_CA_CERTS`) that allowlists by **path, not credential**. Bringing your own PAT does not
-change the answer; it was tested with a deliberately invalid one and drew the identical 403.
+change the answer; it was tested with a deliberately invalid one and drew the identical 403, and
+`GH_TOKEN` in the sandbox reads as the literal string `proxy-injected`. **Connecting the Claude
+GitHub App for the org — what the 403 asks for — was tried and changed nothing.**
+
+Two further refusals, which no amount of repo access would lift:
+
+| Path | Message |
+| --- | --- |
+| `search/issues` | "sessions are bound to their configured repositories. Use repository-scoped endpoints" |
+| `graphql` | "only the pinned set of PR-review operations is served" |
+
+Search is cross-repository by nature and a session is bound to its repositories, so **the loop's
+worklist can only ever be an MCP call.** Do not spend another afternoon on this; the probes are
+recorded in `docs/why.md#a-routine-cannot-reach-the-github-api`.
 
 So a routine reaches GitHub **only through the MCP tools**. `/user` answering 200 while every
 `repos/...` path 403s is the trap: it makes the token look fine and the repo look missing, when the

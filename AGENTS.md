@@ -81,8 +81,8 @@ hook is doing too much.
 | --- | --- |
 | `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
 | `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
-| `workflow/lib/*.mjs` | Shared by the skills' scripts — `gh.mjs` (gh wrappers, config lookup) and `merge-gate.mjs` (the one definition of "green" and "mergeable"). |
-| `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. |
+| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv) and `merge-gate.mjs` (the one definition of "green" and "mergeable"). |
+| `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
 | `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
 | `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
@@ -100,6 +100,12 @@ if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-confi
 is duplication drifting apart. Three homes, no overlap: the **value** here, the **rule** in the skill
 that enforces it, the **story** in `docs/why.md`. A `$comment` earns its place only when a bare value
 is ambiguous on sight, and then it is one line.
+
+**No script here talks to GitHub.** A routine cannot reach the API by any client — not `curl`, not
+`gh` even after installing it, not with any credential — so a fetching script would run only on a
+maintainer's laptop, and a rule with a local implementation and a separate cloud one is precisely the
+shape of the bug that made the merge gate unsafe. The run gathers with MCP; the script decides.
+Scripts take JSON on stdin and return a verdict. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
 **A script beats a prose rule wherever the rule is mechanical.** `workflow/lib/merge-gate.mjs` exists
 because the merge gate's table was wrong in two directions at once and nobody could see it; the

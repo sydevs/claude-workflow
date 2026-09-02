@@ -277,6 +277,11 @@ reach GitHub state directly (a self-hosted relay holding its own token). That is
 real cost, not a workaround: it re-grants, under our own credential, access the proxy deliberately
 gates.
 
+The community recipe for this (`gh-setup-hooks`, dev.to) installs `gh` and sets `GH_TOKEN` to a
+personal token. Its first half works here — `gh` downloads and runs. Its second cannot: the proxy
+answers before it considers a credential, so the token is never read. That recipe targets Claude Code
+*on the web*, which evidently has a laxer proxy than Routines; it is not wrong, it does not transfer.
+
 **Decided 2026-09-02: we are not building that relay.** The gate that could merge untested code
 already works in a routine — the run fetches with MCP, `merge-verdict.mjs` decides — so a relay would
 only move counting and formatting into scripts. Against that it means a service to keep alive and a
@@ -287,6 +292,22 @@ decision rather than an assumption.
 
 The identical 403 with and without an auth header is the part that settles it: the proxy is refusing
 the *path*, not the credential, so installing a binary or finding a better token cannot help.
+Connecting the **Claude GitHub App for the org** — which is what the 403 itself asks for — was tried
+and changed nothing.
+
+**Three different refusals, and the other two are the real ceiling.** They matter more than the first,
+because they would survive any widening of repo access:
+
+| Path | Message |
+| --- | --- |
+| `repos/…` | "GitHub access is not enabled for this session. An org admin must connect the Claude GitHub App" |
+| `search/issues` | "sessions are bound to their configured repositories. Use repository-scoped endpoints" |
+| `graphql` | "only the pinned set of PR-review operations is served" |
+
+**Search is refused by design, not by configuration** — a session is bound to its repositories, and
+search is inherently cross-repository. The loop's worklist *is* a search (`assignee:<bot>` over five
+repos), as are the journal counts and the awaiting-you table. So even if `repos/…` opened tomorrow,
+those three could not become scripts. Only per-repo reads and pure decisions can.
 
 Two traps in that table. `/user` answering 200 while every `repos/...` path 403s makes the token look
 healthy and the repository look missing, when neither is true — and `git` fetch and push work
@@ -360,3 +381,21 @@ This is the failure mode more tests cannot fix. Every other kind of bug is, in p
 another assertion; a wrong fixture is not, because it defines the world every assertion in that file
 is evaluated against. The one-line pre-mortem is cheap precisely because it happens before the
 fixture exists, when the assumption is still conscious.
+
+## A script here never fetches
+
+Every script under `workflow/` takes JSON on stdin and returns a decision. None opens a connection to
+GitHub, and that is a rule rather than a convenience.
+
+The alternative was tried and abandoned within a day. Four scripts shipped calling `gh`; all four
+passed every local test and none could run in a routine, where the loop does nearly all its work.
+Keeping them would have meant two implementations of every rule they encoded — a local one that gets
+exercised while developing, and a prose one in the skill that executes eight times a day. That is the
+exact shape of the defect that made the merge gate unsafe: `get_status` versus check runs was never a
+fetching bug, it was two readings of "green" with no single home.
+
+So the boundary is: **the run gathers, the script decides.** It costs the token savings a scripted
+census would have given, and buys the only thing that was ever load-bearing — one implementation,
+exercised identically everywhere. A script earns its place when its input is small enough to hand
+over and its logic is subtle enough to get wrong in prose. `merge-gate` and `branch-preview-url`
+clear both bars. A census, a count and a markdown table clear neither.

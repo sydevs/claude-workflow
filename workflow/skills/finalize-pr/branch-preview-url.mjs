@@ -43,46 +43,26 @@
  * labelled alias, and even then it derives the host from the COMMIT alias we did
  * observe rather than from a hardcoded project name.
  *
- * ## Two input paths, one parser
+ * ## It is handed the text; it does not fetch it
  *
- * A routine cannot reach the GitHub API by any client — `gh` is absent, and
- * installing it does not help because the proxy 403s `repos/...` regardless of
- * credential (see `lib/merge-gate.mjs`). So the cloud path fetches with MCP and
- * pipes the text in; the local path fetches with `gh` itself. The PARSING — which
- * is where the bug was — is the same code either way.
+ * A routine cannot reach the GitHub API by any client
+ * (why: docs/why.md#a-routine-cannot-reach-the-github-api), so the caller
+ * gathers the Cloudflare bot's comment bodies and each Cloudflare check run's
+ * `output.summary` — with MCP in a routine, however you like locally — and pipes
+ * them in. One code path, run identically everywhere.
  *
  * ## Usage
  *
- *   branch-preview-url.mjs [--repo owner/name] [--pr N] [--wait SECONDS] [--json]
- *   branch-preview-url.mjs --stdin   < {"bodies": ["<comment body>", "<check summary>"]}
+ *   branch-preview-url.mjs [--json] < {"branch":"…","bodies":["<body>","<summary>"]}
  *
- * Local defaults come from `gh` and the current branch. In a routine, pass
- * `--stdin` with the bodies of `mcp__github__get_comments` and the
- * `output.summary` of each Cloudflare check run. Exits 1 when no alias can be
- * resolved, so a run cannot quietly paste a pinned URL instead.
+ * Exits 1 when no alias can be resolved: that is the "preview pending" case, not
+ * a cue to fall back to a per-commit alias.
  */
 
-import { execFileSync } from 'child_process'
 import { readFileSync } from 'fs'
 
 const args = process.argv.slice(2)
-const flag = (name, fallback = null) => {
-  const i = args.indexOf(`--${name}`)
-  return i === -1 ? fallback : args[i + 1]
-}
 const JSON_OUT = args.includes('--json')
-const WAIT_MS = Number(flag('wait', '0')) * 1000
-const POLL_MS = 15_000
-
-/** `gh` with JSON out. Throws with the CLI's own stderr, which is the useful part. */
-function gh(argv) {
-  const out = execFileSync('gh', argv, {
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 32 * 1024 * 1024,
-  })
-  return out.trim() ? JSON.parse(out) : null
-}
 
 const PREVIEW_HOST = /^https:\/\/[a-z0-9.-]+\.(pages|workers)\.dev\/?$/i
 const COMMIT_LABEL = /^[0-9a-f]{8}(?=[-.])/
@@ -164,24 +144,6 @@ function constructFrom(commitUrl, branch) {
   return `https://${slug}${sep}${host.replace(COMMIT_LABEL, '').replace(/^[-.]/, '')}`
 }
 
-/** Collect every Cloudflare-authored blob that might carry a labelled alias. */
-function sources(repo, pr, sha) {
-  const found = []
-
-  const comments = gh(['api', `repos/${repo}/issues/${pr}/comments`, '--paginate']) || []
-  for (const c of comments) {
-    if (/cloudflare/i.test(c.user?.login || '')) found.push({ source: 'comment', body: c.body })
-  }
-
-  const runs = gh(['api', `repos/${repo}/commits/${sha}/check-runs`, '--paginate'])
-  for (const r of runs?.check_runs || []) {
-    if (!/cloudflare/i.test(r.app?.slug || '')) continue
-    found.push({ source: `check:${r.name}`, body: r.output?.summary || '' })
-  }
-
-  return found
-}
-
 /** Any HTTP answer proves the host exists; only a transport failure is fatal. */
 async function probe(url) {
   try {
@@ -241,45 +203,9 @@ async function fromStdin() {
   process.exit((await report(results)) ? 0 : 1)
 }
 
-async function main() {
-  if (args.includes('--stdin')) return fromStdin()
-
-  const repo = flag('repo') || gh(['repo', 'view', '--json', 'nameWithOwner'])?.nameWithOwner
-  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf-8' }).trim()
-
-  const prArg = flag('pr')
-  const prView = prArg
-    ? gh(['pr', 'view', prArg, '--repo', repo, '--json', 'number,headRefOid,headRefName'])
-    : gh(['pr', 'view', '--json', 'number,headRefOid,headRefName'])
-  if (!prView) {
-    console.error(`No pull request found for ${branch} in ${repo}.`)
-    process.exit(1)
-  }
-
-  const deadline = Date.now() + WAIT_MS
-  for (;;) {
-    const results = collect(
-      sources(repo, prView.number, prView.headRefOid),
-      prView.headRefName || branch,
-    )
-    // A host that answers nothing at all is not a link worth pasting.
-    if (results.size) process.exit((await report(results)) ? 0 : 1)
-
-    if (Date.now() >= deadline) break
-    console.error('No branch alias yet — Cloudflare has not posted one. Waiting…')
-    await new Promise((r) => setTimeout(r, Math.min(POLL_MS, deadline - Date.now())))
-  }
-
-  console.error(
-    `No branch preview alias for ${repo}#${prView.number}. The deploy may still be building; ` +
-      'say "preview pending" rather than linking a per-commit alias.',
-  )
-  process.exit(1)
-}
-
-// Guarded so a spec can import the parsers without hitting the network.
+// Guarded so a spec can import the parsers without running the CLI.
 if (process.argv[1] && process.argv[1].endsWith('branch-preview-url.mjs')) {
-  main().catch((err) => {
+  fromStdin().catch((err) => {
     console.error(`branch-preview-url failed: ${err?.message || err}`)
     process.exit(1)
   })

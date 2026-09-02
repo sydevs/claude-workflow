@@ -33,7 +33,7 @@
  */
 
 import { readFileSync } from 'fs'
-import { loadLoopConfig, flag } from '../../lib/gh.mjs'
+import { loadLoopConfig, flag } from '../../lib/config.mjs'
 import { mergeVerdict, normalizeMcp, setRepoWorkflows } from '../../lib/merge-gate.mjs'
 
 const argv = process.argv.slice(2)

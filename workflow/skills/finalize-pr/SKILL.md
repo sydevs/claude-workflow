@@ -203,14 +203,11 @@ sees the change without checking out the branch.
 Cloudflare projects and both platforms:
 
 ```bash
-# In a routine: fetch with MCP, then pipe the text in.
-#   mcp__github__get_comments  → the cloudflare bot's comment bodies
-#   mcp__github__list_workflow_runs / the PR's Cloudflare check runs → output.summary
+# Gather with MCP, then pipe the text in:
+#   mcp__github__get_comments   → the Cloudflare bot's comment bodies
+#   the PR's Cloudflare check runs → each output.summary
 echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
-  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --stdin
-
-# Locally, where gh works, it fetches for itself:
-${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs --wait 300
+  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
 ```
 
 It prints one `project  status  url` line per preview, reading the alias out of the label Cloudflare
@@ -284,9 +281,8 @@ it returns commit statuses, our CI reports check runs, and reading only the firs
 approved SahajCloud PR green for seventeen minutes while its test job was still running. A deploy
 status is not a test signal. (why: docs/why.md#ci-is-check-runs-not-commit-statuses)
 
-> Locally, `${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/ci-status.mjs` polls and applies exactly that
-> definition — exit `0` green · `1` red · `2` still running. It needs `gh` and so cannot run in a
-> routine; `merge-verdict.mjs` is the routine-side equivalent, fed by MCP.
+`merge-verdict.mjs` applies exactly that definition — pipe it the same three calls and read its exit
+code rather than restating the rule here.
 
 - `CONFLICTING` / `dirty` → merge the base branch in, resolve, push. CI fires on that push. The
   script reports this as "no check runs — usually a merge conflict", because a conflicted PR

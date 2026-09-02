@@ -33,11 +33,10 @@
  * they were in deciding what the fetched values meant, which is the half that had
  * no single home.
  *
- * `normalizeMcp()` accepts exactly what the three documented MCP calls return, so
- * the loop's cloud path and a maintainer's local path reach the same code.
+ * `normalizeMcp()` accepts exactly what the three documented MCP calls return.
+ * There is no second, fetching path: one implementation, exercised identically in
+ * a routine and on a laptop, is the only way the routine path gets tested at all.
  */
-
-import { api, graphql } from './gh.mjs'
 
 /** Terminal check-run conclusions that do not block a merge. */
 const OK_CONCLUSIONS = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED'])
@@ -47,61 +46,20 @@ const BAD_CONCLUSIONS = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_RE
 const workflowCache = new Map()
 
 /**
- * Does this repo run GitHub Actions at all? Derived rather than configured, so it
- * cannot go stale the day someone adds a workflow.
+ * Does this repo run GitHub Actions at all?
  *
- * Pre-seed it with `setRepoWorkflows()` where there is no fetch path — a routine
- * reads the count with `mcp__github__list_workflows` and passes it in. Unknown
- * defaults to TRUE: assuming a repo has CI makes a missing check block a merge,
- * where assuming it has none would call an untested PR green.
+ * Seeded by the caller from `mcp__github__list_workflows` (`total_count > 0`).
+ * **Unknown defaults to TRUE**, because the two errors are not symmetric:
+ * assuming a repo has CI makes a missing check block a merge, while assuming it
+ * has none would call an untested PR green. Only the second one can ship
+ * something broken.
  */
 export function setRepoWorkflows(repo, hasWorkflows) {
   workflowCache.set(repo, Boolean(hasWorkflows))
 }
 
 export function repoHasWorkflows(repo) {
-  if (!workflowCache.has(repo)) {
-    try {
-      workflowCache.set(repo, (api(`repos/${repo}/actions/workflows`)?.total_count ?? 0) > 0)
-    } catch {
-      return true
-    }
-  }
-  return workflowCache.get(repo)
-}
-
-const PR_QUERY = (owner, name, number) => `{
-  repository(owner:"${owner}",name:"${name}"){
-    pullRequest(number:${number}){
-      number title isDraft url
-      author{login}
-      reviewDecision mergeable mergeStateStatus
-      headRefName baseRefName
-      assignees(first:10){nodes{login}}
-      reviewRequests(first:10){nodes{requestedReviewer{... on User{login}}}}
-      reviewThreads(first:100){nodes{isResolved isOutdated}}
-      closingIssuesReferences(first:20){nodes{number repository{nameWithOwner}}}
-      commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{
-        __typename
-        ... on CheckRun{name conclusion status}
-        ... on StatusContext{context state}
-      }}}}}}
-    }
-  }
-}`
-
-/**
- * Read one PR. `mergeable` is computed lazily by GitHub and comes back `UNKNOWN`
- * on a cold read, so one retry — a verdict of "conflicted" on a value GitHub has
- * not computed yet would strand a healthy PR.
- */
-export function readPr(repo, number) {
-  const [owner, name] = repo.split('/')
-  let pr = graphql(PR_QUERY(owner, name, number))?.repository?.pullRequest
-  if (pr && pr.mergeable === 'UNKNOWN') {
-    pr = graphql(PR_QUERY(owner, name, number))?.repository?.pullRequest
-  }
-  return pr
+  return workflowCache.has(repo) ? workflowCache.get(repo) : true
 }
 
 /** Flatten the rollup into `{name, kind, state}` rows. */
