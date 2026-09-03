@@ -151,7 +151,7 @@ The PR queries the run skills refine from the fourth search — all indexed, non
 
 | Shape | Query |
 | --- | --- |
-| Merge candidates | `$SCOPE is:pr is:open author:<bot> draft:false` — ⚠ never `review:approved`; approval is read per PR (`/workflow:work-routine` rung 1) |
+| Merge candidates | `$SCOPE is:pr is:open author:<bot> draft:false` — approval is read per PR (`/workflow:work-routine` rung 1) |
 | Revision candidates | `$SCOPE is:pr is:open author:<bot> updated:>=<last-run-ISO>` |
 | Crashed-run residue | `$SCOPE is:pr is:open author:<bot> draft:true` |
 | Review candidates | `$SCOPE is:pr is:open author:<bot> draft:false -reviewed-by:<bot> -label:ops-journal` |

@@ -329,17 +329,17 @@ The shorthand is only safe for issues in the same repository as the comment.
 ## Filing from a cloud run: what MCP reaches, and the one thing it does not
 
 A cloud run has no `gh` — every call 403s (`/workflow:preflight`) — so `mcp__github__issue_write` is
-the filing path, not a fallback. It reaches everything the checklist below asks for **except one
-thing**:
+the filing path, not a fallback.
 
+- ⚠ **The one thing it cannot do is write a blocked-by dependency.** No MCP tool writes them, which
+  is the whole reason `relationships.bodyMarker` exists. A blocker recorded only as a native
+  relationship is invisible to every cloud run, so the `Blocked by:` line in the body is what
+  actually blocks — and it is the half of checklist item 5 a cloud run must satisfy.
 - **Issue type** — `issue_write`'s `type` parameter, validated against `list_issue_types`. This used
   to be unreachable, which is why the first cloud run filed an untyped ticket; it is reachable now,
   so an untyped ticket is a mistake rather than a limitation.
 - **Priority, Effort, `Stage`, `Hold Until`** — `issue_fields`, with `field_option_name` for the
   single-selects so the option is validated before the call.
-- ⚠ **Blocked-by dependencies are still unreachable.** No MCP tool writes them, which is the whole
-  reason `relationships.bodyMarker` exists. A blocker recorded only as a native relationship is
-  invisible to every cloud run, so the `Blocked by:` line in the body is what actually blocks.
 
 If a call genuinely fails, **journal the failure and file nothing.** An unfiled finding can be
 re-derived next run; a malformed backlog has to be cleaned up by hand.
@@ -350,7 +350,8 @@ re-derived next run; a malformed backlog has to be cleaned up by hand.
 - [ ] Priority field set (reviewer's, so leave an existing value alone) **and Effort set — always, by you**
 - [ ] `Stage` set — `Proposed` if you are filing it, and assigned to `assignment.reviewer`
 - [ ] `Hold Until` set if `Stage` is `Blocked`, with the date justified in a comment
-- [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
+- [ ] Blockers mirrored as a `Blocked by:` line in the body — always — **and** set as Relationships
+      where the run can (local `gh` only; a cloud run cannot, see above)
 - [ ] Body in the format above; checklist items are executable
 - [ ] Searched for a duplicate first (`search_issues`), including closed ones
 
