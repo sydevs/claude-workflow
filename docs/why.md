@@ -504,6 +504,26 @@ Leaving the field alone also gives it a use the old model had no room for: **ass
 PR it did not write is how a human hands one over**, and unassigning withdraws that. One field, one
 direction, read but never written.
 
+## The board is a lens
+
+The org project (`projects.url`) shows every open issue grouped by `Stage` and every PR in a lane —
+and the loop neither reads nor writes any of it. Three facts force that shape, all measured:
+
+- **Project views render org issue fields directly.** A board grouped by `Stage` updates the moment
+  a routine writes the field over REST. There is nothing to sync, so nothing can drift — the board
+  and the census are two lenses over one datum.
+- **Routines cannot reach Projects v2 at all.** Probed live on 2026-09-03 (session
+  `cse_0188Trog41g4Zt2j9oQS9crB`): zero `mcp__github__projects*` tools resolve in the routine
+  environment. The board could not be load-bearing even if we wanted it to be.
+- **The one project-native field, PR `Status`, is written only by GitHub's built-in workflows**
+  (changes requested, approved, merged, closed) and read only by humans. If the loop ever read it,
+  the #38 lesson would apply in full: a derived surface lags the event that feeds it, and the loop
+  reads sources.
+
+Items arrive via one `add-to-project` workflow per product repo plus the single free built-in
+auto-add slot, pointed at `claude-workflow`. If an item is missing from the board, the board is
+wrong and nothing else is — which is exactly the failure isolation a lens is for.
+
 ## hasWorkflows is a filesystem check
 
 `mcp__github__list_workflows` is not in the routine's MCP build. Four consecutive runs journalled

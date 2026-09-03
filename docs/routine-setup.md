@@ -148,6 +148,56 @@ GraphQL-only and a routine's GraphQL serves only PR-review operations, so the ca
 from the loop. Recency surfaces the current journal instead. The weekly reflection closes the
 week's journals.
 
+### The workflow board
+
+One org project — **[`Claude Workflow`, sydevs/projects/2](https://github.com/orgs/sydevs/projects/2)**
+(`projects` in `loop-config.json`) — holds every open issue and PR across the five repos. It is a
+**lens**: issues are grouped by the `Stage` issue field, PRs by the project `Status` field, and the
+loop neither reads nor writes any of it (why: `docs/why.md#the-board-is-a-lens`; reachability probe
+recorded in `projects.recheckProbe`).
+
+**How items arrive:**
+
+- Product repos: `.github/workflows/add-to-project.yml` in each, on
+  `issues: [opened, reopened, transferred]` and `pull_request_target: [opened, reopened]`, using the
+  **org Actions secret `ADD_TO_PROJECT_PAT`** — a `sydevs-bot` fine-grained PAT with org
+  **Projects: read/write** and repo **Issues, Pull requests: read**. If a repo's workflow fails with
+  a credentials error, check the org secret's repository-access policy includes it.
+- `claude-workflow`: the project's own built-in **auto-add** workflow (the free plan allows exactly
+  one, targeting one repo — this uses the slot so the repo keeps having no `.github/workflows/`).
+  Filter: `is:issue,pr -label:ops-journal` — journal issues are a diary, never work, and never
+  board items.
+
+**One-time UI configuration** (built-in workflows and views have no API):
+
+1. Project **⚙ Settings → Manage access**: `sydevs-bot` needs **write** (the PAT acts as it).
+2. **Workflows** (left sidebar): enable and map —
+   | Workflow | Set |
+   | --- | --- |
+   | Auto-add to project | repo `sydevs/claude-workflow`, filter `is:issue,pr -label:ops-journal` |
+   | Item added to project | Status: **In progress** |
+   | Item reopened | Status: **In progress** |
+   | Code changes requested | Status: **Changes requested** |
+   | Code review approved | Status: **Approved** |
+   | Pull request merged | Status: **Done** |
+   | Item closed | Status: **Done** |
+   | Auto-archive items | `is:closed updated:<2weeks` (optional, keeps the board small) |
+3. **Views** (each is ⊕ New view, then save):
+   | View | Layout | Filter / grouping |
+   | --- | --- | --- |
+   | 🎫 Pipeline | Board, group by **Stage** | `is:issue has:stage` |
+   | 🔀 Pull requests | Board, group by **Status** | `is:pr` |
+   | 🙋 Awaiting you | Table | `stage:Proposed,Revising` (issues) — plus check the 🔀 board's Approved lane |
+   | 📥 Backlog | Table, sort Priority | `is:issue no:stage` |
+   | ⏸ Parked | Table, sort **Hold Until** | `stage:Blocked`, show Hold Until + Priority columns |
+4. While there, verify two behaviours the docs leave open and note the answers here:
+   dragging a card between **Stage** columns should write the issue field (inline table edit works
+   regardless), and whether date filters accept relative forms for `Hold Until`.
+
+The `Status` options were renamed via GraphQL to `In progress · Changes requested · Approved ·
+Done`. `Status` is per-project-item and GraphQL-only, which is precisely why ticket state lives in
+the `Stage` **issue field** instead — REST-writable, board-visible, one source of truth.
+
 > **Why an issue and not a Discussion or the Wiki?** Both were evaluated and neither is writable
 > from a cloud session: Discussions is GraphQL-only and the session's GitHub proxy allows only a
 > pinned set of GraphQL operations; the wiki is a separate git repo that cannot be attached to a

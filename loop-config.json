@@ -131,5 +131,11 @@
     "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
     "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
     "timezone": "America/Vancouver"
+  },
+  "projects": {
+    "$comment": "The org workflow board — a lens over the Stage field and PR review state; the loop NEVER reads or writes it. Rules in journal/SKILL.md; story in docs/why.md#the-board-is-a-lens.",
+    "url": "https://github.com/orgs/sydevs/projects/2",
+    "number": 2,
+    "recheckProbe": "select:mcp__github__projects_list — probed ABSENT 2026-09-03 (session cse_0188Trog41g4Zt2j9oQS9crB); if this ever resolves from a routine, Projects v2 became reachable — revisit docs/why.md#the-board-is-a-lens"
   }
 }

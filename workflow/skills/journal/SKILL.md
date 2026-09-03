@@ -199,7 +199,7 @@ Window since the last entry: ~Nh.
 Rewritten in full by every run. Short — it is an index, not a second copy of the entries.
 
 ````markdown
-**<N> runs today.** Last: <ISO timestamp>.
+**<N> runs today.** Last: <ISO timestamp>. · [Board](<projects.url>)
 
 ## 📋 Awaiting you
 
@@ -221,6 +221,11 @@ Rewritten in full by every run. Short — it is an index, not a second copy of t
 | 04:00 | [detail](<comment url>) |
 | 06:00 | [detail](<comment url>) |
 ````
+
+The Board link is `projects.url` from `loop-config.json` — a link and nothing more. **Never read
+the board back**: it is a lens over the same fields and review state this entry already derives
+from sources, and the loop has no tool that reaches it anyway.
+(why: docs/why.md#the-board-is-a-lens)
 
 **The body's `📋 Awaiting you` is the one the reviewer reads**, so it is the table in full — the
 comment's copy is a snapshot of one run, this is the current state of the queue. `Since` is why it is

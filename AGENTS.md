@@ -59,7 +59,9 @@ claude --plugin-dir ./workflow                 # load the plugin without install
 ```
 
 **That validator is the entire automated gate.** There is no test suite and no CI — no
-`.github/workflows/` here at all. `validate` checks the plugin manifest and the skill frontmatter;
+`.github/workflows/` here at all. (New issues and PRs still reach the org workflow board: this
+repo uses the project's own built-in auto-add slot, so the automation lives in the project, not
+here.) `validate` checks the plugin manifest and the skill frontmatter;
 it cannot check whether the prose is *right*, because the skills are prose.
 
 The real gate is a **supervised loop run**: `/workflow:work-routine --dry-run` locally, or a manually
