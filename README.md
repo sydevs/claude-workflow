@@ -47,8 +47,8 @@ each person runs `claude plugin install` once.
 | Skill | Purpose |
 | --- | --- |
 | `/workflow:draft-ticket` | Draft a GitHub issue — clarify ambiguity first, then acceptance criteria and a verification checklist. Your way into the pipeline. |
-| `/workflow:triage-issue` | The metadata rules: type, priority, state labels, relationships, body format. Shared by everything that files a ticket. |
-| `/workflow:implement-issue` | Implement an `ready-to-implement` issue in a worktree, then ship via `finalize-pr`. |
+| `/workflow:triage-issue` | The metadata rules: type, the Priority, Effort, Stage and Hold Until fields, assignment, relationships, body format. Shared by everything that files a ticket. |
+| `/workflow:implement-issue` | Implement a `Stage: Implement` issue in a worktree, then ship via `finalize-pr`. |
 | `/workflow:finalize-pr` | Simplify → review → conditional security review → lean gate → docs sync → push → PR → capped CI loop. Never merges. |
 | `/workflow:cross-repo-issue` | File a change spanning repos as a tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
@@ -74,23 +74,41 @@ its own run skill, both starting with `preflight` and ending with `journal`. `sy
 down a ladder of rungs ordered by how much they respect your attention: merge what you approved,
 revise what you commented on, implement what you cleared, adversarially review what it built.
 `sydevs-survey-nightly` runs `survey-routine` once at night — no ladder, just the day's survey and the
-dropped-baton and stale-claim sweeps. Splitting the survey out guarantees it runs even on days the
-queue is busy. State lives entirely in GitHub — **the assignee field is the queue**, PRs
-are the work, a pinned issue is the memory, and `loop-config.json` holds the knobs.
+unheard-replies sweep. Splitting the survey out guarantees it runs even on days the queue is busy.
+State lives entirely in GitHub — **the assignee field is the queue**, PRs are the work, a daily issue
+is the memory, and `loop-config.json` holds the knobs.
 
 **The baton.** `assignee:sydevs-bot` is the worklist: one indexed query per repo, rather than a scan
-of every open item. Reassigning to you is the final action on any unit of work and means *done*, so
-your queue is everything waiting on you and nothing else. Unassign the bot on any PR and it stops
-touching that PR — a per-item kill switch that needs no documentation to understand.
+of every open item. **You are the only one who assigns it**, and it stays put until you take it back
+— so assignment answers exactly one question, *is this the loop's to touch*, and never drifts. The
+loop's one assignment write is removing itself from a ticket once the PR exists. Unassign the bot on
+anything and it stops touching that thing: a per-item kill switch that needs no documentation to
+understand.
+
+**What kind of turn it is** lives in two org-level issue fields, next to Priority and Effort:
+
+| `Stage` | Means |
+| --- | --- |
+| `Proposed` | Filed, awaiting your verdict |
+| `Revising` | Being worked out — whose turn it is is whoever commented last |
+| `Blocked` | Parked, with a `Hold Until` date saying when it comes back |
+| `Implement` | You cleared it for code |
+| `Implemented` | A PR is in flight |
+
+`Hold Until` is a date. While it is in the future the item is not merely skipped — it is invisible,
+including in the journal, because the loop has already promised to look again on that day.
+
+**PRs have no fields, so a PR's turn is its `draft` flag.** The loop opens every PR as a draft and
+clears it once CI is green. Draft means it is still working; ready-for-review means it is your turn.
 
 Three properties make it safe to leave running:
 
-- **`ready-to-implement` is the only code gate.** Ticket-only. The loop never applies that label and
-  never implements without it. It *may* remove it when a question must be answered first — revoking
-  only ever reduces its own autonomy. Everything it finds on its own is filed as a `proposal` for
-  you to judge.
-- **Merging needs all three of** an approving review, green CI, and zero unresolved threads. No label
-  authorises a merge.
+- **`Stage: Implement` is the only code gate**, and only you can set it. The loop never writes that
+  value and never implements without it. It *may* move a ticket off it when a question must be
+  answered first — revoking only ever reduces its own autonomy. Everything it finds on its own is
+  filed as `Proposed` for you to judge.
+- **Merging needs all three of** an approving review, green CI, and zero unresolved threads. No
+  field authorises a merge.
 - **Assignment gates attention.** If it is not assigned to the bot, the bot does not touch it.
 
 Ceilings in `loop-config.json` bound what one run can spend — a cloud session cannot read your
@@ -110,7 +128,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
 | `securityReview.contentPattern` / `.contentPaths` | Newly-introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
-| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). `**` in `claude-workflow`, where the PR body is itself the proposal. Everywhere else, ticket work is gated on the `ready-to-implement` label instead. |
+| `prAllowlistGlobs` | Where a **ticketless** PR may be opened (dep bumps, doc fixes, type re-syncs). `**` in `claude-workflow`, where the PR body is itself the proposal. Everywhere else, ticket work is gated on `Stage: Implement` instead. |
 | `worktreeSetup` | Commands run after `EnterWorktree`. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 

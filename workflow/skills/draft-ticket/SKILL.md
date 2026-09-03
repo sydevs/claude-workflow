@@ -67,26 +67,34 @@ enough resolved detail to survive being picked up cold, possibly by an automated
    that made `--body` unusable with `gh` does not arise. Type and fields are set in the same call,
    which is also what stops a ticket landing untyped.
 
-9. **Return the issue URL**, then ask whether to hand it to the loop now.
+9. **File it at `Stage: Proposed`, assigned to `assignment.reviewer`** — always, whoever asked for
+   it. That pair is what says *filed, awaiting your verdict*, and it is what puts the ticket in the
+   journal's `📋 Awaiting you` table.
 
-   Two things put a ticket into the implementation queue, and **both** are required: the
-   `ready-to-implement` label, and assigning it to the bot. The label says code may be written; the
-   assignment says now. Ask explicitly — never apply either on your own initiative, and never infer
+   Then ask whether to hand it to the loop now.
+
+   Two things put a ticket into the implementation queue, and **both** are required:
+   `Stage: Implement`, and assigning `assignment.bot`. The Stage says code may be written; the
+   assignment says now. Ask explicitly — never set either on your own initiative, and never infer
    them from enthusiasm in the request:
 
-   > Filed as sydevs/SahajCloud#661 (Feature, Medium). Hand it to the loop now — label
-   > `ready-to-implement` and assign `sydevs-bot` — or leave it with you to review first?
+   > Filed as sydevs/SahajCloud#661 (Feature, Medium, Proposed). Hand it to the loop now — set
+   > `Stage: Implement` and assign `sydevs-bot` — or leave it with you to review first?
 
    On a yes:
 
    ```
    mcp__github__issue_write  method:update  issue_number:<n>
-     labels:["ready-to-implement", ...]  assignees:["sydevs-bot"]
+     issue_fields:[{field_name:"Stage", field_option_name:"Implement"}]
+     assignees:["sydevs-bot"]
    ```
 
-   Labels replace wholesale, so include the ticket's existing ones. On a no, leave it **unassigned**
-   — unassigned means untriaged backlog, which is exactly what a ticket awaiting the user's verdict
-   is. Do not park it on the user; that queue is for things needing their response.
+   On a no, leave it exactly as filed. `Proposed` on the reviewer is not a parking space — it is the
+   queue for things genuinely needing their verdict, which is what this is.
+
+   ⚠ **`Stage: Implement` is the one value the loop may never set for itself.** Writing it here is
+   only legitimate because a human just said yes in this session. A routine has no such moment, and
+   `/workflow:preflight` forbids it outright.
 
 ## Body structure, type, priority and relationships
 

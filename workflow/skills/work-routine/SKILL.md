@@ -36,6 +36,15 @@ call. Rationing it would leave approved, green work sitting while the run spent 
 which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
 work and does count.
 
+Candidates are one indexed query — no field is involved, because merge authority never was a field:
+
+```
+mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> draft:false review:approved"
+```
+
+A PR still in draft is the loop's own unfinished work and can never be a merge candidate; that is
+the same fact `merge-verdict.mjs` enforces, and the query just avoids paying for it.
+
 **Never decide mergeability yourself.** Gather all five, then ask `merge-verdict.mjs`:
 
 ```
@@ -107,19 +116,39 @@ The merge sequence, in order:
 Every item here counts against `maxWorkItemsPerRun`. Highest-priority linked ticket first.
 (why: docs/why.md#rung-2-competes-for-the-same-budget)
 
+**A PR needs revision when any of these holds.** Derive them from the revision query in
+`/workflow:preflight`, then read the threads:
+
+- an **unresolved thread whose last comment is from a login in `assignment.respondTo`**, or
+- an **unresolved thread rooted by the own login with no reply** — rung 5's adversarial review, or
+- the **last PR comment is from a login in `assignment.respondTo`**.
+
+Everything else is noise, by construction: a preview-URL comment, a coverage bot and a CI bot are
+all off the allowlist, so none of them can start a revision pass.
+(why: docs/why.md#respondto-is-an-allowlist)
+
 | Condition | Verdict |
 | --- | --- |
 | **Red CI on our own PR** | Diagnose via `actions_get` on the failing run, fix, push. Cap at `ciFixIterations`; on cap-out, comment with the remaining failure and journal it |
 | **Change request on a `claude/*` PR — ours** | Implement the feedback. Then: reply to **each** review comment individually, saying what changed or why it was not done, with `identity.commentMarker` appended; refresh the PR **title and body** from the current `origin/main...HEAD`; resolve the threads you actually addressed |
 | **Change request on a human's PR** | **You cannot push to it** — a cloud session may only push to `claude/*`. This is a wall, not a permission to ask for. Take the three steps below instead |
-| **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question, add `needs-info` to the linked ticket, move on |
-| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body, reassign to `assignment.reviewer` |
+| **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question and set `Stage: Revising` on the linked ticket, move on |
+| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body |
+| **Our PR closed without merging** | The linked ticket is stranded at `Implemented` and unassigned. Set it back to `Stage: Revising`, assign `assignment.reviewer`, and comment saying the PR was abandoned and why |
 
-**The author filter has exactly one exception.** Everywhere else, a comment counts as feedback only
-when its author is not the own login — but a review thread whose **root comment** the loop itself
-wrote exists only because rung 5's adversarial review created it, and it is work, not self-chatter.
-A bot reply inside a human's thread keeps a human root and stays excluded; no marker string is
-involved, the comment's type and its thread's root author are the whole key.
+**Always end a revision with a comment.** That is the termination condition: the trigger is "the
+last word is not ours", so a revision that pushes code and says nothing re-fires on the next run,
+forever.
+
+**Never change the PR's assignee, and never put it back into draft.** `draft:false` means it has
+been ready for review at least once, and rung 5 depends on that staying true.
+(why: docs/why.md#draft-is-the-prs-baton)
+
+**The allowlist has exactly one exception, and it points inward.** A review thread whose **root
+comment** the loop itself wrote exists only because rung 5's adversarial review created it, and it
+is work, not self-chatter — so it counts even though the own login is not on `respondTo`. A reply of
+ours inside someone else's thread keeps their root and is governed by the allowlist as usual; no
+marker string is involved, the comment's type and its thread's root author are the whole key.
 (why: docs/why.md#the-author-filters-one-exception)
 
 On a human's PR, in order:
@@ -135,18 +164,25 @@ On a human's PR, in order:
 
 ## Rung 3 — Implement
 
-**Two kinds of work live here.** Implementation needs `ready-to-implement`. **Investigation does
-not** — an unlabelled ticket may be investigated, measured and answered, so long as nothing is
-committed. `hold` freezes everything. See `/workflow:triage-issue` for the full table.
-**Investigations count against `maxWorkItemsPerRun` too.**
+**Two kinds of work live here.** Implementation needs `Stage: Implement`. **Investigation does
+not** — a ticket at any Stage but `Blocked` or `Implemented` may be investigated, measured and
+answered, so long as nothing is committed. A live `Hold Until` freezes everything. See
+`/workflow:triage-issue` for the full table. **Investigations count against `maxWorkItemsPerRun`
+too.**
 
 The bound on implementations is `wipCapPerRepo`, a stock cap. **Skip the implementation path
-entirely** when the repo is at `wipCapPerRepo` open loop PRs, or when no `ready-to-implement` ticket
+entirely** when the repo is at `wipCapPerRepo` open loop PRs, or when no `Stage: Implement` ticket
 is unblocked.
 
-**Unblocked** means: no `Blocked by:` line in the body naming a still-open issue, and the ticket
-carries neither `hold` nor `blocked-upstream`. Resolve each `Blocked by:` URL with `issue_read` and
-check its state — a closed blocker does not block.
+**Unblocked** means all three: no `Blocked by:` line in the body naming a still-open issue, `Stage`
+is not `Blocked`, and `Hold Until` is absent or already past. Resolve each `Blocked by:` URL with
+`issue_read` and check its state — a closed blocker does not block.
+
+**When a block clears, clear the field too.** Delete `Hold Until` in the same edit that strikes the
+line, and restore the `Stage` the marker's `(was: X)` suffix records — **except `Implement`, which
+becomes `Revising`.** A blocker usually changes the shape of the work, so an `Implement` restored
+without a human re-reading the ticket is the loop authorising its own code by the back door.
+(why: docs/why.md#unblocking-never-restores-implement)
 
 **When you find a blocker closed, strike the line.** Rewrite it in the body as:
 
@@ -159,12 +195,15 @@ future run pays an `issue_read` to re-derive the same answer, and the line reads
 anyone — human or run — who does not resolve it. Three consecutive journals described one such
 ticket as "blocked" when its blocker had already merged. Striking it costs one edit, once.
 
-**Selection:** highest **Priority** field (`Critical` → `Low`), then oldest `updatedAt`. Pull the
-whole candidate set in one call:
+**Selection:** highest **Priority** field (`Critical` → `Low`), then oldest `updatedAt`. There is no
+query for `Stage`, so pull the repo's open issues once and filter in memory:
 
 ```
-mcp__github__list_issues  state:OPEN  labels:["ready-to-implement"]  fields:["field_values","labels","body"]
+mcp__github__list_issues  state:OPEN  fields:["field_values","labels","body"]
 ```
+
+Keep the ones that are assigned to `assignment.bot`, are `Stage: Implement`, and have no live
+`Hold Until`. This is the call `/workflow:preflight` already made — reuse it rather than repeating it.
 
 Use **Effort** as a tie-break and a sanity check: an `Effort: Hard` ticket that cannot plausibly
 finish within one run should be **split rather than started**, since an implementation is never
@@ -183,14 +222,19 @@ describe a decision rather than a behaviour change mean the output is prose.
 (why: docs/why.md#an-investigation-must-not-be-forced-into-a-pr)
 
 **A ticket too large or too vague to finish in one run → do not start it.** Comment with what is
-missing, add `needs-info`, and pick the next one.
+missing, set `Stage: Revising`, and pick the next one. Setting `Revising` on a ticket the reviewer
+marked `Implement` is a revocation, which the loop is always allowed to do — the reverse never is.
 
 ## Rung 4 — Ticket feedback
 
-Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since the last run.
+Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
+`assignment.respondTo` newer than the loop's own last comment.
 
 - **Filter by author first.** A comment counts as feedback only when
-  `comment.author.login != <own login from preflight>`. (why: docs/why.md#filter-feedback-by-author)
+  `comment.author.login` is in `assignment.respondTo`. (why: docs/why.md#respondto-is-an-allowlist)
+- **Set `Stage: Revising` as you start**, unless the ticket is already there. It is a record of what
+  is happening, not a gate — the comment is what triggered this, and the comment order is what says
+  whose turn it is next.
 - **Start from the `updated:>=` search set, not the whole backlog**, then fetch comments only for
   those with a non-zero comment count.
 - **Derive the window from comment timestamps, never from `updated_at`.** Pull the issues that have
@@ -202,7 +246,7 @@ Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since t
 | The comment | What to do |
 | --- | --- |
 | **A question** | Answer it. Reply, update the ticket if the answer changes it, done. |
-| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Work needs the `ready-to-implement` gate like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `ready-to-implement` to start. |
+| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Writing code needs `Stage: Implement` like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `Stage: Implement` to start. |
 | **A correction or new evidence** | Verify it against source before accepting, then rewrite the affected part of the ticket. |
 
 (why: docs/why.md#a-request-in-prose-is-not-permission)
@@ -212,11 +256,10 @@ Counts against `maxWorkItemsPerRun`. Issues where **the user** commented since t
   relationships. A reply that agrees to a change but leaves the ticket saying the old thing has not
   done the job.
 - **Append `identity.commentMarker`** to every comment you write, here and in every other rung.
-- **The loop may reply once to a legacy comment of its own** — comments before 2026-08-29 carry the
-  loop's old identity. **Do not add a dated exclusion rule for it.**
-  (why: docs/why.md#legacy-identity-comments)
-- **Remove `needs-info` once answered.** If the comment reads as approval ("yes, do it"), say that
-  the `ready-to-implement` label is what actually starts work — **do not add it yourself.**
+- **If the comment reads as approval** ("yes, do it"), say plainly that `Stage: Implement` is what
+  actually starts work — **do not write it yourself.**
+- **Leave `Stage` at `Revising` when you finish.** The loop having spoken last is exactly what puts
+  the ticket in the reviewer's `📋 Awaiting you` table; no further field write is needed or wanted.
 
 ## Rung 5 — Adversarial review
 
@@ -233,18 +276,20 @@ One server-side query derives the candidates — `reviewed-by:` matches reviews 
 the census needs no per-PR review fetch:
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:pr is:open draft:false author:<own login> -reviewed-by:<own login> -label:ops-journal"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> draft:false -reviewed-by:<own login> -label:ops-journal"
 ```
 
-Work the candidates in two groups, oldest `created_at` first within each:
+`draft:false` is the whole eligibility rule. A draft PR is the loop still working; the moment
+`/workflow:finalize-pr` marks it ready for review it becomes reviewable, and it stays assigned to
+the bot for its whole life, so assignment says nothing here and is not read.
+(why: docs/why.md#draft-is-the-prs-baton)
 
-1. **PRs not assigned to `assignment.bot`** — already handed to the reviewer; a review that lands
-   before they read the PR is the whole point of the rung.
-2. **Bot-assigned PRs**, skipping any with `reviewDecision == CHANGES_REQUESTED` — those are
-   mid-revision, and the once-ever review is better spent after rung 2 hands them back.
+Work the candidates **oldest `created_at` first**, skipping any with
+`reviewDecision == CHANGES_REQUESTED` — those are mid-revision, and the once-ever review is better
+spent after rung 2 has answered.
 
-PRs opened earlier in this same run are eligible: isolation comes from the subagent below, never
-from waiting a run.
+PRs marked ready earlier in this same run are eligible: isolation comes from the subagent below,
+never from waiting a run.
 
 Per candidate, until the leftover budget is spent:
 
@@ -264,8 +309,8 @@ Per candidate, until the leftover budget is spent:
   `workflow/skills/adversarial-review/SKILL.md` in the claude-workflow checkout and follow it
   exactly. Never review in this session — a PR built here would be judged by the mind that built
   it. (why: docs/why.md#the-review-never-shares-the-implementers-context)
-- One completed review = one work item. A findings review leaves the PR assigned to
-  `assignment.bot` (the subagent does this); a clean review touches nothing.
+- One completed review = one work item. **Neither outcome touches assignment or draft** — the
+  findings are unresolved threads, and rung 2 picks those up on the next run by reading them.
 
 **Starting a review thread is this rung's exclusive privilege.** No other rung may create an
 inline review comment — the structural key above (own-login root = adversarial review) is only

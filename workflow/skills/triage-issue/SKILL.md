@@ -1,6 +1,6 @@
 ---
 name: triage-issue
-description: The metadata rules for sydevs tickets — issue type, priority label, state labels, relationships, and the standard body format. Shared by draft-ticket, the survey skills, and the loop, so every ticket looks the same whoever filed it.
+description: The metadata rules for sydevs tickets — issue type, the Priority, Effort, Stage and Hold Until fields, assignment, relationships, and the standard body format. Shared by draft-ticket, the survey skills, and the loop, so every ticket looks the same whoever filed it.
 allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 ---
 
@@ -20,7 +20,7 @@ One definition of what a well-formed sydevs ticket looks like. `draft-ticket`, t
 and `work-routine` all read this rather than each carrying their own copy — the divergence that produced
 three forks of the workflow started exactly this way.
 
-## The four fields
+## The fields
 
 ### Type — what kind of work (org-level issue types)
 
@@ -54,7 +54,7 @@ Priority is about the **consequence of not doing it**, not effort or appetite. A
 broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
 which is exactly why it is a separate field.
 
-**The two fields have different owners, and this is not the `ready-to-implement` asymmetry.**
+**The two fields have different owners, and this is not the `Stage: Implement` asymmetry.**
 
 | Field | Owner | Why |
 | --- | --- | --- |
@@ -77,8 +77,16 @@ mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n
 ```
 
 By **name**, and it validates the option against the field before calling. Read them back with
-`list_issues(fields:["field_values"])`, which returns the whole backlog's priorities in one call —
-that is how the loop sorts without a request per issue.
+`list_issues(fields:["field_values"])`, which returns the whole backlog's field values in one call —
+that is how the loop sorts and filters without a request per issue.
+
+⚠ **Fields are readable and writable, but they are NOT searchable.** The `field.<name>:<value>`
+qualifier is a web-UI/GraphQL feature; through the REST search a routine has, it is accepted without
+error and returns **zero results** — verified against an issue known to carry `Priority: High`,
+where `field.priority:high` returned 0 against a control of 24. So **no worklist query may filter on
+a field**. Build the candidate set from an indexed qualifier — `assignee:`, `author:`, `is:pr`,
+`draft:`, `review:` — then filter on field values client-side from the `list_issues` call above.
+(why: docs/why.md#issue-fields-are-not-searchable)
 
 <details><summary>Raw REST equivalent, if you ever need it</summary>
 
@@ -94,72 +102,120 @@ existing Effort. Include every field you want kept. Field ids are in `loop-confi
 `issueFields`.
 </details>
 
-### The baton — assignment is the queue
+### The baton — assignment is the queue, and only the user moves it
 
-**The assignee field holds the state.** It is not a hint; it is the worklist.
+**The assignee field says whose turn it is.** It is not a hint; it is the worklist.
 
 | Assignee | Meaning | The loop |
 | --- | --- | --- |
-| `sydevs-bot` | The bot's turn | Acts on the next run |
-| A human | Their turn | Does not touch it |
-| Nobody | Genuinely untriaged backlog | May propose, may not act |
+| `assignment.bot` | The loop's turn | Acts on the next run |
+| Anyone else, or nobody | Not the loop's turn | Does not touch it |
 
-`assignee:sydevs-bot` is one indexed query per repo, and it replaces the old census that scanned
-every open item and diffed `created_at` against the last run. That census had to be narrowed from 38
-issues to 2 for cost, and it broke outright when a bulk issue-field migration bumped every
-`updated_at` in the repo and made the whole backlog look like fresh feedback. Do not reintroduce
-timestamp reasoning to decide what to work on.
+`assignee:<bot>` is one indexed query per repo, and it replaced a census that scanned every open
+item and diffed `created_at` against the last run. That census had to be narrowed from 38 issues to
+2 for cost, and it broke outright when a bulk issue-field migration bumped every `updated_at` in the
+repo and made the whole backlog look like fresh feedback. Do not reintroduce timestamp reasoning to
+decide what to work on.
 
-**Reassigning to the reviewer is the FINAL action on any unit of work, and it means "I am done."**
-Not "I replied" — done, with nothing further until someone responds:
+**Only the user assigns the bot.** That is the entire kill switch: unassign the bot on any item and
+the loop stops touching it, with nothing else to configure. The loop has exactly three assignment
+writes, and none of them adds the bot to anything:
 
-| The loop finishes… | It assigns to |
+| The loop finishes… | Assignment |
 | --- | --- |
-| Revising a ticket after feedback | the reviewer |
-| Revising a PR after review | the reviewer |
-| Investigating and reporting a finding | the reviewer |
-| Opening a PR that is ready for review | the reviewer |
-| Filing a new proposal from a survey | the reviewer — a proposal exists to be judged |
+| Opening the PR for a ticket | **Remove the bot**, set `Stage: Implemented` — the PR carries it from here |
+| Filing a new proposal | Assign `assignment.reviewer` — a proposal exists to be judged |
+| Returning a ticket whose PR closed unmerged | Assign `assignment.reviewer`, `Stage: Revising` |
+| Anything else — revising, answering, investigating, blocking | **Touch nothing.** Say what happened in a comment and let the fields carry the state |
 
-**Staying assigned to the bot is legitimate.** An item the loop is blocked on, or that lost a slot
-to a ceiling, keeps the assignment — handing it back would say "done, over to you", which is false.
-That is the bot's queue for the next run, and the journal should say so.
+**Never add `assignment.bot` to anything** — not a ticket, not a PR, not to hand work to a future
+run. Staying assigned is how the loop keeps its own queue; adding itself would be the loop granting
+itself work.
 
-So **assignment is not the crash signal.** A crashed run is identified by its `labels.claim` still
-being present, never by an item sitting in the bot's queue: those two look identical from outside and
-mean opposite things. The claim label is applied only while a run is actively working an item, and
-removed when it stops.
+**Never reassign a PR at all.** A PR's turn is carried by its `draft` flag, never by its assignee:
+draft means the loop is still working, ready-for-review means it is waiting on a human. The PR stays
+assigned to the bot from the moment it opens until it merges.
 
-### Labels: one gates code, the rest are for humans
+### `Stage` and `Hold Until` — where the ticket sits, and when to look again
 
-**Only the assignee field and `ready-to-implement` mean anything to the loop.**
+Two more native org fields, alongside Priority and Effort. Between them they replaced five labels —
+`ready-to-implement`, `proposal`, `needs-info`, `blocked-upstream` and `hold` — whose meanings
+overlapped and, in one case, contradicted each other outright.
 
-| Label | Bot meaning | What it tells a human |
+| `Stage` | The loop | Who writes it |
 | --- | --- | --- |
-| `ready-to-implement` | **Ticket-only.** Authorises writing code | A human cleared this for implementation |
-| `hold` | **None** | Deliberately frozen — keeps it out of the active scan |
-| `blocked-upstream` | **None** | Waiting on an external dependency |
-| `needs-info` | **None** | Open questions outstanding; the body carries the list |
-| `proposal` | **None** | Loop-raised, awaiting a verdict |
-| `ops-journal` | Excluded from every worklist query | A daily journal issue, not real work |
+| *(empty)* | Nothing. Untriaged backlog, inert | — |
+| `Proposed` | Nothing — filed, awaiting a first verdict | either |
+| `Revising` | **Not a gate.** Being worked out; whose turn it is is the last comment's author | either |
+| `Blocked` | Nothing while `Hold Until` is live | either |
+| `Implement` | Implement it, open the PR, then `Implemented` and unassign | **the reviewer only** |
+| `Implemented` | Nothing — a PR is in flight | either |
 
-`hold`, `needs-info` and `blocked-upstream` lost their bot meaning because *not being assigned*
-already says it, more reliably and in a field visible in every list view. They are kept because they
-tell a human **why** an item is parked, which assignment alone cannot.
+**The loop works a ticket when all three hold**, and not otherwise:
 
-### `ready-to-implement`: the loop may revoke, never grant
+1. `assignment.bot` is among the assignees, **and**
+2. `Hold Until` is absent or already past, **and**
+3. `Stage` is neither `Blocked` nor `Implemented`.
 
-- **Never add it.** This is the safety property that makes the loop safe to leave running: it cannot
-  authorise its own code.
-- **You may remove it** when investigation raises a question that must be answered before
-  implementation. Revoking can only ever reduce the loop's own autonomy, so it is safe.
+What it then does is decided by the ticket, not by the field. `Stage: Implement` means write code; a
+comment from `assignment.respondTo` newer than the loop's own last comment means revise or answer;
+acceptance criteria describing a decision mean investigate.
 
-Removing it is never silent. Pair it with a comment saying what is now unresolved, and put the
-questions in the ticket body's `## Open questions` list — otherwise the reviewer sees a label vanish
-with no explanation.
+`Revising` deliberately covers both halves of a conversation — the loop asked, and the user
+answered. **The last comment's author already says which half it is in**, and unlike a field that
+someone must remember to flip, it cannot go stale. So nobody has to touch `Stage` to answer a
+question: comment, and the next run picks it up.
+
+### `Stage: Implement` — the loop may revoke, never grant
+
+- **Never write `Implement`.** This is the safety property that makes the loop safe to leave
+  running: it cannot authorise its own code. It carries over from the retired `ready-to-implement`
+  label unchanged, because the risk it guards did not change when the mechanism did.
+- **You may move a ticket off `Implement`**, to `Revising`, when investigation raises a question
+  that must be answered first. Revoking only ever reduces the loop's own autonomy, so it is safe.
+
+Revoking is never silent. Pair it with a comment saying what is now unresolved, and put the
+questions in the body's `## Open questions` list — otherwise the reviewer sees a field change with
+no explanation.
 
 **Merge authority is an approving review**, plus green CI and zero unresolved threads. It is never a
-label; `ready-to-implement` does not apply to PRs at all.
+field; `Stage` does not apply to PRs at all.
+
+### `Hold Until` — a date, and the promise to look again
+
+The answer to *"why is this not in my queue, and when does it come back?"*
+
+- **Every `Blocked` ticket carries one.** A block with no re-check date is a ticket that quietly
+  disappears; this field is the difference between parked and lost.
+- **Justify the date in the same comment** — no silent default. Say what you expect to have changed
+  by then. Cap the horizon at `issueFields.holdUntil.maxHorizonDays`.
+- **It is not only for blocks.** Anything that should wait takes one: a dependency that will settle
+  on its own, a decision deferred to next quarter.
+- **A live `Hold Until` means invisible, not merely idle.** No work on it, *and* no mention in the
+  journal at all — including `📋 Awaiting you`. The one exception is naming it as another ticket's
+  blocker.
+- **Clear it the moment the reason goes away.** That is what returns the ticket to active
+  consideration, and it is a single-field delete, so Priority and Effort survive untouched:
+  ```
+  mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
+    issue_fields:[{field_name:"Hold Until", delete:true}]
+  ```
+- An **expired** `Hold Until` on a `Blocked` ticket is a re-evaluation, and re-evaluating is real
+  work: it counts against `maxWorkItemsPerRun` like anything else.
+
+### `assignment.respondTo` — whose comments count as feedback
+
+An **allowlist** of logins. A comment is feedback only when its author is on it — everywhere, in
+every skill, replacing the older test of *"the author is not the loop's own login"*.
+
+A blocklist of known third-party bots fails open on the next integration nobody has met yet. Of the
+200 most recent issue comments across SahajCloud and SahajAtlasWeb, 93 were from
+`cloudflare-workers-and-pages[bot]`; under a "not the bot" test the preview-URL bot would have been
+the single largest source of work. An allowlist fails closed, and it is also how a reviewing bot
+such as Copilot is adopted later: one entry in `loop-config.json`, no skill change.
+
+**A mention is still never silent.** A `mentions:<bot>` hit from a login outside the list is named
+in the journal rather than acted on — an outside contributor is not ignored, just not obeyed.
 
 ### Open questions live in the body
 
@@ -197,8 +253,16 @@ gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by --jq '.[].number'
 **Also write the constraint into the body.** This is not redundant bookkeeping:
 
 ```markdown
-Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges
+Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges (was: Implement)
 ```
+
+**The `(was: <Stage>)` suffix is how a block is undone.** A single-select field cannot remember its
+own previous value, no MCP tool reads the issue timeline, and the REST timeline event for a field
+change carries no field name and no old value — so if the prior `Stage` is not written down here it
+is gone. On unblock, restore what the suffix records, with one exception: **`Implement` is never
+restored automatically**, it becomes `Revising`. A blocker usually changes the shape of the work,
+and auto-restoring `Implement` would let the loop write code against a ticket nobody has re-read
+since the block cleared. No suffix → `Revising`.
 
 **No MCP tool exposes Relationships**, so a cloud routine is blind to them — it reads this line
 instead. A ticket whose blocker exists only in the Relationships panel will be picked up as ready
@@ -209,7 +273,7 @@ reads without opening a side panel.
 appeared; the day they do, the body line becomes redundant.
 
 **Priority and relationships together decide implementation order**: the loop takes the
-highest-priority ticket whose blockers are all closed. A `Critical` behind an open blocker waits
+highest-priority ticket whose blockers are all closed and whose `Hold Until` has passed. A `Critical` behind an open blocker waits
 behind an unblocked `Medium` — which is correct, and is why recording blockers matters more than
 arguing about priority.
 
@@ -271,15 +335,18 @@ backlog has to be cleaned up by hand.
 
 - [ ] Type set
 - [ ] Priority field set (reviewer's, so leave an existing value alone) **and Effort set — always, by you**
-- [ ] `proposal` if loop-raised
+- [ ] `Stage` set — `Proposed` if you are filing it, and assigned to `assignment.reviewer`
+- [ ] `Hold Until` set if `Stage` is `Blocked`, with the date justified in a comment
 - [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
 - [ ] Body in the format above; checklist items are executable
 - [ ] Searched for a duplicate first (`search_issues`), including closed ones
 
 ## Hard rules
 
-- **Never** apply `ready-to-implement`. That label is the user's signal to the loop, and applying it is
+- **Never** write `Stage: Implement`. That value is the user's signal to the loop, and writing it is
   indistinguishable from self-authorizing work.
+- **Never** add `assignment.bot` to a ticket or a PR, and **never** change a PR's assignee at all.
+- **Never** leave a ticket at `Blocked` without a `Hold Until`.
 - **Never** leave a ticket without a Priority field value.
 - **Never** record a blocker only as a Relationship — a cloud run cannot see it.
 - **Never** file without searching for a duplicate.

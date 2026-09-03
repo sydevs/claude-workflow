@@ -92,7 +92,8 @@ where the next author will read it:
   `**/*.md`), bounded by `wipCapPerRepo` like any loop PR. **Never touch anything under
   `.claude/`** — Protected Paths stall an unattended run, invisibly.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
-  `proposal` issue in that repo instead, under `maxOpenProposals` like every survey proposal.
+  `Stage: Proposed` issue in that repo instead, under `maxOpenProposals` like every survey
+  proposal.
 
 If the week gives no clear signal, **say so and open no PR.** A quiet week is a legitimate outcome,
 and an unnecessary change to the machinery is more expensive than none.

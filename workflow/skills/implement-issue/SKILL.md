@@ -1,6 +1,6 @@
 ---
 name: implement-issue
-description: Implement a ready-to-implement GitHub issue end-to-end in an isolated worktree, then ship it via /finalize-pr. Gated on the `ready-to-implement` label; collects preview and email-preview links for the PR. User-invoked only — does not run unless explicitly triggered.
+description: Implement an approved GitHub issue end-to-end in an isolated worktree, then ship it via /finalize-pr. Gated on the `Stage: Implement` field; collects preview and email-preview links for the PR. User-invoked only — does not run unless explicitly triggered.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -36,13 +36,15 @@ branch at every decision point below rather than stalling.
    | Gate | Pass | Fail |
    | --- | --- | --- |
    | **Assigned to the bot** | `assignment.bot` is among the assignees | Not our turn — stop |
-   | **`ready-to-implement`** | Label present | Investigate and reply instead; do not write code |
+   | **`Stage: Implement`** | The field says `Implement` | Investigate and reply instead; do not write code |
+   | **No live `Hold Until`** | Absent, or already past | Stop — it comes back on that date |
    | **No open blockers** | Every `Blocked by:` target is closed | Stop, and name the blocker |
    | **No open PR already closing it** | Nothing in flight | Stop — the PR carries the baton, not the ticket |
 
-   Neither of the last two is visible through assignment, which is exactly why they are listed
-   separately. **Never apply `ready-to-implement` yourself.** You *may* remove it — see step 4.
-   (why: docs/why.md#assignment-alone-is-not-the-implementation-gate)
+   None of the last three is visible through assignment, which is exactly why they are listed
+   separately. **Never write `Stage: Implement` yourself.** You *may* move a ticket off it — see
+   step 4. (why: docs/why.md#the-loop-may-never-write-implement,
+   docs/why.md#assignment-alone-is-not-the-implementation-gate)
 
    `prAllowlistGlobs` in `.claude/workflow.json` gates the **ticketless** paths — dependency bumps,
    reflection config PRs, and **every change in `claude-workflow`, where the glob is `**`**. A
@@ -80,15 +82,16 @@ branch at every decision point below rather than stalling.
    **If the ticket turns out not to be implementable as written** — the criteria contradict the code,
    a decision was never made, the scope hides a second ticket — then **revoke rather than guess**:
 
-   1. Remove `ready-to-implement`.
-   2. Comment saying precisely what is unresolved. A label that vanishes without explanation reads
+   1. Set `Stage: Revising`.
+   2. Comment saying precisely what is unresolved. A field that changes without explanation reads
       as a malfunction.
    3. Add the questions to the ticket body's `## Open questions` list, which is the canonical record.
-   4. Reassign to `assignment.reviewer` and stop.
+   4. Stop. **Leave assignment alone** — the ticket stays the bot's, and your comment being the last
+      word is what puts it in the reviewer's `📋 Awaiting you`.
 
    **File what you trip over.** Implementation is where real defects surface — a failing test that
-   exposes a pre-existing gap, a shortcut that turns out to be actively wrong. **File it as a
-   `proposal` and keep going.** Do not ask permission, and do not let `maxOpenProposals` stop you:
+   exposes a pre-existing gap, a shortcut that turns out to be actively wrong. **File it at `Stage: Proposed`, assigned to `assignment.reviewer`, and keep
+   going.** Do not ask permission, and do not let `maxOpenProposals` stop you:
    that ceiling governs proposals a survey went looking for, not evidence you already hold. Do not
    fix it here either, unless it is genuinely part of this ticket — say what is wrong, what it costs
    and what to do, then carry on with the work you were sent to do.
@@ -149,18 +152,27 @@ branch at every decision point below rather than stalling.
     `git rev-parse HEAD` equals `git rev-parse origin/<branch>`. Tear down the worktree's dev server
     and database first: `/dev-server teardown`.
 
-13. **Hand the baton back.** Assign the ticket and its PR to `assignment.reviewer` — from
-    `loop-config.json`, never hardcoded here. This is the **final action**, and it means *done*, not
-    *replied*. If the work is genuinely not finished — blocked on another ticket, or out of budget
-    — keep the assignment and say so in the journal. That is the bot's queue, not a fault.
+13. **Close the ticket out.** Set `Stage: Implemented` and **remove `assignment.bot` from the
+    ticket's assignees** — one `issue_write`, both changes. From here the PR carries the work, so
+    the ticket drops out of the worklist entirely and stays out until the PR merges or closes.
+
+    **Never touch the PR's assignee or its `draft` flag here** — `/finalize-pr` owns both, and
+    marking it ready for review is its step 9.
+
+    If the work is genuinely not finished — blocked on another ticket, or out of budget — do
+    **not** set `Implemented`: leave the ticket assigned, say so in the journal, and it is the
+    next run's queue rather than a fault.
 
 14. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
     manual verification.
 
 ## Hard rules
 
-- **Never** implement a ticket that is not assigned to the bot, or that lacks `ready-to-implement`.
-- **Never** apply `ready-to-implement` yourself. Removing it is allowed; adding it never is.
+- **Never** implement a ticket that is not assigned to the bot, or that is not `Stage: Implement`,
+  or that has a live `Hold Until`.
+- **Never** write `Stage: Implement` yourself. Moving a ticket off it is allowed; onto it never is.
+- **Never** add `assignment.bot` to anything. The only assignment write here is removing the bot
+  from the ticket at step 13.
 - **Never** implement a ticket that already has an open PR closing it.
 - **Never** edit files in the main checkout while a worktree is active.
 - **Never** hand-roll shipping — `/finalize-pr` is the only path to a PR.

@@ -52,7 +52,8 @@ of the findings.
 
 ## Filing
 
-Per `/workflow:triage-issue`. `proposal` label, type by the nature of the work (usually `Task` for
+Per `/workflow:triage-issue`. `Stage: Proposed`, assigned to `assignment.reviewer`, type by the
+nature of the work (usually `Task` for
 a refactor, `Bug` for a defect found by analysis). Priority by consequence, honestly — most
 analysis findings are `Medium` or `Low`, and inflating them makes the priority field useless.
 

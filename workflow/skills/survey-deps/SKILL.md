@@ -26,7 +26,8 @@ For each finding, in this order:
    runs in production is not worth a PR. Say so in the journal and move on. Reachability beats
    severity — the CVSS score describes the vulnerable code, not our use of it.
 2. **Is a fix available?** No patched version → no PR. Record it in the journal; if it is genuinely
-   exposed, file a `Bug` ticket with `blocked-upstream` instead.
+   exposed, file a `Bug` ticket at `Stage: Blocked` instead — with a `Hold Until` dated to when the
+   upstream fix is plausibly available, and the reason in the body.
 3. **Read the changelog before bumping.** A major bump needs the breaking-changes section read and
    the affected call sites checked. This is the whole reason this is a survey and not Dependabot.
 

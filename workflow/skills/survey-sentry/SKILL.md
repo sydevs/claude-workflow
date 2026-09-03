@@ -9,7 +9,7 @@ allowed-tools: Bash(*), Read, Grep, Glob
 
 Tuesday's survey. Turns production errors into tickets a human can approve — **not** into fixes.
 An error's fix is usually a judgement call about intended behaviour, which is exactly what the
-`ready-to-implement` gate exists to capture.
+`Stage: Implement` gate exists to capture.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
 `loop-config.json`; the token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. Missing
@@ -54,7 +54,8 @@ closed as fixed, and reopening it with new evidence is far more useful than a se
 
 ## Filing
 
-Per `/workflow:triage-issue`. Type `Bug`, `proposal` label, priority by consequence:
+Per `/workflow:triage-issue`. Type `Bug`, `Stage: Proposed`, assigned to `assignment.reviewer`,
+priority by consequence:
 `Critical` for data loss or a security path, `High` for a broken user journey, `Medium` for a
 degraded one, `Low` for a logged error nobody experiences.
 

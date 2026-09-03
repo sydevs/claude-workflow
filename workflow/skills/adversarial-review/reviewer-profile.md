@@ -5,7 +5,7 @@
 > the reviewer's review activity across the five sydevs repos: 55 inline review comments, 32
 > reviews, 33 PR-conversation comments. Two corpus caveats, permanent: `claude-workflow` PRs are
 > merged **without formal reviews** (feedback arrives as ticket comments), and comments from
-> before the machine account (2026-08-29) include loop-written text under this login —
+> include loop-written text under this login —
 > recognisable by its long structured self-narrating format; only human-voiced items informed
 > this profile. Every claim below carries at least one PR link.
 

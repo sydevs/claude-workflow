@@ -247,12 +247,17 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → create it, then two follow-ups, both from `loop-config.json`:
+- **No PR** → **create it as a draft**, then two follow-ups, both from `loop-config.json`:
   ```bash
   gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
   ```
-  and **assign it to `assignment.bot`**. The PR is the bot's until it is ready for review; the
-  assignee field is what rung 2 queries.
+  and **assign it to `assignment.bot`**. That assignment is set once, at creation, and never changes
+  again for the life of the PR.
+
+  **Every PR opens as a draft, without exception.** Draft is the PR's baton: it means *the loop is
+  still working on this*, and step 9 clears it once CI is green. A PR that is born ready-for-review
+  puts unfinished work in the reviewer's queue and makes rung 5 review a moving target.
+  (why: docs/why.md#draft-is-the-prs-baton)
 
   **Always request the review, on every PR, at the moment it is opened** — including drafts, where it
   costs nothing and means the request is already in place at ready-for-review. Assignment and review
@@ -260,10 +265,9 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   must look*. Handing the PR back sets the first; only this sets the second, and a PR that never
   requests one waits in a list the reviewer has no reason to open.
 - **PR exists** → refresh **title and body**, both re-derived from the current `origin/main...HEAD`.
-  Leave the assignee alone here — step 9 decides who holds it. Re-add the reviewer if the request was
-  dismissed by a completed review and the PR has since changed.
-
-Open as a **draft** when `/implement-issue` passed `--draft` — see its autonomy gate.
+  **Leave the assignee alone**, and **never put a ready PR back into draft** — `draft:false` means
+  "has been ready at least once", and rung 5's once-ever review depends on that staying true. Re-add
+  the reviewer if the request was dismissed by a completed review and the PR has since changed.
 
 ### 8. Watch CI, fix, capped at 3
 
@@ -320,20 +324,22 @@ mcp__github__actions_get        # for a failing run's logs
 itself is performed by `/workflow:work-routine` rung 1 once all three of approval, green CI, and zero
 unresolved review threads hold. Finishing here with green CI means *ready for review*, not *done*.
 
-**No label ever authorises a merge.** `ready-to-implement` is ticket-only — it says code may be
-written, never that it may be shipped. If you find yourself reading a label to decide whether to
+**No field ever authorises a merge.** `Stage: Implement` is ticket-only — it says code may be
+written, never that it may be shipped. If you find yourself reading a field to decide whether to
 merge, the gate you want is the approving review.
 
-### 9. Hand the baton back, then report
+### 9. Mark it ready for review, then report
 
-- **Once CI is green, reassign the PR to `assignment.reviewer`.** This is the final action of the
-  run and it means *done* — nothing further until someone responds.
-- **Do not hand back while CI is red or a fix loop is still running** — that would put a broken PR
-  into the reviewer's queue as though it were ready.
-- **But an unsettled CI is not a reason to keep the baton.** If the poll budget runs out with CI
-  still in progress, hand back anyway and say so plainly — "handed over with CI unsettled after N
-  polls; last seen lint/typecheck green".
-- **Never end a run leaving a PR you opened unassigned.**
+- **Once CI is green, clear the draft flag** —
+  `mcp__github__pull_request_write method:update pullNumber:<n> draft:false`. This is the final
+  action of the run and it means *done*: nothing further until someone responds.
+- **Do not mark it ready while CI is red or a fix loop is still running** — that would put a broken
+  PR into the reviewer's queue as though it were ready.
+- **But an unsettled CI is not a reason to leave it in draft.** If the poll budget runs out with CI
+  still in progress, mark it ready anyway and say so plainly — "marked ready with CI unsettled after
+  N polls; last seen lint/typecheck green". A draft PR nobody is working on is invisible to
+  everyone, which is strictly worse than a ready one with a caveat.
+- **Never end a run leaving a PR you opened in draft**, and never change its assignee to do it.
   (why: docs/why.md#hand-the-baton-back-even-with-ci-unsettled)
 
 Then report: PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria a
@@ -349,8 +355,9 @@ it to memory.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Always** run the docs sync before pushing.
 - **Cap** the CI fix loop at 3, then hand back.
-- **Always** assign a new PR to the bot on creation, and reassign to the reviewer only once CI is
-  green — the assignee field is the queue, so a wrong value silently mis-routes the work.
+- **Always** open a PR as a draft and assign it to the bot, and clear the draft flag only once CI
+  is green. **Never** change a PR's assignee after creation — draft is the queue, and a PR that
+  never leaves draft is invisible to the reviewer.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References

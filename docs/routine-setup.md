@@ -63,14 +63,36 @@ org-scoped and cannot be set per-repo.
 
 ### Issue fields (organization level)
 
-Priority and Effort are GitHub's **native org-level issue fields** — not Projects v2, not labels.
-Configure once for the org at **Settings → Organization → Planning → Issue fields**; they then apply
-to every repository with no per-repo setup.
+Four GitHub **native org-level issue fields** — not Projects v2, not labels. Configure once for the
+org at **Settings → Organization → Planning → Issue fields**; they then apply to every repository
+with no per-repo setup.
 
 | Field | Type | Options |
 | --- | --- | --- |
 | Priority | single select | Critical · High · Medium · Low |
 | Effort | single select | Easy · Moderate · Hard |
+| Stage | single select | Proposed · Revising · Blocked · Implement · Implemented |
+| Hold Until | date | — |
+
+Creating them from the CLI needs `admin:org`. Every select **option** requires all four of `name`,
+`color`, `priority` and (optionally) `description` — omitting `priority` returns
+`422 object is missing required key: priority`. Valid colors are `gray`, `blue`, `green`, `yellow`,
+`orange`, `red`, `pink`, `purple`.
+
+```bash
+gh api -X POST orgs/<org>/issue-fields --input - <<'JSON'
+{"name":"Stage","data_type":"single_select","options":[
+  {"name":"Proposed","color":"blue","priority":1},
+  {"name":"Revising","color":"yellow","priority":2},
+  {"name":"Blocked","color":"gray","priority":3},
+  {"name":"Implement","color":"green","priority":4},
+  {"name":"Implemented","color":"purple","priority":5}]}
+JSON
+gh api -X POST orgs/<org>/issue-fields -f name='Hold Until' -f data_type=date
+```
+
+> ⚠ **`Status` and `State` are reserved names** — both return
+> `422 Name cannot have a reserved value`. That is why the field is called `Stage`.
 
 ```bash
 gh api orgs/<org>/issue-fields --jq '.[] | "\(.name) id=\(.id) \([.options[]?.name]|join("/"))"'
@@ -88,14 +110,28 @@ gh api -X PUT repos/OWNER/REPO/issues/N/issue-field-values --input - <<< \
 > **top-level array**; `PATCH`ing the issue itself with a `fields` key returns 200 and silently
 > does nothing.
 
-Field values are reachable from a routine: `list_issues(fields:["field_values"])` returns the whole
-backlog's priorities in one call, and `issue_write(issue_fields:[{field_name, field_option_name}])`
-sets them.
+> ⚠ **The PUT replaces the issue's entire field-value set.** A PUT carrying only Priority silently
+> clears Stage, Effort and Hold Until. Send every value you want kept, or use the single-field
+> `DELETE .../issue-field-values/<field_id>` to clear just one.
+
+Field values are reachable from a routine: `list_issues(fields:["field_values"])` returns a whole
+repo's field values in one call, and `issue_write` sets them — `field_option_name` for a select,
+`value` for a date (ISO `YYYY-MM-DD`), and `delete:true` to clear one field without disturbing the
+others.
+
+> ⚠ **Fields are not searchable.** `field.<name>:<value>` works in the web UI and GraphQL, but
+> through the REST search a routine has it is accepted without error and returns **zero results** —
+> verified against an issue known to carry `Priority: High`. Worklist queries therefore use only
+> indexed qualifiers (`assignee:`, `author:`, `is:pr`, `draft:`, `review:`), and Stage and
+> Hold Until are applied client-side.
 
 ### Labels (every repo, identical)
 
-Labels carry **pipeline state only** — priority and effort are fields, and type is a native issue
-type. Keeping a priority label alongside the field is a second source of truth for the same fact.
+**There is exactly one: `ops-journal`.** Everything the loop reads about a ticket is a field or the
+assignee; type is a native issue type. `ready-to-implement`, `proposal`, `needs-info`,
+`blocked-upstream`, `hold` and `claude:working` were all retired when `Stage` and `Hold Until`
+arrived — keeping a label alongside the field that replaced it is a second source of truth for the
+same fact, which is the failure this repo exists to avoid.
 
 ### The Ops journal
 
@@ -371,7 +407,7 @@ pointing at its own skill — both skills start with `/workflow:preflight` and e
 The split guarantees the survey runs daily — as a low rung of the ladder it could be starved for
 days by a busy queue with nothing looking wrong, which is why the survey routine is **not** a ladder
 and has no rungs (`docs/why.md#the-survey-routine-is-not-a-ladder`). It also carries the
-dropped-baton and stale-claim sweeps, which would re-flag the same items on every pass if they
+unheard-replies sweep, which would re-flag the same items on every pass if it
 lived in the two-hourly loop.
 
 Cron is **always UTC**; the PT equivalents shift by an hour across DST and that is accepted rather
@@ -451,15 +487,15 @@ Then set `enabled: true` on both.
 
 ## 7. Verification checklist
 
-- [ ] Every open issue has exactly one type and one priority
-- [ ] `gh issue list --label approved` returns only things you approved
+- [ ] Every open issue has exactly one type, one priority, and an effort
+- [ ] Only issues you cleared are at `Stage: Implement`, and every `Blocked` one has a `Hold Until`
 - [ ] Mailpit UI: `200` with credentials, `401` without
 - [ ] A message sent through the SMTP proxy appears, and its `/view/<id>` link resolves
 - [ ] Sentry: read `200` on every project; `PUT /issues/<id>/` `200`
 - [ ] Cloud session: `pg_isready` reports the cluster up, and `pnpm test:int` passes in SahajCloud (67 files)
 - [ ] `gh issue edit <n> --add-blocked-by "<full URL>"` works from a cloud session
 - [ ] A dry-run of the ladder produces a correct worklist against the real backlog
-- [ ] One full cycle observed: proposal → approve → PR → review → revision → merge
+- [ ] One full cycle observed: Proposed → Implement → draft PR → ready for review → review → revision → merge
 
 ---
 
@@ -493,7 +529,7 @@ redundant.
 
 Issue **fields** have no such problem — `list_issue_fields`, `issue_read.field_values`,
 `list_issues(fields:["field_values"])` and `issue_write(issue_fields:[...])` all work from a
-routine, so Priority and Effort are fully usable.
+routine, so Priority, Effort, Stage and Hold Until are all fully usable — to read and write, though not to search.
 
 ## Webhook triggers were evaluated and rejected
 
@@ -549,4 +585,4 @@ deleting the owning routine is the presumed removal path.
 | A `<details>` block seems missing when read back through MCP | The write landed. The MCP **read** path strips `<details>`/`<summary>` (while keeping `<table>`, `<sub>`, `<a>`); REST shows the stored tags intact. From a routine, trust the write's 200 — do not re-post or file a bug |
 | A run dies in seconds with `Setup script failed` and zero turns | The setup script exited non-zero; the session never starts. Keep optional dependencies best-effort. Known Postgres traps: `/var/run/postgresql` missing (compiled-in socket dir), and the package's half-cluster at `16/main` — `PG_VERSION` present, config in `/etc` — which `pg_ctl -D` cannot start |
 | A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
-| Loop implements nothing, no error | Correct — nothing is both assigned to the bot and labelled `ready-to-implement`. That is the gate working |
+| Loop implements nothing, no error | Correct — nothing is both assigned to the bot and at `Stage: Implement`. That is the gate working |
