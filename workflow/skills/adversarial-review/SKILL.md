@@ -94,9 +94,9 @@ line it is about; a finding that has no line belongs in the holistic assessment.
 
 ## Verdicts
 
-- **Findings** → submit the review, then assign the PR to `assignment.bot`
-  (`pull_request_write method:update`). A later run's rung 2 treats the unresolved threads as a
-  change request — that handoff is the assignment, nothing else.
+- **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
+  draft flag, not a field. The unresolved threads *are* the handoff — a later run's rung 2 finds
+  them by reading the PR's threads and treats them as a change request.
 - **Clean** → submit the review with the body only, no inline comments, and **touch nothing
   else** — no reassignment, no labels. The reviewer sees a checked PR, not a changed one.
 

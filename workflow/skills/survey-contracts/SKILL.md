@@ -63,7 +63,7 @@ grep -oE 'pnpm [a-z:]+' CLAUDE.md | sort -u   # then compare against package.jso
 One ticket per genuinely drifted contract, per `/workflow:triage-issue` — not one ticket listing
 everything, because they will be fixed at different times by different changes.
 
-Type `Task`, `proposal` label. Priority by who is hurt: a wrong embed guide is `High` (it breaks
+Type `Task`, `Stage: Proposed`, assigned to `assignment.reviewer`. Priority by who is hurt: a wrong embed guide is `High` (it breaks
 integrations on sites we do not control), a stale command in `CLAUDE.md` is `Low`.
 
 ## Hard rules

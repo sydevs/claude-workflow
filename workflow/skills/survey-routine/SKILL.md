@@ -1,6 +1,6 @@
 ---
 name: survey-routine
-description: The once-a-night run — the day's survey, the dropped-baton and stale-claim sweeps, and the journal. Invoked by the sydevs-survey-nightly routine; runnable locally with --dry-run.
+description: The once-a-night run — the day's survey, the unheard-replies sweep, and the journal. Invoked by the sydevs-survey-nightly routine; runnable locally with --dry-run.
 argument-hint: '[--dry-run]'
 disable-model-invocation: true
 effort: max
@@ -25,9 +25,24 @@ commit, push, merge, or label.
 
 Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
 
-Before filing anything, check the standing proposal ceiling with
-`search_issues query:"$SCOPE is:issue is:open label:proposal"`. At or over `maxOpenProposals` →
-**do not file.** Record what you found in the journal instead; it waits for review capacity.
+**Everything filed here is `Stage: Proposed`, assigned to `assignment.reviewer`.** A proposal
+exists to be judged, so it goes to the person who judges it; the Stage is what keeps the loop from
+acting on its own suggestion next run.
+
+Before filing anything, check the standing proposal ceiling. There is no query for a field, so take
+the indexed half and filter the rest:
+
+```
+mcp__github__search_issues  query:"$SCOPE is:issue is:open author:<bot> -label:ops-journal"
+```
+
+then count those at `Stage: Proposed` from the field values `/workflow:preflight` already read. At
+or over `maxOpenProposals` → **do not file.** Record what you found in the journal instead; it waits
+for review capacity.
+
+⚠ **`author:<bot>` is load-bearing, not an optimisation.** The ceiling governs what the loop
+proposes, and a bare `Stage: Proposed` count would sweep in the reviewer's own unreviewed tickets —
+so a busy human backlog would silently switch the surveys off.
 
 **The ceiling governs proposals you went looking for, not defects you tripped over.**
 
@@ -40,7 +55,7 @@ The two differ in kind. A survey manufactures candidates on demand and will prod
 asked, so a stock cap is the right governor. An incidental finding is evidence you already hold:
 you were in the code, something was wrong, and the alternative to filing is that the knowledge dies
 with the run. **Never discard a real finding to respect a number**, and never ask permission to file
-one — a `proposal` commits nobody to anything, which is the whole point of the label.
+one — `Stage: Proposed` commits nobody to anything, which is the whole point of it.
 
 Say where it came from, and keep the bar: what is wrong, what it costs, and what to do. A finding
 you cannot point at a line for is a journal note, not a ticket — that bar is about evidence, not
@@ -48,19 +63,22 @@ about the ceiling.
 
 ## Reconciliation sweeps
 
-**Dropped batons.** Items where the reviewer replied but kept the baton:
+**Unheard replies.** Someone commented, but the ticket is not the loop's to act on — so nothing
+will ever pick it up, and they may be waiting:
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:open assignee:<reviewer> -label:hold -label:ops-journal"
+mcp__github__search_issues  query:"$SCOPE is:open commenter:<reviewer> updated:>=<24h> -label:ops-journal"
 ```
 
-For each, check whether the **newest comment is the reviewer's own** — that shape means they
-answered and forgot to reassign. **Do not pick these up.** Name them in tonight's journal under a
-`### Possibly awaiting a handoff` line. Anything with `hold` is excluded.
+Keep the ones **not** assigned to `assignment.bot` and with no live `Hold Until`, then check that
+the newest comment is genuinely theirs and not a reply to the loop's own last word. **Do not pick
+these up** — assigning the bot is the user's call and only theirs. Name them in tonight's journal
+under a `### Possibly awaiting a handoff` line.
 
-**Stale claims.** Any item still carrying `labels.claim` older than an hour is a crashed run's
-residue. Remove the label, journal which items were cleared, and **leave the item assigned as
-found** — assignment is the queue, not the crash signal.
+This replaced a sweep for *"the reviewer replied but forgot to reassign"*, which meant something
+only while the loop handed work back. It no longer does: an item stays assigned to the bot until the
+user unassigns it, so the failure worth catching is now the opposite one — a comment on something
+the loop was never holding.
 
 ## Journal
 

@@ -149,10 +149,74 @@ A stacked PR based on their branch is one click for them to merge, and their PR 
 Filing an empty PR to satisfy the shape of the pipeline is worse than no PR: it costs a review slot
 and buries the actual answer in a description. The pipeline serves the work, not the reverse.
 
-## Filter feedback by author
+## respondTo is an allowlist
 
-Having its own account is the whole reason the loop can tell feedback from its own writing. Replying
-to itself burns the reply ceiling and produces a thread that argues with itself.
+Having its own account is what first let the loop tell feedback from its own writing — replying to
+itself burns the reply ceiling and produces a thread that argues with itself. But *"the author is
+not me"* is a blocklist with one entry, and it fails open on everything nobody has met yet.
+
+The measurement: of the 200 most recent issue comments across SahajCloud and SahajAtlasWeb, 100 were
+`Ardnived`, **93 were `cloudflare-workers-and-pages[bot]`**, and 7 were `antontcymbal`. Under a
+"not me" test the preview-URL bot would have been the single largest source of work in the system,
+and every new integration would silently add more.
+
+`assignment.respondTo` names the logins whose comments are feedback, so an unknown author is inert
+by default. It is also the extension point: adopting a reviewing bot such as Copilot is one entry in
+`loop-config.json` rather than a change to any skill.
+
+## Issue fields are not searchable
+
+`Stage` and `Hold Until` are read on every run, and neither can ever appear in a query.
+
+GitHub documents a `field.<name>:<value>` search qualifier, and it works — in the web UI, which
+runs on GraphQL. Through the REST search endpoint, the only search a routine can reach, it is
+**accepted without error and matches nothing**. Measured against `sydevs/SahajCloud`:
+`field.priority:high` returned 0 where an issue with `Priority: High` demonstrably exists, and the
+control query returned 24. The negation returned 0 too, which is the tell — a working qualifier
+cannot have both a term and its negation empty.
+
+This is the same failure shape as an HTML-escaped `&gt;` in a query: silence, not an error. So every
+worklist query is built from indexed qualifiers only (`assignee:`, `author:`, `is:pr`, `draft:`,
+`review:`), and field values are attached afterwards from `list_issues(fields:["field_values"])` —
+one call per repo, five in total, which is cheaper than the census this replaced.
+
+## The loop may never write Implement
+
+The property that makes the loop safe to leave running is that **it cannot authorise its own code**.
+
+That used to be the `ready-to-implement` label; it is now `Stage: Implement`. The mechanism changed
+and the risk did not, so the asymmetry moved across intact: the loop may move a ticket *off*
+`Implement`, never onto it. Revoking can only ever reduce its own autonomy, which is why revoking is
+safe and granting never is.
+
+The danger of the field version is that the loop legitimately writes four other `Stage` values, so
+the write is a habit rather than an exception. Hence the rule is stated as a bare imperative in
+`preflight`, `triage-issue` and `implement-issue` rather than inferred from the ownership table.
+
+## Blocked always carries a Hold Until
+
+Three consecutive journals described a ticket as "blocked" whose blocker had already merged.
+
+A block with no re-check date is not parked, it is lost: nothing brings it back, and the only thing
+that would is a human happening to re-read it. `Hold Until` is the promise to look again, and the
+date is what makes the promise checkable.
+
+It is also why a held item is *invisible* rather than merely skipped. Listing it under
+`📋 Awaiting you` asks for attention that was explicitly deferred, and a triage table that lists
+things you cannot act on is a table people stop reading.
+
+## Unblocking never restores Implement
+
+A single-select field cannot remember its previous value, and nothing available to a routine can
+reconstruct it: no MCP tool reads an issue timeline, and the REST timeline event for a field change
+carries an actor and a timestamp but no field name and no old value. So the prior `Stage` is written
+into the `Blocked by:` body marker as `(was: X)` — the same trick, for the same reason, as mirroring
+the relationship there in the first place.
+
+Restoring it verbatim is right for every value but one. A blocker usually changes the shape of the
+work it was blocking, so an `Implement` restored automatically would let the loop write code against
+a ticket no human has re-read since the situation changed — which is the one thing the whole gate
+exists to prevent. `Implement` therefore comes back as `Revising`, and the reviewer re-approves.
 
 ## Derive the window from comment timestamps
 
@@ -162,15 +226,8 @@ said anything. A single migration made all 38 open issues look like fresh feedba
 ## A request in prose is not permission
 
 The middle row of the rung-4 table is the one that goes wrong quietly: a comment asking for work
-reads like permission to do it, and it is not. The label is the gate — a request in prose is a
-request to *scope* the work, not to start it.
-
-## Legacy identity comments
-
-Comments written before 2026-08-29 carry the loop's **old** identity, which was a real person's
-account (`antontcymbal`). Those are indistinguishable from that person's own comments, so the loop
-may reply once to a legacy comment of its own. That is bounded and one-time, and a dated exclusion
-rule would outlive the problem it solved.
+reads like permission to do it, and it is not. `Stage: Implement` is the gate — a request in prose
+is a request to *scope* the work, not to start it.
 
 ## Every claim names the call that produced it
 
@@ -416,6 +473,26 @@ home. `docs/routine-setup.md` asserted the opposite for weeks (`gh` "ships in th
 `/usr/bin/gh`, v2.98.0"), which is exactly the licence needed to write four scripts that pass every
 local test and fail silently where it counts.
 
+## Draft is the PR's baton
+
+Tickets carry their state in fields. **Pull requests have no fields at all**, so a PR's state has to
+come from something GitHub already models — and `draft` is exactly the right thing: it is one bit,
+it is indexed (`draft:true` / `draft:false`), it is visible in every list view, and it already means
+"the author is still working on this" to every human who sees it.
+
+The alternative was to keep moving the assignee, which is what this replaced. That cost a hand-back
+on every unit of work and then a hand-forward from the reviewer to continue it, and it made
+assignment answer two questions at once — *whose is this* and *is it finished* — which is why it was
+ambiguous in exactly the cases that mattered.
+
+Two invariants make it work, and both are load-bearing:
+
+- **A PR opens as a draft and is marked ready exactly once.** It never goes back. `draft:false`
+  therefore means "has been ready at least once", which is what lets the adversarial review fire
+  once and only once.
+- **The assignee never changes.** It is set to the bot at creation and stays there until the PR
+  merges. Unassigning is the reviewer's kill switch and means nothing else.
+
 ## A conflicted PR schedules zero CI runs
 
 A conflicted PR has no computable merge commit, so GitHub schedules **zero** workflow runs for it —
@@ -427,11 +504,13 @@ A run that predates the base moving is stale, and makes a conflicted PR look tes
 
 ## Hand the baton back even with CI unsettled
 
-An item with an uncertain status is still *someone's*. An item assigned to nobody has fallen out of
-the system entirely, because every worklist query is keyed on an assignee.
+A PR with an uncertain CI status is still *someone's*. A PR left in draft has fallen out of the
+system entirely: the reviewer's queue is built from `draft:false`, so nobody is waiting on it and
+nobody knows it exists.
 
-A PR still assigned to the bot is not necessarily a fault — blocked and deferred work legitimately
-stays there. But a PR that is green and reviewed should never sit in the bot's queue.
+Marking it ready with "CI unsettled after N polls, last seen lint green" is a fact the reviewer can
+act on. Leaving it in draft is silence, and silence is indistinguishable from the run having
+crashed.
 
 ---
 
@@ -440,8 +519,11 @@ stays there. But a PR that is green and reviewed should never sit in the bot's q
 ## Assignment alone is not the implementation gate
 
 At backfill time four tickets had open PRs closing them, and all four would have been re-implemented
-had assignment alone been the gate. Neither an open blocker nor an in-flight PR is visible through
-assignment, which is why they are separate rows.
+had assignment alone been the gate. Neither an open blocker, an in-flight PR, nor a live `Hold Until`
+is visible through assignment, which is why they are separate rows.
+
+Assignment answers one question — *is this the loop's to touch* — and it answers it well precisely
+because it answers nothing else.
 
 ## A test fixture defines the world the test lives in
 

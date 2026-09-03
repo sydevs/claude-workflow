@@ -38,7 +38,7 @@ it** (why: docs/why.md#do-not-pin-the-journal).
 ## The title is computed, not written
 
 ```
-Wed — 2 new, 1 revised, 2 merged, 1 closed
+Wed — 2 filed, 1 opened, 2 merged, 1 closed
 ```
 
 **Counts, never prose.** A sentence costs a re-read of the whole day on every run and describes what
@@ -47,15 +47,21 @@ searches below and nothing else — never from memory of what this run did.
 
 | Term | Counts |
 | --- | --- |
-| `new` | Issues the bot opened today. Never PRs; journals excluded |
-| `revised` | Work items handed back to the reviewer today — the hand-back *is* the revision |
+| `filed` | Issues the bot opened today. Never PRs; journals excluded |
+| `opened` | PRs the bot opened today, draft or not |
 | `merged` | PRs the bot authored that merged today |
 | `closed` | Work items closed today without merging |
 
+**All four are searches.** The term this replaced, `revised`, was defined as hand-backs — items
+where an `assigned` event named the reviewer with the bot as actor. There are no hand-backs any
+more, and there never was a way to count them: no MCP tool reads an issue timeline, and the REST
+timeline event for a field change carries no field name and no old value. A number nothing can
+measure does not belong in a title that is read as measured fact.
+
 - **A work item is an issue and its PR together**, paired through
   `closingIssuesReferences`, so a ticket and its PR never count twice.
-- **The buckets are exclusive.** An item that merged or closed today is not also `revised` — the
-  terminal outcome is the one that ended its story.
+- **The buckets are exclusive.** A PR that opened and merged on the same day counts as `merged`
+  only — the terminal outcome is the one that ended its story.
 - **Zero terms are dropped**; a day with nothing is `Wed — no changes`.
 - **Day of week, not a date.** The full date is the issue's creation time, which is sortable and
   filterable in a way a title string is not.
@@ -65,16 +71,12 @@ Vancouver day (use the zone's real UTC offset — `-07:00` or `-08:00` — since
 splits the day across two journals):
 
 ```
-is:issue author:<bot> created:<from>..<to> -label:ops-journal      → new
-is:pr    author:<bot> merged:<from>..<to>                          → merged
+is:issue author:<bot> created:<from>..<to> -label:ops-journal      → filed
+is:pr    author:<bot> created:<from>..<to>                          → opened
+is:pr    author:<bot> merged:<from>..<to>                           → merged
 is:pr    author:<bot> is:unmerged is:closed closed:<from>..<to>  ┐
 is:issue author:<bot> is:closed closed:<from>..<to>              ┘ → closed, deduped
 ```
-
-`revised` is the hand-backs: items where an `assigned` event named the reviewer today with the bot as
-actor. **Read it from each item's own timeline, not from a repo-level event feed** — the repo feed
-reports `actor` as the *assignee* on an `assigned` event, so it would count the reviewer's own triage
-as the loop's work, silently and only ever upward.
 
 ## Two surfaces, two jobs
 
@@ -87,10 +89,26 @@ as the loop's work, silently and only ever upward.
   (why: docs/why.md#the-body-is-rewritten-not-appended)
 - **Never leave a stale `📋 Awaiting you` in the body** — it is the one section a reader trusts, and
   a wrong one is worse than none.
-- **Build `📋 Awaiting you` from a query, not from memory**: `assignee:<reviewer>` across the five
-  repos in `repos`, plus open `proposal` issues. **Scope by `repo:` qualifiers, never `org:`** — the
-  org still holds retired repositories, and a bare org scope put seven-year-old `Atlas` and
+- **Build `📋 Awaiting you` from queries, not from memory.** Two searches and one field filter,
+  from what `/workflow:preflight` already fetched. **Scope by `repo:` qualifiers, never `org:`** —
+  the org still holds retired repositories, and a bare org scope put seven-year-old `Atlas` and
   `WeMeditate` issues in the reviewer's queue the first time this was run as a query.
+
+  | | Row | Comes from | `Since` |
+  | --- | --- | --- | --- |
+  | 💡 | `Stage: Proposed` | `$SCOPE is:issue is:open assignee:<reviewer>` | the issue's `created_at` |
+  | ❓ | `Stage: Revising` **whose last comment is the loop's** | that same set, plus `$SCOPE is:issue is:open assignee:<bot>` | that comment's `created_at` |
+  | 👀 | Ready for review | `$SCOPE is:pr is:open assignee:<bot> draft:false review:none` | the PR's `created_at` |
+
+- **A live `Hold Until` excludes an item from this table and from the whole entry.** Held work is
+  not "awaiting you" — the loop has promised to look again on a date, and listing it asks for
+  attention that was explicitly deferred. The one exception is naming it as another ticket's blocker.
+- **The ❓ row is derived, never stored.** A `Revising` ticket whose last word is the loop's is
+  waiting on the reviewer by construction; one whose last word is theirs is the loop's work next run
+  and belongs in no row here. This is why there is no "needs info" field to leave stale.
+- ⚠ **Never use `updated_at` for `Since`.** A field write bumps it, so a ticket the loop merely
+  re-Staged would read as fresh. Use the timestamps named in the table.
+  (why: docs/why.md#derive-the-window-from-comment-timestamps)
 - **It is a table, not a list.** This is a triage surface: the reviewer is scanning for *what needs
   me and how long has it waited*, which reads down a column and does not read out of a sentence.
   `Since` is the column a bullet list could not carry at all — an item waiting nine days and one

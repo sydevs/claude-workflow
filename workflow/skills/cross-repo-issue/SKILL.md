@@ -45,7 +45,10 @@ copy is updated.
    ```
    mcp__github__issue_write  method:create  owner:sydevs  repo:<producer>
      title:"<title>"  body:"<body>"  type:"Feature"
-     issue_fields:[{field_name:"Priority", field_option_name:"<...>"}]
+     issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
+                   {field_name:"Effort",   field_option_name:"<...>"},
+                   {field_name:"Stage",    field_option_name:"Proposed"}]
+     assignees:["<assignment.reviewer>"]
    ```
 
 4. **Create one child issue per consumer**, then record the dependency natively so GitHub
@@ -54,8 +57,15 @@ copy is updated.
    ```
    mcp__github__issue_write  method:create  owner:sydevs  repo:<consumer>
      title:"<title>"  body:"<body>"  type:"Feature"
-     issue_fields:[{field_name:"Priority", field_option_name:"<...>"}]
+     issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
+                   {field_name:"Effort",   field_option_name:"<...>"},
+                   {field_name:"Stage",    field_option_name:"Proposed"}]
+     assignees:["<assignment.reviewer>"]
    ```
+
+   A child is filed `Proposed` like anything else, **not** `Blocked`: the `Blocked by:` line and the
+   native relationship already carry the ordering, and `Blocked` would demand a `Hold Until` for a
+   wait whose end is a merge, not a date.
 
    Then link it. This is the **one step with no MCP tool**, so it needs `gh` and therefore a local
    session. **Cross-repo dependencies need the full issue URL** — `owner/repo#N` is rejected with

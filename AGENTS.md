@@ -46,7 +46,8 @@ gone; this is the statement.
 ### ⚠ The journal lives here too
 
 `claude-workflow` is both a worked repo *and* the home of the loop's daily journal — issues carrying
-the `ops-journal` label (`labels.journal` in `loop-config.json`). They are a diary, never work. Any
+the `ops-journal` label (`labels.journal` in `loop-config.json` — the only label the loop reads, now
+that ticket state lives in the `Stage` and `Hold Until` fields). They are a diary, never work. Any
 query that builds a worklist must exclude them (`-label:ops-journal`), or the loop picks up its own
 entries as tickets. If you add a query anywhere in a skill, check it carries the exclusion.
 
@@ -86,7 +87,7 @@ hook is doing too much.
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
 | `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
+| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `issueFields`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, in the same shape every product repo uses. Values only, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
@@ -124,7 +125,7 @@ derive it differently. Prose is for judgment. If a rule can be evaluated, evalua
   skill carries it, so nothing fires on inference from a stray phrase. Only `dev-server` and
   `triage-issue` — both invoked *by* other skills — omit it.
 - **Write for one reader who is busy.** The loop's own writing rules (lead with the outcome, detail
-  in `preflight/SKILL.md` and apply to the skill bodies
+  in `<details>`, no throat-clearing) live in `preflight/SKILL.md` and apply to the skill bodies
   themselves as much as to what they emit.
 - **The rule lives in the skill; the story lives in [`docs/why.md`](docs/why.md).** `work-routine` is
   re-read on every run — roughly eleven times a day — so length there costs tokens each time *and*

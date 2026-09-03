@@ -19,19 +19,18 @@
     "maxWorkItemsPerRun": 3
   },
   "labels": {
-    "$comment": "Only the assignee field and readyToImplement mean anything to the loop; the rest are for humans. Gate rules in triage-issue/SKILL.md.",
-    "readyToImplement": "ready-to-implement",
-    "proposal": "proposal",
-    "hold": "hold",
-    "needsInfo": "needs-info",
-    "blockedUpstream": "blocked-upstream",
-    "journal": "ops-journal",
-    "claim": "claude:working"
+    "$comment": "The only label the loop reads. Every other piece of ticket state is a field. Exclusion rule in preflight/SKILL.md.",
+    "journal": "ops-journal"
   },
   "assignment": {
-    "$comment": "The baton: assignee:<bot> IS the worklist. Hand-back rules in work-routine/SKILL.md.",
+    "$comment": "assignee:<bot> IS the worklist and only the user writes it; the loop may only ever remove itself. respondTo is the allowlist of logins whose comments count as feedback. Rules in triage-issue/SKILL.md.",
     "bot": "sydevs-bot",
-    "reviewer": "Ardnived"
+    "reviewer": "Ardnived",
+    "respondTo": [
+      "Ardnived",
+      "antontcymbal",
+      "Copilot"
+    ]
   },
   "mergePolicy": {
     "$comment": "Repos where the loop may open and revise PRs but must never merge them, whatever the gate says. claude-workflow ships the instructions every run is executing, so merging there is the deploy and belongs to a human — and now that the repo is ticketless, review is the ONLY gate its changes pass.",
@@ -78,7 +77,7 @@
     "retentionDays": 7
   },
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields — not Projects v2, not labels. Read/write rules and the PUT-replaces-everything gotcha are in triage-issue/SKILL.md.",
+    "$comment": "GitHub's native org-level issue fields — not Projects v2, not labels. Readable and writable, NOT searchable. Read/write rules and the PUT-replaces-everything gotcha are in triage-issue/SKILL.md.",
     "priority": {
       "fieldId": 14337938,
       "options": [
@@ -95,12 +94,26 @@
         "Moderate",
         "Hard"
       ]
+    },
+    "stage": {
+      "fieldId": 46423931,
+      "options": [
+        "Proposed",
+        "Revising",
+        "Blocked",
+        "Implement",
+        "Implemented"
+      ]
+    },
+    "holdUntil": {
+      "fieldId": 46423871,
+      "maxHorizonDays": 30
     }
   },
   "relationships": {
     "$comment": "No MCP tool reads blocked_by, so a cloud run reads this marker from the issue body instead. Set the real relationship locally AND mirror it here.",
     "bodyMarker": "Blocked by:",
-    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>",
+    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason> (was: <Stage>)",
     "cloudReadable": false,
     "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch work-routine to the tool and retire the body-marker fallback"
   },
