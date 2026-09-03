@@ -326,16 +326,23 @@ The shorthand is only safe for issues in the same repository as the comment.
 `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.
 
-## If GitHub access is unauthorized
+## Filing from a cloud run: what MCP reaches, and the one thing it does not
 
-`gh` is present in every environment we run in, but a cloud session whose GitHub proxy is not
-authorized 403s on every call. **Do not fall back to the GitHub MCP tools to file anyway.** They
-can create issues and comments, but they reach neither issue types nor blocked-by dependencies, so
-what they produce silently fails the checklist below — the first cloud run filed an untyped ticket
-exactly this way, and nobody would have noticed without reading the issue.
+A cloud run has no `gh` — every call 403s (`/workflow:preflight`) — so `mcp__github__issue_write` is
+the filing path, not a fallback. It reaches everything the checklist below asks for **except one
+thing**:
 
-Journal the failure and file nothing. An unfiled finding can be re-derived next run; a malformed
-backlog has to be cleaned up by hand.
+- **Issue type** — `issue_write`'s `type` parameter, validated against `list_issue_types`. This used
+  to be unreachable, which is why the first cloud run filed an untyped ticket; it is reachable now,
+  so an untyped ticket is a mistake rather than a limitation.
+- **Priority, Effort, `Stage`, `Hold Until`** — `issue_fields`, with `field_option_name` for the
+  single-selects so the option is validated before the call.
+- ⚠ **Blocked-by dependencies are still unreachable.** No MCP tool writes them, which is the whole
+  reason `relationships.bodyMarker` exists. A blocker recorded only as a native relationship is
+  invisible to every cloud run, so the `Blocked by:` line in the body is what actually blocks.
+
+If a call genuinely fails, **journal the failure and file nothing.** An unfiled finding can be
+re-derived next run; a malformed backlog has to be cleaned up by hand.
 
 ## Filing checklist
 

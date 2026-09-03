@@ -158,10 +158,13 @@ export function mergeVerdict(pr, repo, policy = {}) {
  * fail-safe, and silent. Both spellings are accepted; absent, a thread counts
  * as unresolved, which is the safe direction.
  *
- * `reviewDecision` has no MCP call of its own, so it is derived from
- * `list_pull_requests`' reviewDecision where available, or passed explicitly.
- * Absent, it is treated as NOT approved — the safe direction, since the only
- * error that can merge something is one that invents an approval.
+ * `reviewDecision` has no MCP call of its own and no MCP call carries the field:
+ * `pull_request_read method:get` omits it, and `list_pull_requests` has no such
+ * member in its `fields` enum. The caller derives it from
+ * `pull_request_read method:get_reviews` and passes it explicitly (the rule is in
+ * `work-routine/SKILL.md`, rung 1). Absent, it is treated as NOT approved — the
+ * safe direction, since the only error that can merge something is one that
+ * invents an approval.
  */
 export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviewDecision }) {
   const checks = [

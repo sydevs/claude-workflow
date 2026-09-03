@@ -129,7 +129,7 @@
   },
   "journal": {
     "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
-    "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
+    "titleFormat": "<Day> — <n> filed, <n> opened, <n> merged, <n> closed",
     "timezone": "America/Vancouver"
   }
 }

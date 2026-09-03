@@ -13,7 +13,7 @@
  *
  *   {
  *     "repo": "sydevs/SahajCloud",
- *     "reviewDecision": "APPROVED",          // from list_pull_requests
+ *     "reviewDecision": "APPROVED",          // derived from pull_request_read method:get_reviews
  *     "hasWorkflows": true,                  // ls <repo>/.github/workflows/*.yml — a filesystem check
  *     "pr":            { … },                // pull_request_read method:get
  *     "checkRuns":     { … },                // pull_request_read method:get_check_runs

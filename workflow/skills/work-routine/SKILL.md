@@ -53,15 +53,25 @@ is approved". (why: docs/why.md#search-lags-the-review-that-feeds-it)
 whose write the index might not have caught up with, and a draft PR can never be a merge candidate
 anyway.
 
-The set is bounded by `wipCapPerRepo` × `repos`, so read `reviewDecision` authoritatively from
-`pull_request_read method:get` on each — the same call the gather below already makes. Anything not
-`APPROVED` stops there and costs one call; this is the authoritative re-check rung 5 has always had
-and rung 1 lacked.
+⚠ **No MCP call returns `reviewDecision` — derive it from `get_reviews`.** `pull_request_read
+method:get` does not carry the field (it returns `requested_reviewers` and `mergeable_state`, and
+neither answers the question), and `list_pull_requests` cannot return it either: its `fields` enum
+has no such member. So the set is bounded by `wipCapPerRepo` × `repos`, and each candidate costs one
+`method:get_reviews` — the same authoritative per-PR read rung 5 makes.
+
+**Derive it like this**, over the reviews that call returns:
+
+- Keep the **latest** review per login whose state is `APPROVED`, `CHANGES_REQUESTED` or `DISMISSED`.
+  A `COMMENTED` review never changes a decision and never clears an earlier one.
+- Drop the run's own login: a PR cannot be approved by the agent that wrote it.
+- `APPROVED` only when at least one login remains at `APPROVED` **and none** at
+  `CHANGES_REQUESTED`. Anything else is not approved, and stops there.
 
 **Never decide mergeability yourself.** Gather all five, then ask `merge-verdict.mjs`:
 
 ```
 mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__pull_request_read  method:get_reviews         owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
