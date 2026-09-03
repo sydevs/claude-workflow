@@ -36,14 +36,27 @@ call. Rationing it would leave approved, green work sitting while the run spent 
 which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
 work and does count.
 
-Candidates are one indexed query — no field is involved, because merge authority never was a field:
+**Candidates are every ready PR of ours, and approval is read per PR — never from search.**
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot> draft:false review:approved"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot> draft:false"
 ```
 
-A PR still in draft is the loop's own unfinished work and can never be a merge candidate; that is
-the same fact `merge-verdict.mjs` enforces, and the query just avoids paying for it.
+⚠ **Do not add `review:approved` to that query.** Search is a derived index and it lags the review
+that feeds it: SahajCloud#679 was approved at 04:45:57Z and `review:approved` still returned **zero**
+at 05:12Z, twenty-six minutes later. That run merged it only because rung 2 happened to read
+`get_reviews` on the same PR for an unrelated reason. Trusting the qualifier leaves approved, green
+work sitting for a whole cycle — silently, because an empty result is indistinguishable from "nothing
+is approved". (why: docs/why.md#search-lags-the-review-that-feeds-it)
+
+`draft:false` **is** safe in the query: the loop sets that flag itself, so there is no third party
+whose write the index might not have caught up with, and a draft PR can never be a merge candidate
+anyway.
+
+The set is bounded by `wipCapPerRepo` × `repos`, so read `reviewDecision` authoritatively from
+`pull_request_read method:get` on each — the same call the gather below already makes. Anything not
+`APPROVED` stops there and costs one call; this is the authoritative re-check rung 5 has always had
+and rung 1 lacked.
 
 **Never decide mergeability yourself.** Gather all five, then ask `merge-verdict.mjs`:
 

@@ -517,6 +517,28 @@ reason the failure was harmless — an absent `hasWorkflows` reads as *this repo
 stayed closed rather than opening — but a recurring `⚠️ Failed` line trains a reader to skim the
 section that exists to be read.
 
+## Search lags the review that feeds it
+
+SahajCloud#679 was approved at 04:45:57Z. At 05:12Z — twenty-six minutes later — rung 1's
+`is:pr is:open author:<bot> draft:false review:approved` returned **zero results**. The approval was
+real and current: `pull_request_read method:get_reviews` showed `Ardnived` / `APPROVED` against
+`51fdbeb`, the head commit. The PR merged that run only because rung 2 read `get_reviews` on it for
+an unrelated reason and the run noticed.
+
+**An empty search result is indistinguishable from "nothing qualifies".** That is what makes this
+worse than a slow index: the failure is silent, and the loop would have journalled "nothing
+qualified for merge" as a measured fact. Approved, green work would have sat for a whole cycle, and
+the journal would have said the system was working.
+
+Rung 5 already knew this — *"Search is a derived index and can lag; this read is authoritative"* —
+and re-checks `get_reviews` immediately before writing. Rung 1 had no equivalent because
+`review:approved` looked like a free filter. It is free; it is just not true yet.
+
+The rule that generalises: **a search qualifier is safe only for facts the loop itself wrote.**
+`draft:` is ours, so the index cannot be behind us on it. `review:`, `-reviewed-by:` and
+`commenter:` describe other people's writes, and those need an authoritative read before anything
+irreversible depends on them.
+
 ## A conflicted PR schedules zero CI runs
 
 A conflicted PR has no computable merge commit, so GitHub schedules **zero** workflow runs for it —
