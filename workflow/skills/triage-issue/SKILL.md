@@ -127,14 +127,20 @@ writes, and none of them adds the bot to anything:
 | Filing a new proposal | Assign `assignment.reviewer` — a proposal exists to be judged |
 | Returning a ticket whose PR closed unmerged | Assign `assignment.reviewer`, `Stage: Revising` |
 | Anything else — revising, answering, investigating, blocking | **Touch nothing.** Say what happened in a comment and let the fields carry the state |
+| Any PR, ever | **Touch nothing.** Ours are found by `author:`; a PR's assignee is only ever someone else's request to us |
 
 **Never add `assignment.bot` to anything** — not a ticket, not a PR, not to hand work to a future
 run. Staying assigned is how the loop keeps its own queue; adding itself would be the loop granting
 itself work.
 
-**Never reassign a PR at all.** A PR's turn is carried by its `draft` flag, never by its assignee:
-draft means the loop is still working, ready-for-review means it is waiting on a human. The PR stays
-assigned to the bot from the moment it opens until it merges.
+**Never set or change a PR's assignee at all.** A PR's turn is carried by its `draft` flag: draft
+means the loop is still working, ready-for-review means it is waiting on a human. And a PR is the
+loop's **by authorship** — every rung finds its own PRs with `author:<bot>`, so no assignment is
+needed to claim one.
+
+That leaves a PR's assignee free to mean one thing, pointing the other way: **assigning the bot to a
+PR it did not write is how you ask the loop to work on that PR.** Unassigning withdraws the request.
+The loop reads that field and never writes it.
 
 ### `Stage` and `Hold Until` — where the ticket sits, and when to look again
 

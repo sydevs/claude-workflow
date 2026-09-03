@@ -490,8 +490,32 @@ Two invariants make it work, and both are load-bearing:
 - **A PR opens as a draft and is marked ready exactly once.** It never goes back. `draft:false`
   therefore means "has been ready at least once", which is what lets the adversarial review fire
   once and only once.
-- **The assignee never changes.** It is set to the bot at creation and stays there until the PR
-  merges. Unassigning is the reviewer's kill switch and means nothing else.
+- **The loop never writes a PR's assignee, at all.** Its own PRs are found by `author:<bot>`, which
+  is exact and needs no field. Writing an assignee would only overwrite something the reviewer might
+  be using.
+
+That second invariant was learned the hard way. The first migration assigned the bot to every open
+PR so that `assignee:<bot>` would find them — which worked, but doubled up with the reviewer's own
+assignment on all three and made the field mean two things at once. Authorship was the answer
+already sitting there: the loop writes its own PRs, so `author:` identifies them with no write and
+no migration.
+
+Leaving the field alone also gives it a use the old model had no room for: **assigning the bot to a
+PR it did not write is how a human hands one over**, and unassigning withdraws that. One field, one
+direction, read but never written.
+
+## hasWorkflows is a filesystem check
+
+`mcp__github__list_workflows` is not in the routine's MCP build. Four consecutive runs journalled
+its absence under `⚠️ Failed`, each time for a fact that was sitting on disk the whole time: every
+repo in `repos` is cloned into the run before Claude starts, so `.github/workflows/*.yml` answers
+`hasWorkflows` exactly, for free, and cannot 403.
+
+The general rule this is an instance of: **when the run already holds the checkout, read the
+checkout.** An API call for a fact on disk buys nothing and adds a way to fail. It is also the
+reason the failure was harmless — an absent `hasWorkflows` reads as *this repo has CI*, so the gate
+stayed closed rather than opening — but a recurring `⚠️ Failed` line trains a reader to skim the
+section that exists to be read.
 
 ## A conflicted PR schedules zero CI runs
 

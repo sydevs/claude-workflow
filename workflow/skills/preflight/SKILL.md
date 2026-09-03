@@ -115,7 +115,8 @@ either run compares against it. Read it from `get_me` rather than assuming.
   `Blocked by:` line in the issue body (see `/workflow:triage-issue`). **Never conclude a ticket is
   unblocked because you could not find a blocker** — conclude it only from the body.
 
-**Build the queue from the assignee field — it IS the worklist.** One indexed search per shape.
+**Build the queue from the assignee field for tickets, and from authorship for PRs.** One indexed
+search per shape.
 
 ⚠ **Scope every search with `repo:` qualifiers built from `repos`, never a bare `org:`.** Call that
 string `$SCOPE` below and in both run skills. The org still holds retired repositories, and an
@@ -126,8 +127,18 @@ first time this was run as a real query. Every search in every run skill uses `$
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<reviewer> -label:ops-journal"
 mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last-run-ISO>"
-mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot>"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot>"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<bot>"
 ```
+
+**A PR is the loop's by authorship, not by assignment.** The loop opens its own PRs, so `author:`
+already identifies them exactly — no assignment is written, and a PR's assignee is left to mean what
+it means everywhere else on GitHub: who is responsible for it right now.
+
+The second query is the delegation path, and it is the only reason assignment is read on a PR at
+all: **assigning the bot to someone else's PR is how you ask the loop to work on it.** Unassigning
+is the kill switch for that case. `-author:<bot>` keeps the two sets disjoint so nothing is counted
+twice.
 
 Then **one `list_issues` per repo** — `fields: ["field_values","labels","body"]` — to attach `Stage`,
 `Hold Until`, Priority and Effort to the issues those searches returned. Five calls, and they are
@@ -140,10 +151,11 @@ The PR queries the run skills refine from the fourth search — all indexed, non
 
 | Shape | Query |
 | --- | --- |
-| Merge candidates | `$SCOPE is:pr is:open assignee:<bot> draft:false review:approved` |
-| Revision candidates | `$SCOPE is:pr is:open assignee:<bot> updated:>=<last-run-ISO>` |
-| Crashed-run residue | `$SCOPE is:pr is:open assignee:<bot> draft:true` |
-| Review candidates | `$SCOPE is:pr is:open assignee:<bot> draft:false -reviewed-by:<bot> -label:ops-journal` |
+| Merge candidates | `$SCOPE is:pr is:open author:<bot> draft:false review:approved` |
+| Revision candidates | `$SCOPE is:pr is:open author:<bot> updated:>=<last-run-ISO>` |
+| Crashed-run residue | `$SCOPE is:pr is:open author:<bot> draft:true` |
+| Review candidates | `$SCOPE is:pr is:open author:<bot> draft:false -reviewed-by:<bot> -label:ops-journal` |
+| Delegated to us | `$SCOPE is:pr is:open assignee:<bot> -author:<bot>` — someone else's PR, handed over |
 
 **Read narrowly. Most of the backlog is irrelevant to any given run.**
 

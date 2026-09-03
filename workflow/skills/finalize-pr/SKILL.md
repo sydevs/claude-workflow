@@ -247,12 +247,14 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → **create it as a draft**, then two follow-ups, both from `loop-config.json`:
+- **No PR** → **create it as a draft**, then one follow-up, from `loop-config.json`:
   ```bash
   gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
   ```
-  and **assign it to `assignment.bot`**. That assignment is set once, at creation, and never changes
-  again for the life of the PR.
+  **Set no assignee at all.** The PR is ours because we wrote it — every rung finds it by
+  `author:<bot>` — so an assignment would add nothing and would overwrite a field that is the
+  reviewer's to use. Assignment on a PR has exactly one meaning, and it points the other way:
+  someone assigning the bot to *their* PR is asking the loop to work on it.
 
   **Every PR opens as a draft, without exception.** Draft is the PR's baton: it means *the loop is
   still working on this*, and step 9 clears it once CI is green. A PR that is born ready-for-review
@@ -355,9 +357,10 @@ it to memory.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Always** run the docs sync before pushing.
 - **Cap** the CI fix loop at 3, then hand back.
-- **Always** open a PR as a draft and assign it to the bot, and clear the draft flag only once CI
-  is green. **Never** change a PR's assignee after creation — draft is the queue, and a PR that
-  never leaves draft is invisible to the reviewer.
+- **Always** open a PR as a draft, and clear the draft flag only once CI is green. A PR that never
+  leaves draft is invisible to the reviewer.
+- **Never** set or change a PR's assignee, on creation or after. Ours are found by `author:`; an
+  assignee on a PR is someone else's signal, not ours to write.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References
