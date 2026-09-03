@@ -98,7 +98,7 @@ is:issue author:<bot> is:closed closed:<from>..<to>              ┘ → closed,
   | --- | --- | --- | --- |
   | 💡 | `Stage: Proposed` | `$SCOPE is:issue is:open assignee:<reviewer>` | the issue's `created_at` |
   | ❓ | `Stage: Revising` **whose last comment is the loop's** | that same set, plus `$SCOPE is:issue is:open assignee:<bot>` | that comment's `created_at` |
-  | 👀 | Ready for review | `$SCOPE is:pr is:open assignee:<bot> draft:false review:none` | the PR's `created_at` |
+  | 👀 | Ready for review | `$SCOPE is:pr is:open author:<bot> draft:false review:none` | the PR's `created_at` |
 
 - **A live `Hold Until` excludes an item from this table and from the whole entry.** Held work is
   not "awaiting you" — the loop has promised to look again on a date, and listing it asks for

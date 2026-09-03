@@ -14,7 +14,7 @@
  *   {
  *     "repo": "sydevs/SahajCloud",
  *     "reviewDecision": "APPROVED",          // from list_pull_requests
- *     "hasWorkflows": true,                  // from list_workflows total_count > 0
+ *     "hasWorkflows": true,                  // ls <repo>/.github/workflows/*.yml — a filesystem check
  *     "pr":            { … },                // pull_request_read method:get
  *     "checkRuns":     { … },                // pull_request_read method:get_check_runs
  *     "statuses":      { … },                // pull_request_read method:get_status  (optional)

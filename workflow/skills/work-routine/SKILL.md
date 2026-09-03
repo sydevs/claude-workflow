@@ -39,7 +39,7 @@ work and does count.
 Candidates are one indexed query — no field is involved, because merge authority never was a field:
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> draft:false review:approved"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot> draft:false review:approved"
 ```
 
 A PR still in draft is the loop's own unfinished work and can never be a merge candidate; that is
@@ -52,7 +52,8 @@ mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO
 mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
-mcp__github__list_workflows     owner:$ORG repo:$REPO        # total_count > 0 → hasWorkflows
+# hasWorkflows — a filesystem check in the checkout, never an API call:
+#   ls $REPO/.github/workflows/*.yml $REPO/.github/workflows/*.yaml 2>/dev/null | head -1
 ```
 
 ```bash
@@ -73,6 +74,12 @@ check runs carry the test signal, commit statuses carry deploy signals, and both
 | `HOLD — no approving review` | Not a rung-1 item at all. Leave it: it waits on the reviewer, not on you |
 | `HOLD — <anything else>` | **Do not merge.** One comment naming that exact reason, then move on. Fixing red CI is rung 2 |
 | Two or more `MERGE` in one repo | **Order first: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
+
+**`hasWorkflows` comes from the filesystem, not from the API.** Every repo in `repos` is already
+cloned into the run, so counting `.github/workflows/*.yml` answers it exactly, for free, and cannot
+403. `mcp__github__list_workflows` is **not** in this session's MCP build — four consecutive runs
+journalled its absence — so naming an API call here guarantees a `⚠️ Failed` line every run for a
+fact sitting on disk. (why: docs/why.md#hasworkflows-is-a-filesystem-check)
 
 **Omissions fail safe, never open.** A missing `reviewDecision` reads as *not approved*; an unknown
 `hasWorkflows` reads as *this repo has CI*, so a missing check blocks rather than passes. Pass what
@@ -140,7 +147,9 @@ all off the allowlist, so none of them can start a revision pass.
 last word is not ours", so a revision that pushes code and says nothing re-fires on the next run,
 forever.
 
-**Never change the PR's assignee, and never put it back into draft.** `draft:false` means it has
+**Never set or change a PR's assignee, and never put it back into draft.** On a PR someone
+delegated by assigning the bot, leave that assignment exactly as found — it is theirs to withdraw.
+`draft:false` means it has
 been ready for review at least once, and rung 5 depends on that staying true.
 (why: docs/why.md#draft-is-the-prs-baton)
 
@@ -276,12 +285,12 @@ One server-side query derives the candidates — `reviewed-by:` matches reviews 
 the census needs no per-PR review fetch:
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> draft:false -reviewed-by:<own login> -label:ops-journal"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<own login> draft:false -reviewed-by:<own login> -label:ops-journal"
 ```
 
 `draft:false` is the whole eligibility rule. A draft PR is the loop still working; the moment
-`/workflow:finalize-pr` marks it ready for review it becomes reviewable, and it stays assigned to
-the bot for its whole life, so assignment says nothing here and is not read.
+`/workflow:finalize-pr` marks it ready for review it becomes reviewable. Assignment says nothing
+here and is not read — the PR is ours because we wrote it.
 (why: docs/why.md#draft-is-the-prs-baton)
 
 Work the candidates **oldest `created_at` first**, skipping any with

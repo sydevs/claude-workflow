@@ -100,6 +100,9 @@ including in the journal, because the loop has already promised to look again on
 
 **PRs have no fields, so a PR's turn is its `draft` flag.** The loop opens every PR as a draft and
 clears it once CI is green. Draft means it is still working; ready-for-review means it is your turn.
+It finds its own PRs by `author:sydevs-bot` and never writes an assignee on one — so a PR's assignee
+is free to mean the opposite thing: **assign the bot to a PR it did not write and it will work on
+that PR.**
 
 Three properties make it safe to leave running:
 

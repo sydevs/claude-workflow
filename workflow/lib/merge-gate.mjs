@@ -48,7 +48,7 @@ const workflowCache = new Map()
 /**
  * Does this repo run GitHub Actions at all?
  *
- * Seeded by the caller from `mcp__github__list_workflows` (`total_count > 0`).
+ * Seeded by the caller from the checkout: `ls <repo>/.github/workflows/*.yml`.
  * **Unknown defaults to TRUE**, because the two errors are not symmetric:
  * assuming a repo has CI makes a missing check block a merge, while assuming it
  * has none would call an untested PR green. Only the second one can ship
