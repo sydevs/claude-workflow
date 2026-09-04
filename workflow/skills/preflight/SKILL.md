@@ -26,66 +26,89 @@ The routine's prompt carries **only** a pointer to its run skill. The run skills
 
 ## Writing style, everywhere the loop speaks
 
-Comments, PR bodies and journal entries are read by one busy person; their attention is the scarcest
-thing here.
+One busy person reads this, and every later run pays to read it again. Budget first, then register.
 
-- **Lead with the outcome** — what happened, or what is being asked of them. Not how you got there.
-- **Detail goes in `<details>`**: file lists, measurements, tool limitations, alternatives
-  considered, reasoning behind a judgement call. Summarise the block in its `<summary>`.
-- **A comment that needs a decision says so in its first line**, and names the decision.
-- **Cut the throat-clearing.** No restating the ticket back, no narrating what you are about to do.
-- Past roughly fifteen lines outside a `<details>`, it is an essay. Find the three sentences that
-  matter.
+### Budgets — measured, not judged
+
+| Artefact | Limit |
+| --- | --- |
+| Ticket or PR comment | `writing.budgets.comment` |
+| Reply on a review thread | `writing.budgets.reviewReply` |
+| The day's journal comment | `writing.budgets.journalComment` |
+| Ticket and PR **bodies** | **No budget.** They are state — see the grounding rule below |
+
+**Counts include `<details>`.** Check with the script, do not estimate:
+
+```bash
+printf '%s' "$TEXT" | ${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --kind comment
+```
+
+**Over budget means cut and re-check.** There is no clause here that lets you explain an overage,
+because the rule this replaced had one and died of it.
+(why: docs/why.md#budgets-not-adjectives)
+
+### Register — Simplified Technical English
+
+- **Active voice. One instruction per sentence.** Name who acts.
+- **At most 20 words a sentence** in instructions, 25 in description.
+- **Use the verb, not the noun made from it** — "decide", never "make a decision".
+- **No phrasal verbs** where one verb exists: "start", not "kick off".
+- **Simple tenses only.** "The run failed", never "the run has failed".
+- **No semicolons.** Write two sentences.
+- **Noun clusters stop at three words.**
+- **Lead with the outcome**, and say in the first line if a decision is needed.
+- **Cut the throat-clearing.** Do not restate the ticket. Do not narrate what you will do next.
+
+`workflow/lib/ste-lint.py` checks the first seven locally. It is a development tool, not a run step.
+(why: docs/why.md#the-rules-cost-more-than-the-output)
 
 ## Non-negotiables
 
-- **Never merge without all three**: an approving review, green CI, and zero unresolved review
-  threads. Any one missing → comment saying precisely which, and move on.
-- **Never implement a ticket that is not `Stage: Implement`**, and never when it is not assigned to
-  `assignment.bot`. No exceptions, no inference from priority or from the user's tone in a comment.
-  You **may move a ticket off `Implement`** when investigation raises a blocking question; you may
-  **never write `Implement`**. (why: docs/why.md#the-loop-may-never-write-implement)
+- **Never merge without all three**: an approving review, green CI, zero unresolved threads. On any
+  one missing, comment saying which, and move on.
+- **Never implement a ticket that is not `Stage: Implement` and assigned to `assignment.bot`.** No
+  inference from priority or from a comment's tone. You **may move a ticket off `Implement`** when
+  investigation raises a blocking question. You may **never write `Implement`**.
+  (why: docs/why.md#the-loop-may-never-write-implement)
 - **Never implement a ticket that already has an open PR closing it.** The PR holds the baton.
-- **Never touch an item with a live `Hold Until`** — no work, and no mention anywhere in the
-  journal. (why: docs/why.md#blocked-always-carries-a-hold-until)
-- **Never write state the state machine owns.** A workflow — `stateMachine.workflow`, called by
-  every repo — maintains `Stage`, assignees and `labels.awaiting` from GitHub events, within
-  seconds. You write only what an event cannot decide:
+- **Never touch an item with a live `Hold Until`** — no work, and no mention in the journal.
+  (why: docs/why.md#blocked-always-carries-a-hold-until)
+- **Never exceed a ceiling** to finish one more.
+- **Never improvise around a missing credential or tool.** Journal the failure and stop that part of
+  the run. (why: docs/why.md#never-improvise-around-a-missing-credential)
+- **Every unit of work is idempotent.** Re-derive the worklist each run. Check for an existing PR or
+  comment before you create one. A re-run after a crash must not double-post.
+- **Work only on `claude/*` branches.** A cloud session cannot push anywhere else.
+- **Report anomalies. Do not explain them.** When a tool refuses, a readback disagrees with a write,
+  or time appears to jump, record the observation and move on. **Never diagnose the platform, and
+  never let such a theory become evidence for a code change.**
+  (why: docs/why.md#report-anomalies-do-not-explain-them)
+- **You cannot detect having been blocked.** When wall-clock time jumps, that is the explanation.
+  Say "roughly N minutes are unaccounted for" and continue. Prefer a wake event's `current-time` to
+  the local clock for anything you compare against a GitHub timestamp.
+  (why: docs/why.md#you-cannot-detect-having-been-blocked)
 
-  | Never write | Who does | Why |
-  | --- | --- | --- |
-  | Any assignee, on anything | The reviewer adds the bot; the workflow removes it at `Implemented` | Two writers on one field race, and the reviewer's add is the kill switch |
-  | `Stage`, except the four judgement cases below | The workflow, on the event that determined it | A run is up to eight hours late; the event is immediate |
-  | `labels.awaiting`, except the four dead ends below | The workflow | Same |
-  | `Stage: Implement`, **ever** | The reviewer, only | The one safety property: the loop cannot authorise its own code |
+### Never write state the state machine owns
 
-  **Approval authority is `assignment.reviewer`'s alone**, and it is narrower than
-  `assignment.respondTo` on purpose: four of the five repos are public, so any account can submit an
-  `APPROVED` review. The state machine and `merge-gate.mjs` both gate approval on the reviewer;
-  `respondTo` governs only what counts as *feedback*.
-  (why: docs/why.md#only-the-reviewers-approval-counts)
+`stateMachine.workflow` maintains `Stage`, assignees and `labels.awaiting` from GitHub events,
+within seconds. You write only what an event cannot decide.
 
-  **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`; clearing
-  `Hold Until` when a block lifts; revoking `Implement` → `Revising`; and `draft:false` on a PR
-  whose work is done. **Your four `awaiting` writes**, all dead ends no event expresses: CI red
-  past `ciFixIterations`, a conflict you could not rebase, a review thread you rebutted rather
-  than adopted, and an investigation finished with a finding.
-  (why: docs/why.md#the-state-machine-is-not-the-loops-job)
-- **Never exceed a ceiling** to "just finish one more".
-- **Never improvise around a missing credential or tool.** Journal the failure and stop that part
-  of the run. (why: docs/why.md#never-improvise-around-a-missing-credential)
-- **Every unit of work is idempotent.** Re-derive the worklist from GitHub each time; check for an
-  existing PR/comment before creating one. A re-run after a crash must not double-post.
-- **Work only on branches named `claude/*`** — cloud sessions cannot push anywhere else.
-- **Report anomalies; do not explain them.** When something about your own environment looks wrong —
-  a tool refuses, a readback disagrees with a write, time appears to have jumped — record the
-  observation and move on. Do **not** diagnose the platform, and never let such a theory become the
-  stated evidence for a code change. (why: docs/why.md#report-anomalies-do-not-explain-them)
-- **You cannot detect having been blocked.** If wall-clock time seems to have jumped, **that is the
-  explanation**: say "roughly N minutes are unaccounted for" and continue. Never theorise about
-  clock skew or a hung job. Where you need a trustworthy clock, prefer a wake event's authoritative
-  `current-time` (GitHub's own frame) over the local clock for anything compared against a GitHub
-  timestamp. (why: docs/why.md#you-cannot-detect-having-been-blocked)
+| Never write | Who does | Why |
+| --- | --- | --- |
+| Any assignee, on anything | The reviewer adds the bot. The workflow removes it at `Implemented` | Two writers race, and the reviewer's add is the kill switch |
+| `Stage`, outside your four cases | The workflow, on the event | A run is up to eight hours late. The event is immediate |
+| `labels.awaiting`, outside your four | The workflow | Same |
+| `Stage: Implement`, **ever** | The reviewer only | The loop cannot authorise its own code |
+
+**Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`; clearing
+`Hold Until` when a block lifts; revoking `Implement` to `Revising`; and `draft:false` on a finished
+PR. **Your four `awaiting` writes**, all dead ends no event sees: CI red past `ciFixIterations`, a
+conflict you could not rebase, a thread you rebutted, and an investigation that ended in a finding.
+(why: docs/why.md#the-state-machine-is-not-the-loops-job)
+
+**Approval authority is `assignment.reviewer`'s alone**, and narrower than `assignment.respondTo` on
+purpose: four repos are public, so any account can approve. `respondTo` governs feedback only.
+(why: docs/why.md#only-the-reviewers-approval-counts)
 
 ## Never subscribe to PR activity
 
@@ -102,44 +125,37 @@ thing here.
 
 ## Run start
 
-**This runs on the GitHub MCP tools, not `gh`.** A routine reaches GitHub *only* through
-`mcp__github__*`. Verified rather than assumed, because `docs/routine-setup.md` once claimed the
-opposite and cost a day: `gh` is absent from the image, **installing it does not help** — `gh api
-repos/...` returns `403 GitHub access is not enabled for this session`, byte-identical with and
-without an auth header, so the proxy refuses the path rather than the credential — and `curl` to
-REST and to GraphQL 403s the same way. `git` fetch and push still work; they do not use the API.
+**This runs on the GitHub MCP tools, not `gh`.** A routine reaches GitHub only through
+`mcp__github__*`. `gh` and `curl` both return 403 for every API path, with or without a credential.
+`git` fetch and push still work, because they do not use the API.
 
-**So a script in this plugin never fetches.** The scripts take data *you* fetched with MCP and
-return a decision. `gh` remains correct when a skill is invoked locally as a slash command, and the
-scripts accept that path too — but the rules they apply are the same code either way.
+**So no script in this plugin fetches.** Scripts take what you gathered and return a decision. `gh`
+stays correct in a local slash command, and the scripts apply the same rules either way.
 (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
-**Confirm access first with `mcp__github__get_me`** — an unauthorized session fails every call with
-a 403 rather than an auth prompt. Failure → journal it and stop; do not improvise.
+**Confirm access first with `mcp__github__get_me`.** An unauthorized session 403s every call
+instead of prompting. On failure, journal it and stop. Do not improvise.
 
-**Record the returned `login` as this run's own identity.** Every "did a human do this?" check in
-either run compares against it. Read it from `get_me` rather than assuming.
+**Record the returned `login` as this run's identity.** Every "did a human do this?" check compares
+against it. Read it. Do not assume it.
 
-**Two capability limits, both verified rather than assumed:**
+**Three capability limits:**
 
-- **Priority, Effort, `Stage` and `Hold Until` are readable and writable** as native issue fields.
-  `list_issues` with `fields: ["field_values"]` returns a whole repo's field values in one call.
-- ⚠ **Fields are NOT searchable.** `field.<name>:<value>` is a web-UI/GraphQL qualifier; through the
-  REST search a routine has, it is accepted without error and returns **zero results**. **No worklist
-  query may filter on a field.** Every query below uses an indexed qualifier only; `Stage` and
-  `Hold Until` are applied client-side to what those queries return.
+- **Priority, Effort, `Stage` and `Hold Until` are readable and writable.** `list_issues` with
+  `fields: ["field_values"]` returns a repo's field values in one call.
+- ⚠ **Fields are NOT searchable.** `field.<name>:<value>` works in the web UI and returns **zero
+  results** through the REST search a routine has, without an error. **No worklist query may filter
+  on a field.** Filter `Stage` and `Hold Until` client-side.
   (why: docs/why.md#issue-fields-are-not-searchable)
-- **Relationships are invisible.** No MCP tool reads `blocked_by`. Determine blocked-ness from the
-  `Blocked by:` line in the issue body (see `/workflow:triage-issue`). **Never conclude a ticket is
-  unblocked because you could not find a blocker** — conclude it only from the body.
+- **Relationships are invisible.** No MCP tool reads `blocked_by`. Read the `Blocked by:` line in
+  the body instead. **Never conclude a ticket is unblocked because you found no blocker.** Conclude
+  it only from the body.
 
-**Build the queue from the assignee field for tickets, and from authorship for PRs.** One indexed
-search per shape.
+**Tickets come from the assignee field. PRs come from authorship.** One indexed search per shape.
 
-⚠ **Scope every search with `repo:` qualifiers built from `repos`, never a bare `org:`.** Call that
-string `$SCOPE` below and in both run skills. The org still holds retired repositories, and an
-`org:` scope pulled seven-year-old `Atlas` and `WeMeditate` issues into the reviewer's queue the
-first time this was run as a real query. Every search in every run skill uses `$SCOPE`.
+⚠ **Scope every search with `repo:` qualifiers from `repos`, never a bare `org:`.** Call that string
+`$SCOPE`. The org still holds retired repositories, and an `org:` scope once pulled seven-year-old
+issues into the queue.
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
@@ -149,14 +165,11 @@ mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<bot>"
 ```
 
-**`label:awaiting` is the census's read-only view of what needs a human.** It is maintained by the
-state machine, never by you — the query is here so a run knows what it must *not* claim to be
-working on, and so the journal can say how many items are stalled on the reviewer. Nothing in any
-rung acts on it.
+**`label:awaiting` is read-only here.** The state machine maintains it. The query tells a run what
+it must not claim to be working on. No rung acts on it.
 
-**A PR is the loop's by authorship, not by assignment.** The loop opens its own PRs, so `author:`
-already identifies them exactly — no assignment is written, and a PR's assignee is left to mean what
-it means everywhere else on GitHub: who is responsible for it right now.
+**A PR is ours by authorship.** `author:` identifies our PRs exactly, so the loop writes no PR
+assignee and the field keeps its ordinary GitHub meaning.
 
 **Nothing is ever assigned to `assignment.reviewer`.** `labels.awaiting` carries that signal now, so
 an issue's assignee means exactly one thing across every repo: `assignment.bot` is present and it is
@@ -188,8 +201,17 @@ The PR queries the run skills refine from the fourth search — all indexed, non
 
 1. **Titles yes, bodies no.** The census carries no bodies. Fetch one only for the item you are
    actually working. (why: docs/why.md#titles-yes-bodies-no)
-2. **Comments cost a call each — earn them.** Fetch `get_comments` only where **both** hold: the item
-   is on the worklist, *and* its comment count is greater than zero.
+2. **Ground from the body. Never read a thread to rebuild context.** The body is state and the
+   comments are conversation, so the body already holds what a run needs to start. Fetch
+   `get_comments` for one purpose only — to find feedback inside the run window — and read newest
+   first, stopping at the window edge.
+
+   If the body does not carry what you need, **the body is the bug.** Fix it, which
+   `/workflow:triage-issue` already requires of any run that changes a ticket.
+
+   ⚠ **Never call `get_comments` on a journal issue.** The day's body holds the run index and the
+   day's failures. One journal reached 97,279 characters in a single response and broke the run that
+   read it. (why: docs/why.md#ground-from-the-body-never-the-thread)
 3. **Feedback is defined by `assignment.respondTo`, not by "not me".** A comment counts as feedback
    only when its author is on that allowlist. A blocklist of third-party bots fails open on the next
    integration nobody has met; `cloudflare-workers-and-pages[bot]` alone wrote 93 of the 200 most

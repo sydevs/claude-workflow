@@ -35,18 +35,15 @@ Read, do not recall — every run starts with no memory of the last. `$ORG`, `$J
 and `$REVIEWER` come from `loop-config.json` (`org`, `journalRepo`, `assignment.bot`,
 `assignment.reviewer`), never typed literally.
 
-**The journal is a flight recorder now, so read it rather than re-deriving it.** Each day's body
-collects that day's `⚠️ Failed` and `⏭️ Ceiling` bullets, so one read per day gives the whole week's
-failures and ceiling stops without opening every run's comment. Open the comments only for a run
-whose failure you need the evidence block for.
+**A journal is one document now, so the week is seven reads.** Each day's body carries that day's
+`⚠️ Failed`, `⏭️ Ceiling` and `🧭 Friction` lines, each stamped with its run's time. **Journals have
+no comments — never call `get_comments` on one.**
 
 ```
 # the week's journal issues — one per day, all still open
 mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:ops-journal"
-# the BODY carries the day's collected ⚠️ Failed and ⏭️ Ceiling bullets — start there
+# the body IS the day. Seven of these is the whole week.
 mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
-# comments only where you need a specific run's 🧭 Friction or its evidence block
-mcp__github__issue_read  method:get_comments  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
 
 # what actually happened to the PRs
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
@@ -90,6 +87,16 @@ A rule added for a single bad night is a rule that outlives its cause.
 Prefer **removing** a rule to adding one. These skills are read in full on every run, and a skill
 that has grown a paragraph per incident becomes a document nobody can follow — which is how the
 previous three-fork workflow decayed.
+
+**When your PR edits a skill, run the rule delta and account for every removal in the body:**
+
+```bash
+node workflow/lib/rule-delta.mjs --base main workflow/skills
+```
+
+It exits non-zero on a directive that vanished with no close match. Each one is a rule you meant to
+drop or a rule that fell out, and only you can say which — this repo cannot validate a skill by
+running it. (why: docs/why.md#lint-measures-style-not-content)
 
 ## Refining the reviewer profile
 

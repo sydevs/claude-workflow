@@ -102,6 +102,28 @@ hook is doing too much.
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
 
+### ⚠ A skill's length is a running cost
+
+`preflight` + `work-routine` + `journal` + `loop-config.json` are read on **every** run — about
+9,250 tokens, eleven times a day. A paragraph added to one of those is paid for daily, forever.
+Before adding prose to a run-loaded skill, check the rule is not already stated elsewhere, and put
+the story in `docs/why.md` behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
+
+Everything the loop writes carries a character budget from `writing.budgets`, checked with
+`workflow/lib/budget.mjs`, counted including `<details>`.
+
+**Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
+
+```bash
+node workflow/lib/rule-delta.mjs --base main workflow/skills
+```
+
+`ste-lint.py` measures a skill's **style**; `rule-delta.mjs` measures its **content**. A rewrite can
+pass the first and fail the second — the `journal` rewrite in #48 took its violations from 16 to 4,
+shrank a third, and silently dropped `Never read the board back`. Lint called it an improvement,
+because by its measure it was. Both are development tools, never run steps.
+(why: docs/why.md#lint-measures-style-not-content)
+
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
 if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-config.json` instead.
