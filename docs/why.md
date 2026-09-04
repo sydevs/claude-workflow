@@ -797,3 +797,31 @@ was chosen to avoid — a document the review skims instead of weighs. The gate 
 model of the reviewer's *intent*, which generalises to cases the week never showed, rather than a
 transcript of their incidents, which does not. It also keeps the weekly diff small enough that the
 reviewer can actually audit their own portrait.
+
+---
+
+# The plugin itself
+
+## An installed plugin does not track main
+
+`AGENTS.md` said, for the plugin's whole life, that there is "no version bump that matters" because
+`main` is consumed live. That is true of the two cloud routines, which fetch the skills on every
+run. It was never true of `/plugin install workflow@sydevs`, and nothing in the repo said so.
+
+The install records a `gitCommitSha` in `~/.claude/plugins/installed_plugins.json` and unpacks the
+skills into `~/.claude/plugins/cache/sydevs/workflow/<version>/`. Neither is revisited on its own:
+the commit is a pin, and the cache directory is named after `version`. So while `version` reads
+`0.1.0`, every session on that machine loads the commit that was `main` on install day, forever,
+and there is no signal anywhere that it is behind.
+
+On 2026-09-04 a maintainer's session filed a ticket with no Type, Priority, Effort or Stage. The
+reflection found the cause was not judgement: the loaded `draft-ticket` was commit `864e72e` — the
+repo's **first** commit, pinned at install on 2026-08-27 — running 53 commits behind a `main` that
+had since grown `triage-issue`, the native issue fields, and the `Stage` field itself. The skill it
+executed genuinely ended at "create the issue, return the URL". Twelve of the seventeen skills did
+not exist in that cache at all, and the marketplace clone was itself nine commits behind.
+
+`version` was the only thing that could have invalidated it, and the guide had explicitly told
+every contributor that `version` did not matter. That is why the manifest bump is now a required
+part of a skill change rather than a release ceremony — the repo has no releases, but it does have
+a cache key, and a cache key that never changes is a cache that never updates.
