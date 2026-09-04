@@ -117,21 +117,23 @@ item and diffed `created_at` against the last run. That census had to be narrowe
 repo and made the whole backlog look like fresh feedback. Do not reintroduce timestamp reasoning to
 decide what to work on.
 
-**Only the user assigns the bot.** That is the entire kill switch: unassign the bot on any item and
-the loop stops touching it, with nothing else to configure. The loop has exactly three assignment
-writes, and none of them adds the bot to anything:
+**Only the user assigns the bot, and nothing is ever assigned to the reviewer.** That is the entire
+kill switch: unassign the bot on any item and the loop stops touching it, with nothing else to
+configure. An issue's assignee therefore means exactly one thing, everywhere — `assignment.bot` is
+present and it is the loop's turn, or it is not.
 
-| The loop finishes… | Assignment |
-| --- | --- |
-| Opening the PR for a ticket | **Remove the bot**, set `Stage: Implemented` — the PR carries it from here |
-| Filing a new proposal | Assign `assignment.reviewer` — a proposal exists to be judged |
-| Returning a ticket whose PR closed unmerged | Assign `assignment.reviewer`, `Stage: Revising` |
-| Anything else — revising, answering, investigating, blocking | **Touch nothing.** Say what happened in a comment and let the fields carry the state |
-| Any PR, ever | **Touch nothing.** Ours are found by `author:`; a PR's assignee is only ever someone else's request to us |
+**The loop writes no assignee at all.** Not on a ticket, not on a PR, not to hand work to a future
+run. The one automated removal — dropping the bot from a ticket once its PR exists — belongs to the
+state machine, which sees `pull_request: opened` the moment it happens.
 
-**Never add `assignment.bot` to anything** — not a ticket, not a PR, not to hand work to a future
-run. Staying assigned is how the loop keeps its own queue; adding itself would be the loop granting
-itself work.
+| Surface | Assignee means | Written by |
+| --- | --- | --- |
+| Issue | `assignment.bot` present = the loop's turn | The reviewer (adding) · the state machine (removing at `Implemented`) |
+| PR | Nothing on ours — found by `author:`. On someone else's, `assignment.bot` = please work on this | The reviewer only |
+
+**`labels.awaiting` is what says a human is needed**, which is why the reviewer is no longer
+assigned anything: two fields for one fact is this repo's oldest failure, and the assignment was the
+half that nothing ever cleared.
 
 **Never set or change a PR's assignee at all.** A PR's turn is carried by its `draft` flag: draft
 means the loop is still working, ready-for-review means it is waiting on a human. And a PR is the
@@ -198,7 +200,7 @@ The answer to *"why is this not in my queue, and when does it come back?"*
 - **It is not only for blocks.** Anything that should wait takes one: a dependency that will settle
   on its own, a decision deferred to next quarter.
 - **A live `Hold Until` means invisible, not merely idle.** No work on it, *and* no mention in the
-  journal at all — including `📋 Awaiting you`. The one exception is naming it as another ticket's
+  journal at all, and the state machine clears `labels.awaiting`. The one exception is naming it as another ticket's
   blocker.
 - **Clear it the moment the reason goes away.** That is what returns the ticket to active
   consideration, and it is a single-field delete, so Priority and Effort survive untouched:
@@ -348,7 +350,7 @@ re-derived next run; a malformed backlog has to be cleaned up by hand.
 
 - [ ] Type set
 - [ ] Priority field set (reviewer's, so leave an existing value alone) **and Effort set — always, by you**
-- [ ] `Stage` set — `Proposed` if you are filing it, and assigned to `assignment.reviewer`
+- [ ] `Stage: Proposed` and `labels.awaiting` — **only when filing locally**; in a routine the state machine sets both on `issues: opened`. Assign nobody
 - [ ] `Hold Until` set if `Stage` is `Blocked`, with the date justified in a comment
 - [ ] Blockers mirrored as a `Blocked by:` line in the body — always — **and** set as Relationships
       where the run can (local `gh` only; a cloud run cannot, see above)

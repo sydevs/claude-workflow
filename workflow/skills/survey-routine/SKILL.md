@@ -25,9 +25,10 @@ commit, push, merge, or label.
 
 Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
 
-**Everything filed here is `Stage: Proposed`, assigned to `assignment.reviewer`.** A proposal
-exists to be judged, so it goes to the person who judges it; the Stage is what keeps the loop from
-acting on its own suggestion next run.
+**File and stop — the state machine does the rest.** Everything filed here is authored by the bot,
+so `issues: opened` fires and sets `Stage: Proposed` and `labels.awaiting` within seconds. **Do not
+set either yourself, and assign nobody.** A proposal exists to be judged; `awaiting` is what says
+so, and it is not yours to write.
 
 Before filing anything, check the standing proposal ceiling. There is no query for a field, so take
 the indexed half and filter the rest:
@@ -62,6 +63,19 @@ you cannot point at a line for is a journal note, not a ticket — that bar is a
 about the ceiling.
 
 ## Reconciliation sweeps
+
+**`awaiting` drift.** The state machine is event-driven, so it can only be wrong where no event
+fired — a webhook GitHub dropped, a workflow run that failed, or one of the loop's own dead-end adds
+that a later run resolved without clearing. Recompute the label across the open backlog with the
+rules below, fix what disagrees, and **journal every correction under `🧭 Friction`** — a silent fix
+hides a broken workflow, and this sweep is the only thing that would notice.
+
+| Should carry `awaiting` | Should not |
+| --- | --- |
+| `Stage: Proposed` | Any live `Hold Until`, or `Stage: Blocked` |
+| `Stage: Revising` whose last comment is the loop's | `Stage: Revising` whose last comment is a `respondTo` human's |
+| `Stage: Implement` with the bot **not** assigned | `Stage: Implement` with the bot assigned, or `Implemented` |
+| A ready PR with no review, or approved in a `loopMayNotMerge` repo | A PR with changes requested, merged, or closed |
 
 **Unheard replies.** Someone commented, but the ticket is not the loop's to act on — so nothing
 will ever pick it up, and they may be waiting:

@@ -54,8 +54,8 @@ closed as fixed, and reopening it with new evidence is far more useful than a se
 
 ## Filing
 
-Per `/workflow:triage-issue`. Type `Bug`, `Stage: Proposed`, assigned to `assignment.reviewer`,
-priority by consequence:
+Per `/workflow:triage-issue`. Type `Bug`, priority by consequence — `Stage` and `labels.awaiting`
+are set by the state machine on `issues: opened`, and nobody is assigned:
 `Critical` for data loss or a security path, `High` for a broken user journey, `Medium` for a
 degraded one, `Low` for a logged error nobody experiences.
 
