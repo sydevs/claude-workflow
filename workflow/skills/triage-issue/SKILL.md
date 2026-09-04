@@ -328,16 +328,23 @@ The shorthand is only safe for issues in the same repository as the comment.
 `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.
 
-## If GitHub access is unauthorized
+## Filing from a cloud run: what MCP reaches, and the one thing it does not
 
-`gh` is present in every environment we run in, but a cloud session whose GitHub proxy is not
-authorized 403s on every call. **Do not fall back to the GitHub MCP tools to file anyway.** They
-can create issues and comments, but they reach neither issue types nor blocked-by dependencies, so
-what they produce silently fails the checklist below — the first cloud run filed an untyped ticket
-exactly this way, and nobody would have noticed without reading the issue.
+A cloud run has no `gh` — every call 403s (`/workflow:preflight`) — so `mcp__github__issue_write` is
+the filing path, not a fallback.
 
-Journal the failure and file nothing. An unfiled finding can be re-derived next run; a malformed
-backlog has to be cleaned up by hand.
+- ⚠ **The one thing it cannot do is write a blocked-by dependency.** No MCP tool writes them, which
+  is the whole reason `relationships.bodyMarker` exists. A blocker recorded only as a native
+  relationship is invisible to every cloud run, so the `Blocked by:` line in the body is what
+  actually blocks — and it is the half of checklist item 5 a cloud run must satisfy.
+- **Issue type** — `issue_write`'s `type` parameter, validated against `list_issue_types`. This used
+  to be unreachable, which is why the first cloud run filed an untyped ticket; it is reachable now,
+  so an untyped ticket is a mistake rather than a limitation.
+- **Priority, Effort, `Stage`, `Hold Until`** — `issue_fields`, with `field_option_name` for the
+  single-selects so the option is validated before the call.
+
+If a call genuinely fails, **journal the failure and file nothing.** An unfiled finding can be
+re-derived next run; a malformed backlog has to be cleaned up by hand.
 
 ## Filing checklist
 
@@ -345,7 +352,8 @@ backlog has to be cleaned up by hand.
 - [ ] Priority field set (reviewer's, so leave an existing value alone) **and Effort set — always, by you**
 - [ ] `Stage: Proposed` and `labels.awaiting` — **only when filing locally**; in a routine the state machine sets both on `issues: opened`. Assign nobody
 - [ ] `Hold Until` set if `Stage` is `Blocked`, with the date justified in a comment
-- [ ] Blockers set as Relationships **and** mirrored as a `Blocked by:` line in the body
+- [ ] Blockers mirrored as a `Blocked by:` line in the body — always — **and** set as Relationships
+      where the run can (local `gh` only; a cloud run cannot, see above)
 - [ ] Body in the format above; checklist items are executable
 - [ ] Searched for a duplicate first (`search_issues`), including closed ones
 

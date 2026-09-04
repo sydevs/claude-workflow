@@ -13,18 +13,24 @@
  *
  *   {
  *     "repo": "sydevs/SahajCloud",
- *     "reviewDecision": "APPROVED",          // from list_pull_requests
  *     "hasWorkflows": true,                  // ls <repo>/.github/workflows/*.yml — a filesystem check
  *     "pr":            { … },                // pull_request_read method:get
+ *     "reviews":       [ … ],                // pull_request_read method:get_reviews
  *     "checkRuns":     { … },                // pull_request_read method:get_check_runs
  *     "statuses":      { … },                // pull_request_read method:get_status  (optional)
  *     "reviewThreads": { … }                 // pull_request_read method:get_review_comments
  *   }
  *
- * Omissions fail SAFE, never open: a missing `reviewDecision` is "not approved",
- * and an unknown `hasWorkflows` is "this repo has CI", so a missing check blocks
- * rather than passes. The only error that can merge something is one that invents
- * an approval.
+ * **Pass `reviews`, not a `reviewDecision` you worked out yourself.** No MCP call
+ * carries the field, and `reviewDecisionFrom` — whose allowlist is
+ * `assignment.reviewer` from `loop-config.json` — is where that derivation lives,
+ * so a run never re-derives it. An explicit `reviewDecision` is still honoured for
+ * a local `gh` caller that has the real field.
+ *
+ * Omissions fail SAFE, never open: no derivable approval is "not approved", and an
+ * unknown `hasWorkflows` is "this repo has CI", so a missing check blocks rather
+ * than passes. The only error that can merge something is one that invents an
+ * approval.
  *
  * Exit codes: 0 merge · 1 hold.
  *
@@ -56,15 +62,21 @@ if (!repo || !repo.includes('/')) {
 if (typeof input.hasWorkflows === 'boolean') setRepoWorkflows(repo, input.hasWorkflows)
 
 let policy = {}
+let reviewAuthority = []
 try {
-  policy = loadLoopConfig(flag(argv, 'config')).mergePolicy || {}
+  const config = loadLoopConfig(flag(argv, 'config'))
+  policy = config.mergePolicy || {}
+  reviewAuthority = [config.assignment?.reviewer].filter(Boolean)
 } catch {
-  // No config reachable: the repo-level "never merge here" rule cannot be
-  // applied, so say so rather than silently dropping a safety rule.
-  console.error('merge-verdict: loop-config.json not found — mergePolicy NOT applied.')
+  // No config reachable: neither the repo-level "never merge here" rule nor the
+  // approval allowlist can be applied. Both fail closed — an empty authority
+  // derives no approval at all — but say so rather than dropping them silently.
+  console.error('merge-verdict: loop-config.json not found — mergePolicy and review authority NOT applied.')
 }
 
-const verdict = mergeVerdict(normalizeMcp(input), repo, policy)
+// `reviewAuthority` comes last on purpose: the config's allowlist is the gate, and
+// a snapshot on stdin must not be able to widen it by naming its own.
+const verdict = mergeVerdict(normalizeMcp({ ...input, reviewAuthority }), repo, policy)
 
 if (JSON_OUT) console.log(JSON.stringify({ repo, pr: input.pr?.number, ...verdict }, null, 2))
 else console.log(`${repo}#${input.pr?.number}  ${verdict.verdict}  — ${verdict.reason}`)

@@ -60,6 +60,8 @@ jobs:
             // Four of the five repos are public, so any account can submit an
             // APPROVED review; treating every respondTo login as an approver would
             // let a drive-by approval decide whether work still needs a human.
+            // Same rule the merge gate enforces in reviewDecisionFrom.
+            // why: docs/why.md#only-the-reviewers-approval-counts
             const REVIEWER = 'Ardnived'
             const LOOP_MAY_NOT_MERGE = ['claude-workflow']
             const AWAITING = 'awaiting'

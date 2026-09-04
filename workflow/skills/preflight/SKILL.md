@@ -63,6 +63,7 @@ thing here.
   `assignment.respondTo` on purpose: four of the five repos are public, so any account can submit an
   `APPROVED` review. The state machine and `merge-gate.mjs` both gate approval on the reviewer;
   `respondTo` governs only what counts as *feedback*.
+  (why: docs/why.md#only-the-reviewers-approval-counts)
 
   **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`; clearing
   `Hold Until` when a block lifts; revoking `Implement` → `Revising`; and `draft:false` on a PR
@@ -177,7 +178,7 @@ The PR queries the run skills refine from the fourth search — all indexed, non
 
 | Shape | Query |
 | --- | --- |
-| Merge candidates | `$SCOPE is:pr is:open author:<bot> draft:false review:approved` |
+| Merge candidates | `$SCOPE is:pr is:open author:<bot> draft:false` — approval is read per PR (`/workflow:work-routine` rung 1) |
 | Revision candidates | `$SCOPE is:pr is:open author:<bot> updated:>=<last-run-ISO>` |
 | Crashed-run residue | `$SCOPE is:pr is:open author:<bot> draft:true` |
 | Review candidates | `$SCOPE is:pr is:open author:<bot> draft:false -reviewed-by:<bot> -label:ops-journal` |

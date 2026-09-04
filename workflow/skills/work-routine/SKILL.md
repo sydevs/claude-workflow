@@ -53,15 +53,25 @@ is approved". (why: docs/why.md#search-lags-the-review-that-feeds-it)
 whose write the index might not have caught up with, and a draft PR can never be a merge candidate
 anyway.
 
-The set is bounded by `wipCapPerRepo` × `repos`, so read `reviewDecision` authoritatively from
-`pull_request_read method:get` on each — the same call the gather below already makes. Anything not
-`APPROVED` stops there and costs one call; this is the authoritative re-check rung 5 has always had
-and rung 1 lacked.
+⚠ **No MCP call returns `reviewDecision` — derive it from `get_reviews`.** `pull_request_read
+method:get` does not carry the field (it returns `requested_reviewers` and `mergeable_state`, and
+neither answers the question), and `list_pull_requests` cannot return it either: its `fields` enum
+has no such member. So the set is bounded by `wipCapPerRepo` × `repos`, and each candidate costs one
+`method:get_reviews` — the same authoritative per-PR read rung 5 makes.
 
-**Never decide mergeability yourself.** Gather all five, then ask `merge-verdict.mjs`:
+**Do not work the decision out yourself — pass the reviews through.**
+`reviewDecisionFrom` in `workflow/lib/merge-gate.mjs` is the one definition, and `merge-verdict.mjs`
+calls it for you: put what `get_reviews` returned in the snapshot's `reviews` key and leave
+`reviewDecision` out. **Only `assignment.reviewer`'s approval counts** — four of the five repos are
+public, so any account can submit an approving review, and the allowlist is what keeps the
+derivation narrower than the field it stands in for rather than wider.
+(why: docs/why.md#only-the-reviewers-approval-counts)
+
+**Never decide mergeability yourself.** Gather all six, then ask `merge-verdict.mjs`:
 
 ```
 mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__pull_request_read  method:get_reviews         owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
@@ -70,7 +80,7 @@ mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO
 ```
 
 ```bash
-echo '{"repo":"'$ORG/$REPO'","reviewDecision":"…","hasWorkflows":true,
+echo '{"repo":"'$ORG/$REPO'","hasWorkflows":true,"reviews":[…],
        "pr":{…},"checkRuns":{…},"statuses":{…},"reviewThreads":{…}}' \
   | ${CLAUDE_PLUGIN_ROOT}/skills/work-routine/merge-verdict.mjs
 ```
@@ -314,9 +324,11 @@ mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<own login> draft
 here and is not read — the PR is ours because we wrote it.
 (why: docs/why.md#draft-is-the-prs-baton)
 
-Work the candidates **oldest `created_at` first**, skipping any with
-`reviewDecision == CHANGES_REQUESTED` — those are mid-revision, and the once-ever review is better
-spent after rung 2 has answered.
+Work the candidates **oldest `created_at` first**. Skip any whose decision is `CHANGES_REQUESTED` —
+those are mid-revision, and the once-ever review is better spent after rung 2 has answered. That
+decision comes from `reviewDecisionFrom` over the `get_reviews` call this rung already makes below,
+never from a `reviewDecision` field: no MCP call carries one, so a run testing for it silently skips
+the check.
 
 PRs marked ready earlier in this same run are eligible: isolation comes from the subagent below,
 never from waiting a run.

@@ -573,9 +573,9 @@ clears `awaiting` because the ball is the loop's, and pushing the fix puts it ba
 the reviewer's latest review still being `CHANGES_REQUESTED`, so ordinary mid-work pushes do not
 flag a PR nobody is waiting on. (Found by the loop itself, in `sydevs/claude-workflow#42`, about the
 journal query this label replaced — the same gap in a different surface.) And **approval is gated on
-`assignment.reviewer`, never on `respondTo`**: approval authority is the
-reviewer's, and a list that admits every feedback-giver is wider than the authority it stands in
-for. The nightly drift sweep is the backstop, and it journals
+`assignment.reviewer`, never on `respondTo`** — the same allowlist, for the same reason, that
+`reviewDecisionFrom` applies in the merge gate (`#only-the-reviewers-approval-counts`). One rule,
+enforced at both sites where an approval is read. The nightly drift sweep is the backstop, and it journals
 every correction, because a silent fix hides a broken workflow.
 
 ## hasWorkflows is a filesystem check
@@ -612,6 +612,29 @@ The rule that generalises: **a search qualifier is safe only for facts the loop 
 `draft:` is ours, so the index cannot be behind us on it. `review:`, `-reviewed-by:` and
 `commenter:` describe other people's writes, and those need an authoritative read before anything
 irreversible depends on them.
+
+## Only the reviewer's approval counts
+
+The first draft of rung 1's derivation — written once it was clear no MCP call returns
+`reviewDecision` — counted the latest state-bearing review from every login **except our own**. An
+adversarial pass on the PR carrying it caught the consequence before it merged: `claude-workflow`,
+`SahajCloud`, `SahajAtlasWeb` and `WeMeditateWeb` are all public, so any GitHub account can submit a
+review on an open PR in them. One drive-by `APPROVED` from a stranger would have satisfied
+`merge-verdict.mjs`, in four repos where a merge is the deploy.
+
+Two things make it worth a heading rather than a fix in silence.
+
+**It was wider than the thing it replaced.** GitHub's own `reviewDecision` is computed against branch
+protection and requested reviewers, not "anyone who clicked approve" — so a stand-in that admits
+every login is not a stand-in. A derivation replacing a field has to be *narrower* than the field, or
+it is a new policy wearing the old one's name.
+
+**Until that PR the gate had never fired.** `reviewDecision` was always absent, so rung 1 held
+everything and the permissiveness was invisible: nothing in the loop's history would have shown it,
+and no test could have, because the wrong behaviour needed a stranger to appear. The rule that
+generalises is the one `preflight` already states about blocklists — *a one-name blocklist of
+ourselves fails open on everyone we have not met.* `assignment.reviewer` is where approval authority
+is already defined; the allowlist just says so where it is enforced, in `reviewDecisionFrom`.
 
 ## A conflicted PR schedules zero CI runs
 

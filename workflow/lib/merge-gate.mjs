@@ -143,6 +143,54 @@ export function mergeVerdict(pr, repo, policy = {}) {
 }
 
 
+/** Review states that carry a decision. `COMMENTED` never changes or clears one. */
+const STATE_BEARING = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
+
+/**
+ * The review decision, from what `pull_request_read method:get_reviews` returned.
+ *
+ * ## Why this is a function
+ *
+ * No MCP call carries `reviewDecision`, so the loop has to derive it — and the
+ * only derivation error that can ever ship something is one that INVENTS an
+ * approval. Its detector is a merge that should not have happened, in four repos
+ * where merging is the deploy. That is not a detector we can afford to arm, so
+ * the rule is evaluated here once rather than re-derived from prose on every run.
+ *
+ * ## `authorized` is an allowlist, and it is the security property
+ *
+ * Approval authority is `assignment.reviewer`'s. Four of the five repos are
+ * **public**, so any GitHub account can submit an `APPROVED` review on an open PR
+ * — which means "count everyone except ourselves" would let a stranger's drive-by
+ * approval satisfy the gate. An allowlist is also strictly narrower than the
+ * `reviewDecision` field this stands in for, rather than wider.
+ *
+ * Excluding the own login falls out of it: the agent is not the reviewer, so its
+ * own reviews are never counted.
+ *
+ * **An empty or absent `authorized` returns `null`** — no configured authority
+ * means no derived approval, which is the safe direction.
+ */
+export function reviewDecisionFrom(reviews, { authorized = [] } = {}) {
+  const allow = new Set((authorized || []).map((l) => String(l).toLowerCase()))
+  if (!allow.size) return null
+
+  // Latest state-bearing review per authorized login.
+  const latest = new Map()
+  for (const r of reviews || []) {
+    const login = String(r?.user?.login || r?.author?.login || '').toLowerCase()
+    const state = String(r?.state || '').toUpperCase()
+    if (!login || !allow.has(login) || !STATE_BEARING.has(state)) continue
+    const at = String(r?.submitted_at || r?.submittedAt || '')
+    const prev = latest.get(login)
+    if (!prev || at >= prev.at) latest.set(login, { state, at })
+  }
+
+  const states = [...latest.values()].map((v) => v.state)
+  if (states.includes('CHANGES_REQUESTED')) return 'CHANGES_REQUESTED'
+  return states.includes('APPROVED') ? 'APPROVED' : null
+}
+
 /**
  * Build the shape `mergeVerdict` wants from what the MCP tools return, so a
  * routine reaches the same decision code a local `gh` run does.
@@ -158,12 +206,16 @@ export function mergeVerdict(pr, repo, policy = {}) {
  * fail-safe, and silent. Both spellings are accepted; absent, a thread counts
  * as unresolved, which is the safe direction.
  *
- * `reviewDecision` has no MCP call of its own, so it is derived from
- * `list_pull_requests`' reviewDecision where available, or passed explicitly.
- * Absent, it is treated as NOT approved — the safe direction, since the only
- * error that can merge something is one that invents an approval.
+ * `reviewDecision` has no MCP call of its own and no MCP call carries the field:
+ * `pull_request_read method:get` omits it, and `list_pull_requests` has no such
+ * member in its `fields` enum. So pass `reviews` — what
+ * `pull_request_read method:get_reviews` returned — and `reviewAuthority`
+ * (`assignment.reviewer`), and `reviewDecisionFrom` derives it. An explicit
+ * `reviewDecision` still wins, for a local `gh` caller that has the real field.
+ * Absent both, it is NOT approved — the safe direction, since the only error that
+ * can merge something is one that invents an approval.
  */
-export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviewDecision }) {
+export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviews, reviewAuthority, reviewDecision }) {
   const checks = [
     ...(checkRuns?.check_runs || []).map((c) => ({
       __typename: 'CheckRun',
@@ -184,7 +236,8 @@ export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviewDec
     isDraft: Boolean(pr?.draft ?? pr?.isDraft),
     mergeable: pr?.mergeable === false ? 'CONFLICTING' : pr?.mergeable === true ? 'MERGEABLE' : 'UNKNOWN',
     mergeStateStatus: (pr?.mergeable_state || pr?.mergeStateStatus || '').toUpperCase(),
-    reviewDecision: reviewDecision || pr?.reviewDecision || null,
+    reviewDecision:
+      reviewDecision || pr?.reviewDecision || reviewDecisionFrom(reviews, { authorized: reviewAuthority }),
     reviewThreads: {
       nodes: (reviewThreads?.review_threads || []).map((t) => ({
         // MCP says `is_resolved`, GraphQL says `isResolved`. Take either;
