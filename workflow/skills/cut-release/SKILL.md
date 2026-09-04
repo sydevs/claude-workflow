@@ -1,6 +1,6 @@
 ---
 name: cut-release
-description: Cut a release where merged work has accumulated unreleased — tag, changelog, and GitHub Release. Friday's survey. Only SahajAtlasWordpress ships versioned artifacts today.
+description: Cut a release where merged work has accumulated unreleased — tag, changelog, and GitHub Release. Friday's survey. SahajAtlasWordpress ships a versioned artifact; claude-workflow ships a version-keyed plugin cache.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
@@ -18,10 +18,31 @@ exception is the one that matters most to end users.
 | SahajCloud | No — Railway deploys on merge. |
 | WeMeditateWeb | No — Cloudflare Workers deploys on merge. |
 | SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract; see `survey-contracts`. |
+| **claude-workflow** | **No tag, but yes a version.** No artifact and no GitHub Release — but `workflow/.claude-plugin/plugin.json`'s `version` is the cache key every installed copy is stored under, so an unchanged version means installed sessions never see the merge. |
 
 `v0.1.0` of the WordPress plugin shipped on 2026-08-27, so the install path documented in its
 README now works. Its README status line still says "complete, not yet tagged" — stale, and worth
 correcting whenever that file is next touched.
+
+### claude-workflow — bump the manifest, do not tag
+
+This repo has no releases and wants none. What it has is a **cache key**: an installed plugin lives
+in `~/.claude/plugins/cache/sydevs/workflow/<version>/`, pinned to the commit `main` pointed at when
+it was installed. While `version` is unchanged, a merge reaches the cloud routines and nothing else.
+`0.1.0` stood for 53 commits and a maintainer ran the repo's first commit for eight days.
+(why: docs/why.md#an-installed-plugin-does-not-track-main)
+
+So:
+
+- **Any PR that changes `workflow/skills/**`, `workflow/hooks/**` or `workflow/lib/**` bumps
+  `version` in the same PR** — new skill or new capability → minor; wording and fixes → patch. It is
+  one line in the manifest, not a release ceremony, and it belongs with the change that needs it
+  rather than in a Friday sweep.
+- **Never tag this repo, and never cut a GitHub Release for it.** The version is a cache key, not an
+  artifact. The rest of this skill — tags, changelog, release assets — applies to SahajAtlasWordpress
+  only.
+- On Friday, if `main` has moved over `workflow/` since the last `version` change, that is a finding:
+  say so in the journal and open the one-line bump.
 
 ## Finding the last release — carefully
 

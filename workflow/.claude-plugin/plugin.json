@@ -1,7 +1,7 @@
 {
   "name": "workflow",
   "description": "Shared issue-to-PR workflow for the sydevs projects. Reads per-repo settings from .claude/workflow.json so one skill body serves every repo.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": { "name": "Sahaja Yoga Developers", "url": "https://github.com/sydevs" },
   "homepage": "https://github.com/sydevs/claude-workflow",
   "repository": "https://github.com/sydevs/claude-workflow",

@@ -17,15 +17,22 @@ right now**, to all five repos including itself. Everything below follows from t
 
 ### ⚠ Merging to `main` IS the deploy
 
-There is no release step, no version bump that matters, no artifact. `main` is consumed live:
+There is no release step and no artifact — but "consumed live" is true of exactly one of the two
+consumers, and the difference has already cost a maintainer eight days of stale skills:
 
-- the two scheduled cloud routines read `loop-config.json` and the skills fresh from `main` on every
-  run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json);
-- `/plugin install workflow@sydevs` installs from `main` via
-  [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json).
+| Consumer | Reads | A merge reaches it |
+| --- | --- | --- |
+| The two scheduled cloud routines | `loop-config.json` and the skills fresh from `main` on every run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json) | **Next run.** Genuinely live. |
+| `/plugin install workflow@sydevs` | The commit that `main` pointed at **when it was installed**, cached under `~/.claude/plugins/cache/sydevs/workflow/<version>/` | **Never**, until `version` in `workflow/.claude-plugin/plugin.json` changes or the maintainer runs `/plugin` → update. |
 
-So the blast radius of a merge is *the next run of everything*. There is no rollback other than
-another PR, and a routine may fire before you have written it.
+So the blast radius of a merge is *the next run of the routines*, and **nothing else**. There is no
+rollback other than another PR, and a routine may fire before you have written it.
+
+⚠ **The installed plugin is pinned by commit and keyed by version.** `installed_plugins.json`
+records a `gitCommitSha` and never revisits it; the cache directory is named after `version`, so an
+unchanged version string is an unchanged cache no matter how far `main` has moved. This is why
+`version` is **not** decorative here, and why it is the one thing in this repo that a skill change
+must not leave alone. (why: docs/why.md#an-installed-plugin-does-not-track-main)
 
 ### ⚠ You cannot validate a change by running it
 
