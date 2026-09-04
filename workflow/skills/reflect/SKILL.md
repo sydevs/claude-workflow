@@ -88,6 +88,16 @@ Prefer **removing** a rule to adding one. These skills are read in full on every
 that has grown a paragraph per incident becomes a document nobody can follow — which is how the
 previous three-fork workflow decayed.
 
+**When your PR edits a skill, run the rule delta and account for every removal in the body:**
+
+```bash
+node workflow/lib/rule-delta.mjs --base main workflow/skills
+```
+
+It exits non-zero on a directive that vanished with no close match. Each one is a rule you meant to
+drop or a rule that fell out, and only you can say which — this repo cannot validate a skill by
+running it. (why: docs/why.md#lint-measures-style-not-content)
+
 ## Refining the reviewer profile
 
 `review.profilePath` is the adversarial review's model of how $REVIEWER reviews. Refining it is

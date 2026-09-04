@@ -110,8 +110,19 @@ Before adding prose to a run-loaded skill, check the rule is not already stated 
 the story in `docs/why.md` behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
 
 Everything the loop writes carries a character budget from `writing.budgets`, checked with
-`workflow/lib/budget.mjs`, counted including `<details>`. `workflow/lib/ste-lint.py` checks register
-locally; it is a development tool, never a run step.
+`workflow/lib/budget.mjs`, counted including `<details>`.
+
+**Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
+
+```bash
+node workflow/lib/rule-delta.mjs --base main workflow/skills
+```
+
+`ste-lint.py` measures a skill's **style**; `rule-delta.mjs` measures its **content**. A rewrite can
+pass the first and fail the second — the `journal` rewrite in #48 took its violations from 16 to 4,
+shrank a third, and silently dropped `Never read the board back`. Lint called it an improvement,
+because by its measure it was. Both are development tools, never run steps.
+(why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:

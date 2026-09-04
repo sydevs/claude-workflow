@@ -639,6 +639,32 @@ The journal is the sharp case. A day's thread reached 134,000 characters and one
 returned 97,279 in a single response, which exceeded the token limit and broke the run. The journal
 is now one rewritten document per day, and **no run calls `get_comments` on a journal issue.**
 
+## Lint measures style, not content
+
+`ste-lint.py` counts passive voice, semicolons and long sentences. `rule-delta.mjs` extracts every
+bold-or-heading imperative and diffs the set. They measure orthogonal things, and only the second
+answers the question that matters when a skill is rewritten: **is every rule still there?**
+
+The case that produced both tools: the `journal` rewrite took violations from 16 to 4 and cut a
+third of the bytes, and dropped **Never read the board back** — half of `#the-board-is-a-lens`. Lint
+scored it a clear improvement. The rule delta named the loss in one line.
+
+This matters here more than it would elsewhere because a skill cannot be validated by running it.
+The edit takes effect next session, merging is the deploy, and a dropped rule surfaces weeks later
+as a run behaving oddly with nothing to attribute it to.
+
+Two details are load-bearing rather than tidy:
+
+- **Whitespace collapses before matching.** Markdown wraps a directive across lines, so a
+  line-oriented match misses it. Skipping this reported `Never force-push someone else's branch` as
+  deleted when it had never moved.
+- **Rewordings are filtered out.** A raw diff of #48 reported 14 disappearances, 11 of them
+  `Do not X` becoming `Never X`. A reviewer handed 14 items skims, and skimming is how the one real
+  removal gets waved through. Three survived the filter, and one of those was genuine.
+
+It is a tripwire, not a proof. It sees bold imperatives and headings only, so a rule written as
+plain prose is invisible to it, and `Never X` weakened to `Avoid X` fuzzy-matches and passes.
+
 ## hasWorkflows is a filesystem check
 
 `mcp__github__list_workflows` is not in the routine's MCP build. Four consecutive runs journalled
