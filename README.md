@@ -85,6 +85,11 @@ loop's one assignment write is removing itself from a ticket once the PR exists.
 anything and it stops touching that thing: a per-item kill switch that needs no documentation to
 understand.
 
+**What needs you is one label: `awaiting`.** It is the primary signal, it works on issues and PRs
+alike, and it is maintained by a workflow from GitHub events rather than by the loop — so it appears
+the moment a PR is ready and disappears the moment you reply, not on the loop's next run. Filter any
+board view by `label:awaiting` and that is your queue.
+
 **What kind of turn it is** lives in two org-level issue fields, next to Priority and Effort:
 
 | `Stage` | Means |

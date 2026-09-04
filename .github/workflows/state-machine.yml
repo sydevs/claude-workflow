@@ -1,0 +1,215 @@
+# The workflow state machine — every MECHANICAL transition of Stage, assignees
+# and the `awaiting` label.
+#
+# Called by all five sydevs repos (see workflow-state.yml in each). One copy
+# here, five thin callers, so the rules cannot drift between repos.
+#
+# The division of labour, stated once and enforced by prose in
+# workflow/skills/preflight/SKILL.md:
+#
+#   this workflow   every transition an EVENT determines
+#   the loop        judgement only — Blocked + Hold Until, clearing a hold,
+#                   revoking Implement, draft:false, and `awaiting` for the
+#                   four dead ends no event expresses
+#   the reviewer    Stage: Implement, and assigning the bot
+#
+# Recursion is bounded by idempotency, not by an actor guard. A write here
+# fires field_added again, but every writer below reads current state first and
+# returns early when it already matches — so the re-trigger is one free no-op
+# run. Do NOT add `if: github.actor != 'sydevs-bot'`: the bot authors its own
+# issues and PRs, so that guard would skip the transitions that matter most.
+#
+# why: sydevs/claude-workflow/docs/why.md#the-state-machine-is-not-the-loops-job
+name: Workflow state machine
+
+on:
+  workflow_call:
+    inputs:
+      project-url:
+        description: Org project the item is added to on open.
+        required: false
+        type: string
+        default: https://github.com/orgs/sydevs/projects/2
+    secrets:
+      token:
+        description: PAT with repo Issues+PRs write and org Projects write.
+        required: true
+
+permissions: {}
+
+jobs:
+  state:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add new items to the board
+        if: github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'transferred'
+        uses: actions/add-to-project@v2
+        continue-on-error: true
+        with:
+          project-url: ${{ inputs.project-url }}
+          github-token: ${{ secrets.token }}
+
+      - name: Apply the state machine
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.token }}
+          script: |
+            const BOT = 'sydevs-bot'
+            const RESPOND_TO = ['Ardnived', 'antontcymbal', 'Copilot']
+            const LOOP_MAY_NOT_MERGE = ['claude-workflow']
+            const AWAITING = 'awaiting'
+            const [owner, repo] = [context.repo.owner, context.repo.repo]
+            const ev = context.payload
+            const action = ev.action
+
+            // ---- helpers -------------------------------------------------
+            const log = []
+            const note = (m) => { log.push(m); core.info(m) }
+
+            async function setAwaiting(number, on, why) {
+              const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number })
+              const has = issue.labels.some((l) => (l.name || l) === AWAITING)
+              if (on && !has) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: [AWAITING] })
+                note(`#${number} +awaiting (${why})`)
+              } else if (!on && has) {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name: AWAITING })
+                note(`#${number} -awaiting (${why})`)
+              }
+            }
+
+            // Issue fields are org-level but written through a repo endpoint.
+            // The PUT replaces the whole set, so read first and merge — a PUT
+            // carrying only Stage silently clears Priority, Effort and Hold Until.
+            async function readFields(number) {
+              const { data } = await github.request(
+                'GET /repos/{owner}/{repo}/issues/{n}/issue-field-values',
+                { owner, repo, n: number })
+              return data
+            }
+            async function setStage(number, value, why) {
+              const cur = await readFields(number)
+              const stage = cur.find((f) => f.issue_field_name === 'Stage')
+              if (stage?.single_select_option?.name === value) return
+              const kept = cur
+                .filter((f) => f.issue_field_name !== 'Stage')
+                .map((f) => ({ field_id: f.issue_field_id, value: f.single_select_option?.name ?? f.value }))
+              await github.request(
+                'PUT /repos/{owner}/{repo}/issues/{n}/issue-field-values',
+                { owner, repo, n: number,
+                  issue_field_values: [...kept, { field_id: STAGE_FIELD_ID, value }] })
+              note(`#${number} Stage -> ${value} (${why})`)
+            }
+            const STAGE_FIELD_ID = 46423931
+
+            async function stageOf(number) {
+              const f = await readFields(number)
+              return {
+                stage: f.find((x) => x.issue_field_name === 'Stage')?.single_select_option?.name ?? null,
+                hold: f.find((x) => x.issue_field_name === 'Hold Until')?.value ?? null,
+              }
+            }
+            const held = (h) => h && h > new Date().toISOString().slice(0, 10)
+
+            // A PR's linked issues. closingIssuesReferences is GraphQL-only.
+            async function closedIssues(prNumber) {
+              const q = `query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){
+                pullRequest(number:$n){closingIssuesReferences(first:10){nodes{number}}}}}`
+              try {
+                const d = await github.graphql(q, { o: owner, r: repo, n: prNumber })
+                return d.repository.pullRequest.closingIssuesReferences.nodes.map((x) => x.number)
+              } catch (e) { core.warning(`closingIssuesReferences failed: ${e.message}`); return [] }
+            }
+            async function unassignBot(number) {
+              const { data: i } = await github.rest.issues.get({ owner, repo, issue_number: number })
+              if (!i.assignees.some((a) => a.login === BOT)) return
+              await github.rest.issues.removeAssignees({ owner, repo, issue_number: number, assignees: [BOT] })
+              note(`#${number} unassigned ${BOT}`)
+            }
+
+            // ---- the transitions ----------------------------------------
+            if (context.eventName === 'issues') {
+              const n = ev.issue.number
+              const labels = ev.issue.labels.map((l) => l.name)
+              if (labels.includes('ops-journal')) { note('journal issue — no-op'); return }
+
+              if (action === 'opened' && ev.issue.user.login === BOT) {
+                const { stage } = await stageOf(n)
+                if (!stage) {
+                  await setStage(n, 'Proposed', 'bot filed it')
+                  await setAwaiting(n, true, 'Proposed — verdict owed')
+                }
+              } else if (action === 'closed') {
+                await setAwaiting(n, false, 'closed')
+              } else if (action === 'assigned' && ev.assignee?.login === BOT) {
+                await setAwaiting(n, false, 'assigned to the loop')
+              } else if (action === 'field_added' || action === 'field_removed') {
+                const { stage, hold } = await stageOf(n)
+                const botAssigned = ev.issue.assignees.some((a) => a.login === BOT)
+                if (held(hold) || stage === 'Blocked') {
+                  await setAwaiting(n, false, 'parked')
+                } else if (stage === 'Implement' && !botAssigned) {
+                  await setAwaiting(n, true, 'Implement but the loop is not assigned')
+                } else if (stage === 'Implement' || stage === 'Implemented') {
+                  await setAwaiting(n, false, `Stage=${stage}`)
+                }
+              }
+            }
+
+            if (context.eventName === 'issue_comment' && action === 'created') {
+              const n = ev.issue.number
+              if (ev.issue.labels.map((l) => l.name).includes('ops-journal')) return
+              if (!RESPOND_TO.includes(ev.comment.user.login)) { note('comment not from respondTo — no-op'); return }
+              await setAwaiting(n, false, 'you replied')
+              if (!ev.issue.pull_request) {
+                const { stage, hold } = await stageOf(n)
+                if (!held(hold) && (stage === 'Proposed' || stage === 'Revising')) {
+                  await setStage(n, 'Revising', 'you replied')
+                }
+              }
+            }
+
+            if (context.eventName === 'pull_request' || context.eventName === 'pull_request_target') {
+              const pr = ev.pull_request
+              const n = pr.number
+              const ours = pr.user.login === BOT
+
+              if ((action === 'opened' || action === 'reopened') && ours) {
+                for (const i of await closedIssues(n)) {
+                  await setStage(i, 'Implemented', `PR #${n} is in flight`)
+                  await unassignBot(i)
+                  await setAwaiting(i, false, 'its PR carries it now')
+                }
+              } else if (action === 'ready_for_review' && ours) {
+                await setAwaiting(n, true, 'ready for review')
+              } else if (action === 'closed') {
+                await setAwaiting(n, false, pr.merged ? 'merged' : 'closed')
+                if (!pr.merged && ours) {
+                  for (const i of await closedIssues(n)) {
+                    await setStage(i, 'Revising', `PR #${n} closed unmerged`)
+                    await setAwaiting(i, true, 'its PR was abandoned')
+                  }
+                }
+              }
+            }
+
+            if (context.eventName === 'pull_request_review' && action === 'submitted') {
+              const n = ev.pull_request.number
+              const state = ev.review.state.toUpperCase()
+              if (!RESPOND_TO.includes(ev.review.user.login)) { note('review not from respondTo — no-op'); return }
+              if (state === 'APPROVED') {
+                // The loop merges approved work on its next run — except where
+                // it is forbidden to merge at all, and only a human can finish it.
+                const humanMerges = LOOP_MAY_NOT_MERGE.includes(repo)
+                await setAwaiting(n, humanMerges, humanMerges
+                  ? 'approved, but only a human may merge in this repo'
+                  : 'approved — the loop merges next run')
+              } else {
+                await setAwaiting(n, false, `review ${state} — the loop's turn`)
+              }
+            }
+
+            if (log.length === 0) note('no transition applied')
+            await core.summary.addHeading('State machine', 3)
+              .addRaw(`\`${context.eventName}.${action}\``).addBreak()
+              .addList(log.length ? log : ['no transition applied']).write()

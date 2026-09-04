@@ -127,7 +127,7 @@ others.
 
 ### Labels (every repo, identical)
 
-**There is exactly one: `ops-journal`.** Everything the loop reads about a ticket is a field or the
+**There are two: `ops-journal` and `awaiting`** (see the board section below). Everything else the loop reads about a ticket is a field or the
 assignee; type is a native issue type. `ready-to-implement`, `proposal`, `needs-info`,
 `blocked-upstream`, `hold` and `claude:working` were all retired when `Stage` and `Hold Until`
 arrived — keeping a label alongside the field that replaced it is a second source of truth for the
@@ -147,6 +147,71 @@ title is a rewritten headline, so it is never the key). **Journals are not pinne
 GraphQL-only and a routine's GraphQL serves only PR-review operations, so the call cannot succeed
 from the loop. Recency surfaces the current journal instead. The weekly reflection closes the
 week's journals.
+
+### The workflow board and the state machine
+
+One org project — **[`Claude Workflow`, sydevs/projects/2](https://github.com/orgs/sydevs/projects/2)**
+(`projects` in `loop-config.json`) — holds every open issue and PR across the five repos. Issues are
+grouped by `Stage`, PRs by the project's own `Status`, and `awaiting` marks anything needing a human.
+**The loop neither reads nor writes the board** (why: `docs/why.md#the-board-is-a-lens`).
+
+**One workflow maintains all of it.** `.github/workflows/state-machine.yml` in this repo is a
+`workflow_call` reusable workflow; every repo — including this one — carries a ~20-line
+`workflow-state.yml` that calls it. One copy of the rules, five callers, no drift.
+
+```yaml
+jobs:
+  state:
+    uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
+    secrets:
+      token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+```
+
+**The token.** Org Actions secret `ADD_TO_PROJECT_PAT` — a `sydevs-bot` fine-grained PAT with repo
+**Issues: read/write**, **Pull requests: read/write**, and org **Projects: read/write**. Issue-field
+writes go through a repo endpoint (`PUT /repos/{o}/{r}/issues/{n}/issue-field-values`) but the field
+is org-level, and whether the default `GITHUB_TOKEN` suffices is undocumented — so the PAT is used
+throughout. If a repo's runs fail with a credentials error, check the secret's repository-access
+policy includes it.
+
+> ⚠ **Recursion is bounded by idempotency, not by an actor guard.** The workflow's own writes fire
+> `field_added` again, but every writer reads current state first and returns early when it matches,
+> so the re-trigger is one free no-op run. **Do not add `if: github.actor != 'sydevs-bot'`** — the
+> bot authors its own issues and PRs, so that guard skips the transitions that matter most.
+
+**Labels — there are two**, identical in every repo:
+
+```bash
+gh label create "ops-journal" --repo sydevs/<repo> --color 0052cc --description "Run log for the autonomous loop" --force
+gh label create "awaiting"    --repo sydevs/<repo> --color D93F0B --description "A human is needed. The primary signal — maintained by the state-machine workflow." --force
+```
+
+**One-time UI configuration** (built-in project workflows and views have no API):
+
+1. Project **⚙ Settings → Manage access**: `sydevs-bot` needs **write**.
+2. **Workflows** sidebar — enable and map:
+   | Workflow | Set |
+   | --- | --- |
+   | Item added to project · Item reopened | Status: **In progress** |
+   | Code changes requested | Status: **Changes requested** |
+   | Code review approved | Status: **Approved** |
+   | Pull request merged · Item closed | Status: **Done** |
+   | Auto-archive items | `is:closed updated:<2weeks` (optional) |
+
+   Auto-add is **not** used — the reusable workflow adds items in every repo, which the free plan's
+   single auto-add slot could not do.
+3. **Views**:
+   | View | Layout | Filter |
+   | --- | --- | --- |
+   | 🙋 Awaiting you | Table | `label:awaiting` — **the primary view** |
+   | 🎫 Pipeline | Board, group by **Stage** | `is:issue has:stage` |
+   | 🔀 Pull requests | Board, group by **Status** | `is:pr` |
+   | 📥 Backlog | Table, sort Priority | `is:issue no:stage` |
+   | ⏸ Parked | Table, sort **Hold Until** | `stage:Blocked` |
+
+`Status` options were renamed via GraphQL to `In progress · Changes requested · Approved · Done`.
+`Status` is per-project-item and GraphQL-only, which is why ticket state lives in the `Stage`
+**issue field** instead — REST-writable, board-visible, one source of truth.
 
 > **Why an issue and not a Discussion or the Wiki?** Both were evaluated and neither is writable
 > from a cloud session: Discussions is GraphQL-only and the session's GitHub proxy allows only a

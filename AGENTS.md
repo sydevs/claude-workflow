@@ -58,8 +58,17 @@ claude plugin validate ./workflow --strict     # leanGate.command
 claude --plugin-dir ./workflow                 # load the plugin without installing it
 ```
 
-**That validator is the entire automated gate.** There is no test suite and no CI — no
-`.github/workflows/` here at all. `validate` checks the plugin manifest and the skill frontmatter;
+**That validator is the entire automated gate for the plugin's prose.** There is no test suite and
+no CI for it.
+
+⚠ **`.github/workflows/` now exists, and it is not CI.** It holds
+`state-machine.yml` — the reusable workflow that owns every mechanical `Stage`, assignee and
+`awaiting` transition for all five repos — plus this repo's own thin caller. The old "no workflows
+here at all" rule was a consequence of having nothing to test; it stopped being true when this repo
+started shipping *automation* alongside prose. Editing `state-machine.yml` changes behaviour in
+every sydevs repo on the next event, with no merge anywhere else, so it carries the same blast
+radius as a skill and the same rule: one behaviour per PR, and say what failure the change prevents.
+(why: docs/why.md#the-state-machine-is-not-the-loops-job) `validate` checks the plugin manifest and the skill frontmatter;
 it cannot check whether the prose is *right*, because the skills are prose.
 
 The real gate is a **supervised loop run**: `/workflow:work-routine --dry-run` locally, or a manually
@@ -87,7 +96,8 @@ hook is doing too much.
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` | The plugin manifest. |
 | `.claude-plugin/marketplace.json` | The **marketplace** manifest — a different file, one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `issueFields`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
+| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `issueFields`, `projects`, `stateMachine`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Values only — never rules, never rationale. Read fresh from `main` each run. |
+| `.github/workflows/state-machine.yml` | The mechanical state machine, called by all five repos. **Not CI** — see the warning above. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, in the same shape every product repo uses. Values only, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |

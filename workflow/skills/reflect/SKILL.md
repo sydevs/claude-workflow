@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Read the week's journal, PR outcomes, and the reviewer's review activity; refine the reviewer profile and propose changes to the loop's own configuration and skills as a PR. Sunday's survey — the loop improving itself through its own pipeline.
+description: Grade last week's changes, then read the week's flight-recorder journals, PR outcomes and the reviewer's review activity; refine the reviewer profile and propose changes to the loop's own configuration and skills as a PR. Sunday's survey — the loop improving itself through its own pipeline.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
@@ -12,16 +12,40 @@ go through the same review-and-merge path as everything else, so nothing about t
 changes without the user approving it — and because routines clone `main` fresh each run, a merged
 change takes effect on the next run with no redeploy.
 
+## Start by grading last week
+
+**Before looking at this week at all, read the previous reflection PR and say whether it worked.**
+Find it in this repo's merged PRs; for each change it made, state in one line whether the failure it
+addressed recurred in the week just gone — with the count, from the journals below.
+
+A reflection that never checks its own past changes is not learning, it is opinion with a PR
+attached. This section leads the new PR's body, and it has three possible verdicts per change:
+
+| Verdict | Then |
+| --- | --- |
+| **Held** — the failure did not recur | Say so and move on. This is the common case and it should be boring |
+| **Did not hold** — same failure, same shape | Do **not** re-propose the same fix harder. Say the model behind it was wrong, and propose a different one or nothing |
+| **Too early** — the situation never arose | Say so. Not evidence of anything, and it does not license a follow-up |
+
+With no previous reflection, say so in one line and continue.
+
 ## Evidence
 
 Read, do not recall — every run starts with no memory of the last. `$ORG`, `$JOURNAL_REPO`, `$BOT`
 and `$REVIEWER` come from `loop-config.json` (`org`, `journalRepo`, `assignment.bot`,
 `assignment.reviewer`), never typed literally.
 
+**The journal is a flight recorder now, so read it rather than re-deriving it.** Each day's body
+collects that day's `⚠️ Failed` and `⏭️ Ceiling` bullets, so one read per day gives the whole week's
+failures and ceiling stops without opening every run's comment. Open the comments only for a run
+whose failure you need the evidence block for.
+
 ```
 # the week's journal issues — one per day, all still open
 mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:ops-journal"
-# then, per issue: the body is the day's summary, the comments are the per-run detail
+# the BODY carries the day's collected ⚠️ Failed and ⏭️ Ceiling bullets — start there
+mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
+# comments only where you need a specific run's 🧭 Friction or its evidence block
 mcp__github__issue_read  method:get_comments  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
 
 # what actually happened to the PRs
@@ -39,10 +63,20 @@ previous reflection, seven days.
 
 ## What to look for
 
-The useful signals are about **friction**, not volume:
+The useful signals are about **friction**, not volume — and the journal now states them directly
+rather than leaving them to be inferred. Count across the seven days before concluding anything.
+
+**Recurrence is the gate for every change, not just profile edits.** One occurrence is weather: it
+gets named in the PR body as observed and nothing else. Propose a change when the same failure,
+ceiling or friction appears **on two or more distinct days**, and say the count in the proposal.
+A rule added for a single bad night is a rule that outlives its cause.
+(why: docs/why.md#reflect-edits-the-profile-only-on-recurrence)
 
 | Signal | What it suggests |
 | --- | --- |
+| The same `⚠️ Failed` bullet on 2+ days | A real defect in the machinery, not an environment blip |
+| A `🧭 Friction` entry repeating | A rule that misfires in practice — usually the rule is wrong, not the run |
+| The `awaiting` drift sweep correcting the same shape twice | The state machine has a gap; fix the workflow, not the sweep |
 | A ceiling hit every run | The ceiling is wrong, or the rung above it is not clearing work |
 | PRs needing 3+ revision rounds | The tickets are underspecified, or `implement-issue` is guessing |
 | CI fix-loop capping out repeatedly | A flaky gate, or a class of change the lean gate does not catch |
@@ -79,9 +113,13 @@ One PR to `claude-workflow` per week, at most. Ticketless (`prAllowlistGlobs`). 
 the evidence supports: a ceiling number, a clarified instruction, a removed rule that never fired,
 a profile refinement.
 
-The PR body must show the evidence for each change — "raise `maxWorkItemsPerRun` to 3: hit the
-cap on 4 of 6 runs, leaving PRs #12 and #15 waiting a full day for a one-line fix". A proposal
-without its evidence is a guess, and the reviewer has no way to check it.
+The PR body must show the evidence for each change, **as arithmetic over the week, not as
+impression**. The `⏭️ Ceiling` bullets are counted, not characterised: "raise `maxWorkItemsPerRun`
+to 4: it was the binding constraint on 5 of 7 days, and cost 3 adversarial reviews and 2 ticket
+replies". A proposal without its count is a guess, and the reviewer has no way to check it.
+
+**Lead the body with the grading section** from the top of this skill — what last week's changes
+were meant to fix, and whether they did.
 
 **Lessons that belong to a product repo, not to the loop**, follow the week's evidence out to that
 repo — a recurring reviewer comment is often a convention nobody wrote down, and the fix belongs
@@ -92,8 +130,8 @@ where the next author will read it:
   `**/*.md`), bounded by `wipCapPerRepo` like any loop PR. **Never touch anything under
   `.claude/`** — Protected Paths stall an unattended run, invisibly.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
-  `Stage: Proposed` issue in that repo instead, under `maxOpenProposals` like every survey
-  proposal.
+  proposal issue in that repo instead, under `maxOpenProposals` like every survey proposal — the
+  state machine sets its `Stage` and `labels.awaiting`.
 
 If the week gives no clear signal, **say so and open no PR.** A quiet week is a legitimate outcome,
 and an unnecessary change to the machinery is more expensive than none.
@@ -113,5 +151,7 @@ they are the only input that cannot be reconstructed.
 - **Never** raise a ceiling without evidence it was the binding constraint.
 - **Never** open a reflection PR while a previous one is still unreviewed — stack the findings into
   the next week instead.
+- **Never** propose a change on a single occurrence. Name it as observed and wait for the second.
+- **Never** open the PR body without the grading of last week's changes at the top.
 - **Never** ship a skill change and a ceiling change in the same PR — split them across weeks if
   the evidence demands both.

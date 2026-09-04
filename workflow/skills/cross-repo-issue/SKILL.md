@@ -48,8 +48,12 @@ copy is updated.
      issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
                    {field_name:"Effort",   field_option_name:"<...>"},
                    {field_name:"Stage",    field_option_name:"Proposed"}]
-     assignees:["<assignment.reviewer>"]
+     labels:["awaiting"]
    ```
+
+   ⚠ This skill needs `gh` for Relationships, so it runs **locally as you** — no bot event fires,
+   which is why `Stage` and `awaiting` are set here rather than left to the state machine. Assign
+   nobody.
 
 4. **Create one child issue per consumer**, then record the dependency natively so GitHub
    enforces and displays it — not just prose in the body.
@@ -60,7 +64,7 @@ copy is updated.
      issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
                    {field_name:"Effort",   field_option_name:"<...>"},
                    {field_name:"Stage",    field_option_name:"Proposed"}]
-     assignees:["<assignment.reviewer>"]
+     labels:["awaiting"]
    ```
 
    A child is filed `Proposed` like anything else, **not** `Blocked`: the `Blocked by:` line and the
