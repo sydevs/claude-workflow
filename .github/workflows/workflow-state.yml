@@ -12,7 +12,7 @@ on:
   # pull_request_target, not pull_request: the org secret must be present, and
   # nothing is checked out here, which is what makes that safe.
   pull_request_target:
-    types: [opened, reopened, ready_for_review, closed]
+    types: [opened, reopened, ready_for_review, synchronize, closed]
   pull_request_review:
     types: [submitted]
 

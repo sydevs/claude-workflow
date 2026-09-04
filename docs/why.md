@@ -564,7 +564,18 @@ The staleness it could suffer is answered by who writes it. The state machine cl
 `respondTo` human's comment or review, within seconds, so it cannot outlive the reply that answered
 it. The four adds the loop still owns are the dead ends no event expresses: CI red past
 `ciFixIterations`, a conflict it could not rebase, a thread it rebutted rather than adopted, and an
-investigation finished with a finding. The nightly drift sweep is the backstop, and it journals
+investigation finished with a finding.
+
+Two transitions were missing from the first draft and are worth naming, because both are silent
+failures rather than loud ones. **`synchronize` is the revision handover**: `changes_requested`
+clears `awaiting` because the ball is the loop's, and pushing the fix puts it back with the reviewer
+— but no other event says so, so a revised PR would have waited unlabelled forever. It is guarded on
+the reviewer's latest review still being `CHANGES_REQUESTED`, so ordinary mid-work pushes do not
+flag a PR nobody is waiting on. (Found by the loop itself, in `sydevs/claude-workflow#42`, about the
+journal query this label replaced — the same gap in a different surface.) And **approval is gated on
+`assignment.reviewer`, never on `respondTo`**: approval authority is the
+reviewer's, and a list that admits every feedback-giver is wider than the authority it stands in
+for. The nightly drift sweep is the backstop, and it journals
 every correction, because a silent fix hides a broken workflow.
 
 ## hasWorkflows is a filesystem check

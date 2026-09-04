@@ -56,6 +56,11 @@ jobs:
           script: |
             const BOT = 'sydevs-bot'
             const RESPOND_TO = ['Ardnived', 'antontcymbal', 'Copilot']
+            // Approval authority is NARROWER than respondTo, and deliberately so.
+            // Four of the five repos are public, so any account can submit an
+            // APPROVED review; treating every respondTo login as an approver would
+            // let a drive-by approval decide whether work still needs a human.
+            const REVIEWER = 'Ardnived'
             const LOOP_MAY_NOT_MERGE = ['claude-workflow']
             const AWAITING = 'awaiting'
             const [owner, repo] = [context.repo.owner, context.repo.repo]
@@ -182,6 +187,22 @@ jobs:
                 }
               } else if (action === 'ready_for_review' && ours) {
                 await setAwaiting(n, true, 'ready for review')
+              } else if (action === 'synchronize' && ours) {
+                // The revision handover. `changes_requested` cleared `awaiting`
+                // because the ball was ours; pushing the fix puts it back with
+                // the reviewer, and no other event says so. Guarded on their
+                // latest review still being CHANGES_REQUESTED, so ordinary
+                // mid-work pushes do not flag a PR nobody is waiting on.
+                // why: sydevs/claude-workflow#42
+                const { data: reviews } = await github.rest.pulls.listReviews(
+                  { owner, repo, pull_number: n })
+                const latest = reviews
+                  .filter((r) => r.user?.login === REVIEWER)
+                  .filter((r) => ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state))
+                  .pop()
+                if (latest?.state === 'CHANGES_REQUESTED') {
+                  await setAwaiting(n, true, 'revised after changes were requested — re-review')
+                }
               } else if (action === 'closed') {
                 await setAwaiting(n, false, pr.merged ? 'merged' : 'closed')
                 if (!pr.merged && ours) {
@@ -196,8 +217,10 @@ jobs:
             if (context.eventName === 'pull_request_review' && action === 'submitted') {
               const n = ev.pull_request.number
               const state = ev.review.state.toUpperCase()
-              if (!RESPOND_TO.includes(ev.review.user.login)) { note('review not from respondTo — no-op'); return }
+              const who = ev.review.user.login
+              if (!RESPOND_TO.includes(who)) { note('review not from respondTo — no-op'); return }
               if (state === 'APPROVED') {
+                if (who !== REVIEWER) { note(`approval from ${who} is not ${REVIEWER}'s — no-op`); return }
                 // The loop merges approved work on its next run — except where
                 // it is forbidden to merge at all, and only a human can finish it.
                 const humanMerges = LOOP_MAY_NOT_MERGE.includes(repo)

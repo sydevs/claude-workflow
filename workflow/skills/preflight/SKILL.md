@@ -59,6 +59,11 @@ thing here.
   | `labels.awaiting`, except the four dead ends below | The workflow | Same |
   | `Stage: Implement`, **ever** | The reviewer, only | The one safety property: the loop cannot authorise its own code |
 
+  **Approval authority is `assignment.reviewer`'s alone**, and it is narrower than
+  `assignment.respondTo` on purpose: four of the five repos are public, so any account can submit an
+  `APPROVED` review. The state machine and `merge-gate.mjs` both gate approval on the reviewer;
+  `respondTo` governs only what counts as *feedback*.
+
   **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`; clearing
   `Hold Until` when a block lifts; revoking `Implement` → `Revising`; and `draft:false` on a PR
   whose work is done. **Your four `awaiting` writes**, all dead ends no event expresses: CI red

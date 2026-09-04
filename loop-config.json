@@ -129,8 +129,8 @@
     "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md"
   },
   "journal": {
-    "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
-    "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
+    "$comment": "One issue per day in journalRepo, created lazily. The title reports run health; volume lives on the board. No issue number here on purpose: the run finds today's by creation date.",
+    "titleFormat": "<Day> — <n> runs · <n> failed · <n> ceiling stops",
     "timezone": "America/Vancouver"
   },
   "projects": {
