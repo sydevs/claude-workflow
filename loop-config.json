@@ -144,5 +144,13 @@
     "workflow": ".github/workflows/state-machine.yml",
     "callerWorkflow": ".github/workflows/workflow-state.yml",
     "tokenSecret": "ADD_TO_PROJECT_PAT"
+  },
+  "writing": {
+    "$comment": "Character budgets for everything the loop writes, counted INCLUDING <details>. Bodies are deliberately unbudgeted: they are state, and grounding reads them instead of the thread. Enforced by workflow/lib/budget.mjs; rules in preflight/SKILL.md.",
+    "budgets": {
+      "comment": 1200,
+      "reviewReply": 600,
+      "journalComment": 2500
+    }
   }
 }

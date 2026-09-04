@@ -30,44 +30,32 @@ comment, commit, push, merge, or label.
 ## Rung 1 — Merge and sequence
 
 **Merges do not count against `maxWorkItemsPerRun`. Merge every PR that qualifies.** The ceiling
-governs work you *do* to an item — revising, implementing, investigating, replying. A merge consumes
-a review decision that was already made: the gates are read, and if all three hold it is one API
-call. Rationing it would leave approved, green work sitting while the run spent its budget elsewhere,
-which is the opposite of the intent. Conflict resolution or a rebase that follows a merge is real
-work and does count.
+governs work you *do* to an item. A merge spends a decision the reviewer already made. A conflict
+you resolve or a rebase you run after the merge is work, and does count.
 
-**Candidates are every ready PR of ours, and approval is read per PR — never from search.**
+**Candidates are every ready PR of ours. Read approval per PR, never from search.**
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot> draft:false"
 ```
 
-⚠ **Do not add `review:approved` to that query.** Search is a derived index and it lags the review
-that feeds it: SahajCloud#679 was approved at 04:45:57Z and `review:approved` still returned **zero**
-at 05:12Z, twenty-six minutes later. That run merged it only because rung 2 happened to read
-`get_reviews` on the same PR for an unrelated reason. Trusting the qualifier leaves approved, green
-work sitting for a whole cycle — silently, because an empty result is indistinguishable from "nothing
-is approved". (why: docs/why.md#search-lags-the-review-that-feeds-it)
+⚠ **Never add `review:approved` to that query.** Search lags the review that feeds it, and an empty
+result looks exactly like "nothing is approved".
+(why: docs/why.md#search-lags-the-review-that-feeds-it)
 
-`draft:false` **is** safe in the query: the loop sets that flag itself, so there is no third party
-whose write the index might not have caught up with, and a draft PR can never be a merge candidate
-anyway.
+`draft:false` is safe here. The loop sets that flag itself, so no third party's write can lag.
 
-⚠ **No MCP call returns `reviewDecision` — derive it from `get_reviews`.** `pull_request_read
-method:get` does not carry the field (it returns `requested_reviewers` and `mergeable_state`, and
-neither answers the question), and `list_pull_requests` cannot return it either: its `fields` enum
-has no such member. So the set is bounded by `wipCapPerRepo` × `repos`, and each candidate costs one
-`method:get_reviews` — the same authoritative per-PR read rung 5 makes.
+⚠ **No MCP call returns `reviewDecision`.** `method:get` omits it and `list_pull_requests` has no
+such field. Derive it from `method:get_reviews`, one call per candidate — the set is bounded by
+`wipCapPerRepo` × `repos`.
 
-**Do not work the decision out yourself — pass the reviews through.**
-`reviewDecisionFrom` in `workflow/lib/merge-gate.mjs` is the one definition, and `merge-verdict.mjs`
-calls it for you: put what `get_reviews` returned in the snapshot's `reviews` key and leave
-`reviewDecision` out. **Only `assignment.reviewer`'s approval counts** — four of the five repos are
-public, so any account can submit an approving review, and the allowlist is what keeps the
-derivation narrower than the field it stands in for rather than wider.
+**Do not work the decision out yourself.** `reviewDecisionFrom` in `workflow/lib/merge-gate.mjs` is
+the one definition and `merge-verdict.mjs` calls it. Put the `get_reviews` payload in the snapshot's
+`reviews` key and leave `reviewDecision` out. **Only `assignment.reviewer`'s approval counts** —
+four repos are public, so any account can approve.
 (why: docs/why.md#only-the-reviewers-approval-counts)
 
-**Never decide mergeability yourself.** Gather all six, then ask `merge-verdict.mjs`:
+**Never decide mergeability yourself.** Gather all six, then ask the script:
 
 ```
 mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO pullNumber:<n>
@@ -75,7 +63,7 @@ mcp__github__pull_request_read  method:get_reviews         owner:$ORG repo:$REPO
 mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
-# hasWorkflows — a filesystem check in the checkout, never an API call:
+# hasWorkflows — read the checkout, never the API:
 #   ls $REPO/.github/workflows/*.yml $REPO/.github/workflows/*.yaml 2>/dev/null | head -1
 ```
 
@@ -85,55 +73,41 @@ echo '{"repo":"'$ORG/$REPO'","hasWorkflows":true,"reviews":[…],
   | ${CLAUDE_PLUGIN_ROOT}/skills/work-routine/merge-verdict.mjs
 ```
 
-**The definition of green lives in `workflow/lib/merge-gate.mjs`, and only there.** It was wrong in
-two directions at once for a week — a deploy status standing in for a test job that was still
-running, and a fully green PR reading as `pending` forever — which is why it is code with its story
-in `docs/why.md#ci-truth-lives-in-check-runs` rather than a paragraph re-derived here. In short:
-check runs carry the test signal, commit statuses carry deploy signals, and both are read.
-
-| Script says | Verdict |
+| Script says | Do |
 | --- | --- |
-| `MERGE` | Merge, then the merge sequence below |
-| `HOLD — no approving review` | Not a rung-1 item at all. Leave it: it waits on the reviewer, not on you |
-| `HOLD — <anything else>` | **Do not merge.** One comment naming that exact reason, then move on. Fixing red CI is rung 2 |
-| Two or more `MERGE` in one repo | **Order first: producers before consumers.** A consumer merged first was reviewed against a shape that does not exist yet |
+| `MERGE` | Merge, then the sequence below |
+| `HOLD — no approving review` | Leave it. It waits on the reviewer, not on you |
+| `HOLD — <anything else>` | **Do not merge.** Comment with that exact reason. Red CI is rung 2 |
+| Two or more `MERGE` in one repo | **Producers before consumers.** Order from each PR's linked issue and its `Blocked by:` lines |
 
-**`hasWorkflows` comes from the filesystem, not from the API.** Every repo in `repos` is already
-cloned into the run, so counting `.github/workflows/*.yml` answers it exactly, for free, and cannot
-403. `mcp__github__list_workflows` is **not** in this session's MCP build — four consecutive runs
-journalled its absence — so naming an API call here guarantees a `⚠️ Failed` line every run for a
-fact sitting on disk. (why: docs/why.md#hasworkflows-is-a-filesystem-check)
+**Exit `0` merges. Exit `1` does not, and prints the reason for the comment.**
 
-**Omissions fail safe, never open.** A missing `reviewDecision` reads as *not approved*; an unknown
-`hasWorkflows` reads as *this repo has CI*, so a missing check blocks rather than passes. Pass what
-you actually fetched and let it refuse — never fill a field in to get a merge.
+**Never substitute `method:get_status` for the check runs.** Check runs carry the test signal and
+commit statuses carry deploy signals. The script reads both and requires at least one check run.
+**The definition of green lives in `merge-gate.mjs` and only there.**
+(why: docs/why.md#ci-truth-lives-in-check-runs)
 
-**Exit `0` merges; exit `1` does not, and prints the reason to put in the comment.**
+**`hasWorkflows` comes from the filesystem.** Every repo is already cloned, so the API call is both
+unnecessary and absent from this MCP build.
+(why: docs/why.md#hasworkflows-is-a-filesystem-check)
 
-**Never substitute `method:get_status` for the check runs.** That call returns commit statuses; our
-CI reports check runs. Reading it alone had SahajCloud#672 green for seventeen minutes while
-`Lint, Test & Smoke` was still running, and had SahajAtlasWeb#181 — five of five checks green —
-reading as `pending` forever. Pass `statuses` too if you have it; the script reads both surfaces and
-requires **at least one check run**, so a deploy status cannot stand in for a test job that was
-never scheduled. (why: docs/why.md#ci-truth-lives-in-check-runs)
+**Omissions fail safe.** A missing `reviewDecision` reads as *not approved*. An unknown
+`hasWorkflows` reads as *this repo has CI*, so a missing check blocks. Pass what you fetched. Never
+fill a field in to get a merge.
 
-Repos in `mergePolicy.loopMayNotMerge` are held whatever the gate says. `claude-workflow` is one:
-merging there is the deploy of the instructions the next run executes, and since that repo is also
-ticketless, a human reading the PR is the only gate its changes pass.
+**Repos in `mergePolicy.loopMayNotMerge` are held whatever the gate says.** Merging `claude-workflow`
+deploys the instructions the next run executes, and a human reading the PR is its only gate.
 
-**This is the same code path in a routine and on a laptop.** No script under `workflow/` fetches
-anything; you gather, it decides. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
-
-Ordering reads each PR's linked issue and the `Blocked by:` lines on it.
+**The same code runs in a routine and on a laptop.** No script under `workflow/` fetches. You gather,
+it decides. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 
 The merge sequence, in order:
 
-1. `mcp__github__merge_pull_request  owner:$ORG repo:$REPO pullNumber:<n>  merge_method:"squash"`.
-2. **Rebase the survivors** — every other open loop PR in that repo, onto the new `main`, so the
-   next review is against current code. Conflicts → leave it, comment saying so, flag in the
-   journal. **Never force-push someone else's branch.**
-3. **Resolve the Sentry issue** if the merged work closed a ticket carrying a `Sentry:` link (see
-   `survey-sentry` for the footer convention):
+1. `mcp__github__merge_pull_request  owner:$ORG repo:$REPO pullNumber:<n>  merge_method:"squash"`
+2. **Rebase the survivors** — every other open loop PR in that repo onto the new `main`, so the next
+   review reads current code. On a conflict, leave it, comment, and journal it. **Never force-push
+   someone else's branch.**
+3. **Resolve the Sentry issue** when the merged work closed a ticket carrying a `Sentry:` link:
    ```bash
    API=$(jq -r '.sentry.apiBase' loop-config.json)   # DE region — sentry.io 404s here
    curl -sX PUT "$API/issues/<id>/" \
@@ -143,226 +117,174 @@ The merge sequence, in order:
 
 ## Rung 2 — PR health
 
-Every item here counts against `maxWorkItemsPerRun`. Highest-priority linked ticket first.
+Every item counts against `maxWorkItemsPerRun`. Take the highest-priority linked ticket first.
 (why: docs/why.md#rung-2-competes-for-the-same-budget)
 
-**A PR needs revision when any of these holds.** Derive them from the revision query in
-`/workflow:preflight`, then read the threads:
+**A PR needs revision when any one of these holds:**
 
-- an **unresolved thread whose last comment is from a login in `assignment.respondTo`**, or
-- an **unresolved thread rooted by the own login with no reply** — rung 5's adversarial review, or
-- the **last PR comment is from a login in `assignment.respondTo`**.
+- an unresolved thread whose last comment comes from a login in `assignment.respondTo`,
+- an unresolved thread the own login rooted, with no reply — rung 5's adversarial review,
+- the last PR comment comes from a login in `assignment.respondTo`.
 
-Everything else is noise, by construction: a preview-URL comment, a coverage bot and a CI bot are
-all off the allowlist, so none of them can start a revision pass.
-(why: docs/why.md#respondto-is-an-allowlist)
+A preview-URL bot, a coverage bot and a CI bot all sit off the allowlist, so none of them can start
+a revision. (why: docs/why.md#respondto-is-an-allowlist)
 
-| Condition | Verdict |
-| --- | --- |
-| **Red CI on our own PR** | Diagnose via `actions_get` on the failing run, fix, push. Cap at `ciFixIterations`; on cap-out, comment with the remaining failure and journal it |
-| **Change request on a `claude/*` PR — ours** | Implement the feedback. Then: reply to **each** review comment individually, saying what changed or why it was not done, with `identity.commentMarker` appended; refresh the PR **title and body** from the current `origin/main...HEAD`; resolve the threads you actually addressed |
-| **Change request on a human's PR** | **You cannot push to it** — a cloud session may only push to `claude/*`. This is a wall, not a permission to ask for. Take the three steps below instead |
-| **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question and move on — your reply is a comment from the bot, so no event clears `awaiting`; add it yourself if the question is a dead end |
-| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body. **A thread you rebutted rather than adopted is a dead end — add `labels.awaiting`**, since only the reviewer can settle it |
-| **Our PR closed without merging** | The state machine already returned the linked ticket to `Stage: Revising` and marked it `awaiting`. Write neither — just comment saying why it was abandoned |
-
-**Always end a revision with a comment.** That is the termination condition: the trigger is "the
-last word is not ours", so a revision that pushes code and says nothing re-fires on the next run,
-forever.
-
-**Never set or change a PR's assignee, and never put it back into draft.** On a PR someone
-delegated by assigning the bot, leave that assignment exactly as found — it is theirs to withdraw.
-
-**Add `labels.awaiting` on a dead end, and only there.** Two live here: **CI red past
-`ciFixIterations`**, and **a conflict you could not rebase**. Both mean the loop has stopped and
-only the reviewer can move it. Everything else in this rung is answered by an event — a human's
-reply or review clears `awaiting` the moment it lands.
-
-`draft:false` means it has
-been ready for review at least once, and rung 5 depends on that staying true.
-(why: docs/why.md#draft-is-the-prs-baton)
-
-**The allowlist has exactly one exception, and it points inward.** A review thread whose **root
-comment** the loop itself wrote exists only because rung 5's adversarial review created it, and it
-is work, not self-chatter — so it counts even though the own login is not on `respondTo`. A reply of
-ours inside someone else's thread keeps their root and is governed by the allowlist as usual; no
-marker string is involved, the comment's type and its thread's root author are the whole key.
+**The allowlist has one exception, and it points inward.** Rung 5 creates threads under the own
+login, and those are work. A reply of ours inside someone else's thread keeps their root, so the
+allowlist still governs it. The comment type and the thread's root author are the whole key.
 (why: docs/why.md#the-author-filters-one-exception)
+
+| Condition | Do |
+| --- | --- |
+| **Red CI on our own PR** | Diagnose with `actions_get` on the failing run, fix, push. Cap at `ciFixIterations`. On cap-out, comment with the remaining failure and journal it |
+| **Change request on a `claude/*` PR** | Implement the feedback. Reply to **each** review comment, saying what changed or why it did not. Append `identity.commentMarker`. Refresh title and body from `origin/main...HEAD`. Resolve the threads you addressed |
+| **Change request on a human's PR** | **You cannot push to it.** A cloud session pushes only to `claude/*`. Take the three steps below |
+| **Ambiguous or architectural feedback** | **Ask, do not guess.** Reply with the question and move on |
+| **Unresolved own-rooted threads** | Treat as a change request on our own PR. **A thread you rebutted rather than adopted is a dead end — add `labels.awaiting`**, because only the reviewer settles it |
+| **Our PR closed unmerged** | The state machine already set the ticket to `Revising` and marked it `awaiting`. Write neither. Comment saying why it was abandoned |
+
+**Always end a revision with a comment.** The trigger is "the last word is not ours", so a revision
+that pushes code and says nothing re-fires every run.
+
+**Never set or change a PR's assignee, and never return a PR to draft.** Leave a delegated
+assignment as you found it. `draft:false` means the PR has been ready once, and rung 5 depends on
+that. (why: docs/why.md#draft-is-the-prs-baton)
+
+**Add `labels.awaiting` on a dead end, and only there.** Two live in this rung: CI red past
+`ciFixIterations`, and a conflict you could not rebase. An event clears the label everywhere else.
 
 On a human's PR, in order:
 
-1. **Triage every thread and answer it** — adopted, or pushed back with the evidence. One comment
-   summarising, detail in `<details>`. This happens even if nothing else does.
-2. **Open a stacked PR carrying the adopted changes**, from `claude/<type>-<slug>` targeting **their
-   branch**, not `main`. Say in the summary comment that it exists and what it contains.
-3. **File a follow-up ticket** for anything the review raised that generalises beyond this PR.
+1. **Answer every thread** — adopt it, or push back with evidence. One summary comment. This happens
+   even when nothing else does.
+2. **Open a stacked PR** from `claude/<type>-<slug>` targeting **their branch**, not `main`. Say in
+   the summary comment that it exists and what it holds.
+3. **File a follow-up ticket** for anything that generalises beyond this PR.
 
-⚠ **A stacked PR's base is their branch — confirm that before opening it.**
+⚠ **Confirm a stacked PR's base is their branch before you open it.**
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)
 
 ## Rung 3 — Implement
 
 **Two kinds of work live here.** Implementation needs `Stage: Implement`. **Investigation does
-not** — a ticket at any Stage but `Blocked` or `Implemented` may be investigated, measured and
-answered, so long as nothing is committed. A live `Hold Until` freezes everything. See
-`/workflow:triage-issue` for the full table. **Investigations count against `maxWorkItemsPerRun`
-too.**
+not** — any Stage but `Blocked` or `Implemented` may be investigated, measured and answered, so long
+as you commit nothing. A live `Hold Until` freezes both. **Investigations count against
+`maxWorkItemsPerRun`.**
 
-The bound on implementations is `wipCapPerRepo`, a stock cap. **Skip the implementation path
-entirely** when the repo is at `wipCapPerRepo` open loop PRs, or when no `Stage: Implement` ticket
-is unblocked.
+`wipCapPerRepo` bounds implementations. **Skip the implementation path** when the repo is at that
+cap, or when no unblocked `Stage: Implement` ticket exists.
 
-**Unblocked** means all three: no `Blocked by:` line in the body naming a still-open issue, `Stage`
-is not `Blocked`, and `Hold Until` is absent or already past. Resolve each `Blocked by:` URL with
-`issue_read` and check its state — a closed blocker does not block.
+**Unblocked** means all three: no `Blocked by:` line naming a still-open issue, `Stage` is not
+`Blocked`, and `Hold Until` is absent or past. Resolve each `Blocked by:` URL with `issue_read`.
 
 **When a block clears, clear the field too.** Delete `Hold Until` in the same edit that strikes the
-line, and restore the `Stage` the marker's `(was: X)` suffix records — **except `Implement`, which
-becomes `Revising`.** A blocker usually changes the shape of the work, so an `Implement` restored
-without a human re-reading the ticket is the loop authorising its own code by the back door.
-(why: docs/why.md#unblocking-never-restores-implement)
+line, and restore the `Stage` the `(was: X)` suffix records — **except `Implement`, which becomes
+`Revising`**. (why: docs/why.md#unblocking-never-restores-implement)
 
-**When you find a blocker closed, strike the line.** Rewrite it in the body as:
+**Strike a closed blocker's line** so no future run pays to re-derive it:
 
 ```markdown
 ~~Blocked by: <url> — <original reason>~~ — cleared <YYYY-MM-DD>, that issue is closed
 ```
 
-A live `Blocked by:` line against a closed issue is a standing cost and a standing trap. Every
-future run pays an `issue_read` to re-derive the same answer, and the line reads as a blocker to
-anyone — human or run — who does not resolve it. Three consecutive journals described one such
-ticket as "blocked" when its blocker had already merged. Striking it costs one edit, once.
+**Selection: highest `Priority`, then oldest `updatedAt`.** No query reaches `Stage`, so filter the
+`list_issues` call `/workflow:preflight` already made — keep what is bot-assigned, at
+`Stage: Implement`, and not held. Reuse that call. Do not repeat it.
 
-**Selection:** highest **Priority** field (`Critical` → `Low`), then oldest `updatedAt`. There is no
-query for `Stage`, so pull the repo's open issues once and filter in memory:
+Use **Effort** as a tie-break and a sanity check. **Split an `Effort: Hard` ticket rather than start
+it** when one run cannot finish it, because an implementation never carries across runs. Then hand
+to `/workflow:implement-issue`.
 
-```
-mcp__github__list_issues  state:OPEN  fields:["field_values","labels","body"]
-```
+**Cross-repo side effects are exempt from the WIP cap.** When the work forces a consumer change,
+open that PR too — withholding it leaves `main` inconsistent. Order it with
+`/workflow:cross-repo-issue`.
 
-Keep the ones that are assigned to `assignment.bot`, are `Stage: Implement`, and have no live
-`Hold Until`. This is the call `/workflow:preflight` already made — reuse it rather than repeating it.
-
-Use **Effort** as a tie-break and a sanity check: an `Effort: Hard` ticket that cannot plausibly
-finish within one run should be **split rather than started**, since an implementation is never
-carried across runs. Then hand to `/workflow:implement-issue`, which owns worktree, contract step,
-and shipping.
-
-**Cross-repo side effects are exempt from the WIP cap.** If the implementation forces a consumer
-change (a `types:cms` re-sync, an embed-contract update), open that PR too — withholding it leaves
-`main` inconsistent across repos. Use `/workflow:cross-repo-issue` for the ordering.
-
-**An investigation is not a code change, and must not be forced into one.** A ticket whose
-deliverable is a *finding* — "evaluate X", "work out whether Y", "investigate Z" — is finished by
-posting the finding as a comment on the ticket and updating its body with what was learned. No
-branch, no PR. Read `Effort` and the acceptance criteria to tell the difference: criteria that
-describe a decision rather than a behaviour change mean the output is prose.
+**Never force an investigation into a PR.** A ticket whose deliverable is a finding ends with a
+comment and an updated body. No branch, no PR. Acceptance criteria that describe a decision rather
+than a behaviour change mean the output is prose.
 (why: docs/why.md#an-investigation-must-not-be-forced-into-a-pr)
 
-**A ticket too large or too vague to finish in one run → do not start it.** Comment with what is
-missing, set `Stage: Revising` and add `labels.awaiting`, then pick the next one. Setting `Revising`
-on a ticket the reviewer marked `Implement` is a revocation, which the loop is always allowed to do
-— the reverse never is.
+**Never start a ticket too large or too vague to finish in one run.** Comment with what is missing,
+set `Stage: Revising`, add `labels.awaiting`, and take the next one. Revoking `Implement` is always
+allowed. Granting it never is.
 
 ## Rung 4 — Ticket feedback
 
 Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
 `assignment.respondTo` newer than the loop's own last comment.
 
-- **Filter by author first.** A comment counts as feedback only when
-  `comment.author.login` is in `assignment.respondTo`. (why: docs/why.md#respondto-is-an-allowlist)
-- **Do not touch `Stage` or `labels.awaiting` here.** The comment that triggered this rung already
-  fired `issue_comment: created`, and the state machine set `Revising` and cleared `awaiting` before
-  the run even started. Reply, revise the ticket body, and stop.
-- **Start from the `updated:>=` search set, not the whole backlog**, then fetch comments only for
-  those with a non-zero comment count.
-- **Derive the window from comment timestamps, never from `updated_at`.** Pull the issues that have
-  comments at all, then filter each comment by `created_at` against the window and by author.
-  (why: docs/why.md#derive-the-window-from-comment-timestamps)
+- **Filter by author first.** Only a login in `assignment.respondTo` writes feedback.
+  (why: docs/why.md#respondto-is-an-allowlist)
+- **Never touch `Stage` or `labels.awaiting` here.** The comment already fired
+  `issue_comment: created`, so the state machine set `Revising` and cleared `awaiting` before this
+  run started. Reply, revise the body, stop.
+- **Start from the `updated:>=` search set**, then read comments only where the count is non-zero.
+- **Derive the window from comment timestamps, never from `updated_at`.** A field write bumps
+  `updated_at`. (why: docs/why.md#derive-the-window-from-comment-timestamps)
 
-**First decide what the comment is asking for**, because the three cases have different endings:
-
-| The comment | What to do |
+| The comment | Do |
 | --- | --- |
-| **A question** | Answer it. Reply, update the ticket if the answer changes it, done. |
-| **A request for work** — "investigate this", "can you look at…", "we should also…" | Do **not** implement it. Writing code needs `Stage: Implement` like everything else. Reply with what you would do and what it would cost, update the ticket body to specify it, and say plainly that it needs `Stage: Implement` to start. |
-| **A correction or new evidence** | Verify it against source before accepting, then rewrite the affected part of the ticket. |
+| **A question** | Answer it. Update the ticket when the answer changes it |
+| **A request for work** | Do **not** implement it. Reply with what you would do and what it costs, specify it in the body, and say that `Stage: Implement` starts it |
+| **A correction or new evidence** | Verify against source, then rewrite the affected part of the ticket |
 
 (why: docs/why.md#a-request-in-prose-is-not-permission)
 
-- **Reply substantively** — answer the question, or say what you will change.
-- **Update the ticket itself** where the comment changes it: title, body, priority, type,
-  relationships. A reply that agrees to a change but leaves the ticket saying the old thing has not
-  done the job.
-- **Append `identity.commentMarker`** to every comment you write, here and in every other rung.
-- **If the comment reads as approval** ("yes, do it"), say plainly that `Stage: Implement` is what
-  actually starts work — **do not write it yourself.**
-- **Add `labels.awaiting` when you finish only if you asked a question or reported a finding** — an
-  investigation whose deliverable is a verdict is a dead end no event can see. If you simply
-  answered and the ball is back with nobody, leave it clear.
+- **Reply substantively.** Answer the question, or say what you will change.
+- **Update the ticket itself** — title, body, priority, type, relationships. A reply that agrees to
+  a change and leaves the ticket stating the old thing has not done the job.
+- **Append `identity.commentMarker`** to every comment, here and in every rung.
+- **When a comment reads as approval, say that `Stage: Implement` starts work. Never write it.**
+- **Add `labels.awaiting` only when you asked a question or reported a finding.** No event sees
+  either. When you simply answered, leave the label clear.
 
 ## Rung 5 — Adversarial review
 
-Counts against `maxWorkItemsPerRun`, and runs **only on leftover budget**: if rungs 2–4 spent the
-run's slots, skip the whole rung and journal it under `⏭️ Skipped`. Going reviewless on a busy day
-is the design, not a failure. (why: docs/why.md#the-adversarial-review-runs-last-and-may-starve)
+Counts against `maxWorkItemsPerRun` and runs **only on leftover budget**. When rungs 2–4 spend the
+slots, skip the rung and journal it. A reviewless busy day is the design.
+(why: docs/why.md#the-adversarial-review-runs-last-and-may-starve)
 
-Every eligible loop-authored PR gets **one adversarial review, ever**, before the reviewer reads
-it. The review is advisory — approval stays with `assignment.reviewer`, and a run can neither
-approve nor request changes on its own PR anyway, so every review submits as `COMMENT`.
-(why: docs/why.md#reviews-are-comment-only)
-
-One server-side query derives the candidates — `reviewed-by:` matches reviews of every state, so
-the census needs no per-PR review fetch:
+**Every eligible loop-authored PR gets one adversarial review, ever**, before the reviewer reads it.
+The review is advisory, and a run can neither approve nor request changes on its own PR, so **every
+review submits as `COMMENT`**. (why: docs/why.md#reviews-are-comment-only)
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<own login> draft:false -reviewed-by:<own login> -label:ops-journal"
 ```
 
-`draft:false` is the whole eligibility rule. A draft PR is the loop still working; the moment
-`/workflow:finalize-pr` marks it ready for review it becomes reviewable. Assignment says nothing
-here and is not read — the PR is ours because we wrote it.
-(why: docs/why.md#draft-is-the-prs-baton)
+`draft:false` is the whole eligibility rule. Assignment says nothing here — the PR is ours because
+we wrote it. (why: docs/why.md#draft-is-the-prs-baton)
 
-Work the candidates **oldest `created_at` first**. Skip any whose decision is `CHANGES_REQUESTED` —
-those are mid-revision, and the once-ever review is better spent after rung 2 has answered. That
-decision comes from `reviewDecisionFrom` over the `get_reviews` call this rung already makes below,
-never from a `reviewDecision` field: no MCP call carries one, so a run testing for it silently skips
-the check.
+Work candidates **oldest `created_at` first**. **Skip any at `CHANGES_REQUESTED`** — those are
+mid-revision, and the once-ever review is better spent after rung 2 answers. Take that decision from
+`reviewDecisionFrom` over the `get_reviews` call below, never from a `reviewDecision` field, because
+no MCP call carries one. A PR marked ready earlier in this run is eligible.
 
-PRs marked ready earlier in this same run are eligible: isolation comes from the subagent below,
-never from waiting a run.
-
-Per candidate, until the leftover budget is spent:
+Per candidate, until the budget runs out:
 
 - `pull_request_read method:get` — still open, still not draft.
-- **Green by rung 1's definition** — same gathering, same `merge-verdict.mjs`, and read only its
-  `ci` verdict here (a PR awaiting review is `HOLD` for want of an approval, which is not a reason
-  to skip reviewing it). Do not restate the rule, and do not special-case a repo: `claude-workflow`
-  having no CI is *derived* from its workflow count, not written down. Not green → skip; a no-op
-  skip is free.
-- **Re-check for an existing review immediately before writing** — `pull_request_read
-  method:get_reviews`, filtered to the own login. Search is a derived index and can lag; this read
-  is authoritative. Any own-login review of any state → skip silently. An own-login **`PENDING`**
-  review is a crashed run's residue: delete it if a delete tool resolves, otherwise submit it
-  as-is; journal either way. (why: docs/why.md#one-review-per-pr-ever)
-- **Spawn a fresh subagent (Task) to conduct the review.** Its prompt carries only the repo, the
-  PR number, the checkout path, and the instruction to read
-  `workflow/skills/adversarial-review/SKILL.md` in the claude-workflow checkout and follow it
-  exactly. Never review in this session — a PR built here would be judged by the mind that built
-  it. (why: docs/why.md#the-review-never-shares-the-implementers-context)
-- One completed review = one work item. **Neither outcome touches assignment or draft** — the
-  findings are unresolved threads, and rung 2 picks those up on the next run by reading them.
+- **Green by rung 1's definition.** Same gathering, same script, read only its `ci` verdict. A PR
+  awaiting review is `HOLD` for want of an approval, which is no reason to skip reviewing it. Not
+  green means skip.
+- **Re-check for an existing review immediately before writing**, with `method:get_reviews` filtered
+  to the own login. Search lags. Any own-login review of any state means skip. An own-login
+  `PENDING` review is a crashed run's residue: delete it if a tool resolves, otherwise submit it,
+  and journal either way. (why: docs/why.md#one-review-per-pr-ever)
+- **Spawn a fresh subagent (`Task`) to conduct the review.** Its prompt carries the repo, the PR
+  number, the checkout path, and one instruction: read
+  `workflow/skills/adversarial-review/SKILL.md` and follow it. **Never review in this session** — a
+  PR built here would be judged by the mind that built it.
+  (why: docs/why.md#the-review-never-shares-the-implementers-context)
+- One completed review is one work item. **Neither outcome touches assignment or draft.** The
+  findings are unresolved threads, and rung 2 reads them next run.
 
-**Starting a review thread is this rung's exclusive privilege.** No other rung may create an
-inline review comment — the structural key above (own-login root = adversarial review) is only
-sound while that holds. Replying inside an existing thread is not creating one, and stays allowed
-everywhere. (why: docs/why.md#the-author-filters-one-exception)
+**Starting a review thread is this rung's exclusive privilege.** No other rung creates an inline
+review comment, because rung 2's structural key depends on it. Replying inside an existing thread is
+allowed everywhere. (why: docs/why.md#the-author-filters-one-exception)
 
-`--dry-run`: print both groups with each candidate's verdict — eligibility, CI state, deferral
-reason — and stop before spawning anything.
+`--dry-run`: print each candidate's verdict and stop before spawning anything.
 
 ## Journal
 
-Hand off to `/workflow:journal` — this run's entry is marked `loop`. If a ceiling stopped every
-rung, the closing summary says so plainly; that is the signal the Sunday `reflect` survey acts on.
+Hand off to `/workflow:journal`. When a ceiling stopped every rung, say so — that is the signal
+Sunday's `reflect` acts on.

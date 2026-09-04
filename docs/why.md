@@ -578,6 +578,67 @@ journal query this label replaced — the same gap in a different surface.) And 
 enforced at both sites where an approval is read. The nightly drift sweep is the backstop, and it journals
 every correction, because a silent fix hides a broken workflow.
 
+## The rules cost more than the output
+
+Measured, after the loop's comments looked like the problem:
+
+| | |
+| --- | --- |
+| Skills loaded every run — `preflight` + `work-routine` + `journal` + config | **~148,600 tokens a day** |
+| Every bot comment ever written, in total | ~152,000 tokens |
+
+**The rules cost as much each day as every comment the loop has ever written.** The output was never
+the largest line. Two facts fell out of the same measurement and reversed two assumptions:
+
+- **Bot ticket bodies are shorter than the reviewer's** — 4,854 characters against 5,610. Bodies
+  were never the problem, and the grounding rule below depends on them staying rich.
+- **A journal thread ran to 134,000 characters.** One returned 97,279 in a single response and broke
+  the run that read it.
+
+So a skill's length is a running cost, not a style question. Every paragraph in a run-loaded skill
+is read eleven times a day, for as long as it exists. Prefer removing a rule to adding one, keep the
+story in this file and the imperative in the skill, and never state the same rule in two places.
+
+Simplified Technical English (ASD-STE100) supplies the register. The rules are vendored into
+`preflight` rather than installed, because the upstream skill is 16,260 characters — loading it
+eleven times a day would cost more than the brevity it buys. `workflow/lib/ste-lint.py` is vendored
+from `github.com/danyuchn/asd-ste100-skill` (MIT).
+
+## Budgets, not adjectives
+
+The rule this replaced read: *"Past roughly fifteen lines outside a `<details>`, it is an essay."*
+It failed in both directions at once, and the measurement shows how.
+
+Across 80 bot comments, **51% of all bytes sat inside `<details>`** — where the rule did not reach,
+and where the tokens still cost full price on read. The visible half ran to 3,364 characters, about
+forty lines, against a rule asking for fifteen.
+
+Two lessons, and the second is the one that generalises:
+
+- **A limit that exempts a container names where to hide.** `budget.mjs` counts the whole artefact,
+  `<details>` included.
+- **A limit with a discretionary exit is not a limit.** The old rule said "roughly", so every entry
+  was roughly compliant. The script returns over or under and nothing else. There is no clause
+  permitting an explained overage, because that clause is what the old rule died of.
+
+Bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them instead of the
+thread.
+
+## Ground from the body, never the thread
+
+`triage-issue` has always said *"comments are conversation; the body is state"*. Nothing enforced
+it, so a run grounding a ticket pulled the whole thread — body plus six comments, about 27,000
+characters, to learn what 4,854 already held.
+
+Reading the body alone costs a third of that and changes nothing already written, which makes it the
+cheapest saving available. It also has a useful failure mode: **when the body does not carry what a
+run needs, the body is the bug.** Fixing it improves every future read, where re-reading the thread
+improves nothing.
+
+The journal is the sharp case. A day's thread reached 134,000 characters and one `get_comments` call
+returned 97,279 in a single response, which exceeded the token limit and broke the run. The journal
+is now one rewritten document per day, and **no run calls `get_comments` on a journal issue.**
+
 ## hasWorkflows is a filesystem check
 
 `mcp__github__list_workflows` is not in the routine's MCP build. Four consecutive runs journalled

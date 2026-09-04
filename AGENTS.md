@@ -102,6 +102,17 @@ hook is doing too much.
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
 
+### ⚠ A skill's length is a running cost
+
+`preflight` + `work-routine` + `journal` + `loop-config.json` are read on **every** run — about
+9,250 tokens, eleven times a day. A paragraph added to one of those is paid for daily, forever.
+Before adding prose to a run-loaded skill, check the rule is not already stated elsewhere, and put
+the story in `docs/why.md` behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
+
+Everything the loop writes carries a character budget from `writing.budgets`, checked with
+`workflow/lib/budget.mjs`, counted including `<details>`. `workflow/lib/ste-lint.py` checks register
+locally; it is a development tool, never a run step.
+
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
 if you find yourself typing a threshold into a `SKILL.md`, add it to `loop-config.json` instead.

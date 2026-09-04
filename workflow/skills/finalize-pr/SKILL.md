@@ -192,12 +192,11 @@ Never force-push a shared branch. Never `--no-verify`.
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:open
 ```
 
-**Read `pr-template.md` and follow its headings.** Not as inspiration — as the structure: a PR that
-invents its own sections loses exactly the ones the reviewer needs. Omit a section the template says
-to omit; never rename one or add your own in its place.
+**Read `pr-template.md` and follow its headings** as structure, not inspiration. Omit a section the
+template says to omit. **Never rename one or add your own.**
 
-**The Preview section is mandatory wherever the repo has a preview deploy.** It is how the reviewer
-sees the change without checking out the branch.
+**The Preview section is mandatory wherever the repo deploys previews.** The reviewer sees the
+change without a checkout.
 
 **Always link the BRANCH alias, never a per-commit alias.** One script produces it, for both
 Cloudflare projects and both platforms:
@@ -210,34 +209,24 @@ echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
   | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
 ```
 
-It prints one `project  status  url` line per preview, reading the alias out of the label Cloudflare
-itself writes — `Branch Preview URL`, in both the Pages check-run summary and the Workers comment.
-It exits non-zero when there is no alias yet: that is the "preview pending" case, **not** a cue to
-fall back to something else.
+It prints one `project status url` line per preview. A non-zero exit means no alias exists yet —
+that is "preview pending", **not** a cue to fall back.
 
-**Do not use `scripts/get-cloudflare-preview-url.mjs` for the body.** That script ranks per-commit
-aliases *above* branch aliases on purpose, because it feeds the CI smoke gate, which must test the
-exact SHA. Its reasoning is sound and does not transfer: a body written from it goes stale on the
-next push, and its docblock will talk you into it.
-(why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
+**Never use `scripts/get-cloudflare-preview-url.mjs` for the body.** It ranks per-commit aliases
+above branch aliases to feed the CI smoke gate, which must test one SHA. A body written from it goes
+stale on the next push. (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 
-**A per-commit alias in a PR body is a defect, not a fallback.** Its first hostname label is eight
-hex characters — `c76da223.sahajatlas.pages.dev`,
-`c14f4e66-wemeditate-web.contact-c66.workers.dev`. If you are about to write one, the answer is
-"preview pending".
+**A per-commit alias in a PR body is a defect.** Its first hostname label is eight hex characters,
+as in `c76da223.sahajatlas.pages.dev`. When you are about to write one, write "preview pending".
 
-- **SahajCloud** uses Railway, whose preview host is per-PR and already stable across pushes:
-  `pnpm tsx scripts/get-railway-preview-url.ts`. Nothing to correct there.
-- SahajAtlasWeb has **two** previews and a UI change should link both: the app (`sahajatlas`) and the
-  Ladle component playground (`sahajatlas-design`). The script returns both.
-- **Deep-link to the routes actually changed, not the root** — a reviewer should land on the thing,
-  not hunt for it.
-- The preview builds a few minutes after the push, so create the PR, then refresh the body once the
-  URL resolves.
-- **Re-verify every deep link when you revise a PR.** Your own revision can invalidate a link — if
-  the review asked you to delete a component, its Ladle story went with it. Branch aliases keep the
-  *host* current; they do not keep the *path* valid.
-- Only SahajAtlasWordpress has no preview deploy; there the section is omitted.
+- **SahajCloud** uses Railway, whose preview host is already stable across pushes:
+  `pnpm tsx scripts/get-railway-preview-url.ts`.
+- **SahajAtlasWeb has two previews** — the app and the Ladle playground. Link both on a UI change.
+- **Deep-link the routes you changed, not the root.**
+- **Re-verify every deep link when you revise.** A branch alias keeps the host current, never the
+  path — deleting a component deletes its Ladle story.
+- The preview builds minutes after the push. Create the PR, then refresh the body.
+- SahajAtlasWordpress has no preview. Omit the section.
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
@@ -251,10 +240,9 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   ```bash
   gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
   ```
-  **Set no assignee at all.** The PR is ours because we wrote it — every rung finds it by
-  `author:<bot>` — so an assignment would add nothing and would overwrite a field that is the
-  reviewer's to use. Assignment on a PR has exactly one meaning, and it points the other way:
-  someone assigning the bot to *their* PR is asking the loop to work on it.
+  **Set no assignee at all.** Every rung finds our PRs by `author:<bot>`, so an assignment adds
+  nothing and overwrites a field the reviewer uses. On a PR, an assignee points the other way:
+  someone assigning the bot to *their* PR asks the loop to work on it.
 
   **Every PR opens as a draft, without exception.** Draft is the PR's baton: it means *the loop is
   still working on this*, and step 9 clears it once CI is green. A PR that is born ready-for-review
