@@ -50,25 +50,16 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 | | `Low` | Do when nothing above it waits. Deferred or speculative. |
 | **Effort** | `Easy` / `Moderate` / `Hard` | Rough size. Set it honestly — the loop uses it to avoid starting something it cannot finish in one run. |
 
-Priority is about the **consequence of not doing it**, not effort or appetite. A one-line fix to a
-broken signup path is `High`; a month of pleasant refactoring is `Low`. Effort is the separate axis,
-which is exactly why it is a separate field.
+Priority measures the **consequence of not doing it**, never effort or appetite. A one-line fix to
+a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
-**The two fields have different owners, and this is not the `Stage: Implement` asymmetry.**
+**The two fields have different owners.** The reviewer sets **Priority**, because consequence to the
+product is a business judgement. **You set Effort, always** — it estimates work, and you just read
+the code.
 
-| Field | Owner | Why |
-| --- | --- | --- |
-| **Priority** | the reviewer | It encodes consequence to the product, which is a judgement about the business, not the code |
-| **Effort** | **you, always** | It is an estimate of work. Whoever just read the code is best placed to make it, and that is you |
-
-**Always set Effort. It is never "the reviewer's to set".** If you have understood a ticket well
-enough to write or revise it, you have understood it well enough to size it — and if you truly
-cannot, say what makes it unsizable rather than leaving the field empty.
-
-This is a real failure, not a hypothetical: a run once wrote *"I would call it **Moderate** — one
-field, one branch in the sitemap endpoint, one lazy memoized read — but Effort is yours to set"*,
-having done the entire estimation and then discarded it. Writing the estimate into the field costs
-one more parameter on a call you are already making.
+**Always set Effort.** If you understood the ticket well enough to write it, you understood it well
+enough to size it. When you truly cannot, say what makes it unsizable rather than leave it empty.
+A run once wrote out a full estimate and then discarded it as "yours to set".
 
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
@@ -76,16 +67,12 @@ mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n
                 {field_name:"Effort",   field_option_name:"Moderate"}]
 ```
 
-By **name**, and it validates the option against the field before calling. Read them back with
-`list_issues(fields:["field_values"])`, which returns the whole backlog's field values in one call —
-that is how the loop sorts and filters without a request per issue.
+By **name** — the tool validates the option before it calls. Read values back with
+`list_issues(fields:["field_values"])`, one call per repo.
 
-⚠ **Fields are readable and writable, but they are NOT searchable.** The `field.<name>:<value>`
-qualifier is a web-UI/GraphQL feature; through the REST search a routine has, it is accepted without
-error and returns **zero results** — verified against an issue known to carry `Priority: High`,
-where `field.priority:high` returned 0 against a control of 24. So **no worklist query may filter on
-a field**. Build the candidate set from an indexed qualifier — `assignee:`, `author:`, `is:pr`,
-`draft:`, `review:` — then filter on field values client-side from the `list_issues` call above.
+⚠ **Fields are readable and writable, but NOT searchable.** `field.<name>:<value>` returns zero
+results through the REST search, without an error. **No worklist query may filter on a field.**
+Build the set from an indexed qualifier, then filter client-side.
 (why: docs/why.md#issue-fields-are-not-searchable)
 
 <details><summary>Raw REST equivalent, if you ever need it</summary>

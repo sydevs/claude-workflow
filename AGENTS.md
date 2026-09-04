@@ -17,15 +17,22 @@ right now**, to all five repos including itself. Everything below follows from t
 
 ### ⚠ Merging to `main` IS the deploy
 
-There is no release step, no version bump that matters, no artifact. `main` is consumed live:
+There is no release step and no artifact — but "consumed live" is true of exactly one of the two
+consumers, and the difference has already cost a maintainer eight days of stale skills:
 
-- the two scheduled cloud routines read `loop-config.json` and the skills fresh from `main` on every
-  run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json);
-- `/plugin install workflow@sydevs` installs from `main` via
-  [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json).
+| Consumer | Reads | A merge reaches it |
+| --- | --- | --- |
+| The two scheduled cloud routines | `loop-config.json` and the skills fresh from `main` on every run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json) | **Next run.** Genuinely live. |
+| `/plugin install workflow@sydevs` | The commit that `main` pointed at **when it was installed**, cached under `~/.claude/plugins/cache/sydevs/workflow/<version>/` | **Never**, until `version` in `workflow/.claude-plugin/plugin.json` changes or the maintainer runs `/plugin` → update. |
 
-So the blast radius of a merge is *the next run of everything*. There is no rollback other than
-another PR, and a routine may fire before you have written it.
+So the blast radius of a merge is *the next run of the routines*, and **nothing else**. There is no
+rollback other than another PR, and a routine may fire before you have written it.
+
+⚠ **The installed plugin is pinned by commit and keyed by version.** `installed_plugins.json`
+records a `gitCommitSha` and never revisits it; the cache directory is named after `version`, so an
+unchanged version string is an unchanged cache no matter how far `main` has moved. This is why
+`version` is **not** decorative here, and why it is the one thing in this repo that a skill change
+must not leave alone. (why: docs/why.md#an-installed-plugin-does-not-track-main)
 
 ### ⚠ You cannot validate a change by running it
 
@@ -101,6 +108,28 @@ hook is doing too much.
 | `.claude/workflow.json` | This repo's own per-repo **values**, in the same shape every product repo uses. Values only, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Standing the loop up on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
+
+### ⚠ A skill's length is a running cost
+
+`preflight` + `work-routine` + `journal` + `loop-config.json` are read on **every** run — about
+9,250 tokens, eleven times a day. A paragraph added to one of those is paid for daily, forever.
+Before adding prose to a run-loaded skill, check the rule is not already stated elsewhere, and put
+the story in `docs/why.md` behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
+
+Everything the loop writes carries a character budget from `writing.budgets`, checked with
+`workflow/lib/budget.mjs`, counted including `<details>`.
+
+**Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
+
+```bash
+node workflow/lib/rule-delta.mjs --base main workflow/skills
+```
+
+`ste-lint.py` measures a skill's **style**; `rule-delta.mjs` measures its **content**. A rewrite can
+pass the first and fail the second — the `journal` rewrite in #48 took its violations from 16 to 4,
+shrank a third, and silently dropped `Never read the board back`. Lint called it an improvement,
+because by its measure it was. Both are development tools, never run steps.
+(why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** They come from `loop-config.json`, and
 that is deliberate — a tuning change should be a data edit reviewable on its own. Keep it that way:
