@@ -143,16 +143,18 @@ first time this was run as a real query. Every search in every run skill uses `$
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
-mcp__github__search_issues  query:"$SCOPE is:open label:awaiting"
-mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last-run-ISO>"
+mcp__github__search_issues  query:"$SCOPE is:issue is:open label:awaiting"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open label:awaiting"
+mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:issue is:open updated:>=<last-run-ISO>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<bot>"
 ```
 
 **`label:awaiting` is the census's read-only view of what needs a human.** It is maintained by the
-state machine, never by you — the query is here so a run knows what it must *not* claim to be
+state machine, never by you — the queries are here so a run knows what it must *not* claim to be
 working on, and so the journal can say how many items are stalled on the reviewer. Nothing in any
-rung acts on it.
+rung acts on them. **It takes two, and that is rule 7 below, not a redundancy:** the label sits on
+issues and on PRs alike, and a single query can only ever see one of the two.
 
 **A PR is the loop's by authorship, not by assignment.** The loop opens its own PRs, so `author:`
 already identifies them exactly — no assignment is written, and a PR's assignee is left to mean what
@@ -204,6 +206,11 @@ The PR queries the run skills refine from the fourth search — all indexed, non
 6. ⚠ **In a hand-written `search_issues` query, write `>` literally.** An HTML-escaped `&gt;` is
    accepted without error and returns **zero results**. If a search returns nothing where you expect
    otherwise, suspect the qualifier before believing the answer.
+7. ⚠ **Every `search_issues` query carries `is:issue` or `is:pr` explicitly. Omit it and the tool
+   scopes to issues**, silently — a PR can never appear, whatever else the query says. So a query
+   about a label, an author or a mention that omits it answers only half the question, and a run
+   reads that half as the whole. Where the shape matters both ways, that is **two queries**, not one.
+   (why: docs/why.md#a-search-with-no-is-qualifier-cannot-see-a-pr)
 
 The per-repo PR list is cheap and stays full. **Read the last journal entry** (see
 `/workflow:journal`) to learn when the previous run ended — "since last run" means since that

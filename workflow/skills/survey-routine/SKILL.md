@@ -81,8 +81,12 @@ hides a broken workflow, and this sweep is the only thing that would notice.
 will ever pick it up, and they may be waiting:
 
 ```
-mcp__github__search_issues  query:"$SCOPE is:open commenter:<reviewer> updated:>=<24h> -label:ops-journal"
+mcp__github__search_issues  query:"$SCOPE is:issue is:open commenter:<reviewer> updated:>=<24h> -label:ops-journal"
 ```
+
+`is:issue` is deliberate and states what this sweep already did: it is about **tickets** nobody will
+pick up, and a PR of the reviewer's is not one. Omitting it would not have widened the sweep to PRs
+anyway — see `/workflow:preflight`'s rule 7.
 
 Keep the ones **not** assigned to `assignment.bot` and with no live `Hold Until`, then check that
 the newest comment is genuinely theirs and not a reply to the loop's own last word. **Do not pick
