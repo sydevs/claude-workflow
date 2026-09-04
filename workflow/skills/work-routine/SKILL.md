@@ -152,9 +152,9 @@ all off the allowlist, so none of them can start a revision pass.
 | **Red CI on our own PR** | Diagnose via `actions_get` on the failing run, fix, push. Cap at `ciFixIterations`; on cap-out, comment with the remaining failure and journal it |
 | **Change request on a `claude/*` PR — ours** | Implement the feedback. Then: reply to **each** review comment individually, saying what changed or why it was not done, with `identity.commentMarker` appended; refresh the PR **title and body** from the current `origin/main...HEAD`; resolve the threads you actually addressed |
 | **Change request on a human's PR** | **You cannot push to it** — a cloud session may only push to `claude/*`. This is a wall, not a permission to ask for. Take the three steps below instead |
-| **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question and set `Stage: Revising` on the linked ticket, move on |
-| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body |
-| **Our PR closed without merging** | The linked ticket is stranded at `Implemented` and unassigned. Set it back to `Stage: Revising`, assign `assignment.reviewer`, and comment saying the PR was abandoned and why |
+| **Feedback that is ambiguous or architectural** | **Ask, do not guess.** Reply with the specific question and move on — your reply is a comment from the bot, so no event clears `awaiting`; add it yourself if the question is a dead end |
+| **Unresolved review threads whose root comment is the own login** — rung 5's adversarial review | Treat exactly like a change request on our own PR: implement or rebut each thread with evidence, reply per thread, resolve the threads you actually addressed, refresh title and body. **A thread you rebutted rather than adopted is a dead end — add `labels.awaiting`**, since only the reviewer can settle it |
+| **Our PR closed without merging** | The state machine already returned the linked ticket to `Stage: Revising` and marked it `awaiting`. Write neither — just comment saying why it was abandoned |
 
 **Always end a revision with a comment.** That is the termination condition: the trigger is "the
 last word is not ours", so a revision that pushes code and says nothing re-fires on the next run,
@@ -162,6 +162,12 @@ forever.
 
 **Never set or change a PR's assignee, and never put it back into draft.** On a PR someone
 delegated by assigning the bot, leave that assignment exactly as found — it is theirs to withdraw.
+
+**Add `labels.awaiting` on a dead end, and only there.** Two live here: **CI red past
+`ciFixIterations`**, and **a conflict you could not rebase**. Both mean the loop has stopped and
+only the reviewer can move it. Everything else in this rung is answered by an event — a human's
+reply or review clears `awaiting` the moment it lands.
+
 `draft:false` means it has
 been ready for review at least once, and rung 5 depends on that staying true.
 (why: docs/why.md#draft-is-the-prs-baton)
@@ -244,8 +250,9 @@ describe a decision rather than a behaviour change mean the output is prose.
 (why: docs/why.md#an-investigation-must-not-be-forced-into-a-pr)
 
 **A ticket too large or too vague to finish in one run → do not start it.** Comment with what is
-missing, set `Stage: Revising`, and pick the next one. Setting `Revising` on a ticket the reviewer
-marked `Implement` is a revocation, which the loop is always allowed to do — the reverse never is.
+missing, set `Stage: Revising` and add `labels.awaiting`, then pick the next one. Setting `Revising`
+on a ticket the reviewer marked `Implement` is a revocation, which the loop is always allowed to do
+— the reverse never is.
 
 ## Rung 4 — Ticket feedback
 
@@ -254,9 +261,9 @@ Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
 
 - **Filter by author first.** A comment counts as feedback only when
   `comment.author.login` is in `assignment.respondTo`. (why: docs/why.md#respondto-is-an-allowlist)
-- **Set `Stage: Revising` as you start**, unless the ticket is already there. It is a record of what
-  is happening, not a gate — the comment is what triggered this, and the comment order is what says
-  whose turn it is next.
+- **Do not touch `Stage` or `labels.awaiting` here.** The comment that triggered this rung already
+  fired `issue_comment: created`, and the state machine set `Revising` and cleared `awaiting` before
+  the run even started. Reply, revise the ticket body, and stop.
 - **Start from the `updated:>=` search set, not the whole backlog**, then fetch comments only for
   those with a non-zero comment count.
 - **Derive the window from comment timestamps, never from `updated_at`.** Pull the issues that have
@@ -280,8 +287,9 @@ Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
 - **Append `identity.commentMarker`** to every comment you write, here and in every other rung.
 - **If the comment reads as approval** ("yes, do it"), say plainly that `Stage: Implement` is what
   actually starts work — **do not write it yourself.**
-- **Leave `Stage` at `Revising` when you finish.** The loop having spoken last is exactly what puts
-  the ticket in the reviewer's `📋 Awaiting you` table; no further field write is needed or wanted.
+- **Add `labels.awaiting` when you finish only if you asked a question or reported a finding** — an
+  investigation whose deliverable is a verdict is a dead end no event can see. If you simply
+  answered and the ball is back with nobody, leave it clear.
 
 ## Rung 5 — Adversarial review
 

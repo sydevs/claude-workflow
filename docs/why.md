@@ -202,8 +202,8 @@ that would is a human happening to re-read it. `Hold Until` is the promise to lo
 date is what makes the promise checkable.
 
 It is also why a held item is *invisible* rather than merely skipped. Listing it under
-`📋 Awaiting you` asks for attention that was explicitly deferred, and a triage table that lists
-things you cannot act on is a table people stop reading.
+the board's `awaiting` view asks for attention that was explicitly deferred, and a queue that lists
+things you cannot act on is a queue people stop reading.
 
 ## Unblocking never restores Implement
 
@@ -231,7 +231,7 @@ is a request to *scope* the work, not to start it.
 
 ## Every claim names the call that produced it
 
-Building `📋 Awaiting you` from a live query rather than from memory fixed a real divergence between
+Building the old `📋 Awaiting you` table from a live query rather than from memory fixed a real divergence between
 what a run narrated and what GitHub actually held. The general form of that fix is this rule.
 
 Two runs produced confident, detailed, **wrong** claims that read as measured fact:
@@ -503,6 +503,80 @@ no migration.
 Leaving the field alone also gives it a use the old model had no room for: **assigning the bot to a
 PR it did not write is how a human hands one over**, and unassigning withdraws that. One field, one
 direction, read but never written.
+
+## The board is a lens
+
+The org project (`projects.url`) shows every open issue grouped by `Stage`, every PR in a `Status`
+lane, and `labels.awaiting` on anything needing a human — and the loop neither reads nor writes any
+of it. Three measured facts force that shape:
+
+- **Project views render org issue fields directly.** A board grouped by `Stage` updates the moment
+  the field is written. There is nothing to sync, so nothing can drift.
+- **Routines cannot reach Projects v2 at all.** Probed live on 2026-09-03 (session
+  `cse_0188Trog41g4Zt2j9oQS9crB`): zero `mcp__github__projects*` tools resolve in the routine
+  environment. The board could not be load-bearing even if we wanted it to be.
+- **The one project-native field, PR `Status`, is written only by GitHub's built-in workflows** and
+  read only by humans. If the loop read it, `#search-lags-the-review-that-feeds-it` would apply in
+  full: a derived surface lags the event, and the loop reads sources.
+
+This is also why the journal stopped carrying a `📋 Awaiting you` table. The board answers "what
+needs me" continuously and cannot go stale; a table restating it every run was a second
+implementation of one rule, which is the failure this repo exists to avoid. What the journal keeps
+is what the board cannot show: why a run failed, what a ceiling cost, which rule misfired.
+
+## The state machine is not the loop's job
+
+Almost every state write the loop used to make was **mechanical** — an event determined it, no
+judgement was involved — and the loop made them late, at up to eight hours' remove, and could
+forget. `stateMachine.workflow` makes them from the event instead, within seconds, and cannot
+forget.
+
+The prize is larger than punctuality. Every *"as your final action, reassign / set Stage"* rule left
+the skills entirely, and with them a whole class of instruction that was only ever bookkeeping. What
+remains in the skills is judgement: choosing a `Hold Until` date, deciding a block has lifted,
+revoking `Implement`, deciding the work is done. Those need a model. Setting `Implemented` because a
+PR opened does not.
+
+The split is a rule, not a preference: **if an event determines the answer, the workflow owns it.**
+Two writers on one field race, and the loser's write is silent.
+
+Recursion is bounded by idempotency rather than an actor guard. Every writer in the workflow reads
+current state first and returns early when it already matches, so a write that re-fires `field_added`
+costs one free no-op run. An actor guard was tried first and was wrong: the bot authors its own
+issues and PRs, so `github.actor != 'sydevs-bot'` skips exactly the transitions that matter.
+
+## awaiting is the one label that earns its place
+
+Six labels were retired when `Stage` and `Hold Until` arrived, on the rule that ticket state belongs
+in a field. `awaiting` is not ticket state — it is *whose turn it is*, and that is a different fact
+with two properties `Stage` cannot supply:
+
+- **It spans issues and pull requests.** Issue fields are issues-only; a PR shows an empty `Stage`
+  cell forever. Nothing else can mark both.
+- **It is searchable.** `field.<name>:<value>` returns zero through the REST search a routine has
+  (`#issue-fields-are-not-searchable`), so no field can ever be a worklist query or a board filter.
+
+It is deliberately a boolean. Sub-labels (`awaiting:review`, `awaiting:merge`) were considered and
+rejected: a boolean cannot be self-inconsistent, and the *kind* of attention is already legible from
+where the item sits — issues in a `Stage` column, PRs in a `Status` lane.
+
+The staleness it could suffer is answered by who writes it. The state machine clears it on any
+`respondTo` human's comment or review, within seconds, so it cannot outlive the reply that answered
+it. The four adds the loop still owns are the dead ends no event expresses: CI red past
+`ciFixIterations`, a conflict it could not rebase, a thread it rebutted rather than adopted, and an
+investigation finished with a finding.
+
+Two transitions were missing from the first draft and are worth naming, because both are silent
+failures rather than loud ones. **`synchronize` is the revision handover**: `changes_requested`
+clears `awaiting` because the ball is the loop's, and pushing the fix puts it back with the reviewer
+— but no other event says so, so a revised PR would have waited unlabelled forever. It is guarded on
+the reviewer's latest review still being `CHANGES_REQUESTED`, so ordinary mid-work pushes do not
+flag a PR nobody is waiting on. (Found by the loop itself, in `sydevs/claude-workflow#42`, about the
+journal query this label replaced — the same gap in a different surface.) And **approval is gated on
+`assignment.reviewer`, never on `respondTo`**: approval authority is the
+reviewer's, and a list that admits every feedback-giver is wider than the authority it stands in
+for. The nightly drift sweep is the backstop, and it journals
+every correction, because a silent fix hides a broken workflow.
 
 ## hasWorkflows is a filesystem check
 

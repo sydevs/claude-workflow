@@ -67,9 +67,12 @@ enough resolved detail to survive being picked up cold, possibly by an automated
    that made `--body` unusable with `gh` does not arise. Type and fields are set in the same call,
    which is also what stops a ticket landing untyped.
 
-9. **File it at `Stage: Proposed`, assigned to `assignment.reviewer`** — always, whoever asked for
-   it. That pair is what says *filed, awaiting your verdict*, and it is what puts the ticket in the
-   journal's `📋 Awaiting you` table.
+9. **File it at `Stage: Proposed` with `labels.awaiting`, assigned to nobody.**
+
+   ⚠ **This skill is the exception that must write its own state.** The state machine sets those
+   two on `issues: opened` — but only for issues the *bot* authored. Run locally this skill files
+   as you, no bot event fires, and a ticket left without them is invisible on the board. Set both
+   in the create call. Assign nobody: `awaiting` is the signal now.
 
    Then ask whether to hand it to the loop now.
 
@@ -89,8 +92,9 @@ enough resolved detail to survive being picked up cold, possibly by an automated
      assignees:["sydevs-bot"]
    ```
 
-   On a no, leave it exactly as filed. `Proposed` on the reviewer is not a parking space — it is the
-   queue for things genuinely needing their verdict, which is what this is.
+   On a no, leave it exactly as filed. `Proposed` plus `awaiting` is not a parking space — it is
+   the queue for things genuinely needing a verdict, which is what this is. Assigning the bot is
+   what clears `awaiting`, and the state machine does that the moment you do.
 
    ⚠ **`Stage: Implement` is the one value the loop may never set for itself.** Writing it here is
    only legitimate because a human just said yes in this session. A routine has no such moment, and

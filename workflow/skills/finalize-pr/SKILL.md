@@ -334,7 +334,10 @@ merge, the gate you want is the approving review.
 
 - **Once CI is green, clear the draft flag** —
   `mcp__github__pull_request_write method:update pullNumber:<n> draft:false`. This is the final
-  action of the run and it means *done*: nothing further until someone responds.
+  action of the run and it means *done*: nothing further until someone responds. It also fires
+  `pull_request: ready_for_review`, so the state machine adds `labels.awaiting` for you — **do not
+  add it yourself**, and do not touch `Stage` on the linked ticket, which went to `Implemented`
+  when this PR opened.
 - **Do not mark it ready while CI is red or a fix loop is still running** — that would put a broken
   PR into the reviewer's queue as though it were ready.
 - **But an unsettled CI is not a reason to leave it in draft.** If the poll budget runs out with CI
@@ -361,6 +364,8 @@ it to memory.
   leaves draft is invisible to the reviewer.
 - **Never** set or change a PR's assignee, on creation or after. Ours are found by `author:`; an
   assignee on a PR is someone else's signal, not ours to write.
+- **Never** write `labels.awaiting` or the linked ticket's `Stage` here. Opening the PR and clearing
+  its draft flag are events, and the state machine turns them into state within seconds.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References

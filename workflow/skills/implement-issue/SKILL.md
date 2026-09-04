@@ -82,16 +82,18 @@ branch at every decision point below rather than stalling.
    **If the ticket turns out not to be implementable as written** — the criteria contradict the code,
    a decision was never made, the scope hides a second ticket — then **revoke rather than guess**:
 
-   1. Set `Stage: Revising`.
+   1. Set `Stage: Revising`. This is one of your four judgement writes — a revocation, which only
+      ever reduces the loop's own autonomy.
    2. Comment saying precisely what is unresolved. A field that changes without explanation reads
-      as a malfunction.
+      as a malfunction. Your comment is also what the state machine cannot infer, so add
+      `labels.awaiting` here yourself.
    3. Add the questions to the ticket body's `## Open questions` list, which is the canonical record.
    4. Stop. **Leave assignment alone** — the ticket stays the bot's, and your comment being the last
-      word is what puts it in the reviewer's `📋 Awaiting you`.
+      word is why you add `labels.awaiting` here — no event will.
 
    **File what you trip over.** Implementation is where real defects surface — a failing test that
-   exposes a pre-existing gap, a shortcut that turns out to be actively wrong. **File it at `Stage: Proposed`, assigned to `assignment.reviewer`, and keep
-   going.** Do not ask permission, and do not let `maxOpenProposals` stop you:
+   exposes a pre-existing gap, a shortcut that turns out to be actively wrong. **File it and keep going** — when a routine files it the state machine sets
+   `Stage: Proposed` and `labels.awaiting`; locally, set both yourself, since no bot event fires. Do not ask permission, and do not let `maxOpenProposals` stop you:
    that ceiling governs proposals a survey went looking for, not evidence you already hold. Do not
    fix it here either, unless it is genuinely part of this ticket — say what is wrong, what it costs
    and what to do, then carry on with the work you were sent to do.
@@ -152,16 +154,13 @@ branch at every decision point below rather than stalling.
     `git rev-parse HEAD` equals `git rev-parse origin/<branch>`. Tear down the worktree's dev server
     and database first: `/dev-server teardown`.
 
-13. **Close the ticket out.** Set `Stage: Implemented` and **remove `assignment.bot` from the
-    ticket's assignees** — one `issue_write`, both changes. From here the PR carries the work, so
-    the ticket drops out of the worklist entirely and stays out until the PR merges or closes.
+13. **Do not close the ticket out — the state machine already did.** Opening the PR fired
+    `pull_request: opened`, which set `Stage: Implemented` and unassigned the bot within seconds.
+    Write neither. Touch no assignee and no `Stage` here at all.
 
-    **Never touch the PR's assignee or its `draft` flag here** — `/finalize-pr` owns both, and
-    marking it ready for review is its step 9.
-
-    If the work is genuinely not finished — blocked on another ticket, or out of budget — do
-    **not** set `Implemented`: leave the ticket assigned, say so in the journal, and it is the
-    next run's queue rather than a fault.
+    If the work is genuinely not finished — blocked on another ticket, or out of budget — then no
+    PR exists, nothing fired, and the ticket is still yours: say so in the journal. That is the
+    next run's queue, not a fault.
 
 14. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
     manual verification.
@@ -171,8 +170,8 @@ branch at every decision point below rather than stalling.
 - **Never** implement a ticket that is not assigned to the bot, or that is not `Stage: Implement`,
   or that has a live `Hold Until`.
 - **Never** write `Stage: Implement` yourself. Moving a ticket off it is allowed; onto it never is.
-- **Never** add `assignment.bot` to anything. The only assignment write here is removing the bot
-  from the ticket at step 13.
+- **Never** write an assignee, a `Stage` or `labels.awaiting` outside the revocation in step 4.
+  The state machine owns the rest and is immediate; you would only race it.
 - **Never** implement a ticket that already has an open PR closing it.
 - **Never** edit files in the main checkout while a worktree is active.
 - **Never** hand-roll shipping — `/finalize-pr` is the only path to a PR.

@@ -48,11 +48,28 @@ thing here.
 - **Never implement a ticket that already has an open PR closing it.** The PR holds the baton.
 - **Never touch an item with a live `Hold Until`** — no work, and no mention anywhere in the
   journal. (why: docs/why.md#blocked-always-carries-a-hold-until)
-- **Never add `assignment.bot` to anything, and never change a PR's assignee.** Assignment is the
-  user's signal and the kill switch. The loop's only assignment writes are removing itself from a
-  ticket at `Implemented`, and assigning `assignment.reviewer` on a new proposal or a ticket whose
-  PR closed unmerged. A PR's turn is its `draft` flag, never its assignee.
-  (why: docs/why.md#draft-is-the-prs-baton)
+- **Never write state the state machine owns.** A workflow — `stateMachine.workflow`, called by
+  every repo — maintains `Stage`, assignees and `labels.awaiting` from GitHub events, within
+  seconds. You write only what an event cannot decide:
+
+  | Never write | Who does | Why |
+  | --- | --- | --- |
+  | Any assignee, on anything | The reviewer adds the bot; the workflow removes it at `Implemented` | Two writers on one field race, and the reviewer's add is the kill switch |
+  | `Stage`, except the four judgement cases below | The workflow, on the event that determined it | A run is up to eight hours late; the event is immediate |
+  | `labels.awaiting`, except the four dead ends below | The workflow | Same |
+  | `Stage: Implement`, **ever** | The reviewer, only | The one safety property: the loop cannot authorise its own code |
+
+  **Approval authority is `assignment.reviewer`'s alone**, and it is narrower than
+  `assignment.respondTo` on purpose: four of the five repos are public, so any account can submit an
+  `APPROVED` review. The state machine and `merge-gate.mjs` both gate approval on the reviewer;
+  `respondTo` governs only what counts as *feedback*.
+
+  **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`; clearing
+  `Hold Until` when a block lifts; revoking `Implement` → `Revising`; and `draft:false` on a PR
+  whose work is done. **Your four `awaiting` writes**, all dead ends no event expresses: CI red
+  past `ciFixIterations`, a conflict you could not rebase, a review thread you rebutted rather
+  than adopted, and an investigation finished with a finding.
+  (why: docs/why.md#the-state-machine-is-not-the-loops-job)
 - **Never exceed a ceiling** to "just finish one more".
 - **Never improvise around a missing credential or tool.** Journal the failure and stop that part
   of the run. (why: docs/why.md#never-improvise-around-a-missing-credential)
@@ -125,15 +142,24 @@ first time this was run as a real query. Every search in every run skill uses `$
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
-mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<reviewer> -label:ops-journal"
+mcp__github__search_issues  query:"$SCOPE is:open label:awaiting"
 mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last-run-ISO>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<bot>"
 ```
 
+**`label:awaiting` is the census's read-only view of what needs a human.** It is maintained by the
+state machine, never by you — the query is here so a run knows what it must *not* claim to be
+working on, and so the journal can say how many items are stalled on the reviewer. Nothing in any
+rung acts on it.
+
 **A PR is the loop's by authorship, not by assignment.** The loop opens its own PRs, so `author:`
 already identifies them exactly — no assignment is written, and a PR's assignee is left to mean what
 it means everywhere else on GitHub: who is responsible for it right now.
+
+**Nothing is ever assigned to `assignment.reviewer`.** `labels.awaiting` carries that signal now, so
+an issue's assignee means exactly one thing across every repo: `assignment.bot` is present and it is
+the loop's turn, or it is not.
 
 The second query is the delegation path, and it is the only reason assignment is read on a PR at
 all: **assigning the bot to someone else's PR is how you ask the loop to work on it.** Unassigning

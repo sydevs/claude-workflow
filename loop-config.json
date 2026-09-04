@@ -19,8 +19,9 @@
     "maxWorkItemsPerRun": 3
   },
   "labels": {
-    "$comment": "The only label the loop reads. Every other piece of ticket state is a field. Exclusion rule in preflight/SKILL.md.",
-    "journal": "ops-journal"
+    "$comment": "Two labels. journal excludes the diary from every worklist; awaiting is the primary human-attention signal, written by the state-machine workflow and — for four dead ends only — by the loop. Rules in triage-issue/SKILL.md.",
+    "journal": "ops-journal",
+    "awaiting": "awaiting"
   },
   "assignment": {
     "$comment": "assignee:<bot> IS the worklist and only the user writes it; the loop may only ever remove itself. respondTo is the allowlist of logins whose comments count as feedback. Rules in triage-issue/SKILL.md.",
@@ -128,8 +129,20 @@
     "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md"
   },
   "journal": {
-    "$comment": "One issue per day in journalRepo, created lazily. No issue number here on purpose: the run finds today's by creation date.",
-    "titleFormat": "<Day> — <n> new, <n> revised, <n> merged, <n> closed",
+    "$comment": "One issue per day in journalRepo, created lazily. The title reports run health; volume lives on the board. No issue number here on purpose: the run finds today's by creation date.",
+    "titleFormat": "<Day> — <n> runs · <n> failed · <n> ceiling stops",
     "timezone": "America/Vancouver"
+  },
+  "projects": {
+    "$comment": "The org workflow board — a lens over Stage, awaiting and PR review state; the loop NEVER reads or writes it. Story in docs/why.md#the-board-is-a-lens.",
+    "url": "https://github.com/orgs/sydevs/projects/2",
+    "number": 2,
+    "recheckProbe": "select:mcp__github__projects_list — probed ABSENT 2026-09-03 (session cse_0188Trog41g4Zt2j9oQS9crB); if this ever resolves from a routine, Projects v2 became reachable"
+  },
+  "stateMachine": {
+    "$comment": "The workflow that owns every mechanical Stage/assignee/awaiting transition. Values only; the division of labour is in preflight/SKILL.md and docs/why.md#the-state-machine-is-not-the-loops-job.",
+    "workflow": ".github/workflows/state-machine.yml",
+    "callerWorkflow": ".github/workflows/workflow-state.yml",
+    "tokenSecret": "ADD_TO_PROJECT_PAT"
   }
 }
