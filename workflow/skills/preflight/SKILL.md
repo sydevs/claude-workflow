@@ -159,14 +159,16 @@ issues into the queue.
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open assignee:<bot> -label:ops-journal"
-mcp__github__search_issues  query:"$SCOPE is:open label:awaiting"
-mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:open updated:>=<last-run-ISO>"
+mcp__github__search_issues  query:"$SCOPE is:issue is:open label:awaiting"
+mcp__github__search_issues  query:"$SCOPE is:pr is:open label:awaiting"
+mcp__github__search_issues  query:"$SCOPE mentions:<bot> is:issue is:open updated:>=<last-run-ISO>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open author:<bot>"
 mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<bot>"
 ```
 
-**`label:awaiting` is read-only here.** The state machine maintains it. The query tells a run what
-it must not claim to be working on. No rung acts on it.
+**`label:awaiting` is read-only here.** The state machine maintains it. The queries tell a run what
+it must not claim to be working on. No rung acts on them. **Two queries, not one:** the label sits
+on issues and on PRs, and one query sees a single shape. Rule 7 below says why.
 
 **A PR is ours by authorship.** `author:` identifies our PRs exactly, so the loop writes no PR
 assignee and the field keeps its ordinary GitHub meaning.
@@ -220,12 +222,18 @@ The PR queries the run skills refine from the fourth search — all indexed, non
    work routine's rung 4, whatever else it matched — the survey routine does not process feedback,
    so it leaves mention hits for the next work-routine run rather than answering them. Never let one
    pass silently: it is answered by rung 4 or named in the journal, one of the two. A mention from a
-   login outside `respondTo` is named, not obeyed.
+   login outside `respondTo` is named, not obeyed. **The query is issue-scoped**, so a mention on a
+   PR reaches the loop through rung 2 or not at all.
 5. **`-label:ops-journal` is mandatory on every worklist query** you write by hand. Journal issues are
    never work. (why: docs/why.md#the-ops-journal-exclusion-is-mandatory)
 6. ⚠ **In a hand-written `search_issues` query, write `>` literally.** An HTML-escaped `&gt;` is
    accepted without error and returns **zero results**. If a search returns nothing where you expect
    otherwise, suspect the qualifier before believing the answer.
+7. ⚠ **Every `search_issues` query carries `is:issue` or `is:pr` explicitly. Omit it and the tool
+   scopes to issues**, silently — a PR can never appear, whatever else the query says. So a query
+   about a label, an author or a mention that omits it answers only half the question, and a run
+   reads that half as the whole. Where the shape matters both ways, that is **two queries**, not one.
+   (why: docs/why.md#a-search-with-no-is-qualifier-cannot-see-a-pr)
 
 The per-repo PR list is cheap and stays full. **Read the last journal entry** (see
 `/workflow:journal`) to learn when the previous run ended — "since last run" means since that

@@ -678,6 +678,53 @@ reason the failure was harmless — an absent `hasWorkflows` reads as *this repo
 stayed closed rather than opening — but a recurring `⚠️ Failed` line trains a reader to skim the
 section that exists to be read.
 
+## A search with no is: qualifier cannot see a PR
+
+For three consecutive runs on 2026-09-04 the census reported **`label:awaiting` returns zero while
+PRs demonstrably carry the label**, and journalled it as a failure of the label or the index. It was
+neither. `mcp__github__search_issues` says so in its own description — *"Already scoped to
+is:issue"* — and the census query at the time was `$SCOPE is:open label:awaiting`, with no `is:`
+qualifier at all. Every item carrying `awaiting` that day was a pull request, so the query could not
+have returned one.
+
+Measured rather than reasoned, in the 19:03Z run against the same live data the failing runs saw:
+
+| Query | Returned |
+| --- | --- |
+| `$SCOPE is:open label:awaiting` | 0 |
+| `$SCOPE is:pr is:open label:awaiting` | 3 — SahajCloud #692, #691, #686 |
+| `repo:sydevs/SahajCloud is:issue is:open label:awaiting` | 0 |
+| `repo:sydevs/SahajCloud is:open author:sydevs-bot` (control) | 8, **all issues**, no PRs |
+
+The control is what settles it: the same omission hides PRs from *any* query, not just a label one.
+
+**Two things make this the expensive kind of wrong.** It fails the way an empty result always fails
+— indistinguishable from "nothing qualifies" — so the census's one view of what needs a human read
+blank and wrong while three PRs sat waiting on the reviewer. And because it was reported as a
+failure of the *system* rather than of the query, two runs' `⚠️ Failed` sections spent their most
+valuable line on a fact that was never true, which is precisely the training-to-skim cost described
+under `#hasworkflows-is-a-filesystem-check`.
+
+The rule that generalises, and the reason it is stated as an imperative rather than an anecdote:
+**a qualifier a query omits is not a qualifier the tool leaves open.** Where a label, an author or a
+mention can land on both shapes, seeing both takes two queries.
+
+**Two decisions the fix forced, recorded so nobody re-opens them by accident.**
+
+**The PR census now sees `awaiting` on PRs for the first time, and the survey routine's drift sweep
+reads it.** That sweep already carried a PR row in its table, and until this query existed it could
+see a PR that *should* carry the label but never one that carries it wrongly. Half of that row
+becomes enforceable on the first survey run after the merge. This is the sweep doing what its own
+table specifies, not a second behaviour — but a run that starts stripping `awaiting` off PRs it
+never touched before is doing it because of this change, and that is worth knowing without a
+bisect.
+
+**`search_issues` with a hand-written `is:pr` stays the one tool, on purpose.** A sibling exists,
+`mcp__github__search_pull_requests`, described as already scoped to `is:pr`. The explicit qualifier
+overrides the default, and eight run-skill queries prove that daily. One tool with one syntax is
+easier to check than two tools with two defaults, so the answer is deliberate rather than an
+omission.
+
 ## Search lags the review that feeds it
 
 SahajCloud#679 was approved at 04:45:57Z. At 05:12Z — twenty-six minutes later — rung 1's
