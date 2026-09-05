@@ -513,6 +513,16 @@ current state first, and returns early when it already matches, so a write that 
 authors its own issues and PRs, so `github.actor != 'sydevs-bot'` would skip exactly the transitions
 that matter most.
 
+One author guard survived that lesson, inverted, and cost the same thing. `issues: opened` set
+`Stage: Proposed` and `awaiting` only when the **bot** filed the issue, so a ticket filed from a
+local session, from the GitHub UI, or by an outside contributor landed with an empty `Stage` and no
+`awaiting`. It was invisible on the board and absent from the one view that answers "what needs me".
+The skills patched around it: `draft-ticket`, `cross-repo-issue` and `implement-issue` each carried
+a paragraph telling a local run to write that state itself, which is the two-writers shape this
+whole anchor exists to forbid. The event is the same event whoever fires it, so the rule is now
+about the event alone. `BOT` still names whose PR or assignment an event describes. It no longer
+decides whether a rule applies.
+
 `awaiting` is the one label the state machine still maintains, and the only one of six retired
 labels to survive. `Stage` and `Hold Until` cover ticket state, but `awaiting` marks *whose turn it
 is* — a different fact, with two properties no field supplies: it spans issues and pull requests (a

@@ -193,7 +193,7 @@ gh label create "awaiting"    --repo sydevs/<repo> --color D93F0B --description 
    | 🙋 Awaiting you | Table | `label:awaiting` — **the primary view** |
    | 🎫 Pipeline | Board, group by **Stage** | `is:issue has:stage` |
    | 🔀 Pull requests | Board, group by **Status** | `is:pr` |
-   | 📥 Backlog | Table, sort Priority | `is:issue no:stage` |
+   | 📥 Backlog | Table, sort Priority | `stage:Proposed` — every new issue is born `Proposed`, so `no:stage` shows only the pre-2026-09 backlog |
    | ⏸ Parked | Table, sort **Hold Until** | `stage:Blocked` |
 
 `Status` options were renamed via GraphQL to `In progress · Changes requested · Approved · Done`.
