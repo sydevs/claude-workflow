@@ -10,11 +10,13 @@
 # workflow/skills/preflight/SKILL.md documents and enforces this division of
 # labour:
 #
-#   this workflow   every transition an EVENT determines
+#   this workflow   every transition an EVENT determines, plus assigning the
+#                   bot to its own PR at open
 #   the loop        judgement only — Blocked + Hold Until, clearing a hold,
 #                   revoking Implement, draft:false, and `awaiting` for the
 #                   four dead ends no event expresses
-#   the reviewer    Stage: Implement, and assigning the bot
+#   the reviewer    Stage: Implement, assigning the bot to a TICKET, and
+#                   delegating someone else's PR to it
 #
 # Idempotency bounds recursion, not an actor guard. A write here fires
 # field_added again. Every writer below reads current state first, and
@@ -143,6 +145,16 @@ jobs:
               await github.rest.issues.removeAssignees({ owner, repo, issue_number: number, assignees: [BOT] })
               note(`#${number} unassigned ${BOT}`)
             }
+            // Called ONLY on `pull_request: opened`, and only for the bot's own
+            // PR. Never on reopened, never on synchronize. Unassigning a PR is
+            // the kill switch for a delegated one, so re-adding on any later
+            // event would undo a deliberate removal.
+            async function assignBot(number) {
+              const { data: i } = await github.rest.issues.get({ owner, repo, issue_number: number })
+              if (i.assignees.some((a) => a.login === BOT)) return
+              await github.rest.issues.addAssignees({ owner, repo, issue_number: number, assignees: [BOT] })
+              note(`#${number} assigned ${BOT}`)
+            }
 
             // ---- the transitions ----------------------------------------
             if (context.eventName === 'issues') {
@@ -193,6 +205,8 @@ jobs:
               const pr = ev.pull_request
               const n = pr.number
               const ours = pr.user.login === BOT
+
+              if (action === 'opened' && ours) await assignBot(n)
 
               if ((action === 'opened' || action === 'reopened') && ours) {
                 for (const i of await closedIssues(n)) {

@@ -108,26 +108,32 @@ configure. An issue's assignee means exactly one thing, everywhere — `assignme
 and it is the loop's turn, or it is not.
 
 **The loop writes no assignee at all** — not on a ticket, not on a PR, not to hand work to a future
-run. The one automated removal, dropping the bot from a ticket once its PR exists, belongs to the
-state machine, which sees `pull_request: opened` the moment it happens.
+run. The two automated writes both belong to the state machine, which sees `pull_request: opened`
+the moment it happens: it drops the bot from a ticket once its PR exists, and it adds the bot to
+that PR.
 
 | Surface | Assignee means | Written by |
 | --- | --- | --- |
 | Issue | `assignment.bot` present = the loop's turn | The reviewer (adding) · the state machine (removing at `Implemented`) |
-| PR | Nothing on ours — found by `author:`. On someone else's, `assignment.bot` = please work on this | The reviewer only |
+| PR, ours | Bookkeeping. Rungs find our PRs by `author:<bot>`, never by assignee | The state machine, once, at open |
+| PR, someone else's | `assignment.bot` = please work on this | The reviewer only |
 
 **`labels.awaiting` is what says a human is needed**, which is why the reviewer holds no
 assignment: two fields for one fact was this repo's oldest failure, and the assignment was the
 half nothing ever cleared.
 
-**Never set or change a PR's assignee at all.** A PR's turn is carried by its `draft` flag — draft
-means the loop still works, ready-for-review means it waits on a human. A PR is the loop's **by
-authorship**: every rung finds its own PRs with `author:<bot>`, so no assignment is needed to
-claim one.
+**Never set or change a PR's assignee.** The state machine assigns the bot to its own PR once, at
+`opened`, and never again — not on reopen, not on a push. Nothing else writes that field, in either
+direction. (why: docs/why.md#a-prs-assignee-is-a-record-never-a-signal)
 
-That leaves a PR's assignee free to mean one thing, pointing the other way: **assigning the bot to
-a PR it did not write is how you ask the loop to work on that PR.** Unassigning withdraws the
-request. The loop reads that field and never writes it.
+A PR's turn is still carried by its `draft` flag — draft means the loop still works,
+ready-for-review means it waits on a human. A PR is the loop's **by authorship**: every rung finds
+its own PRs with `author:<bot>`, so the assignment claims nothing.
+
+On a PR the bot did **not** write, the assignee keeps its one meaning, pointing the other way:
+**assigning the bot to someone else's PR is how you ask the loop to work on it.** Unassigning
+withdraws the request, and because the workflow never re-adds an assignee after `opened`, that
+removal sticks. The loop reads that field and never writes it.
 
 ### `Stage` and `Hold Until` — where the ticket sits, and when to look again
 
@@ -341,7 +347,8 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 
 - **Never** write `Stage: Implement`. That value is the user's signal to the loop — writing it is
   indistinguishable from self-authorizing work.
-- **Never** add `assignment.bot` to a ticket or a PR, and **never** change a PR's assignee at all.
+- **Never** add `assignment.bot` to a ticket or a PR, and **never** change a PR's assignee. The
+  state machine assigns the bot to its own PR at open. You do not.
 - **Never** leave a ticket at `Blocked` without a `Hold Until`.
 - **Never** leave a ticket without a Priority field value.
 - **Never** record a blocker only as a Relationship — a cloud run cannot see it.

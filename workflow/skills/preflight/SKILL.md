@@ -93,7 +93,7 @@ within seconds. You write only what an event cannot decide.
 
 | Never write | Who does | Why |
 | --- | --- | --- |
-| Any assignee, on anything | The reviewer adds the bot. The workflow removes it at `Implemented` | Two writers race, and the reviewer's add is the kill switch |
+| Any assignee, on anything | The reviewer adds the bot to a ticket. The workflow removes it at `Implemented`, and adds it to our own PR at open | Two writers race, and the reviewer's add is the kill switch |
 | `Stage`, outside your four cases | The workflow, on the event | A run is up to eight hours late. The event is immediate |
 | `labels.awaiting`, outside your four | The workflow | Same |
 | `Stage: Implement`, **ever** | The reviewer only | The loop cannot authorise its own code |
@@ -105,12 +105,14 @@ finished PR. **Your four `awaiting` writes**, all dead ends no event sees: CI re
 ended in a finding. (why: docs/why.md#the-state-machine-is-not-the-loops-job)
 
 **On a PR, assignee means delegation, not ownership.** Authorship (`author:<bot>`), not
-assignment, marks a PR as ours, so the loop never writes a PR assignee, in either direction, and
-the field keeps its ordinary GitHub meaning. On an issue, `labels.awaiting` — not assignment —
-carries the "needs the loop" signal, so an issue's assignee means one thing everywhere:
-`assignment.bot` is present and it is the loop's turn, or it is not.
+assignment, marks a PR as ours — the workflow assigns the bot to its own PR at `opened` for the
+record only, and no rung reads it. **You never write a PR assignee, in either direction.** On an
+issue, `labels.awaiting` — not assignment — carries the "needs the loop" signal, so an issue's
+assignee means one thing everywhere: `assignment.bot` is present and it is the loop's turn, or it
+is not.
 **Assigning the bot to someone else's PR is how a human hands the loop that work — the only case
-where a PR's assignee matters.** Unassigning is the kill switch for that case.
+where a PR's assignee is read.** Unassigning is the kill switch for that case, and it holds:
+nothing re-adds an assignee after `opened`.
 
 **Approval authority is `assignment.reviewer`'s alone**, narrower than `assignment.respondTo` on
 purpose — four repos are public, so any account can approve, but `respondTo` governs feedback
