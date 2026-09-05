@@ -843,3 +843,23 @@ in that cache at all, and the marketplace clone itself sat nine commits behind.
 contributor, explicitly, that `version` did not matter. That is why bumping the manifest is now a
 required part of any skill change, not a release ceremony. This repo has no releases. It does have a
 cache key, and a cache key that never changes is a cache that never updates.
+
+## Rung 4 writes awaiting when it asks a question
+
+Rung 4 carried two rules that contradicted each other. One forbade touching `labels.awaiting` in
+the rung at all. The other, twelve lines below it, required adding the label after a question or a
+finding. A run reading them in order had no defined answer, and the 2026-09-05 journal recorded the
+clash twice.
+
+Both rules had a real reason, and only one of them survives contact with the event stream. The
+prohibition exists because the **human's** comment already fired `issue_comment: created`, so the
+state machine cleared `awaiting` seconds later — a run that clears it again is a second writer on a
+field an event owns. That reasoning covers clearing the label. It says nothing about setting it.
+
+Setting it is the case the state machine cannot see. When a rung-4 reply asks a question back, the
+loop's own comment fires the same event, and the state machine clears `awaiting` on it — so the
+ticket ends the run needing a human and carrying no signal that it does. That is the same shape as
+the other four writes: a dead end no event sees.
+
+So the prohibition narrows to `Stage`, and the label write stays. The alternative — deleting the
+label write — was rejected because it makes the loop ask a question into silence.

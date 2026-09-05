@@ -210,9 +210,9 @@ Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
 
 - **Filter by author first.** Only a login in `assignment.respondTo` writes feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
-- **Never touch `Stage` or `labels.awaiting` here** — the comment already fired
-  `issue_comment: created`, so the state machine set `Revising` and cleared `awaiting` before this
-  run started. Reply, revise the body, and stop.
+- **Never write `Stage` here** — the comment already fired `issue_comment: created`, so the state
+  machine set `Revising` and cleared `awaiting` before this run started. Reply, revise the body,
+  and stop. The one `labels.awaiting` write is the last rule in this rung.
 - **Start from the `updated:>=` search set**, then read comments only where the count is
   non-zero.
 - **Derive the window from comment timestamps, never from `updated_at`** — a field write bumps
@@ -232,7 +232,8 @@ Counts against `maxWorkItemsPerRun`. Bot-assigned issues carrying a comment from
 - **Append `identity.commentMarker`** to every comment, here and in every rung.
 - **When a comment reads as approval, say that `Stage: Implement` starts work. Never write it.**
 - **Add `labels.awaiting` only when you asked a question or reported a finding.** No event sees
-  either. When you simply answered, leave the label clear.
+  either — your own reply clears the label again. When you simply answered, leave it clear.
+  (why: docs/why.md#rung-4-writes-awaiting-when-it-asks-a-question)
 
 ## Rung 5 — Adversarial review
 

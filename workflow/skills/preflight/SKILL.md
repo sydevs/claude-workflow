@@ -100,9 +100,10 @@ within seconds. You write only what an event cannot decide.
 
 **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`, clearing
 `Hold Until` when a block lifts, revoking `Implement` to `Revising`, and `draft:false` on a
-finished PR. **Your four `awaiting` writes**, all dead ends no event sees: CI red past
+finished PR. **Your five `awaiting` writes**, all dead ends no event sees: CI red past
 `ciFixIterations`, a conflict you could not rebase, a thread you rebutted, an investigation that
-ended in a finding. (why: docs/why.md#the-state-machine-is-not-the-loops-job)
+ended in a finding, and a question you asked back in rung 4.
+(why: docs/why.md#the-state-machine-is-not-the-loops-job)
 
 **On a PR, assignee means delegation, not ownership.** Authorship (`author:<bot>`), not
 assignment, marks a PR as ours — the workflow assigns the bot to its own PR at `opened` for the
