@@ -238,7 +238,8 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
   ```
   **Set no assignee at all** — see `/workflow:triage-issue`'s baton section for the full rule. A
-  PR is ours by `author:<bot>`, never by assignee.
+  PR is ours by `author:<bot>`, never by assignee. The state machine assigns the bot at `opened`,
+  for the record only, and never again.
 
   **Every PR opens as a draft, without exception.** Draft is the PR's baton — it means *the loop
   is still working on this*, and step 9 clears it once CI is green. A PR born ready-for-review
@@ -324,7 +325,8 @@ user to save it to memory.
 - **Cap** the CI fix loop at 3, then hand back.
 - **Always** open a PR as a draft, and clear the flag only once CI is green — a PR that never
   leaves draft is invisible to the reviewer.
-- **Never** set or change a PR's assignee, on creation or after (`/workflow:triage-issue`).
+- **Never** set or change a PR's assignee, on creation or after — the state machine does it at
+  `opened` (`/workflow:triage-issue`).
 - **Never** write `labels.awaiting` or the linked ticket's `Stage` here. Opening the PR and
   clearing its draft flag are events. The state machine turns them into state within seconds.
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.

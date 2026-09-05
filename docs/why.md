@@ -694,6 +694,22 @@ The rule that generalizes: **a search qualifier is safe only for facts the loop 
 `commenter:` describe other people's writes, and those need an authoritative read before anything
 irreversible depends on them.
 
+## A PR's assignee is a record, never a signal
+
+Rungs find the loop's PRs with `author:<bot>`. Nothing reads the assignee on a PR the bot wrote, so
+for a long time nothing wrote it either, and the field sat empty. That was defensible and it read as
+broken — a queue of PRs with no owner, in a UI whose every other row has one.
+
+The state machine now assigns the bot to its own PR, **once, on `opened`**. It is bookkeeping. No
+rung may start reading it, or authorship and assignment become two answers to one question, which
+is the failure `#the-state-machine-is-not-the-loops-job` describes.
+
+**Once is the whole rule.** On a PR the bot did not write, the assignee means the opposite thing —
+a human handing the loop that work — and removing it is the kill switch. Re-asserting the
+assignment on `reopened` or `synchronize` would undo a deliberate removal on the next push, so a
+kill switch that only holds until the author pushes is not a kill switch. `opened` fires once in a
+PR's life, which is why it is the only safe place for this write.
+
 ## Only the reviewer's approval counts
 
 The first draft of rung 1's derivation, written once it became clear no MCP call returns
