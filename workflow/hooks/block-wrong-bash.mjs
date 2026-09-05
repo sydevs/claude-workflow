@@ -3,12 +3,13 @@
 /**
  * Block Wrong Bash Commands (PreToolUse / Bash)
  *
- * Denies invocations that are known-wrong for these repos and names the right
- * one, failing fast rather than letting Claude try, fail and retry.
+ * Denies commands that are known wrong for these repos, and names the right
+ * command instead. This stops Claude from trying the wrong command, failing,
+ * and retrying.
  *
- * Reconciled from three forks. The sibling-repo exemption is SahajCloud's — it
- * was the only copy that had it, and its absence elsewhere is what blocked
- * cross-repo work. The package-manager rule is SahajAtlasWeb's, which covered
+ * This hook merges three earlier forks. SahajCloud's fork was the only one
+ * with the sibling-repo exemption. Its absence elsewhere blocked cross-repo
+ * work. SahajAtlasWeb's fork supplied the package-manager rule and covered
  * yarn as well as npm.
  */
 
@@ -25,8 +26,8 @@ if (!command) process.exit(0)
 const ROOT = worktreeRoot()
 const PM = loadConfig(ROOT).packageManager ?? 'pnpm'
 
-// Anchored to command position — start of line, or after && ; | || — so we do
-// not false-positive on these tokens appearing inside an echoed string.
+// This anchors to command position: start of line, or after && ; | ||. So it
+// does not false-match these tokens when they appear inside an echoed string.
 const CMD_START = '(?:^|&&|;|\\|\\||\\|)\\s*'
 
 /** Strip quotes, expand `~`, resolve relatives against the worktree root. */
@@ -57,19 +58,18 @@ function gitTopLevel(dir) {
 /**
  * True when a captured path belongs to a DIFFERENT repository than this session.
  *
- * The two git rules exist because *within* a repo the cwd is already its root,
- * so `git -C` and `cd … && git` are redundant and trigger permission prompts.
- * That rationale does not hold for a sibling checkout, and cross-repo work is
- * routine here (`/cross-repo-issue`, the shared workspace).
+ * The two git rules exist for one reason: inside a repo, the cwd is already
+ * its root. So `git -C` and `cd … && git` are redundant, and both trigger a
+ * permission prompt. That reason does not apply to a sibling checkout, and
+ * cross-repo work is routine here (`/cross-repo-issue`, the shared workspace).
  *
- * This compares REPOSITORIES, not directory containment, because containment
- * gets the multi-root case exactly backwards. `worktreeRoot()` falls back to the
- * project dir when `git rev-parse` fails, so a session rooted at the workspace
- * folder — which is not itself a repo — takes ROOT to be that folder, and every
- * sibling checkout then sits *under* it. The old containment test therefore read
- * each sibling as "inside this worktree" and fired the very rules the exemption
- * exists to lift, blocking all cross-repo git in the one session shape that
- * needs it most.
+ * This function compares REPOSITORIES, not directory containment. Containment
+ * gets the multi-root case backwards. `worktreeRoot()` falls back to the
+ * project directory when `git rev-parse` fails. A session rooted at the
+ * workspace folder is not itself a repo, so ROOT becomes that folder, and
+ * every sibling checkout then sits under it. The old containment test read
+ * each sibling as inside this worktree. It fired the exemption's own rules
+ * and blocked cross-repo git in the one session shape that needs it most.
  */
 function targetsSiblingRepo(match) {
   const p = resolvePath(match?.[1])
@@ -82,7 +82,7 @@ function targetsSiblingRepo(match) {
 
   const dir = existsSync(p) && statSync(p).isDirectory() ? p : dirname(p)
   const targetRepo = gitTopLevel(dir)
-  // Outside any repo — the rules have nothing to say about it.
+  // Outside any repo, the rules have nothing to say about it.
   if (!targetRepo) return true
 
   return targetRepo !== ownRepo

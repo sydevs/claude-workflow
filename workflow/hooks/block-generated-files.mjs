@@ -3,12 +3,12 @@
 /**
  * Block Generated Files (PreToolUse / Edit|Write)
  *
- * Denies edits to files produced by tooling rather than written by hand, and
- * says how to regenerate them instead.
+ * Denies edits to files that tooling produces, not files written by hand.
+ * Tells the caller how to regenerate the file instead.
  *
- * The rules are per-repo data, not code: they come from `generatedFiles` in
- * `.claude/workflow.json`. Each entry is `{ pattern, reason }`, where `pattern`
- * is a JS regex tested against the worktree-relative path.
+ * The rules are per-repo data, not code. They come from `generatedFiles` in
+ * `.claude/workflow.json`. Each entry is `{ pattern, reason }`. `pattern` is
+ * a JS regex tested against the worktree-relative path.
  */
 
 import { readInput, loadConfig, worktreeRoot, relativePath, deny } from './lib/workflow-config.mjs'

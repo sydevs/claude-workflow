@@ -1,11 +1,14 @@
-# The workflow state machine — every MECHANICAL transition of Stage, assignees
-# and the `awaiting` label.
+# The workflow state machine.
 #
-# Called by all five sydevs repos (see workflow-state.yml in each). One copy
-# here, five thin callers, so the rules cannot drift between repos.
+# It applies every MECHANICAL transition of Stage, assignees, and the
+# `awaiting` label.
 #
-# The division of labour, stated once and enforced by prose in
-# workflow/skills/preflight/SKILL.md:
+# All five sydevs repos call this workflow (see workflow-state.yml in each
+# repo). One copy lives here. Five thin callers use it. The rules cannot
+# drift between repos.
+#
+# workflow/skills/preflight/SKILL.md documents and enforces this division of
+# labour:
 #
 #   this workflow   every transition an EVENT determines
 #   the loop        judgement only — Blocked + Hold Until, clearing a hold,
@@ -13,11 +16,13 @@
 #                   four dead ends no event expresses
 #   the reviewer    Stage: Implement, and assigning the bot
 #
-# Recursion is bounded by idempotency, not by an actor guard. A write here
-# fires field_added again, but every writer below reads current state first and
-# returns early when it already matches — so the re-trigger is one free no-op
-# run. Do NOT add `if: github.actor != 'sydevs-bot'`: the bot authors its own
-# issues and PRs, so that guard would skip the transitions that matter most.
+# Idempotency bounds recursion, not an actor guard. A write here fires
+# field_added again. Every writer below reads current state first, and
+# returns early when it already matches. So the re-trigger costs one free
+# no-op run.
+#
+# Do not add `if: github.actor != 'sydevs-bot'`. The bot authors its own
+# issues and PRs. That guard would skip the transitions that matter most.
 #
 # why: sydevs/claude-workflow/docs/why.md#the-state-machine-is-not-the-loops-job
 name: Workflow state machine
@@ -56,11 +61,11 @@ jobs:
           script: |
             const BOT = 'sydevs-bot'
             const RESPOND_TO = ['Ardnived', 'antontcymbal', 'Copilot']
-            // Approval authority is NARROWER than respondTo, and deliberately so.
-            // Four of the five repos are public, so any account can submit an
-            // APPROVED review; treating every respondTo login as an approver would
-            // let a drive-by approval decide whether work still needs a human.
-            // Same rule the merge gate enforces in reviewDecisionFrom.
+            // Approval authority is narrower than respondTo, on purpose.
+            // Four of the five repos are public. Any account can submit an
+            // APPROVED review. Treating every respondTo login as an approver
+            // would let a drive-by approval decide if work still needs a human.
+            // The merge gate enforces this same rule in reviewDecisionFrom.
             // why: docs/why.md#only-the-reviewers-approval-counts
             const REVIEWER = 'Ardnived'
             const LOOP_MAY_NOT_MERGE = ['claude-workflow']
@@ -85,9 +90,11 @@ jobs:
               }
             }
 
-            // Issue fields are org-level but written through a repo endpoint.
-            // The PUT replaces the whole set, so read first and merge — a PUT
-            // carrying only Stage silently clears Priority, Effort and Hold Until.
+            // Issue fields are org-level. The workflow writes them through a
+            // repo endpoint. The PUT replaces the whole field set. Read the
+            // current fields first, then merge your change into them. A PUT
+            // with only Stage would silently clear Priority, Effort, and
+            // Hold Until.
             async function readFields(number) {
               const { data } = await github.request(
                 'GET /repos/{owner}/{repo}/issues/{n}/issue-field-values',
@@ -191,10 +198,11 @@ jobs:
                 await setAwaiting(n, true, 'ready for review')
               } else if (action === 'synchronize' && ours) {
                 // The revision handover. `changes_requested` cleared `awaiting`
-                // because the ball was ours; pushing the fix puts it back with
-                // the reviewer, and no other event says so. Guarded on their
-                // latest review still being CHANGES_REQUESTED, so ordinary
-                // mid-work pushes do not flag a PR nobody is waiting on.
+                // because we owed the next action. Pushing the fix returns
+                // `awaiting` to the reviewer. No other event does this. The
+                // check requires their latest review to still be
+                // CHANGES_REQUESTED, so an ordinary mid-work push does not
+                // flag a PR nobody is waiting on.
                 // why: sydevs/claude-workflow#42
                 const { data: reviews } = await github.rest.pulls.listReviews(
                   { owner, repo, pull_number: n })
@@ -223,8 +231,9 @@ jobs:
               if (!RESPOND_TO.includes(who)) { note('review not from respondTo — no-op'); return }
               if (state === 'APPROVED') {
                 if (who !== REVIEWER) { note(`approval from ${who} is not ${REVIEWER}'s — no-op`); return }
-                // The loop merges approved work on its next run — except where
-                // it is forbidden to merge at all, and only a human can finish it.
+                // The loop merges approved work on its next run. One exception:
+                // some repos forbid the loop to merge at all, and only a human
+                // can finish it there.
                 const humanMerges = LOOP_MAY_NOT_MERGE.includes(repo)
                 await setAwaiting(n, humanMerges, humanMerges
                   ? 'approved, but only a human may merge in this repo'

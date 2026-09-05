@@ -1,6 +1,6 @@
 ---
 name: survey-routine
-description: The once-a-night run — the day's survey, the unheard-replies sweep, and the journal. Invoked by the sydevs-survey-nightly routine; runnable locally with --dry-run.
+description: The once-a-night run — the day's survey, the unheard-replies sweep, and the journal. Invoked by the sydevs-survey-nightly routine, runnable locally with --dry-run.
 argument-hint: '[--dry-run]'
 disable-model-invocation: true
 effort: max
@@ -10,65 +10,60 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 # Survey Routine
 
 The once-a-night pass across the five sydevs repos. **This is not a ladder** — nothing here
-competes for budget or descends by priority. It is a fixed set of once-a-day tasks that were split
-out of the working-day loop precisely so a busy queue can never starve them, plus two sweeps that
-would re-flag the same untouched items on every pass if they ran hourly.
+competes for budget or descends by priority. It is a set of once-a-day tasks, split out of the
+working-day loop so a busy queue can never starve them, plus two sweeps that would re-flag the
+same items on every pass if they ran hourly.
 (why: docs/why.md#the-survey-routine-is-not-a-ladder)
 
-**Begin with `/workflow:preflight`** — the ground rules and the census apply to this run in full —
-**and end with `/workflow:journal`.** In between, the three tasks below, in order.
+**Begin with `/workflow:preflight`** — its ground rules and census apply in full — **and end with
+`/workflow:journal`.** In between, the three tasks below, in order.
 
-`--dry-run`: do everything read-only. Print what each task *would* act on and stop. Never comment,
-commit, push, merge, or label.
+`--dry-run`: do everything read-only. Print what each task *would* act on, then stop. Never
+comment, commit, push, merge, or label.
 
 ## Survey
 
-Look up today's weekday in `surveyCalendar` and invoke that skill. `null` → skip.
+Look up today's weekday in `surveyCalendar` and invoke that skill. `null` means skip.
 
-**File and stop — the state machine does the rest.** Everything filed here is authored by the bot,
-so `issues: opened` fires and sets `Stage: Proposed` and `labels.awaiting` within seconds. **Do not
-set either yourself, and assign nobody.** A proposal exists to be judged; `awaiting` is what says
-so, and it is not yours to write.
+**File and stop — the state machine does the rest.** Everything filed here is bot-authored, so
+`issues: opened` sets `Stage: Proposed` and `labels.awaiting` within seconds. **Never set either
+yourself, and assign nobody** — a proposal exists to be judged, and `awaiting` says so.
 
-Before filing anything, check the standing proposal ceiling. There is no query for a field, so take
-the indexed half and filter the rest:
+Before filing, check the standing proposal ceiling. No query reaches a field, so take the indexed
+half and filter the rest:
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open author:<bot> -label:ops-journal"
 ```
 
-then count those at `Stage: Proposed` from the field values `/workflow:preflight` already read. At
-or over `maxOpenProposals` → **do not file.** Record what you found in the journal instead; it waits
-for review capacity.
+Count those at `Stage: Proposed` from the field values `/workflow:preflight` already read. At or
+over `maxOpenProposals`, **do not file** — record what you found in the journal, to wait for
+review capacity.
 
-⚠ **`author:<bot>` is load-bearing, not an optimisation.** The ceiling governs what the loop
-proposes, and a bare `Stage: Proposed` count would sweep in the reviewer's own unreviewed tickets —
-so a busy human backlog would silently switch the surveys off.
+⚠ **`author:<bot>` is load-bearing, not an optimisation.** A bare `Stage: Proposed` count would
+sweep in the reviewer's own unreviewed tickets, silently switching the surveys off on a busy day.
 
 **The ceiling governs proposals you went looking for, not defects you tripped over.**
 
 | Where it came from | Capped? |
 | --- | --- |
 | A survey — you set out to find candidates | **Yes.** Respect `maxOpenProposals` and `maxProposalsPerSurvey` |
-| Work on something else — a real defect surfaced while implementing, reviewing or investigating | **No. File it, every time, even over the ceiling** |
+| A real defect found while implementing, reviewing or investigating | **No. File it, every time, even over the ceiling** |
 
-The two differ in kind. A survey manufactures candidates on demand and will produce more whenever
-asked, so a stock cap is the right governor. An incidental finding is evidence you already hold:
-you were in the code, something was wrong, and the alternative to filing is that the knowledge dies
-with the run. **Never discard a real finding to respect a number**, and never ask permission to file
-one — `Stage: Proposed` commits nobody to anything, which is the whole point of it.
+A survey manufactures candidates on demand, so a cap fits. An incidental finding is evidence you
+already hold, and filing it costs nothing — `Stage: Proposed` commits nobody to anything. **Never
+discard a real finding to respect a number**, and never ask permission to file one.
 
-Say where it came from, and keep the bar: what is wrong, what it costs, and what to do. A finding
-you cannot point at a line for is a journal note, not a ticket — that bar is about evidence, not
-about the ceiling.
+Say where the finding came from, and keep the bar: what is wrong, what it costs, and what to do. A
+finding you cannot point at a line for is a journal note, not a ticket.
 
 ## Reconciliation sweeps
 
 **`awaiting` drift.** The state machine is event-driven, so it can only be wrong where no event
-fired — a webhook GitHub dropped, a workflow run that failed, or one of the loop's own dead-end adds
-that a later run resolved without clearing. Recompute the label across the open backlog with the
-rules below, fix what disagrees, and **journal every correction under `🧭 Friction`** — a silent fix
-hides a broken workflow, and this sweep is the only thing that would notice.
+fired — a dropped webhook, a failed workflow run, or one of the loop's own dead-end adds that a
+later run resolved without clearing. Recompute the label across the open backlog with the rules
+below, correct what disagrees, and **journal every correction under `🧭 Friction`** — an unlogged
+correction hides a broken workflow, and this sweep is the only thing that would notice.
 
 | Should carry `awaiting` | Should not |
 | --- | --- |
@@ -77,28 +72,26 @@ hides a broken workflow, and this sweep is the only thing that would notice.
 | `Stage: Implement` with the bot **not** assigned | `Stage: Implement` with the bot assigned, or `Implemented` |
 | A ready PR with no review, or approved in a `loopMayNotMerge` repo | A PR with changes requested, merged, or closed |
 
-**Unheard replies.** Someone commented, but the ticket is not the loop's to act on — so nothing
-will ever pick it up, and they may be waiting:
+**Unheard replies.** Someone commented, but the ticket is not the loop's to act on, so nothing will
+ever pick it up, and they may be waiting:
 
 ```
 mcp__github__search_issues  query:"$SCOPE is:issue is:open commenter:<reviewer> updated:>=<24h> -label:ops-journal"
 ```
 
-`is:issue` is deliberate and states what this sweep already did: it is about **tickets** nobody will
-pick up, and a PR of the reviewer's is not one. Omitting it would not have widened the sweep to PRs
-anyway — see `/workflow:preflight`'s rule 7.
+`is:issue` is deliberate — this sweep covers **tickets** only, not the reviewer's own PRs.
+Omitting it would not widen the sweep anyway — see `/workflow:preflight` rule 7.
 
-Keep the ones **not** assigned to `assignment.bot` and with no live `Hold Until`, then check that
-the newest comment is genuinely theirs and not a reply to the loop's own last word. **Do not pick
-these up** — assigning the bot is the user's call and only theirs. Name them in tonight's journal
-under a `### Possibly awaiting a handoff` line.
+Keep only tickets **not** assigned to `assignment.bot`, with no live `Hold Until`, and check that
+the newest comment is genuinely theirs, not a reply to the loop's last word. **Do not act on these** —
+assigning the bot is the user's call alone. Name them under `### Possibly awaiting a handoff` in
+tonight's journal.
 
-This replaced a sweep for *"the reviewer replied but forgot to reassign"*, which meant something
-only while the loop handed work back. It no longer does: an item stays assigned to the bot until the
-user unassigns it, so the failure worth catching is now the opposite one — a comment on something
-the loop was never holding.
+This replaced a sweep for the reviewer forgetting to reassign, which mattered only when the loop
+handed work back. Now an item stays assigned until the user unassigns it, so the sweep instead
+catches a comment on something the loop never held.
 
 ## Journal
 
-Hand off to `/workflow:journal` — this run's entry is marked `nightly`, and its `🔍 Surveyed`
-section carries the survey's one-line verdict.
+Hand off to `/workflow:journal`. Mark this run's entry `nightly`, and give its `🔍 Surveyed`
+section the survey's one-line verdict.

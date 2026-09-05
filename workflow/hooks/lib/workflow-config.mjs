@@ -1,11 +1,11 @@
 /**
  * Shared config loader for the sydevs workflow hooks.
  *
- * Every hook here is repo-agnostic; the per-repo data lives in
- * `<worktree>/.claude/workflow.json`. Resolving against the *worktree* root
- * rather than `CLAUDE_PROJECT_DIR` matters because `/implement-issue` works in a
- * worktree by default, and a hook keyed on the main checkout would read the
- * wrong repo's rules — or none.
+ * Every hook here is repo-agnostic. The per-repo data lives in
+ * `<worktree>/.claude/workflow.json`. This resolves against the worktree
+ * root, not `CLAUDE_PROJECT_DIR`. That matters because `/implement-issue`
+ * works in a worktree by default. A hook keyed on the main checkout would
+ * read the wrong repo's rules, or none at all.
  */
 
 import { execFileSync } from 'child_process'
@@ -27,8 +27,9 @@ export function worktreeRoot() {
 }
 
 /**
- * Load `.claude/workflow.json`. Returns `{}` when absent or malformed — a hook
- * must never break a session because a repo has not been onboarded yet.
+ * Load `.claude/workflow.json`. Returns `{}` when the file is missing or
+ * malformed. A hook must never break a session just because a repo has not
+ * been onboarded yet.
  */
 export function loadConfig(root = worktreeRoot()) {
   const path = join(root, '.claude', 'workflow.json')

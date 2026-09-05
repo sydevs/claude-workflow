@@ -4,22 +4,24 @@
  *
  * ## Why this is a script
  *
- * The rule it replaces was prose — "past roughly fifteen lines outside a
- * `<details>`, it is an essay" — and it failed in both directions at once.
- * Measured over 80 bot comments: the visible half ran to 3,364 characters
- * (about forty lines), and 51% of all bytes had migrated INSIDE `<details>`,
- * where the rule did not reach and the tokens still cost full price on read.
+ * The old rule was prose: "past roughly fifteen lines outside a `<details>`,
+ * it is an essay." It failed in both directions at once. A measurement of
+ * 80 bot comments found the visible half ran to 3,364 characters, about
+ * forty lines. It also found that 51% of all bytes had moved INSIDE
+ * `<details>`, where the rule could not reach, and those tokens still cost
+ * full price to read.
  *
- * So the count here is of the whole artefact, `<details>` included. A budget
- * that exempts a container is a budget that names where to hide.
+ * So this script counts the whole artefact, `<details>` included. A budget
+ * that exempts a container just names where to hide text.
  *
  * ## No discretionary overage
  *
- * `check()` returns over/under and nothing else. There is deliberately no
- * "unless you explain why" clause: the fifteen-line rule had one, and that is
- * what it died of.
+ * `check()` returns only over or under. It has no "unless you explain why"
+ * clause on purpose. The fifteen-line rule had one. That clause is what
+ * killed the rule.
  *
- * Takes text on stdin, never fetches, so a routine and a laptop agree.
+ * This script reads text from stdin. It never fetches data. So a routine
+ * and a laptop always agree.
  * (why: docs/why.md#budgets-not-adjectives)
  */
 
