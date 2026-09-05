@@ -21,8 +21,11 @@
 # returns early when it already matches. So the re-trigger costs one free
 # no-op run.
 #
-# Do not add `if: github.actor != 'sydevs-bot'`. The bot authors its own
-# issues and PRs. That guard would skip the transitions that matter most.
+# Do not gate a transition on who authored the item. Not
+# `if: github.actor != 'sydevs-bot'`, and not the inverse either. The bot
+# authors its own issues and PRs, and you author your own, so any author test
+# skips the transitions that matter most. `BOT` below identifies WHOSE PR or
+# assignment an event describes. It never decides whether a rule applies.
 #
 # why: sydevs/claude-workflow/docs/why.md#the-state-machine-is-not-the-loops-job
 name: Workflow state machine
@@ -147,10 +150,13 @@ jobs:
               const labels = ev.issue.labels.map((l) => l.name)
               if (labels.includes('ops-journal')) { note('journal issue — no-op'); return }
 
-              if (action === 'opened' && ev.issue.user.login === BOT) {
+              if (action === 'opened') {
+                // Every author, not only the bot. A ticket filed locally, from
+                // the GitHub UI, or by an outside contributor owes the same
+                // first verdict. `!stage` keeps a Stage the filer chose.
                 const { stage } = await stageOf(n)
                 if (!stage) {
-                  await setStage(n, 'Proposed', 'bot filed it')
+                  await setStage(n, 'Proposed', 'newly opened')
                   await setAwaiting(n, true, 'Proposed — verdict owed')
                 }
               } else if (action === 'closed') {
