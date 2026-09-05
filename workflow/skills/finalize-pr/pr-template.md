@@ -1,11 +1,11 @@
 # PR body template
 
 **This is the structure, not a suggestion.** Use these headings, in this order. Delete a section
-the notes say to delete; never rename one or substitute your own. A reviewer reading their fifth PR
-of the week should know where to look without reading the whole thing.
+only when the notes say to. Never rename one, and never add your own. A reviewer reading their
+fifth PR of the week should find what they need without reading the whole thing.
 
-Keep the visible body short and put depth in `<details>` — reasoning, alternatives rejected,
-measurements, file-by-file notes. The reviewer decides what to open.
+Keep the visible body short. Put depth in `<details>` — reasoning, rejected alternatives,
+measurements, file-by-file notes — and let the reviewer decide what to open.
 
 ```markdown
 ## Summary
@@ -25,12 +25,8 @@ refactors where the structural change is not apparent from individual diffs.]
 
 ## Preview
 
-[BRANCH-alias preview URL(s) from `branch-preview-url.mjs`, deep-linked to the
-routes this PR changes — not just the root. Never a per-commit alias: an eight-hex
-first label (`c76da223.…`) means the link freezes at this push and the reviewer
-cannot tell. Omit the section entirely for repos with no preview deploy
-(SahajAtlasWordpress). Say "preview pending" only if it genuinely had not built
-by the time the body was written, and refresh once it does.]
+[BRANCH-alias preview URL(s), deep-linked to the changed routes. See
+`finalize-pr/SKILL.md` step 7 for the branch-vs-commit-alias rule.]
 
 - [what changed] — <url>
 
@@ -87,17 +83,17 @@ Closes #NNN
 
 ## Title
 
-The issue title (`<type>(<scope>): <subject>`), or close to it. Implementer's discretion when scope
-shifted during implementation — but then say so in the notes.
+The issue title (`<type>(<scope>): <subject>`), or close to it. If scope shifted during
+implementation, use your discretion, and say so in the notes.
 
 ## Length
 
-Summary bullets ≤ 100 chars. Test results factual, no editorializing. A short focused description
-with clear test results beats a long one that is vague about them.
+Keep summary bullets to ≤ 100 characters. State test results as facts, with no editorializing. A
+short, focused description with clear test results beats a long one that is vague about them.
 
 ## Avoid
 
 - Restating what each commit did — the commit list is right there.
 - "This should fix the bug" — say what it does, not what you hope.
-- "Made some refactors" — be specific or omit.
+- "Made some refactors" — name the refactor, or omit the line.
 - Repeating the acceptance criteria verbatim — `Closes #N` already links them.

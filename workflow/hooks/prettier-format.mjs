@@ -3,13 +3,13 @@
 /**
  * Prettier Auto-Format (PostToolUse / Edit|Write)
  *
- * Formats the single edited file. Silent on no-op; reports only when the file
- * actually changed.
+ * Formats the edited file. Stays silent when nothing changes, and reports
+ * only when the file actually changed.
  *
- * Runs through the repo's package manager (`pnpm exec`), not `npx`. The forked
- * copies used `npx`, which contradicts the pnpm-only rule these repos enforce
- * in `block-wrong-bash` and can resolve a different binary — or fetch one from
- * the registry — in a pnpm workspace.
+ * Runs through the repo's package manager (`pnpm exec`), never `npx`. The
+ * forked copies this hook replaced used `npx`. That breaks the pnpm-only
+ * rule `block-wrong-bash` enforces, and in a pnpm workspace `npx` can
+ * resolve a different binary, or fetch one from the registry.
  */
 
 import { execFileSync } from 'child_process'
@@ -19,9 +19,10 @@ import { readInput, loadConfig, worktreeRoot, relativePath, passSilently } from 
 const input = readInput()
 const filePath = input?.tool_input?.file_path ?? ''
 
-// Markdown is deliberately excluded: Prettier's table and heading normalization
-// rewrites hand-formatted docs wholesale, turning a one-line edit into a large
-// unrelated diff. Docs in these repos are maintained by hand — do not re-add md.
+// Markdown is excluded on purpose. Prettier's table and heading formatting
+// rewrites hand-formatted docs completely, turning a one-line edit into a
+// large, unrelated diff. These repos maintain docs by hand. Do not add md
+// back here.
 if (!filePath || !/\.(js|jsx|ts|tsx|json|css|mjs)$/.test(filePath)) passSilently()
 
 const root = worktreeRoot()
@@ -46,8 +47,9 @@ try {
     process.exit(0)
   }
 } catch {
-  // Prettier absent or failed (e.g. the WordPress repo has no JS toolchain).
-  // A formatter is not a gate — never block an edit because it could not run.
+  // Prettier is absent, or it failed (for example, the WordPress repo has no
+  // JS toolchain).
+  // A formatter is not a gate. Never block an edit because it could not run.
 }
 
 passSilently()

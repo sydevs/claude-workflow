@@ -4,32 +4,33 @@
  *
  * ## Why this exists
  *
- * `ste-lint.py` measures a skill's STYLE. This measures its CONTENT. A rewrite
- * can score perfectly on the first and fail the second, and that is not
- * hypothetical: the rewrite of `journal/SKILL.md` took its violations from 16
- * to 4 and its size down by a third, and silently dropped
- * **Never read the board back** — half of `docs/why.md#the-board-is-a-lens`.
- * Lint called that rewrite a clear improvement, because by its measure it was.
+ * `ste-lint.py` measures a skill's STYLE. This measures its CONTENT. A
+ * rewrite can score perfectly on the first and fail the second. That is not
+ * hypothetical: the rewrite of `journal/SKILL.md` took its violations from
+ * 16 to 4 and its size down by a third. It also silently dropped
+ * **Never read the board back** (half of `docs/why.md#the-board-is-a-lens`).
+ * Lint called that rewrite a clear improvement, because by its measure it
+ * was.
  *
- * This repo has no way to validate a skill by running it: an edit takes effect
- * next session, and merging is the deploy. A dropped rule surfaces weeks later
- * as a run behaving oddly, with nothing to attribute it to. This is the closest
- * thing to a regression test that prose admits.
+ * This repo has no way to validate a skill by running it. An edit takes
+ * effect next session, and merging is the deploy. A dropped rule surfaces
+ * weeks later as a run behaving oddly, with no clear cause. This is the
+ * closest thing to a regression test that prose allows.
  *
  * ## What it does NOT prove
  *
- * Hold it at its real strength. It sees **bold imperatives only**, so a rule
- * written as plain prose is invisible to it. It cannot catch semantic weakening
- * — `Never X` to `Avoid X` fuzzy-matches and passes. It cannot tell you a
- * surviving rule is still correct, or still in the right file. It is a
- * tripwire, not a proof.
+ * Hold it at its real strength. It sees bold imperatives only, so a rule
+ * written as plain prose stays invisible to it. It cannot catch semantic
+ * weakening: `Never X` to `Avoid X` fuzzy-matches and passes. It cannot tell
+ * you a surviving rule is still correct, or still in the right file. It is
+ * a tripwire, not a proof.
  *
  * ## Usage
  *
  *   rule-delta.mjs --base main                 # git ref vs the working tree
  *   rule-delta.mjs before/ after/              # two directories
  *
- * Exits 1 when a directive disappeared with no close match, which is the case
+ * Exits 1 when a directive disappears with no close match. That is the case
  * that needs a human. (why: docs/why.md#lint-measures-style-not-content)
  */
 
@@ -38,19 +39,20 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 
 /**
- * A directive is bold, or a heading. Both carry the same force in these skills,
- * and catching only the first makes a promotion to a heading look like a
- * deletion — which it did, for `Never write state the state machine owns`.
+ * A directive is bold text, or a heading. Both carry the same force in
+ * these skills. Catching only the first makes a promotion to a heading
+ * look like a deletion. That happened once, for `Never write state the
+ * state machine owns`.
  */
 const DIRECTIVE = /\*\*((?:Never|Always|Do not|Don.t)[^*]{5,110})\*\*|^#{2,4} ((?:Never|Always|Do not|Don.t)[^\n]{5,110})$/gim
 
 /**
  * Pull every bold imperative out of one document.
  *
- * Whitespace collapses FIRST, and that is load-bearing rather than tidy:
- * markdown wraps a directive across lines, so a line-oriented match misses it.
- * Skipping this step produced a false "GONE" on `Never force-push someone
- * else's branch` — a rule that had never moved.
+ * This collapses whitespace FIRST. That step is load-bearing, not tidiness:
+ * markdown wraps a directive across lines, so a line-oriented match would
+ * miss it. Skipping this step once produced a false "GONE" result for
+ * `Never force-push someone else's branch`, a rule that had never moved.
  */
 export function directives(text) {
   const headings = new Set([...String(text).matchAll(/^#{2,4} ((?:Never|Always|Do not|Don.t)[^\n]{5,110})$/gim)]
@@ -72,11 +74,11 @@ function similar(a, b) {
 /**
  * Compare two directive sets.
  *
- * `removed` is what a reviewer must adjudicate: a directive with no close match
- * on the other side. Rewordings are filtered out on purpose — a raw diff of
- * this change reported 14 disappearances, 11 of which were `Do not X` becoming
- * `Never X`. A reviewer handed 14 items starts skimming, and skimming is how
- * the one real removal gets waved through.
+ * `removed` is what a reviewer must judge: a directive with no close match
+ * on the other side. This filters out rewordings on purpose. A raw diff of
+ * one real change reported 14 disappearances. 11 of those were just `Do not
+ * X` becoming `Never X`. A reviewer handed 14 items starts skimming, and
+ * skimming is how the one real removal gets waved through.
  */
 export function compare(before, after, threshold = 0.55) {
   const rewordings = []
@@ -110,7 +112,7 @@ const collect = (dir) => {
   return all
 }
 
-/** Read the same paths out of a git ref. Local only — no network, so a routine can run it. */
+/** Read the same paths from a git ref. Local only, with no network, so a routine can run it. */
 const collectRef = (ref, dir) => {
   const all = new Set()
   for (const f of mdFiles(dir)) {

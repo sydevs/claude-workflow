@@ -1,6 +1,6 @@
-# Maintains Stage, assignees and the `awaiting` label from GitHub events, and
-# adds new items to the org workflow board. All rules live in the reusable
-# workflow so the five repos cannot drift apart:
+# This workflow maintains Stage, assignees, and the `awaiting` label from
+# GitHub events. It adds new items to the org workflow board. All rules
+# live in the reusable workflow below, so the five repos cannot drift apart:
 # https://github.com/sydevs/claude-workflow/blob/main/.github/workflows/state-machine.yml
 name: Workflow state
 
@@ -9,8 +9,9 @@ on:
     types: [opened, reopened, transferred, closed, assigned, field_added, field_removed]
   issue_comment:
     types: [created]
-  # pull_request_target, not pull_request: the org secret must be present, and
-  # nothing is checked out here, which is what makes that safe.
+  # This uses pull_request_target, not pull_request. The org secret must be
+  # available. Nothing here checks out the PR code. That combination keeps
+  # the secret safe.
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, closed]
   pull_request_review:

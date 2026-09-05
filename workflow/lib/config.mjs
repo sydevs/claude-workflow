@@ -1,15 +1,16 @@
 /**
  * Config lookup and argv parsing for the loop's scripts.
  *
- * This file used to wrap `gh`. It does not any more, and the reason is the
- * constraint the whole script layer is built around: **a routine cannot reach the
- * GitHub API by any client** (why: docs/why.md#a-routine-cannot-reach-the-github-api).
- * A helper that fetches would only ever run on a maintainer's laptop, which makes
- * it a second implementation of a rule the cloud path executes some other way —
- * and the loop's worst bug to date was exactly that shape.
+ * This file used to wrap `gh`. It no longer does. The reason is the
+ * constraint the whole script layer is built around: a routine cannot reach
+ * the GitHub API by any client (why: docs/why.md#a-routine-cannot-reach-the-github-api).
+ * A helper that fetches would run only on a maintainer's laptop. That makes
+ * it a second implementation of a rule the cloud path executes a different
+ * way, and the loop's worst bug to date had exactly that shape.
  *
- * So: the run fetches with MCP, and the scripts here take data and return a
- * decision. Nothing under `workflow/` opens a network connection to GitHub.
+ * So the run fetches data with MCP. The scripts here take that data and
+ * return a decision. Nothing under `workflow/` opens a network connection
+ * to GitHub.
  */
 
 import { existsSync, readFileSync } from 'fs'
@@ -17,9 +18,9 @@ import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 /**
- * Locate and parse `loop-config.json`, walking up from the cwd and then from this
- * file. Throws rather than defaulting: a script that silently assumed the wrong
- * org or bot would produce confident, wrong answers.
+ * Locate and parse `loop-config.json`. Walk up from the cwd, then from this
+ * file. This throws instead of defaulting. A script that silently assumed
+ * the wrong org or bot would give a confident, wrong answer.
  */
 export function loadLoopConfig(explicit = null) {
   if (explicit) {

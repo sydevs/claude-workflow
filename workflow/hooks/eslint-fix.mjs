@@ -3,13 +3,13 @@
 /**
  * ESLint Auto-Fix (PostToolUse / Edit|Write)
  *
- * Runs `eslint --fix` on the single edited file and reports what it fixed, plus
- * anything still outstanding. Runs through the repo's package manager, not
- * `npx` — see the note in prettier-format.mjs.
+ * Runs `eslint --fix` on the edited file, and reports what it fixed and what
+ * problems remain. Runs through the repo's package manager. See
+ * prettier-format.mjs for why not `npx`.
  *
- * This hook survives the move to LSP diagnostics because it *rewrites* files.
- * The `typecheck` hook did not: a language server reports, it does not fix, so
- * `typescript-lsp` supersedes it entirely.
+ * This hook survives the move to LSP diagnostics because it rewrites files.
+ * The old `typecheck` hook did not survive: a language server reports
+ * problems, it does not fix them, so `typescript-lsp` replaces it completely.
  */
 
 import { execFileSync } from 'child_process'
@@ -32,7 +32,7 @@ function runEslint(extraArgs = []) {
     })
     return JSON.parse(out || '[]')
   } catch (err) {
-    // eslint exits non-zero when problems remain — that output is still valid.
+    // eslint exits non-zero when problems remain. That output is still valid.
     const stdout = err?.stdout?.toString?.() ?? ''
     if (stdout.trim().startsWith('[')) {
       try {

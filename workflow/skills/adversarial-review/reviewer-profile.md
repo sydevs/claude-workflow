@@ -1,13 +1,13 @@
 # Reviewer profile — how Ardnived reviews
 
-> Living document, read at review time by `/workflow:adversarial-review` and refined only by the
-> Sunday `reflect` survey, only on recurring evidence. Seeded 2026-09-02 from the full history of
-> the reviewer's review activity across the five sydevs repos: 55 inline review comments, 32
-> reviews, 33 PR-conversation comments. Two corpus caveats, permanent: `claude-workflow` PRs are
-> merged **without formal reviews** (feedback arrives as ticket comments), and comments from
-> include loop-written text under this login —
-> recognisable by its long structured self-narrating format; only human-voiced items informed
-> this profile. Every claim below carries at least one PR link.
+> This is a living document. `/workflow:adversarial-review` reads it at review time. Only the
+> Sunday `reflect` survey refines it, and only on recurring evidence. It was seeded on 2026-09-02
+> from the reviewer's full review history across the five sydevs repos: 55 inline review comments,
+> 32 reviews, 33 PR-conversation comments. Two caveats apply permanently. `claude-workflow` PRs
+> merge **without formal reviews** — feedback arrives as ticket comments instead. And some
+> comments under this login are loop-written text, recognisable by its long, structured,
+> self-narrating format. Only human-voiced items informed this profile. Every claim below carries
+> at least one PR link.
 
 ## Values, ranked
 

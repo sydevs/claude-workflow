@@ -1,19 +1,22 @@
 #!/bin/bash
 # Worktree-scoped dev server.
 #
-# Identity is the **git worktree**, not the project directory. That is the whole point:
-# /implement-issue works in a worktree by default, so a server keyed on the project root
-# either refuses to start there (the old behaviour) or — worse — serves another branch's
-# code to a test that believes it is testing this one.
+# Identity is the git worktree, not the project directory. That is the whole
+# point: /implement-issue works in a worktree by default. A server keyed on
+# the project root would either refuse to start there (the old behavior), or
+# worse, serve another branch's code to a test that believes it tests this
+# one.
 #
 # Three properties follow from that:
-#   1. Each worktree gets its own deterministic port, so two agents never collide.
-#   2. Each worktree records the HEAD it booted from; `status`/`health` compare it against
-#      the caller's HEAD and shout when they differ. Stale-code testing becomes visible
-#      instead of silent.
-#   3. Where the app owns a database (`isolateDatabase` in workflow.json), each worktree
-#      gets its own. Port isolation alone is not enough when Drizzle `push` syncs a
-#      divergent schema into one shared Postgres.
+#   1. Each worktree gets its own deterministic port, so two agents never
+#      collide.
+#   2. Each worktree records the HEAD it booted from. `status`/`health`
+#      compare that HEAD against the caller's HEAD, and warn when they
+#      differ. This makes stale-code testing visible instead of silent.
+#   3. Where the app owns a database (`isolateDatabase` in workflow.json),
+#      each worktree gets its own database. Port isolation alone is not
+#      enough when Drizzle `push` syncs a divergent schema into one shared
+#      Postgres.
 #
 # Per-repo settings come from <worktree>/.claude/workflow.json → devServer.
 
@@ -45,7 +48,8 @@ DB_TEMPLATE="$(read_cfg databaseNameTemplate)"
 [ -n "$CMD_START" ] || { echo "dev-server: devServer.command missing in $CONFIG" >&2; exit 1; }
 
 # --- worktree identity -------------------------------------------------------
-# basename keeps it readable; the path hash keeps two worktrees with the same basename apart.
+# basename keeps the slug readable. The path hash keeps two worktrees with
+# the same basename apart.
 SLUG="$(basename "$WORKTREE" | tr -c 'a-zA-Z0-9_-' '_')_$(printf '%s' "$WORKTREE" | cksum | cut -d' ' -f1)"
 # Deterministic per-worktree offset, so the same worktree always lands on the same port.
 OFFSET=$(( $(printf '%s' "$SLUG" | cksum | cut -d' ' -f1) % 20 ))
@@ -88,8 +92,9 @@ PY
 
 running() { local p; p="$(state_get pid)"; [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }
 
-# Is whatever holds $PORT ours? Compare against the WORKTREE, not the project dir —
-# that single change is what makes this work inside .claude/worktrees/*.
+# Is whatever holds $PORT ours? This compares against the WORKTREE, not the
+# project directory. That single change makes this work inside
+# .claude/worktrees/*.
 port_holder_is_ours() {
   local pid cwd
   pid="$(lsof -t -i :"$PORT" 2>/dev/null | head -1)" || return 1
@@ -147,8 +152,9 @@ cmd_start() {
     return 1
   fi
   ensure_database
-  # Frameworks disagree about how to be told a port: Next.js reads $PORT, Vite ignores it
-  # entirely and needs --port. So the command is a template and {port} is substituted here.
+  # Frameworks disagree about how to receive a port. Next.js reads $PORT.
+  # Vite ignores it and needs --port instead. So the command is a template,
+  # and {port} is substituted here.
   local run="${CMD_START//\{port\}/$PORT}"
   echo "starting: $run"
   echo "  worktree $WORKTREE"
@@ -162,10 +168,12 @@ cmd_start() {
   wait_for_health && echo "healthy: http://localhost:$PORT"
 }
 
-# `pnpm dev` / `pnpm devsafe` exec a child (vite, next-server) that is the process which
-# actually holds the port. Killing only the recorded pid orphans that grandchild, leaving a
-# listener behind that the next `start` then mistakes for "someone else's process". So stop
-# the recorded pid AND whatever still holds our port, once we have confirmed it is ours.
+# `pnpm dev` and `pnpm devsafe` exec a child process (vite, next-server).
+# That child, not the parent, actually holds the port. Killing only the
+# recorded pid orphans that child. The orphan keeps listening, and the next
+# `start` then mistakes it for "someone else's process". So this function
+# stops the recorded pid AND whatever still holds our port, once it
+# confirms the port is ours.
 kill_port_holder() {
   local pid
   pid="$(lsof -t -i :"$PORT" 2>/dev/null | head -1)" || return 0

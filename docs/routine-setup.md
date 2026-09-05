@@ -1,11 +1,11 @@
-# Setting up the loop on a new Claude account
+# Bootstrap the loop on a new Claude account
 
-Everything needed to stand the autonomous loop back up from nothing: a new Claude account, a fresh
-Railway project, a new Sentry org, or all three. Written because the pieces live in five different
-dashboards and none of them is discoverable from the repo.
+Everything needed to rebuild the autonomous loop from nothing: a new Claude account, a fresh
+Railway project, a new Sentry org, or all three. The pieces live in five different dashboards, and
+none of them is discoverable from the repo.
 
 **Time:** about 45 minutes, most of it waiting for deploys.
-**Order matters** — each section depends on identifiers produced by the one before it.
+**Order matters.** Each section needs an identifier the one before it produced.
 
 ---
 
@@ -14,7 +14,7 @@ dashboards and none of them is discoverable from the repo.
 | Thing | Why | Notes |
 | --- | --- | --- |
 | Claude Pro/Max/Team account | Routines are cloud sessions | Zero-Data-Retention orgs **cannot** use cloud sessions at all |
-| GitHub access to `sydevs` | The loop reads and writes issues and PRs | Admin not required; write is enough |
+| GitHub access to `sydevs` | The loop reads and writes issues and PRs | Admin not required. Write access is enough |
 | Railway account | Hosts Mailpit | Free tier is sufficient |
 | Sentry org | Error surveys | Optional — the loop degrades gracefully without it |
 | `gh` ≥ 2.94 locally | Native `--type`, `--parent`, `--blocked-by` | `gh --version` |
@@ -24,33 +24,29 @@ dashboards and none of them is discoverable from the repo.
 ## 0b. A machine account for the loop
 
 **Do this before anything else touches GitHub.** A routine acts as whatever GitHub account is
-connected to the Claude account — the routines docs are explicit: *"Anything a routine does through
-your connected GitHub identity appears as you."* There is no per-routine identity and no GitHub App
-option.
+connected to the Claude account, with no per-routine identity and no GitHub App option. If that
+account is a human's, the loop cannot tell its own comments from that person's, and the rung that
+answers maintainer feedback replies to itself. Found, not theorized, on this project's second
+supervised run.
 
-If that connected account is a human's, the loop **cannot tell its own comments from that person's**,
-and the rung that answers maintainer feedback will reply to itself. This is not theoretical: it was
-found on the second supervised run here.
-
-1. Create a GitHub account used only by the loop — `sydevs-bot`. GitHub's Terms permit this
-   explicitly: *"no more than one free machine account in addition to a free personal account"*,
-   set up by a human who accepts the Terms on its behalf.
+1. Create a GitHub account used only by the loop — `sydevs-bot`. GitHub's Terms permit one free
+   machine account alongside a personal account, registered by a human who accepts the Terms for it.
 2. Enable 2FA on it.
 3. Invite it to the org with **write** access to every repo the loop touches, and accept from the
    bot account. Public repos consume no seat.
-4. Connect it as the Claude account's GitHub identity — `/web-setup` from a terminal signed in as
+4. Connect it as the Claude account's GitHub identity: `/web-setup` from a terminal signed in as
    the bot, or the browser flow at claude.ai/code in a private window.
 5. Verify from a routine: `mcp__github__get_me` must return the bot's login, not a person's.
 
 > ⚠ Every cloud session on that Claude account then acts as the bot, not just routines. Local
-> sessions are unaffected. The resulting split — cloud = bot, local = human — is the intended shape.
+> sessions stay unaffected — cloud as the bot, local as the human, is the intended split.
 
-> ⚠ A machine account is `type: User`, not `type: Bot`; only a GitHub App gets the `[bot]` suffix,
-> and routines cannot act as one. So filter by **login**, never by `type`.
+> ⚠ A machine account is `type: User`, not `type: Bot`. Only a GitHub App gets the `[bot]` suffix,
+> and a routine cannot act as one. Filter by **login**, never by `type`.
 
-**Switching identity later leaves residue.** Comments the loop already wrote keep the old login
-permanently, so it will read them as human feedback. Bounded and one-time; not worth a dated
-exclusion rule that would misfire once the previous account comments for real.
+**Switching identity later leaves residue.** Comments the loop already wrote keep the old login, so
+the loop reads them as human feedback. This is bounded and one-time, not worth a dated exclusion
+rule.
 
 ## 1. GitHub metadata
 
@@ -63,9 +59,9 @@ org-scoped and cannot be set per-repo.
 
 ### Issue fields (organization level)
 
-Four GitHub **native org-level issue fields** — not Projects v2, not labels. Configure once for the
-org at **Settings → Organization → Planning → Issue fields**; they then apply to every repository
-with no per-repo setup.
+Four GitHub **native org-level issue fields** — not Projects v2, not labels. Configure them once, at
+**Settings → Organization → Planning → Issue fields**. They then apply to every repository, with no
+per-repo setup.
 
 | Field | Type | Options |
 | --- | --- | --- |
@@ -74,10 +70,9 @@ with no per-repo setup.
 | Stage | single select | Proposed · Revising · Blocked · Implement · Implemented |
 | Hold Until | date | — |
 
-Creating them from the CLI needs `admin:org`. Every select **option** requires all four of `name`,
-`color`, `priority` and (optionally) `description` — omitting `priority` returns
-`422 object is missing required key: priority`. Valid colors are `gray`, `blue`, `green`, `yellow`,
-`orange`, `red`, `pink`, `purple`.
+Creating them from the CLI needs `admin:org`. Every select **option** needs `name`, `color`, and
+`priority` (omitting `priority` returns `422 object is missing required key: priority`). Valid
+colors: `gray`, `blue`, `green`, `yellow`, `orange`, `red`, `pink`, `purple`.
 
 ```bash
 gh api -X POST orgs/<org>/issue-fields --input - <<'JSON'
@@ -98,7 +93,7 @@ gh api -X POST orgs/<org>/issue-fields -f name='Hold Until' -f data_type=date
 gh api orgs/<org>/issue-fields --jq '.[] | "\(.name) id=\(.id) \([.options[]?.name]|join("/"))"'
 ```
 
-Record the ids in `loop-config.json` → `issueFields`. Setting a value locally:
+Record the ids in `loop-config.json` → `issueFields`. To set a value locally:
 
 ```bash
 gh api -X PUT repos/OWNER/REPO/issues/N/issue-field-values --input - <<< \
@@ -106,32 +101,26 @@ gh api -X PUT repos/OWNER/REPO/issues/N/issue-field-values --input - <<< \
 ```
 
 > ⚠ The `value` must be the option **name**. Passing an option id returns
-> `422 must be a string option name`. The endpoint is `issue-field-values` (hyphens) and takes a
-> **top-level array**; `PATCH`ing the issue itself with a `fields` key returns 200 and silently
+> `422 must be a string option name`. The endpoint is `issue-field-values` (hyphens), and it takes
+> a **top-level array**. `PATCH`ing the issue itself with a `fields` key returns 200 and silently
 > does nothing.
 
 > ⚠ **The PUT replaces the issue's entire field-value set.** A PUT carrying only Priority silently
 > clears Stage, Effort and Hold Until. Send every value you want kept, or use the single-field
 > `DELETE .../issue-field-values/<field_id>` to clear just one.
 
-Field values are reachable from a routine: `list_issues(fields:["field_values"])` returns a whole
-repo's field values in one call, and `issue_write` sets them — `field_option_name` for a select,
-`value` for a date (ISO `YYYY-MM-DD`), and `delete:true` to clear one field without disturbing the
-others.
+A routine reads field values with `list_issues(fields:["field_values"])`, one call per repo. It
+writes them with `issue_write`: `field_option_name` for a select, `value` for a date (ISO
+`YYYY-MM-DD`), `delete:true` to clear one field without disturbing the others.
 
-> ⚠ **Fields are not searchable.** `field.<name>:<value>` works in the web UI and GraphQL, but
-> through the REST search a routine has it is accepted without error and returns **zero results** —
-> verified against an issue known to carry `Priority: High`. Worklist queries therefore use only
-> indexed qualifiers (`assignee:`, `author:`, `is:pr`, `draft:`, `review:`), and Stage and
-> Hold Until are applied client-side.
+> ⚠ **Fields are not searchable through REST.** See `workflow/skills/preflight/SKILL.md` for the
+> rule and the worklist-query pattern this forces.
 
 ### Labels (every repo, identical)
 
-**There are two: `ops-journal` and `awaiting`** (see the board section below). Everything else the loop reads about a ticket is a field or the
-assignee; type is a native issue type. `ready-to-implement`, `proposal`, `needs-info`,
-`blocked-upstream`, `hold` and `claude:working` were all retired when `Stage` and `Hold Until`
-arrived — keeping a label alongside the field that replaced it is a second source of truth for the
-same fact, which is the failure this repo exists to avoid.
+**There are two: `ops-journal` and `awaiting`** (see the board section below). Everything else the
+loop reads about a ticket is a field or the assignee. Type is a native issue type. Six older ticket
+labels are now retired, replaced by `Stage` and `Hold Until`.
 
 ### The Ops journal
 
@@ -142,22 +131,21 @@ of the day — nothing to pre-create beyond the label:
 gh label create "ops-journal" --repo sydevs/claude-workflow --color 0052cc --description "Run log for the autonomous loop" --force
 ```
 
-The run finds today's issue by matching the issue's **creation date** to the current Vancouver day (the
-title is a rewritten headline, so it is never the key). **Journals are not pinned** — `pinIssue` is
-GraphQL-only and a routine's GraphQL serves only PR-review operations, so the call cannot succeed
-from the loop. Recency surfaces the current journal instead. The weekly reflection closes the
-week's journals.
+The run finds today's issue by matching its **creation date** to the current Vancouver day. The
+title is a rewritten headline, never the key. **Journals are not pinned** — a routine's GraphQL
+access cannot reach `pinIssue` — so recency surfaces the current journal instead. The weekly
+reflection closes the week's journals.
 
 ### The workflow board and the state machine
 
 One org project — **[`Claude Workflow`, sydevs/projects/2](https://github.com/orgs/sydevs/projects/2)**
 (`projects` in `loop-config.json`) — holds every open issue and PR across the five repos. Issues are
-grouped by `Stage`, PRs by the project's own `Status`, and `awaiting` marks anything needing a human.
-**The loop neither reads nor writes the board** (why: `docs/why.md#the-board-is-a-lens`).
+grouped by `Stage`, PRs by the project's own `Status`, and `awaiting` marks anything needing a
+human. **The loop neither reads nor writes the board** (why: `docs/why.md#the-board-is-a-lens`).
 
 **One workflow maintains all of it.** `.github/workflows/state-machine.yml` in this repo is a
-`workflow_call` reusable workflow; every repo — including this one — carries a ~20-line
-`workflow-state.yml` that calls it. One copy of the rules, five callers, no drift.
+`workflow_call` reusable workflow. Every repo, including this one, carries a ~20-line
+`workflow-state.yml` that calls it: one copy of the rules, five callers, no drift.
 
 ```yaml
 jobs:
@@ -168,16 +156,15 @@ jobs:
 ```
 
 **The token.** Org Actions secret `ADD_TO_PROJECT_PAT` — a `sydevs-bot` fine-grained PAT with repo
-**Issues: read/write**, **Pull requests: read/write**, and org **Projects: read/write**. Issue-field
-writes go through a repo endpoint (`PUT /repos/{o}/{r}/issues/{n}/issue-field-values`) but the field
-is org-level, and whether the default `GITHUB_TOKEN` suffices is undocumented — so the PAT is used
-throughout. If a repo's runs fail with a credentials error, check the secret's repository-access
-policy includes it.
+**Issues: read/write**, **Pull requests: read/write**, and org **Projects: read/write**. It is used
+throughout, since whether the default `GITHUB_TOKEN` covers the org-level field endpoint is
+undocumented. A credentials error on a repo's runs usually means its access policy excludes this
+secret.
 
-> ⚠ **Recursion is bounded by idempotency, not by an actor guard.** The workflow's own writes fire
-> `field_added` again, but every writer reads current state first and returns early when it matches,
-> so the re-trigger is one free no-op run. **Do not add `if: github.actor != 'sydevs-bot'`** — the
-> bot authors its own issues and PRs, so that guard skips the transitions that matter most.
+> ⚠ **Recursion is bounded by idempotency, not by an actor guard.** The workflow's own writes
+> re-fire `field_added`, but every writer checks current state first and skips a no-op match — one
+> free extra run, nothing more. **Never add `if: github.actor != 'sydevs-bot'`.** The bot authors
+> its own issues and PRs, so that guard would skip the transitions that matter most.
 
 **Labels — there are two**, identical in every repo:
 
@@ -198,8 +185,8 @@ gh label create "awaiting"    --repo sydevs/<repo> --color D93F0B --description 
    | Pull request merged · Item closed | Status: **Done** |
    | Auto-archive items | `is:closed updated:<2weeks` (optional) |
 
-   Auto-add is **not** used — the reusable workflow adds items in every repo, which the free plan's
-   single auto-add slot could not do.
+   Auto-add is **not** used. The reusable workflow adds items in every repo. The free plan's single
+   auto-add slot could not.
 3. **Views**:
    | View | Layout | Filter |
    | --- | --- | --- |
@@ -211,19 +198,18 @@ gh label create "awaiting"    --repo sydevs/<repo> --color D93F0B --description 
 
 `Status` options were renamed via GraphQL to `In progress · Changes requested · Approved · Done`.
 `Status` is per-project-item and GraphQL-only, which is why ticket state lives in the `Stage`
-**issue field** instead — REST-writable, board-visible, one source of truth.
+**issue field** instead: REST-writable, board-visible, one source of truth.
 
-> **Why an issue and not a Discussion or the Wiki?** Both were evaluated and neither is writable
-> from a cloud session: Discussions is GraphQL-only and the session's GitHub proxy allows only a
-> pinned set of GraphQL operations; the wiki is a separate git repo that cannot be attached to a
-> routine. Issues are REST, and REST works.
+> **Why an issue, not a Discussion or the Wiki?** Neither is writable from a cloud session —
+> Discussions is GraphQL-only and the proxy serves only pinned GraphQL operations, and the wiki is
+> a separate git repo a routine cannot attach to. Issues use REST, and REST works.
 
 ---
 
 ## 2. Mailpit on Railway
 
-Captures all non-production email. Replaces Ethereal, which deletes messages after a few hours —
-too short for a link in a PR to survive until review.
+Captures all non-production email. Replaces Ethereal, which deleted messages after a few hours —
+too short for a PR link to survive until review.
 
 ```bash
 railway login
@@ -243,19 +229,19 @@ railway redeploy --service mailpit --yes
 railway domain --port 8025                 # public UI
 ```
 
-Three things that are not obvious:
+Three traps:
 
-- **`PORT=8025` is required.** Railway routes the generated domain to `$PORT`, and Mailpit does not
-  read it. Without this the UI returns `502` while the container logs look perfectly healthy.
-- **The volume must exist before first successful boot.** `MP_DATABASE=/data/mailpit.db` points at
-  a mount that does not exist yet, so the service crash-loops until the volume is attached.
+- **`PORT=8025` is required.** Railway routes the generated domain to `$PORT`. Mailpit does not read
+  it. Without this the UI returns `502`, while the container logs look healthy.
+- **The volume must exist before the first successful boot.** `MP_DATABASE=/data/mailpit.db` points
+  at a mount that does not exist yet, so the service crash-loops until the volume attaches.
 - **`MP_SMTP_AUTH_ALLOW_INSECURE=true`** is needed because Railway's TCP proxy does not terminate
-  TLS. Acceptable here: this path carries test mail to a capture inbox, never real delivery.
+  TLS. Acceptable here — this path carries test mail to a capture inbox, never real delivery.
 
 ### SMTP ingress (TCP proxy)
 
-Not exposed by the CLI, but the GraphQL API accepts the CLI's own token, so it needs no dashboard
-visit:
+The CLI does not expose this, but its GraphQL API accepts the CLI's own token, so no dashboard
+visit is needed:
 
 ```bash
 TOKEN=$(python3 -c "import json,os;d=json.load(open(os.path.expanduser('~/.railway/config.json')));print(d.get('user',{}).get('token') or d.get('token'))")
@@ -269,15 +255,15 @@ Returns the public host and port. Assemble `SMTP_URL=smtp://<user>:<pass>@<domai
 
 ### Wire it up
 
-- `SMTP_URL` on **every Railway PR preview environment**, so preview mail is captured.
-- `MAILPIT_URL`, `MAILPIT_UI_AUTH`, `SMTP_URL` into `SahajCloud/.env.claude.local` (gitignored) for
-  local use, and into the Claude cloud environment for the loop.
-- **Do not** put `SMTP_URL` in the tracked `.env`. It carries a credential, and SahajCloud#570 is
-  an open ticket about removing committed secrets from exactly that file.
+- Add `SMTP_URL` to **every Railway PR preview environment**, so preview mail is captured.
+- Add `MAILPIT_URL`, `MAILPIT_UI_AUTH`, `SMTP_URL` to `SahajCloud/.env.claude.local` (gitignored)
+  for local use, and to the Claude cloud environment for the loop.
+- **Never** put `SMTP_URL` in the tracked `.env`. It carries a credential (SahajCloud#570 tracks
+  removing committed secrets from that file).
 
-Preview environments cannot reach Resend anyway — `src/payload.config.ts` gates it on
-`isProductionDeployment()` (Railway's environment name), not `NODE_ENV`, because **Railway previews
-also run `NODE_ENV=production`** and used to send real mail to real addresses.
+Preview environments cannot reach Resend anyway. `src/payload.config.ts` gates it on
+`isProductionDeployment()` (Railway's environment name), not `NODE_ENV`. Railway previews also run
+`NODE_ENV=production`, and once sent real mail to real addresses.
 
 ---
 
@@ -290,9 +276,8 @@ step no-ops.
 2. Permissions: **Issue & Event: Read & Write**. Nothing else — `org:read` is not needed.
 3. Save, then scroll to **Tokens** at the bottom and copy the token.
 
-> ⚠ **Copy the Token, not the Client Secret.** Both are 64 hex characters and they sit on the same
-> page. The Client Secret authenticates as `401 Invalid token`, which looks like a typo rather than
-> the wrong field. We lost time to this.
+> ⚠ **Copy the Token, not the Client Secret.** Both are 64 hex characters on the same page. The
+> Client Secret fails as `401 Invalid token`, which reads as a typo, not the wrong field.
 
 4. Store as `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment.
 5. Fill in `loop-config.json` → `sentry.org`, `sentry.projects`, and **`sentry.apiBase`**.
@@ -317,9 +302,9 @@ curl -s -o /dev/null -w "read: %{http_code}\n" \
 
 ## 4. The Claude cloud environment
 
-At **claude.ai/code → Environments → New**. UI only; there is no API for this.
+At **claude.ai/code → Environments → New**. UI only — there is no API for this.
 
-**Name:** anything; note the id for the routines.
+**Name:** anything. Note the id for the routines.
 
 **Environment variables** (`.env` format):
 
@@ -371,95 +356,43 @@ if ! ( setup_pg ); then
 fi
 ```
 
-Three rules in that script each bought with a dead run:
+Three rules in that script, each bought with a dead run and commented in place above: best-effort
+only, never `set -e`, across the database block. A private cluster directory, never the package's
+half-configured one. `/var/run/postgresql` created before `pg_ctl` starts.
 
-- **Best-effort, never `set -e` across the database block.** A setup script that exits non-zero
-  aborts the session at zero turns — no census, no journal. A missing test database is worth a
-  warning, not the whole run.
-- **Own cluster directory, never the package's.** `/var/lib/postgresql/16/main` has `PG_VERSION`
-  but no `postgresql.conf` (Debian keeps config in `/etc/postgresql/16/main`), so any script that
-  checks `PG_VERSION` and then `pg_ctl -D`s the data dir starts a half-cluster and dies.
-- **`/var/run/postgresql` must exist** — the socket directory is compiled into Debian's binaries —
-  and the postgres log is `cat`ed on failure, because the container is gone by the time anyone reads
-  the abort message.
+⚠ **A routine cannot reach the GitHub API, by any client, with or without a credential.** Not `gh`
+(it is not in the routine image), not raw HTTP. `git`, `jq`, `yq`, `ripgrep`, and `node` (v22) are
+present, and `git` fetch and push work through the credential helper. Everything else GitHub-shaped
+goes through the MCP tools only — a script never fetches from GitHub itself. Full evidence and the
+proxy mechanism live in `docs/why.md#a-routine-cannot-reach-the-github-api`. Do not re-test this.
 
-⚠ **`gh` is NOT in the routine image, and neither is raw GitHub HTTP.** An earlier revision of this
-line claimed it ships at `/usr/bin/gh` v2.98.0; that was wrong, and it is the kind of wrong that
-costs a day — it reads as a licence to write scripts that shell out to `gh`, which then pass every
-local test and fail silently in the only environment that matters.
-
-Measured in a routine on 2026-09-02:
-
-| Call | Result |
-| --- | --- |
-| `command -v gh`, `ls /usr/bin/gh`, `find / -name gh -type f` | absent; nothing on the filesystem |
-| `curl https://api.github.com/user` | **200** — returns the bot's login |
-| `curl https://api.github.com/repos/<any in-session repo>` | **403** |
-| `curl https://api.github.com/graphql` | **403** — *"only the pinned set of PR-review operations is served"* |
-| `mcp__github__*` | **works**, and is scoped to the session's configured repositories |
-| `curl` to `example.com`, `de.sentry.io`, Railway, `raw.githubusercontent.com`, `codeload.github.com` | **all reachable** — only GitHub's API is gated |
-
-`api.github.com` connects to `peer=127.0.0.1` behind a certificate issued by `CN=CCR Upstream Proxy
-CA (staging); O=Anthropic` — a TLS-intercepting proxy (`CCR_AGENT_PROXY_ENABLED`,
-`NODE_EXTRA_CA_CERTS`) that allowlists by **path, not credential**. Bringing your own PAT does not
-change the answer; it was tested with a deliberately invalid one and drew the identical 403, and
-`GH_TOKEN` in the sandbox reads as the literal string `proxy-injected`. **Connecting the Claude
-GitHub App for the org — what the 403 asks for — was tried and changed nothing.**
-
-Two further refusals, which no amount of repo access would lift:
-
-| Path | Message |
-| --- | --- |
-| `search/issues` | "sessions are bound to their configured repositories. Use repository-scoped endpoints" |
-| `graphql` | "only the pinned set of PR-review operations is served" |
-
-Search is cross-repository by nature and a session is bound to its repositories, so **the loop's
-worklist can only ever be an MCP call.** Do not spend another afternoon on this; the probes are
-recorded in `docs/why.md#a-routine-cannot-reach-the-github-api`.
-
-So a routine reaches GitHub **only through the MCP tools**. `/user` answering 200 while every
-`repos/...` path 403s is the trap: it makes the token look fine and the repo look missing, when the
-proxy is refusing the path. `git` fetch and push do work — those go through the credential helper,
-not the API.
-
-`git`, `jq`, `yq`, `ripgrep` and `node` (v22) **are** present. Anything a script needs from GitHub
-must therefore be handed to it, not fetched by it.
-
-**GitHub access** — the piece most likely to be missing, and it fails in a way that looks like
-something else. A session whose GitHub connection is not set up 403s on *every* `gh` call with
-`GitHub access is not enabled for this session`, while `gh auth status` separately reports the
-token invalid because `GH_TOKEN` reads as the literal string `proxy-injected`.
-
-Two ways to connect, per the docs, and **either is sufficient**:
+**GitHub access** is the piece most likely to be missing, and its failure looks like something
+else. An unconnected session 403s on every `gh` call with `GitHub access is not enabled for this
+session`. Connect it one of two ways, either sufficient:
 
 | Method | How |
 | --- | --- |
-| **`/web-setup`** | Run it in a local terminal; it syncs your local `gh` token to your Claude account. Best if you already use `gh` — and the session then acts as *your* GitHub identity |
-| **Claude GitHub App** | Authorize it during web onboarding at claude.ai/code |
+| **`/web-setup`** | Run it in a local terminal. It syncs your local `gh` token to your Claude account, and the session then acts as *your* GitHub identity. |
+| **Claude GitHub App** | Authorize it during web onboarding at claude.ai/code. |
 
-> ⚠ **Installing the Claude GitHub App on the organization is not the fix**, however much the error
-> message sounds like it. The docs are explicit: a cloud session "can access any repository the
-> connecting GitHub account can see, not just the repositories the Claude GitHub App is installed
-> on. App installation enables PR webhooks for Auto-fix; **it is not a session-level access
-> control**." We had the App installed org-wide with write permissions and every call still 403'd.
+> ⚠ Installing the Claude GitHub App **on the organization** does not fix a 403, even though the
+> error message suggests it. App installation enables PR webhooks. It grants no session-level
+> access.
 
-Whichever you choose determines **which GitHub account the loop acts as** — every issue, comment
-and PR it creates is attributed to that identity. Check it from a session with
-`gh api user --jq .login`.
+Whichever method you use sets **which GitHub account the loop acts as** — every issue, comment, and
+PR it creates is attributed to that identity. Check it with `gh api user --jq .login`.
 
-**Network access:** `Full` is the practical setting. A curated allowlist is tighter, but the
-implementation rung does real research — reading changelogs, upstream issues, library docs — and a
-blocked host fails as an opaque `403 host_not_allowed` mid-task. If you do curate it, these are
-load-bearing: `raw.githubusercontent.com` (`pnpm types:cms` fetches from it), the Sentry regional
-host, the Mailpit host and TCP proxy, and `*.up.railway.app` / `*.pages.dev` / `*.workers.dev` for
-preview smoke.
+**Network access:** set `Full`. The implementation rung does real research — changelogs, upstream
+issues, library docs — and a curated allowlist fails as an opaque `403 host_not_allowed` mid-task.
+If you do curate it, `raw.githubusercontent.com`, the Sentry regional host, the Mailpit host and TCP
+proxy, and `*.up.railway.app` / `*.pages.dev` / `*.workers.dev` are load-bearing.
 
 ---
 
 ## 5. The routines
 
-Two, split by **function** rather than by time of day, both attaching all five repos, each
-pointing at its own skill — both skills start with `/workflow:preflight` and end with
+Two routines, split by **function** rather than time of day. Both attach all five repos, each
+pointing at its own skill, and both skills start with `/workflow:preflight` and end with
 `/workflow:journal`:
 
 | | `sydevs-work-hourly` | `sydevs-survey-nightly` |
@@ -469,21 +402,20 @@ pointing at its own skill — both skills start with `/workflow:preflight` and e
 | Skill | `work-routine` (the ladder, rungs 1–5) | `survey-routine` (survey, reconciliation sweeps) |
 | Model | opus | opus |
 
-The split guarantees the survey runs daily — as a low rung of the ladder it could be starved for
-days by a busy queue with nothing looking wrong, which is why the survey routine is **not** a ladder
-and has no rungs (`docs/why.md#the-survey-routine-is-not-a-ladder`). It also carries the
-unheard-replies sweep, which would re-flag the same items on every pass if it
-lived in the two-hourly loop.
+The split guarantees the survey runs daily. As a low rung it could otherwise starve for days on a
+busy queue, which is why survey-routine is **not** a ladder and has no rungs
+(`docs/why.md#the-survey-routine-is-not-a-ladder`). It also carries the unheard-replies sweep,
+which would re-flag the same items on every pass if it lived in the hourly loop instead.
 
-Cron is **always UTC**; the PT equivalents shift by an hour across DST and that is accepted rather
-than corrected. Minimum interval is 1 hour. The morning is hourly because that is when the
-maintainer reviews — replies land within the hour while the conversation is warm; afternoons drop
-to every two hours. Eleven small runs beat two large ones: smaller blast radius per failure,
-fresher context per item, and most runs find an empty queue and exit cheaply.
+Cron stays in **UTC**. The PT equivalents shift by an hour across DST, and that drift is accepted,
+not corrected. Minimum interval is 1 hour. Mornings run hourly, since that is when the maintainer
+reviews and replies land while the conversation is warm. Afternoons drop to every two hours. Eleven
+small runs beat two large ones: smaller blast radius per failure, and most runs find an empty queue
+and exit cheaply.
 
-The prompt is deliberately thin — all behaviour lives in the repo, so a merged change takes effect
+The prompt stays thin on purpose. All behaviour lives in the repo, so a merged change takes effect
 on the next run with no redeploy. It names the skill, warns that restated rules go stale, and says
-how to end; it enumerates nothing:
+how to end. It enumerates nothing:
 
 ```
 Read `claude-workflow/workflow/skills/work-routine/SKILL.md` and follow it exactly. It is the
@@ -503,16 +435,16 @@ leave anything that could wake you.
 
 — identical for `sydevs-survey-nightly` with `survey-routine/SKILL.md` as the path.
 
-Create them **disabled**, via the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.
+Create them **disabled**, with the `RemoteTrigger` tool (`action: "create"`) or `/schedule`.
 
-Two API quirks worth knowing:
+Two API quirks:
 
-- **`environment_id` is not validated at create time.** A nonexistent id is accepted with `HTTP 200`
-  and fails only when the routine runs. Confirm the id from the `/schedule` skill's environment
-  listing rather than assuming it, since it is not shown in the claude.ai UI.
-- **Connectors are attached automatically.** Every MCP connector on the account gets added unless
-  you pass `clear_mcp_connections: true`. The loop needs none of them — GitHub comes from the
-  session proxy, Sentry and Mailpit are plain HTTPS — and each one costs context on every turn.
+- **`environment_id` is not validated at create time.** A nonexistent id returns `HTTP 200` and
+  fails only when the routine runs. Confirm it from the `/schedule` skill's environment listing —
+  the claude.ai UI does not show it.
+- **Connectors attach automatically.** Every MCP connector on the account gets added, unless you
+  pass `clear_mcp_connections: true`. The loop needs none of them: GitHub comes from the session
+  proxy, Sentry and Mailpit are plain HTTPS, and each connector costs context on every turn.
 
 ### Current routine ids
 
@@ -520,11 +452,6 @@ Two API quirks worth knowing:
 | --- | --- | --- |
 | `sydevs-survey-nightly` | `trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6` | `0 8 * * *` (01:00 PT daily) |
 | `sydevs-work-hourly` | `trig_01BUwH4WjazMXjG2bnC3TVRL` | `0 1,12,13,14,15,16,17,18,19,21,23 * * *` (hourly 05:00–12:00 PT, then 14/16/18) |
-
-The predecessors — `sydevs-loop` (`trig_01GyUCMWmPLekwTzYL7Xzobi`) and the original
-`sydevs-survey-nightly` (`trig_016XeEsVa7dfSCum7t4Vmeuw`) — pointed at the pre-split
-`loop-run/SKILL.md` path and were replaced, not updated, when the runs were renamed; delete them
-once the replacements are enabled.
 
 Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 <https://claude.ai/code/routines> — the API cannot delete a routine.
@@ -537,14 +464,14 @@ Do not schedule straight away. For ~3 days:
 
 1. Fire manually (`RemoteTrigger` `action: "run"`).
 2. Read the journal entry **and** the transcript (`list_runs` → `get_run_log`).
-3. Fix what it got wrong; merge; the next run picks it up.
+3. Fix what it got wrong. Merge. The next run picks it up.
 
-Cover one of each deliberately: a merge, a PR revision, an implementation, an adversarial review,
-a survey.
+Cover one case of each on purpose: a merge, a PR revision, an implementation, an adversarial
+review, a survey.
 
 > **A green run status only means no infrastructure error.** Task-level failures, blocked network
-> requests and missing tools appear *only* in the transcript and the journal. That asymmetry is why
-> the journal exists and why its "Failed" line is never softened.
+> requests, and missing tools show up only in the transcript and the journal. That is why the
+> journal exists, and why its "Failed" line is never softened.
 
 Then set `enabled: true` on both.
 
@@ -556,7 +483,7 @@ Then set `enabled: true` on both.
 - [ ] Only issues you cleared are at `Stage: Implement`, and every `Blocked` one has a `Hold Until`
 - [ ] Mailpit UI: `200` with credentials, `401` without
 - [ ] A message sent through the SMTP proxy appears, and its `/view/<id>` link resolves
-- [ ] Sentry: read `200` on every project; `PUT /issues/<id>/` `200`
+- [ ] Sentry: read `200` on every project, and `PUT /issues/<id>/` returns `200`
 - [ ] Cloud session: `pg_isready` reports the cluster up, and `pnpm test:int` passes in SahajCloud (67 files)
 - [ ] `gh issue edit <n> --add-blocked-by "<full URL>"` works from a cloud session
 - [ ] A dry-run of the ladder produces a correct worklist against the real backlog
@@ -566,88 +493,55 @@ Then set `enabled: true` on both.
 
 ## Issue Relationships are unreachable from a routine
 
-GitHub calls them **Relationships**; the REST resource is `dependencies/blocked_by` and
-`dependencies/blocking`, and the issue object carries `issue_dependencies_summary`.
+GitHub calls these **Relationships** (REST: `dependencies/blocked_by`, `dependencies/blocking`). No
+MCP tool in a routine's build exposes them. Every tested route to a second GitHub MCP connection
+fails at the same wall: a session cannot open one, since the required path is not repository-scoped
+and the proxy refuses it during the handshake.
 
-`github/github-mcp-server` **does** ship `issue_dependency_read` / `issue_dependency_write`
-(PR #2839, full read/write, cross-repo), gated behind the `issue_dependencies` feature flag —
-which is in `AllowedFeatureFlags`, so it is user-toggleable via `X-MCP-Features`. None of that
-helps here. Every route to switching it on was tested and all fail at the same wall:
+Set Relationships from a local session with `gh`, then mirror the same fact into the issue body as
+a `Blocked by: <url>` line, so a cloud run can grep it. `workflow/skills/triage-issue/SKILL.md`
+holds the exact commands and the body-marker format — this file only flags that the mechanism
+exists and where it lives.
 
-| Route | Fails at |
-| --- | --- |
-| Repo `.mcp.json`, multi-repo routine | Config never read — session root is `/home/user`, repos are subdirectories, so no repo is the project root |
-| Repo `.mcp.json`, single-repo routine | Config **is** read, then: `Dynamic Client Registration rejected (HTTP 403): This GitHub API path is not available: sessions are bound to their configured repositories` |
-| Routine `mcp_connections` | `headers: Extra inputs are not permitted`, and `connector_uuid` is required |
-| A custom claude.ai connector | Same proxy, same non-repo-scoped path — no reason to expect a different result |
-| `curl https://api.github.com/...` with `GH_TOKEN` | 403 on every endpoint; the proxy declines rather than substituting |
-
-The blocker is not the flag, the header, or where the config lives: **a session cannot open a
-second GitHub MCP connection at all**, because `api.githubcopilot.com/mcp/` is not a
-repository-scoped path and the proxy refuses it during the handshake.
-
-**Consequence for the loop:** it cannot read whether a ticket is blocked. Until this changes,
-Relationships are set **locally** (where `gh` works and the GitHub UI graph is the point) and
-mirrored into the issue body as a `Blocked by: <url>` line that a cloud run can grep. Re-test the
-`select:` probe after any GitHub MCP release; the day the tools appear, the body line becomes
-redundant.
-
-Issue **fields** have no such problem — `list_issue_fields`, `issue_read.field_values`,
-`list_issues(fields:["field_values"])` and `issue_write(issue_fields:[...])` all work from a
-routine, so Priority, Effort, Stage and Hold Until are all fully usable — to read and write, though not to search.
+Issue **fields** have no such problem: `list_issue_fields`, `issue_read.field_values`,
+`list_issues(fields:["field_values"])`, and `issue_write(issue_fields:[...])` all work from a
+routine. Priority, Effort, Stage, and Hold Until are fully readable and writable, just not
+searchable (see above).
 
 ## Webhook triggers were evaluated and rejected
 
-`RemoteTrigger` exposes `create_webhook_trigger`, which can fire a routine from a GitHub event. It
-was tested against a live trigger and **not adopted**. Recorded here so nobody re-derives it.
+`RemoteTrigger` exposes `create_webhook_trigger`, which can fire a routine from a GitHub event.
+Tested against a live trigger, then **not adopted** — recorded here so nobody re-derives it.
 
-**The API validates almost nothing.** Only `hook_type` (`app` | `url`), the `plugin_id` /
-`routine_trigger_id` xor, and `source` (`github`, `gitlab`, `bitbucket`, and enterprise variants).
-Field validation runs *before* the trigger lookup, so probing with a nonexistent
-`routine_trigger_id` is side-effect free.
+The API validates almost nothing, and silently drops fields it does not recognize, including a
+`filter` key sent during testing. **There is no author filtering**: every matching event fires the
+routine, including events the bot itself generates, so an infinite-loop guard would have to live in
+the handler, not the trigger. Subscribing to `pull_request` or `issues` is also all-or-nothing per event type. Every
+`synchronize`, `labeled`, and `edited` would fire a handler. A review-thread reply also fires a
+different event than an approval does, so the most common follow-up is the easiest to miss. The
+baton model already polls cheaply enough that four webhook triggers, and this new failure mode,
+were not worth it.
 
-**Everything else is accepted and silently discarded**, including unknown keys and invalid event
-names. A `filter` key was sent and is **absent from the stored object**, with `warnings: []`:
-
-```json
-{"events":["pull_request_review","issue_comment"], "extra_env":{}, "hook_type":"app",
- "scope_id":"github.com/sydevs/sahajatlasweb", "source":"github",
- "trigger_id":"a84a3cd8-2f99-4173-a266-1219e6f91f89"}
-```
-
-So **there is no author filtering.** Every matching event fires the routine, including events the
-bot itself generates — which means any infinite-loop guard has to live in the handler, never in the
-trigger. `scope_id` is one repository, normalised to `github.com/org/repo`, so org-wide coverage
-would need four triggers.
-
-**Why rejected.** With no filter, subscribing to `pull_request` or `issues` is all-or-nothing per
-event type: every `synchronize`, `labeled` and `edited` would fire a handler, including the loop's
-own pushes. And a reply typed into a review thread fires `pull_request_review_comment`, not
-`pull_request_review`, so the most common follow-up is the easiest event to miss. The baton model
-makes polling cheap enough that the latency gain does not justify four triggers and a new class of
-silent misconfiguration.
-
-**A live test trigger still exists**: `a84a3cd8-2f99-4173-a266-1219e6f91f89`, pointing at the
-disabled routine `zz-webhook-probe2-DELETEME`. No delete action for webhook triggers is exposed;
-deleting the owning routine is the presumed removal path.
+A live test trigger, `a84a3cd8-2f99-4173-a266-1219e6f91f89`, still points at the disabled routine
+`zz-webhook-probe2-DELETEME`. No API deletes a webhook trigger. Delete the owning routine instead.
 
 ## Failure modes worth recognising
 
 | Symptom | Cause |
 | --- | --- |
-| Every `gh` call 403s with "GitHub access is not enabled for this session" | The account's GitHub connection is missing. Run `/web-setup` locally, or authorize the Claude GitHub App. Installing the App **on the org** does not fix this — per the docs it "is not a session-level access control" |
-| `gh` reports "The token in GH_TOKEN is invalid" | Expected when the proxy handles auth: `GH_TOKEN` reads as the literal `proxy-injected`. Only a real 403 on an API call indicates a problem |
-| `gh issue list --json issueType` 403s | It routes through GraphQL, and the proxy serves only pinned PR-review operations. Use the REST form |
-| `railway` exits 1 silently, even `--help` | pnpm blocked the postinstall that downloads the binary. `pnpm approve-builds -g`, or run `npm-install/postinstall.js` by hand |
-| Mailpit UI `502`, container logs healthy | `PORT` not set to `8025` |
-| Mailpit crash-loops on first deploy | Volume not attached at `/data` |
-| Sentry `401 Invalid token` | Client Secret copied instead of Token |
-| Sentry `404` on a project that exists | Wrong regional host |
-| Plugin installs but reports `disabled` | `enabledPlugins` written as an array; it must be an object map |
-| Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N` |
-| A newly created label vanishes | Case-insensitive collision with a label deleted in the same run |
-| The loop answers review feedback but pushes nothing | It cannot push to a human's branch — only `claude/*`. It opens a stacked PR into that branch instead |
-| A `<details>` block seems missing when read back through MCP | The write landed. The MCP **read** path strips `<details>`/`<summary>` (while keeping `<table>`, `<sub>`, `<a>`); REST shows the stored tags intact. From a routine, trust the write's 200 — do not re-post or file a bug |
-| A run dies in seconds with `Setup script failed` and zero turns | The setup script exited non-zero; the session never starts. Keep optional dependencies best-effort. Known Postgres traps: `/var/run/postgresql` missing (compiled-in socket dir), and the package's half-cluster at `16/main` — `PG_VERSION` present, config in `/etc` — which `pg_ctl -D` cannot start |
-| A `search_issues` query returns zero unexpectedly | The `>` in a `updated:>…` qualifier was HTML-escaped to `&gt;`; it fails silently rather than erroring |
-| Loop implements nothing, no error | Correct — nothing is both assigned to the bot and at `Stage: Implement`. That is the gate working |
+| Every `gh` call 403s: "GitHub access is not enabled for this session" | The account's GitHub connection is missing. Run `/web-setup`, or authorize the Claude GitHub App. Installing the App **on the org** does not fix this. |
+| `gh` reports "The token in GH_TOKEN is invalid" | Expected — the proxy handles auth, and `GH_TOKEN` reads as the literal `proxy-injected`. Only a real 403 signals a problem. |
+| `gh issue list --json issueType` 403s | It routes through GraphQL, and the proxy serves only pinned PR-review operations. Use the REST form. |
+| `railway` exits 1 silently, even `--help` | pnpm blocked the postinstall that downloads the binary. Run `pnpm approve-builds -g`, or run `npm-install/postinstall.js` by hand. |
+| Mailpit UI `502`, container logs healthy | `PORT` not set to `8025`. |
+| Mailpit crash-loops on first deploy | Volume not attached at `/data`. |
+| Sentry `401 Invalid token` | Client Secret copied instead of Token. |
+| Sentry `404` on a project that exists | Wrong regional host. |
+| Plugin installs but reports `disabled` | `enabledPlugins` written as an array. It must be an object map. |
+| Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N`. |
+| A newly created label vanishes | Case-insensitive collision with a label deleted in the same run. |
+| The loop answers review feedback but pushes nothing | It can only push to `claude/*`, never a human's branch. It opens a stacked PR into that branch instead. |
+| A `<details>` block seems missing on MCP readback | The write landed. MCP's **read** path strips `<details>`/`<summary>` (keeping `<table>`, `<sub>`, `<a>`). REST shows the tags intact. Trust the write's 200. Never re-post. |
+| A run dies in seconds, `Setup script failed`, zero turns | The setup script exited non-zero, so the session never started. Keep optional dependencies best-effort (see the Postgres traps above). |
+| A `search_issues` query returns zero unexpectedly | The `>` in `updated:>…` was HTML-escaped to `&gt;`. It fails silently, with no error. |
+| Loop implements nothing, no error | Correct. Nothing is both assigned to the bot and at `Stage: Implement` — the gate is working. |

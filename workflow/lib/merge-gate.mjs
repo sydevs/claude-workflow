@@ -1,41 +1,43 @@
 /**
- * Is this PR safe to merge, and is its CI actually green?
+ * Is this PR safe to merge? Is its CI actually green?
  *
  * ## Why this is a script and not a table in a skill
  *
- * The prose table got it wrong twice, in opposite directions, and one of them was
- * dangerous:
+ * The prose table got the answer wrong twice, in opposite directions. One
+ * error was dangerous:
  *
- *   - `pull_request_read method:get_status` returns COMMIT STATUSES. Our CI posts
- *     CHECK RUNS. On SahajCloud#672 the only commit status was Railway's deploy,
- *     which went green at 21:14 while `Lint, Test & Smoke` ran until 21:31 — a
- *     seventeen-minute window in which an approved PR read as green with its tests
- *     still running, and a run merging there would have been following the skill
- *     exactly. (sydevs/claude-workflow#26)
- *   - The same call reported SahajAtlasWeb#181 — five of five check runs green —
- *     as `pending` forever, so the loop would decline it on every pass. (#26)
- *   - `claude-workflow` runs no CI at all, so no PR here can ever be "green"; the
- *     loop would comment "checks unfinished" every run about checks that do not
- *     exist, on its own self-improvement PRs. (#29)
+ *   - `pull_request_read method:get_status` returns COMMIT STATUSES. Our CI
+ *     posts CHECK RUNS instead. On SahajCloud#672 the only commit status was
+ *     Railway's deploy. That status went green at 21:14, while `Lint, Test &
+ *     Smoke` ran until 21:31. For seventeen minutes an approved PR read as
+ *     green while its tests still ran. A run merging there would have
+ *     followed the skill exactly. (sydevs/claude-workflow#26)
+ *   - The same call reported SahajAtlasWeb#181 as `pending` forever, even
+ *     with five of five check runs green. The loop would decline it on
+ *     every pass. (#26)
+ *   - `claude-workflow` runs no CI at all, so no PR here can ever read as
+ *     "green". The loop would comment "checks unfinished" every run, about
+ *     checks that do not exist, on its own self-improvement PRs. (#29)
  *
  * ## Why it does no fetching
  *
- * **A routine cannot reach the GitHub API by any client.** Measured 2026-09-02:
- * `gh` is absent from the image; installing it does not help, because
- * `gh api repos/...` returns `403 GitHub access is not enabled for this session`
- * — byte-identical with and without an auth header, so the proxy is refusing the
- * path rather than the credential. `curl` to the same path, and to GraphQL, 403s
- * the same way. Only `mcp__github__*` has a route.
+ * A routine cannot reach the GitHub API by any client. Measured 2026-09-02:
+ * `gh` is absent from the image. Installing it does not help. `gh api
+ * repos/...` returns `403 GitHub access is not enabled for this session`,
+ * byte-identical with or without an auth header, so the proxy refuses the
+ * path, not the credential. `curl` 403s the same way, on this path and on
+ * GraphQL. Only `mcp__github__*` has a route.
  *
- * So the verdict functions here are PURE: they take data the caller already
- * fetched — with MCP in a routine, with `gh` locally — and return a decision.
- * That split is the right one anyway. The bugs above were never in the fetching;
- * they were in deciding what the fetched values meant, which is the half that had
- * no single home.
+ * So the verdict functions here are PURE. They take data the caller already
+ * fetched (with MCP in a routine, with `gh` locally) and return a decision.
+ * That split is the right one anyway. The bugs above were never in the
+ * fetching. They were in deciding what the fetched values meant, and that
+ * half had no single home.
  *
- * `normalizeMcp()` accepts exactly what the three documented MCP calls return.
- * There is no second, fetching path: one implementation, exercised identically in
- * a routine and on a laptop, is the only way the routine path gets tested at all.
+ * `normalizeMcp()` accepts exactly what the three documented MCP calls
+ * return. There is no second, fetching path. One implementation runs
+ * identically in a routine and on a laptop. That is the only way to test
+ * the routine path at all.
  */
 
 /** Terminal check-run conclusions that do not block a merge. */
@@ -48,11 +50,11 @@ const workflowCache = new Map()
 /**
  * Does this repo run GitHub Actions at all?
  *
- * Seeded by the caller from the checkout: `ls <repo>/.github/workflows/*.yml`.
- * **Unknown defaults to TRUE**, because the two errors are not symmetric:
- * assuming a repo has CI makes a missing check block a merge, while assuming it
- * has none would call an untested PR green. Only the second one can ship
- * something broken.
+ * The caller seeds this from the checkout: `ls <repo>/.github/workflows/*.yml`.
+ * Unknown defaults to TRUE. The two errors are not symmetric. Assuming a
+ * repo has CI makes a missing check block a merge. Assuming it has none
+ * would call an untested PR green. Only the second error can ship something
+ * broken.
  */
 export function setRepoWorkflows(repo, hasWorkflows) {
   workflowCache.set(repo, Boolean(hasWorkflows))
@@ -75,10 +77,11 @@ export function checksOf(pr) {
 /**
  * `{ green, reason, running, failing }`.
  *
- * Three ways to be non-green, kept distinct because the loop's response differs:
- * red is rung-2 work, running is "come back later", and absent-when-expected is
- * usually a conflict — a conflicted PR schedules ZERO workflow runs, silently
- * (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs).
+ * There are three ways to be non-green, kept distinct because the loop
+ * responds to each differently. Red means rung-2 work. Running means "come
+ * back later." Absent-when-expected usually means a conflict: a conflicted
+ * PR schedules ZERO workflow runs, silently.
+ * (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
  */
 export function ciVerdict(pr, repo) {
   const checks = checksOf(pr)
@@ -101,9 +104,9 @@ export function ciVerdict(pr, repo) {
   if (running.length) {
     return { green: false, reason: `still running: ${running.map((c) => c.name).join(', ')}`, running, failing }
   }
-  // At least one CHECK RUN, not merely one context: a Railway or Cloudflare deploy
-  // posts its own status and would otherwise stand in for the test job that never
-  // got scheduled.
+  // This requires at least one CHECK RUN, not just one context. A Railway or
+  // Cloudflare deploy posts its own status. Without this check, that status
+  // would stand in for the test job that never got scheduled.
   if (hasWorkflows && !checks.some((c) => c.kind === 'check')) {
     return {
       green: false,
@@ -116,14 +119,15 @@ export function ciVerdict(pr, repo) {
 }
 
 /**
- * `{ verdict: 'MERGE' | 'HOLD', reason, ci }`. Order matters: report the first wall hit.
+ * `{ verdict: 'MERGE' | 'HOLD', reason, ci }`. Order matters. This reports
+ * the first wall the PR hits.
  *
- * `loopMayNotMerge` is checked FIRST and is not a gate the loop can satisfy. It
- * exists because deriving "no CI" as green (#29) had an edge the ticket did not
- * ask for: `claude-workflow` runs no Actions, so an approved PR there now reads
- * as green and would be merged — and merging there IS the deploy of the
- * instructions every subsequent run executes. Now that the repo is also
- * ticketless, review is the only gate its changes pass at all.
+ * `loopMayNotMerge` is checked FIRST. It is not a gate the loop can satisfy.
+ * It exists because treating "no CI" as green (#29) had an edge the ticket
+ * did not ask for: `claude-workflow` runs no Actions, so an approved PR
+ * there would read as green and get merged. Merging there IS the deploy of
+ * the instructions every later run executes. This repo is also ticketless
+ * now, so review is the only gate its changes pass through.
  */
 export function mergeVerdict(pr, repo, policy = {}) {
   const unresolved = (pr?.reviewThreads?.nodes || []).filter((t) => !t.isResolved).length
@@ -147,29 +151,31 @@ export function mergeVerdict(pr, repo, policy = {}) {
 const STATE_BEARING = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
 
 /**
- * The review decision, from what `pull_request_read method:get_reviews` returned.
+ * The review decision, derived from what `pull_request_read method:get_reviews`
+ * returns. This comment is the canonical rationale for that derivation. Other
+ * files should cite it, not restate it.
  *
  * ## Why this is a function
  *
- * No MCP call carries `reviewDecision`, so the loop has to derive it — and the
- * only derivation error that can ever ship something is one that INVENTS an
- * approval. Its detector is a merge that should not have happened, in four repos
- * where merging is the deploy. That is not a detector we can afford to arm, so
- * the rule is evaluated here once rather than re-derived from prose on every run.
+ * No MCP call carries `reviewDecision`. The loop must derive it. The only
+ * derivation error that can ship something bad is one that INVENTS an
+ * approval. That error causes a merge that should not happen, in four repos
+ * where merging is the deploy. We cannot afford that risk, so this rule runs
+ * here once, instead of being re-derived from prose on every run.
  *
  * ## `authorized` is an allowlist, and it is the security property
  *
- * Approval authority is `assignment.reviewer`'s. Four of the five repos are
- * **public**, so any GitHub account can submit an `APPROVED` review on an open PR
- * — which means "count everyone except ourselves" would let a stranger's drive-by
- * approval satisfy the gate. An allowlist is also strictly narrower than the
- * `reviewDecision` field this stands in for, rather than wider.
+ * Approval authority belongs to `assignment.reviewer`. Four of the five
+ * repos are PUBLIC, so any GitHub account can submit an `APPROVED` review on
+ * an open PR. "Count everyone except ourselves" would let a stranger's
+ * drive-by approval satisfy the gate. An allowlist is also strictly
+ * narrower than the `reviewDecision` field it replaces, never wider.
  *
- * Excluding the own login falls out of it: the agent is not the reviewer, so its
- * own reviews are never counted.
+ * Excluding the agent's own login follows from this rule: the agent is not
+ * the reviewer, so its own reviews never count.
  *
- * **An empty or absent `authorized` returns `null`** — no configured authority
- * means no derived approval, which is the safe direction.
+ * An empty or absent `authorized` returns `null`. No configured authority
+ * means no derived approval. That is the safe direction.
  */
 export function reviewDecisionFrom(reviews, { authorized = [] } = {}) {
   const allow = new Set((authorized || []).map((l) => String(l).toLowerCase()))
@@ -192,28 +198,29 @@ export function reviewDecisionFrom(reviews, { authorized = [] } = {}) {
 }
 
 /**
- * Build the shape `mergeVerdict` wants from what the MCP tools return, so a
- * routine reaches the same decision code a local `gh` run does.
+ * Build the shape `mergeVerdict` wants from what the MCP tools return. This
+ * lets a routine reach the same decision code a local `gh` run does.
  *
  * Inputs are the three documented calls:
  *   get               → draft, mergeable, mergeable_state, requested_reviewers
  *   get_check_runs    → { check_runs: [{ name, status, conclusion }] }
  *   get_review_comments → { review_threads: [{ is_resolved }] }
  *
- * ⚠ That key is snake_case. The MCP tool returns `is_resolved`; GraphQL returns
- * `isResolved`. Reading only the camelCase spelling made EVERY thread read as
- * unresolved, so any PR that had ever been reviewed inline was held forever —
- * fail-safe, and silent. Both spellings are accepted; absent, a thread counts
- * as unresolved, which is the safe direction.
+ * ⚠ That key is snake_case. The MCP tool returns `is_resolved`. GraphQL
+ * returns `isResolved`. Reading only the camelCase spelling once made EVERY
+ * thread read as unresolved, so any PR ever reviewed inline was held
+ * forever, fail-safe and silent. This code accepts both spellings. When
+ * neither is present, a thread counts as unresolved, the safe direction.
  *
- * `reviewDecision` has no MCP call of its own and no MCP call carries the field:
- * `pull_request_read method:get` omits it, and `list_pull_requests` has no such
- * member in its `fields` enum. So pass `reviews` — what
- * `pull_request_read method:get_reviews` returned — and `reviewAuthority`
- * (`assignment.reviewer`), and `reviewDecisionFrom` derives it. An explicit
- * `reviewDecision` still wins, for a local `gh` caller that has the real field.
- * Absent both, it is NOT approved — the safe direction, since the only error that
- * can merge something is one that invents an approval.
+ * `reviewDecision` has no MCP call of its own, and no MCP call carries the
+ * field: `pull_request_read method:get` omits it, and `list_pull_requests`
+ * has no such member in its `fields` enum. So pass `reviews` (what
+ * `pull_request_read method:get_reviews` returned) and `reviewAuthority`
+ * (`assignment.reviewer`). `reviewDecisionFrom`, above, derives the decision
+ * from those and carries the full rationale. An explicit `reviewDecision`
+ * still wins, for a local `gh` caller that has the real field. Absent both,
+ * the decision is NOT approved, the safe direction: the only error that can
+ * merge something bad is one that invents an approval.
  */
 export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviews, reviewAuthority, reviewDecision }) {
   const checks = [
@@ -240,8 +247,7 @@ export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviews, 
       reviewDecision || pr?.reviewDecision || reviewDecisionFrom(reviews, { authorized: reviewAuthority }),
     reviewThreads: {
       nodes: (reviewThreads?.review_threads || []).map((t) => ({
-        // MCP says `is_resolved`, GraphQL says `isResolved`. Take either;
-        // neither present means unresolved, which is the safe direction.
+        // Accept either spelling. See the is_resolved note above.
         isResolved: Boolean(t.is_resolved ?? t.isResolved),
       })),
     },
