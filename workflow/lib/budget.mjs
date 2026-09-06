@@ -38,7 +38,7 @@ import { loadLoopConfig } from './config.mjs'
 export const DEFAULT_BUDGETS = {
   comment: 1200,
   reviewReply: 600,
-  journalComment: 2500,
+  journalComment: 4000,
 }
 
 /**
