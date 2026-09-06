@@ -206,7 +206,17 @@ jobs:
               const n = pr.number
               const ours = pr.user.login === BOT
 
-              if (action === 'opened' && ours) await assignBot(n)
+              // GitHub emits `ready_for_review` only on a draft -> ready
+              // transition, and the `opened` arm below claims the chain
+              // first, so the `setAwaiting` on that arm cannot run for a PR
+              // opened non-draft. Such a PR is ready for review and invisible
+              // on the board. Label it here instead. `setAwaiting` is
+              // idempotent, so the draft -> ready path is unaffected.
+              // why: sydevs/claude-workflow#57
+              if (action === 'opened' && ours) {
+                await assignBot(n)
+                if (!pr.draft) await setAwaiting(n, true, 'opened ready for review')
+              }
 
               if ((action === 'opened' || action === 'reopened') && ours) {
                 for (const i of await closedIssues(n)) {
