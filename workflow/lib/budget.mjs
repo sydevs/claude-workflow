@@ -31,8 +31,9 @@ import { loadLoopConfig } from './config.mjs'
  * Fallback budgets. `loop-config.json` → `writing.budgets` is authoritative.
  *
  * The fallback is reached only when no `loop-config.json` exists above this
- * file or the cwd — an installed plugin, whose cache ships `workflow/` alone.
- * Keep these numbers equal to the config's, so both paths agree.
+ * file or the cwd. Keep these numbers equal to the config's, so both paths
+ * agree. The CLI names which path it took, so a run reports the answer
+ * rather than assuming it.
  */
 export const DEFAULT_BUDGETS = {
   comment: 1200,
@@ -74,12 +75,19 @@ if (isMain) {
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {
     let budgets = DEFAULT_BUDGETS
+    let source = 'fallback'
     try {
-      budgets = loadLoopConfig()?.writing?.budgets || DEFAULT_BUDGETS
-    } catch { /* no loop-config.json above this file or the cwd — use the fallback */ }
+      const configured = loadLoopConfig()?.writing?.budgets
+      if (configured) { budgets = configured; source = 'config' }
+    } catch (err) {
+      // Two failures land here, and only one is routine. A missing file is
+      // the fallback's whole purpose. A file that EXISTS and will not parse
+      // is the silent-wrong-number bug this script was fixed for, so say it.
+      if (!/not found/.test(err.message)) source = `fallback, loop-config.json unreadable: ${err.message}`
+    }
     const r = check(text, kind, budgets)
     const d = detailsShare(text)
-    console.log(`${r.verdict} — ${r.reason}${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
+    console.log(`${r.verdict} — ${r.reason} (${source})${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
     process.exit(r.verdict === 'OVER' ? 1 : 0)
   })
 }
