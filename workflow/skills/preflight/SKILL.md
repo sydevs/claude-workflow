@@ -95,12 +95,12 @@ within seconds. You write only what an event cannot decide.
 | --- | --- | --- |
 | Any assignee, on anything | The reviewer adds the bot to a ticket. The workflow removes it at `Implemented`, and adds it to our own PR at open | Two writers race, and the reviewer's add is the kill switch |
 | `Stage`, outside your four cases | The workflow, on the event | A run is up to eight hours late. The event is immediate |
-| `labels.awaiting`, outside your four | The workflow | Same |
+| `labels.awaiting`, outside your own writes | The workflow | Same |
 | `Stage: Implement`, **ever** | The reviewer only | The loop cannot authorise its own code |
 
 **Your four `Stage` writes**, all judgement: `Blocked` with a justified `Hold Until`, clearing
 `Hold Until` when a block lifts, revoking `Implement` to `Revising`, and `draft:false` on a
-finished PR. **Your five `awaiting` writes**, all dead ends no event sees: CI red past
+finished PR. **Your `awaiting` writes** are the dead ends no event sees, among them: CI red past
 `ciFixIterations`, a conflict you could not rebase, a thread you rebutted, an investigation that
 ended in a finding, and a question you asked back in rung 4.
 (why: docs/why.md#the-state-machine-is-not-the-loops-job)

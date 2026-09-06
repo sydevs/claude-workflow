@@ -14,7 +14,7 @@
 #                   bot to its own PR at open
 #   the loop        judgement only — Blocked + Hold Until, clearing a hold,
 #                   revoking Implement, draft:false, and `awaiting` for the
-#                   four dead ends no event expresses
+#                   dead ends no event expresses
 #   the reviewer    Stage: Implement, assigning the bot to a TICKET, and
 #                   delegating someone else's PR to it
 #
