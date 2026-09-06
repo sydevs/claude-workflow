@@ -25,7 +25,15 @@
  * (why: docs/why.md#budgets-not-adjectives)
  */
 
-/** Fallback budgets. `loop-config.json` → `writing.budgets` is authoritative. */
+import { loadLoopConfig } from './config.mjs'
+
+/**
+ * Fallback budgets. `loop-config.json` → `writing.budgets` is authoritative.
+ *
+ * The fallback is reached only when no `loop-config.json` exists above this
+ * file or the cwd — an installed plugin, whose cache ships `workflow/` alone.
+ * Keep these numbers equal to the config's, so both paths agree.
+ */
 export const DEFAULT_BUDGETS = {
   comment: 1200,
   reviewReply: 600,
@@ -67,9 +75,8 @@ if (isMain) {
   process.stdin.on('end', () => {
     let budgets = DEFAULT_BUDGETS
     try {
-      const fs = require('node:fs')
-      budgets = JSON.parse(fs.readFileSync('loop-config.json', 'utf8'))?.writing?.budgets || DEFAULT_BUDGETS
-    } catch { /* defaults */ }
+      budgets = loadLoopConfig()?.writing?.budgets || DEFAULT_BUDGETS
+    } catch { /* no loop-config.json above this file or the cwd — use the fallback */ }
     const r = check(text, kind, budgets)
     const d = detailsShare(text)
     console.log(`${r.verdict} — ${r.reason}${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
