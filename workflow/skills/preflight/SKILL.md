@@ -183,9 +183,13 @@ mcp__github__search_issues  query:"$SCOPE is:pr is:open assignee:<bot> -author:<
 rung acts on it. **Two queries, not one:** the label sits on issues and on PRs, and one query
 sees a single shape.
 
-**One `list_issues` per repo** — `fields: ["field_values","labels","body"]` — then attaches
-`Stage`, `Hold Until`, Priority and Effort to the issues those searches returned. Five calls, and
-the only way to see a field at all.
+**One `list_issues` per repo the searches named** — `fields: ["field_values","labels","body"]` —
+then attaches `Stage`, `Hold Until`, Priority and Effort to the issues those searches returned.
+This call is the only way to see a field at all.
+
+⚠ **Skip a repo none of the searches named.** It holds no issue to attach a field to, and its
+response runs to tens of kilobytes. Search first, then fetch fields for the repos that answered.
+(why: docs/why.md#fetch-fields-only-where-a-search-answered)
 
 **Drop every item whose `Hold Until` is in the future**, from the census itself. A held item does
 not exist for this run, and must not appear in the journal.

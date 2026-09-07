@@ -905,3 +905,15 @@ The reserve exists because of the second half of that run. A body fitted to the 
 breaks again on the next edit, and the next edit is a timestamp the journal step always writes.
 200 characters buys that edit room. It sits in the script rather than `loop-config.json` so the
 fix could ship without a ceiling change beside it.
+
+## Fetch fields only where a search answered
+
+Issue fields are readable but not searchable, so the census fetches a whole repo's issues to see
+`Stage` at all. That call is unavoidable. Making it five times a run is not.
+
+The searches above it already name every repo with a candidate. A repo none of them named holds
+nothing to attach a field to, so its response — 8 to 29 KB, measured on 2026-09-07 — is read,
+carried through the rest of the run's context, and used for nothing.
+
+Four consecutive runs that day (12:05 to 15:04) stopped at `wipCapPerRepo` with no work to start.
+Each paid for all five.
