@@ -267,9 +267,12 @@ without opening a side panel.
 appeared. The day they do, the body line becomes redundant.
 
 **Priority and relationships together decide implementation order**: the loop takes the
-highest-priority ticket whose blockers are all closed and whose `Hold Until` has passed. A
-`Critical` behind an open blocker waits behind an unblocked `Medium`, correctly — which is why
-recording blockers matters more than arguing about priority.
+highest-priority ticket whose blockers are all closed and whose `Hold Until` has passed. Inside one
+`Priority` band it prefers a ticket that blocks open work, then the newest. A `Critical` behind an
+open blocker waits behind an unblocked `Medium`, correctly — which is why recording blockers
+matters more than arguing about priority. **A blocker never leaves its own band**, so a `Low`
+blocker still waits behind an unrelated `Medium`. Raise the blocker's own `Priority` when that is
+wrong. (why: docs/why.md#selection-favours-new-work-and-blockers)
 
 ## Body format
 
