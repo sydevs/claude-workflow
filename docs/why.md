@@ -214,6 +214,27 @@ gate exists to prevent. So `Implement` reverts to `Revising` instead, and the re
 A field write, a label change, or a bulk metadata pass all bump `updated_at`, even when nobody said
 anything. One migration made all 38 open issues look like fresh feedback, on 2026-08-28.
 
+## Selection favours new work and blockers
+
+Rung 3 ordered by oldest `updatedAt` until 2026-09-07. That key carried two faults.
+
+`updatedAt` is not a fact about the ticket. A field write, a label change, or a bulk metadata pass
+bumps it, so the queue reorders itself when nobody touches the work. One backfill of Type and
+Priority bumped 22 tickets in a single pass on 2026-09-07. `createdAt` never moves, so it replaces
+it.
+
+Oldest-first also worked the backlog from the bottom. A ticket filed today describes the code as it
+stands. A ticket filed four months ago describes code that moved since, and a run that starts it
+spends its budget on re-deriving the difference. Newest-first reads the freshest evidence.
+
+A blocker rises only inside its own `Priority` band. Letting it rise further is the other
+defensible design, and the reviewer rejected it on 2026-09-07: a `Low` blocker of another `Low`
+ticket would then outrank an unrelated `High`, and `Priority` would stop measuring consequence.
+
+That choice has a cost, and the cost is real. A `Low` blocker of a `High` ticket waits while any
+`Medium` waits, so the `High` behind it stalls. The fix is to raise the blocker's own `Priority`.
+That is a reviewer decision, and the field then shows it.
+
 ## A request in prose is not permission
 
 The middle row of the rung-4 table fails quietly. A comment asking for work reads like permission to

@@ -113,8 +113,8 @@ The merge sequence, in order:
 
 ## Rung 2 — PR health
 
-Every item counts against `maxWorkItemsPerRun`. Take the highest-priority linked ticket first.
-(why: docs/why.md#rung-2-competes-for-the-same-budget)
+Every item counts against `maxWorkItemsPerRun`. Take the highest-priority linked ticket first, and
+break a tie the way rung 3 does. (why: docs/why.md#rung-2-competes-for-the-same-budget)
 
 **A PR needs revision when any one of these holds:**
 
@@ -182,13 +182,16 @@ becomes `Revising`**. (why: docs/why.md#unblocking-never-restores-implement)
 ~~Blocked by: <url> — <original reason>~~ — cleared <YYYY-MM-DD>, that issue is closed
 ```
 
-**Selection: highest `Priority`, then oldest `updatedAt`.** No query reaches `Stage`, so filter
-the `list_issues` call `/workflow:preflight` already made, keeping what is bot-assigned, at
-`Stage: Implement`, and not held.
+**Selection: highest `Priority`, then a ticket that blocks open work, then newest `createdAt`.**
+No query reaches `Stage`, so filter the `list_issues` call `/workflow:preflight` already made,
+keeping what is bot-assigned, at `Stage: Implement`, and not held. **A blocker outranks a peer only
+inside its own `Priority` band.** Read the blocking set from the census bodies — every URL a
+`Blocked by:` line names. Never order by `updatedAt`, which any field write bumps.
+(why: docs/why.md#selection-favours-new-work-and-blockers)
 
-Use **Effort** as a tie-break and a sanity check — **split an `Effort: Hard` ticket rather than
-start it** when one run cannot finish it, since an implementation never carries across runs. Then
-hand to `/workflow:implement-issue`.
+Use **Effort** as a sanity check — **split an `Effort: Hard` ticket rather than start it** when one
+run cannot finish it, since an implementation never carries across runs. Then hand to
+`/workflow:implement-issue`.
 
 **Cross-repo side effects are exempt from the WIP cap.** When the work forces a consumer change,
 open that PR too — withholding it leaves `main` inconsistent. Order it with
