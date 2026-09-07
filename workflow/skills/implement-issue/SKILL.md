@@ -100,11 +100,20 @@ every decision point below rather than stall.
 5. **Plan.** Auto-proceed when the ticket is clear. Pause only on missing criteria, genuine
    ambiguity, deviation from the ticket, or destructive work.
 
-6. **Worktree by default.** `EnterWorktree`, branch named **`claude/<type>-<slug>`** — required
-   for a routine run, since cloud sessions can only push to `claude/*`, and harmless locally.
-   `--no-worktree` falls back to a plain branch. Run `worktreeSetup` from `workflow.json`, then
-   start the dev server with `/dev-server` if the work needs one — it is worktree-scoped, with its
-   own port and database.
+6. **Worktree by default, on its final branch.** `EnterWorktree` names its own branch
+   `worktree-<name>`, so renaming it afterwards leaves `ExitWorktree` refusing to remove a branch
+   that no longer exists. Create the worktree yourself, then enter it by path:
+
+   ```bash
+   git worktree add .claude/worktrees/<slug> -b claude/<type>-<slug> origin/<default-branch>
+   ```
+
+   Then `EnterWorktree path:.claude/worktrees/<slug>`. The branch is named
+   **`claude/<type>-<slug>`** — required for a routine run, since cloud sessions can only push to
+   `claude/*`, and harmless locally. `--no-worktree` falls back to a plain branch.
+
+   Run `worktreeSetup` from `workflow.json`, then start the dev server with `/dev-server` if the
+   work needs one — it is worktree-scoped, with its own port and database.
 
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
    `Co-Authored-By` trailer.
@@ -136,9 +145,10 @@ every decision point below rather than stall.
 
 11. **Ship.** Hand to `/finalize-pr`. Never hand-roll the push, the PR, or the CI loop.
 
-12. **Clean up.** `ExitWorktree` only after the PR is open, CI is green, and `git rev-parse HEAD`
-    equals `git rev-parse origin/<branch>`. Tear down the worktree's dev server and database
-    first: `/dev-server teardown`.
+12. **Clean up.** Only after the PR is open, CI is green, and `git rev-parse HEAD` equals
+    `git rev-parse origin/<branch>`. Tear down the worktree's dev server and database first:
+    `/dev-server teardown`. Then `ExitWorktree action:"keep"` — it never removes a worktree
+    entered by path — and `git worktree remove <path>`. **Never pass `discard_changes`.**
 
 13. **Do not close the ticket out — the state machine already did.** Opening the PR fired
     `pull_request: opened`, which set `Stage: Implemented` and unassigned the bot within seconds.

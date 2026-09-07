@@ -18,12 +18,17 @@ document holds the same facts in about 2,500 characters.
 
 **Budget: `writing.budgets.journalComment`, counted with `<details>` included.**
 
+**Fit it with the script. Never trim by hand.** `--fit` drops the oldest `📄 Did` lines until the
+body is under budget, keeps a reserve so a later edit cannot push it back over, and touches
+`⚠️ Failed`, `⏭️ Ceiling`, `🧭 Friction` and the run table never. Trimming by hand cost one run
+thirteen re-checks. (why: docs/why.md#fit-the-journal-do-not-negotiate-with-it)
+
 ```bash
-printf '%s' "$BODY" | ${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --kind journalComment
+${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --fit --kind journalComment < body.md > fitted.md
 ```
 
-Over budget means cut, oldest `📄 Did` lines first — GitHub already records those events. Never
-cut a failure.
+It exits 1 only when dropping every `📄 Did` line still leaves the body over. Then cut prose from
+what remains yourself, and never a failure.
 
 ## What the journal is for
 

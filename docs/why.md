@@ -885,3 +885,35 @@ the loop's other `awaiting` writes: a dead end no event sees.
 
 So the prohibition narrows to `Stage`, and the label write stays. The alternative — deleting the
 label write — was rejected because it makes the loop ask a question into silence.
+
+## Fit the journal, do not negotiate with it
+
+`budget.mjs` answered one question — over or under — and returned nothing about where to cut or by
+how much. So a run that went over regenerated the whole body, re-checked, and repeated.
+
+On 2026-09-07 the 17:03 run did that thirteen times between 17:38:45 and 17:49:38, shedding 1,557
+characters in steps of 3 to 800. It converged at 3,999 of 4,000 at 17:41:46, then wrote a fresher
+`Last:` timestamp into the same body and spent four more re-checks getting back under. The 15:04
+run, twelve minutes long in total, spent 1 minute 43 on five rewrites of the same kind.
+
+Every one of those rewrites applied a rule that was already written down and already fixed: drop
+the oldest `📄 Did` lines first, never cut a failure. A fixed rule evaluated by a model, once per
+run, eleven times a day, is eleven chances to evaluate it differently — the same reason
+`merge-gate.mjs` exists. So the script cuts, and the run writes.
+
+The reserve exists because of the second half of that run. A body fitted to the last character
+breaks again on the next edit, and the next edit is a timestamp the journal step always writes.
+200 characters buys that edit room. It sits in the script rather than `loop-config.json` so the
+fix could ship without a ceiling change beside it.
+
+## Fetch fields only where a search answered
+
+Issue fields are readable but not searchable, so the census fetches a whole repo's issues to see
+`Stage` at all. That call is unavoidable. Making it five times a run is not.
+
+The searches above it already name every repo with a candidate. A repo none of them named holds
+nothing to attach a field to, so its response — 8 to 29 KB, measured on 2026-09-07 — is read,
+carried through the rest of the run's context, and used for nothing.
+
+Four consecutive runs that day (12:05 to 15:04) stopped at `wipCapPerRepo` with no work to start.
+Each paid for all five.
