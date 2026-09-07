@@ -131,6 +131,8 @@ only. (why: docs/why.md#only-the-reviewers-approval-counts)
   `ceilings.ciPollAttempts` of `get_check_runs`. Past that, say so in the journal and hand the PR
   back. An unfinished CI watch is a fact to report, not a reason to stay awake.
   (why: docs/why.md#never-subscribe-to-pr-activity)
+- **Wait with one `until` loop, in the background.** A foreground `sleep N` is hook-blocked. Write
+  `until <check>; do sleep 15; done` and pass `run_in_background: true`. One waiter, never several.
 
 ## Run start
 
