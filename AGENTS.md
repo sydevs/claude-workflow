@@ -38,9 +38,13 @@ decorative here: it is the one thing a skill change must always update.
 A skill edit takes effect on the **next** session, never the current one — the skill body is
 already loaded in context. The usual "make it, run it, see it work" loop does not exist here.
 
-- **Prefer small, reversible edits.** One behaviour per PR.
-- **Never ship a skill change and a ceiling change in the same PR.** If the next run behaves
-  oddly, you need to know which change caused it.
+- **Prefer small, reversible edits**, and default to one behaviour per PR. That is a default,
+  not a prohibition. Ship related changes together when each stays separately revertable — one
+  commit per behaviour, each named in the PR body — and say in the body why they belong in one
+  PR. A change too small to be worth its own review round is not worth splitting.
+- **The one hard split: never ship a skill change and a ceiling change in the same PR.** Both
+  move the next run's output in the same direction, so a combined PR leaves you unable to say
+  which one did it — and you cannot re-run to find out.
 - **State the failure the change prevents, in the PR body.** That reasoning is the only evidence
   available before merge.
 
@@ -65,8 +69,8 @@ CI here. It checks only the plugin manifest and skill frontmatter, never whether
 ⚠ **`.github/workflows/` exists, and it is not CI.** It holds `state-machine.yml` — the reusable
 workflow that owns every mechanical `Stage`, assignee, and `awaiting` transition for all five
 repos, plus this repo's own thin caller. Editing it changes behaviour in every sydevs repo on the
-next event, with no merge anywhere else, so it carries a skill's blast radius and rule: one
-behaviour per PR, stating what failure the change prevents.
+next event, with no merge anywhere else, so it carries a skill's blast radius and the same
+rules: keep the edit small and reversible, and state what failure it prevents.
 (why: docs/why.md#the-state-machine-is-not-the-loops-job)
 
 The real gate is a **supervised loop run**: `/workflow:work-routine --dry-run` locally, or a
@@ -197,5 +201,6 @@ attended.
   when the change needs a **decision** before code — competing designs, or a cost worth agreeing
   on before it is paid.
 - Merge authority is still **an approving review**, and `wipCapPerRepo` still bounds how many loop
-  PRs may be open here at once. Both rules above — one behaviour per PR, never a skill change and
-  a ceiling change together — bind harder now that nothing upstream forces a pause.
+  PRs may be open here at once. The skill/ceiling split above binds harder now that
+  nothing upstream forces a pause, and a PR carrying more than one behaviour still owes one
+  commit per behaviour.

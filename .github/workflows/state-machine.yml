@@ -206,14 +206,16 @@ jobs:
               const n = pr.number
               const ours = pr.user.login === BOT
 
-              // `ready_for_review` fires only on a draft -> ready transition,
-              // so a PR opened non-draft is never labelled by the arm below —
-              // ready for review, and invisible on the board. `setAwaiting`
-              // is idempotent, so the draft -> ready path is unaffected.
-              // why: sydevs/claude-workflow#57
               if (action === 'opened' && ours) {
                 await assignBot(n)
-                if (!pr.draft) await setAwaiting(n, true, 'opened ready for review')
+              }
+
+              // `ready_for_review` fires only on a draft -> ready transition,
+              // so it never sees a PR that is already ready: opened non-draft,
+              // or reopened after `closed` stripped the label below.
+              // why: sydevs/claude-workflow#57
+              if ((action === 'opened' || action === 'reopened') && ours && !pr.draft) {
+                await setAwaiting(n, true, `${action} ready for review`)
               }
 
               if ((action === 'opened' || action === 'reopened') && ours) {
