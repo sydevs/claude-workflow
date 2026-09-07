@@ -229,7 +229,7 @@ Create or refresh with MCP, which takes the body directly — no temp file, and 
 markdown-mangling that made `gh --body` unusable:
 
 ```
-mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main title:"…" body:"…"
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main draft:true title:"…" body:"…"
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
