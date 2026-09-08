@@ -234,8 +234,12 @@ jobs:
                 // CHANGES_REQUESTED, so an ordinary mid-work push does not
                 // flag a PR nobody is waiting on.
                 // why: sydevs/claude-workflow#42
-                const { data: reviews } = await github.rest.pulls.listReviews(
-                  { owner, repo, pull_number: n })
+                // `paginate`, never `listReviews` alone: it returns 30 without
+                // `per_page`, one inline reply is one COMMENTED review, and the
+                // verdict is on the page you did not read.
+                // why: docs/why.md#a-review-list-arrives-one-page-at-a-time
+                const reviews = await github.paginate(github.rest.pulls.listReviews,
+                  { owner, repo, pull_number: n, per_page: 100 })
                 const latest = reviews
                   .filter((r) => r.user?.login === REVIEWER)
                   .filter((r) => ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state))
