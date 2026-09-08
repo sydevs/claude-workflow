@@ -211,7 +211,7 @@ export function decide(target, s, config) {
     case 'issues.transferred':
       return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising'), label([L.awaiting], [])]
     case 'issues.closed':
-      return [status('done'), label([], [L.awaiting, L.stuck]), targets(s.dependents.map((d) => ({ ...d, reason: 'unblock-check' }))), drain()]
+      return [status('done'), label([], [L.awaiting, L.stuck]), targets(s.dependents.map((d) => ({ ...d, reason: 'unblock-check' })))]
     case 'unblock-check': {
       if (!(s.item.labels || []).includes(L.blocked)) return [note('not blocked')]
       if (s.blockedByOpen.length) return [note(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)]

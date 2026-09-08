@@ -193,3 +193,9 @@ test('a merged PR resolves Sentry for linked issues and scans other ready bot PR
   assert.ok(p.some((a) => a.type === 'sentry' && a.id === '55'))
   assert.equal(p.find((a) => a.type === 'targets').list.length, 2)
 })
+
+test('a closed issue goes Done and re-checks its dependents', () => {
+  const p = decide({ reason: 'issues.closed' }, issueSnap({ dependents: [{ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 12 }] }), config)
+  assert.ok(p.some((a) => a.type === 'status' && a.value === 'done'))
+  assert.equal(p.find((a) => a.type === 'targets').list[0].reason, 'unblock-check')
+})
