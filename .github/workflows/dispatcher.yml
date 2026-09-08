@@ -1,0 +1,153 @@
+# The dispatcher.
+#
+# Every GitHub event in the five sydevs repos reaches this reusable workflow
+# through a thin caller (workflow-state.yml in each repo). It classifies the
+# event with no tokens, applies the `bot:working` lock, and fires one cloud
+# routine per handler with a pointer. Everything an event determines —
+# merge, mark ready, board Status, `awaiting`, Sentry resolve, unblocking,
+# the implement queue, the residue sweep — happens here, mechanically.
+#
+# The decision is re-derived from current GitHub state on every run. The
+# event is a wake-up. That is what makes storms, cancelled pending runs and
+# stale payloads safe. Code lives in dispatcher/ at the repo root; the pure
+# parts are covered by `node --test dispatcher/test/*.test.mjs`.
+#
+# Two jobs: `resolve` maps the event to one or more items; `act` handles one
+# item per matrix leg, serialized per item by a concurrency group.
+#
+# why: sydevs/claude-workflow/docs/why.md#actions-observes-classifies-locks-and-fires
+name: Dispatcher
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: Log the plan; write nothing and fire nothing.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      SYDEVS_BOT_PAT:
+        required: true
+      SENTRY_CLAUDE_WORKFLOW_TOKEN:
+        required: false
+      ROUTINE_TOKEN_SAHAJCLOUD:
+        required: false
+      ROUTINE_TOKEN_SAHAJATLASWEB:
+        required: false
+      ROUTINE_TOKEN_WEMEDITATEWEB:
+        required: false
+      ROUTINE_TOKEN_SAHAJATLASWORDPRESS:
+        required: false
+      ROUTINE_TOKEN_CLAUDE_WORKFLOW:
+        required: false
+
+permissions: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.resolve.outputs.targets }}
+    steps:
+      # Our own default branch, never the PR head. The caller runs on
+      # pull_request_target with nothing checked out; this job checks out
+      # only claude-workflow's dispatcher code.
+      - uses: actions/checkout@v4
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - id: resolve
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { resolveTargets, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            const config = loadConfig(`${cw}/loop-config.json`)
+            const targets = await resolveTargets({ github, context, core, config })
+            core.setOutput('targets', JSON.stringify(targets))
+
+  act:
+    needs: resolve
+    if: needs.resolve.outputs.targets != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        target: ${{ fromJSON(needs.resolve.outputs.targets) }}
+    # One running plus one pending per item. Older pending runs are
+    # cancelled, which is safe only because the decision is re-derived.
+    concurrency:
+      group: dispatch-${{ matrix.target.repo.name }}-${{ matrix.target.number }}
+      cancel-in-progress: false
+    env:
+      TARGET: ${{ toJSON(matrix.target) }}
+      DRY_RUN: ${{ inputs.dry-run }}
+      SENTRY_CLAUDE_WORKFLOW_TOKEN: ${{ secrets.SENTRY_CLAUDE_WORKFLOW_TOKEN }}
+      ROUTINE_TOKEN_SAHAJCLOUD: ${{ secrets.ROUTINE_TOKEN_SAHAJCLOUD }}
+      ROUTINE_TOKEN_SAHAJATLASWEB: ${{ secrets.ROUTINE_TOKEN_SAHAJATLASWEB }}
+      ROUTINE_TOKEN_WEMEDITATEWEB: ${{ secrets.ROUTINE_TOKEN_WEMEDITATEWEB }}
+      ROUTINE_TOKEN_SAHAJATLASWORDPRESS: ${{ secrets.ROUTINE_TOKEN_SAHAJATLASWORDPRESS }}
+      ROUTINE_TOKEN_CLAUDE_WORKFLOW: ${{ secrets.ROUTINE_TOKEN_CLAUDE_WORKFLOW }}
+      ROUTINE_ID_SAHAJCLOUD: ${{ vars.ROUTINE_ID_SAHAJCLOUD }}
+      ROUTINE_ID_SAHAJATLASWEB: ${{ vars.ROUTINE_ID_SAHAJATLASWEB }}
+      ROUTINE_ID_WEMEDITATEWEB: ${{ vars.ROUTINE_ID_WEMEDITATEWEB }}
+      ROUTINE_ID_SAHAJATLASWORDPRESS: ${{ vars.ROUTINE_ID_SAHAJATLASWORDPRESS }}
+      ROUTINE_ID_CLAUDE_WORKFLOW: ${{ vars.ROUTINE_ID_CLAUDE_WORKFLOW }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      # No `run:` step interpolates github.event.*; event data reaches node
+      # only through context.payload and the TARGET env var.
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { act, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            const config = loadConfig(`${cw}/loop-config.json`)
+            const target = JSON.parse(process.env.TARGET)
+            const dryRun = process.env.DRY_RUN === 'true'
+            await act({ github, context, core, config, target, env: process.env, dryRun })
+
+  journal:
+    # Only the journal repo's schedule maintains the day issue and its title.
+    if: github.event_name == 'schedule' && github.repository == 'sydevs/claude-workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { journalTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            await journalTick({ github, core, config: loadConfig(`${cw}/loop-config.json`), dryRun: ${{ inputs.dry-run }} })
