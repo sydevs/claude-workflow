@@ -15,7 +15,8 @@
  *     "repo": "sydevs/SahajCloud",
  *     "hasWorkflows": true,                  // ls <repo>/.github/workflows/*.yml (a filesystem check)
  *     "pr":            { … },                // pull_request_read method:get
- *     "reviews":       [ … ],                // pull_request_read method:get_reviews
+ *     "reviews":       [ … ],                // pull_request_read method:get_reviews — EVERY page
+ *     "reviewsComplete": true,               // optional: a page came back short, so that is all of them
  *     "checkRuns":     { … },                // pull_request_read method:get_check_runs
  *     "statuses":      { … },                // pull_request_read method:get_status  (optional)
  *     "reviewThreads": { … }                 // pull_request_read method:get_review_comments

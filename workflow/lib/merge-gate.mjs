@@ -137,6 +137,15 @@ export function mergeVerdict(pr, repo, policy = {}) {
   if ((policy.loopMayNotMerge || []).includes(name))
     return { verdict: 'HOLD', reason: `${name} is merged by a human, never by the loop`, ci, unresolved }
   if (pr.isDraft) return { verdict: 'HOLD', reason: 'draft', ci, unresolved }
+  if (pr.reviewsTruncated)
+    return {
+      verdict: 'HOLD',
+      reason:
+        `the ${pr.reviewsCount} reviews given land exactly on a page boundary, so this is probably page 1 of ` +
+        'several — refetch with perPage:100, page until one comes back short, then add "reviewsComplete": true',
+      ci,
+      unresolved,
+    }
   if (pr.reviewDecision !== 'APPROVED')
     return { verdict: 'HOLD', reason: `no approving review (${pr.reviewDecision || 'NONE'})`, ci, unresolved }
   if (unresolved) return { verdict: 'HOLD', reason: `${unresolved} unresolved review thread(s)`, ci, unresolved }
@@ -146,6 +155,30 @@ export function mergeVerdict(pr, repo, policy = {}) {
   return { verdict: 'MERGE', reason: ci.reason, ci, unresolved }
 }
 
+
+/**
+ * Page sizes a review list arrives in. 30 is what `pull_request_read
+ * method:get_reviews` returns when the call omits `perPage`; 100 is the API's
+ * maximum. A total landing exactly on either boundary cannot be told apart
+ * from a first page with more behind it.
+ */
+const REVIEW_PAGE_SIZES = [30, 100]
+
+/**
+ * Might this review list be page 1 of several?
+ *
+ * Truncation always hides the NEWEST reviews, and only the newest decides.
+ * So a partial list is not a weaker input, it is a wrong one, in both
+ * directions: a stale CHANGES_REQUESTED hides a later approval and holds a
+ * merge forever, and a stale APPROVED hides a later change request and merges
+ * work the reviewer has since rejected. Neither is recoverable by reading
+ * more carefully — the answer is simply not in the data. The gate refuses
+ * instead of deriving. (why: docs/why.md#a-review-list-arrives-one-page-at-a-time)
+ */
+export function reviewsLookTruncated(reviews) {
+  const n = (reviews || []).length
+  return n > 0 && REVIEW_PAGE_SIZES.some((size) => n % size === 0)
+}
 
 /** Review states that carry a decision. `COMMENTED` never changes or clears one. */
 const STATE_BEARING = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
@@ -221,8 +254,24 @@ export function reviewDecisionFrom(reviews, { authorized = [] } = {}) {
  * still wins, for a local `gh` caller that has the real field. Absent both,
  * the decision is NOT approved, the safe direction: the only error that can
  * merge something bad is one that invents an approval.
+ *
+ * ⚠ `reviews` must be EVERY page. `get_reviews` returns 30 without `perPage`,
+ * and one inline reply is one `COMMENTED` review, so 30 arrives on an ordinary
+ * PR. A page-boundary total is reported as `reviewsTruncated` and refused
+ * above, unless the caller passes `reviewsComplete: true` to say it paged to a
+ * short page itself. That only applies where the decision is DERIVED here: a
+ * caller handing over a real `reviewDecision` never reads the list at all.
  */
-export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviews, reviewAuthority, reviewDecision }) {
+export function normalizeMcp({
+  pr,
+  checkRuns,
+  statuses,
+  reviewThreads,
+  reviews,
+  reviewAuthority,
+  reviewDecision,
+  reviewsComplete,
+}) {
   const checks = [
     ...(checkRuns?.check_runs || []).map((c) => ({
       __typename: 'CheckRun',
@@ -237,9 +286,13 @@ export function normalizeMcp({ pr, checkRuns, statuses, reviewThreads, reviews, 
     })),
   ]
 
+  const derived = !reviewDecision && !pr?.reviewDecision
+
   return {
     number: pr?.number,
     title: pr?.title,
+    reviewsCount: (reviews || []).length,
+    reviewsTruncated: derived && reviewsComplete !== true && reviewsLookTruncated(reviews),
     isDraft: Boolean(pr?.draft ?? pr?.isDraft),
     mergeable: pr?.mergeable === false ? 'CONFLICTING' : pr?.mergeable === true ? 'MERGEABLE' : 'UNKNOWN',
     mergeStateStatus: (pr?.mergeable_state || pr?.mergeStateStatus || '').toUpperCase(),

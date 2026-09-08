@@ -761,6 +761,32 @@ actually appeared. The rule that generalizes is the one `preflight` already stat
 already defines approval authority — the allowlist just enforces it where an approval gets read, in
 `reviewDecisionFrom`.
 
+## A review list arrives one page at a time
+
+`SahajCloud#714` collected **60 reviews**, and the loop declined to merge it three runs running,
+each time telling the reviewer their last review was `CHANGES_REQUESTED`. They had approved it
+twice by then, and said so.
+
+Neither reader had asked for a second page. `pull_request_read method:get_reviews` returns 30
+without `perPage`, and `github.rest.pulls.listReviews` returns 30 without `per_page`, so both saw
+the same first 30 of 60. Inline review replies are what filled them: **one reply is one
+`COMMENTED` review**, and a long revision round posted about 45. The reviewer's last state-bearing
+review inside that window was a `CHANGES_REQUESTED` from the day before, on a commit four merges
+old. Their two approvals sat at positions 57 and 59, unread.
+
+The failure had a second face that looked like a separate bug. The state machine's `synchronize`
+handler re-adds `awaiting` when the reviewer's latest review is `CHANGES_REQUESTED`, and it read
+the same stale page — so every merge of `main` into the branch re-flagged a PR that was approved.
+The label looked like the cause of the hold and was only its twin.
+
+**An unpaginated read is fine for a set you filter and wrong for a set whose last element is the
+answer.** Truncation drops the newest rows, which is exactly where a decision lives, and it is
+unrecoverable in both directions: a stale `CHANGES_REQUESTED` holds an approved PR forever, and a
+stale `APPROVED` would merge work the reviewer has since rejected. So `reviewsLookTruncated` makes
+the gate refuse a list that ends on a page boundary rather than derive from it — the one case
+where "I cannot tell" is the correct verdict, and a confident wrong reason cost three runs and a
+reviewer's afternoon.
+
 ## A conflicted PR schedules zero CI runs
 
 A conflicted PR has no computable merge commit, so GitHub schedules **zero** workflow runs for it,

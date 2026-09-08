@@ -56,7 +56,7 @@ since four repos are public and any account can approve.
 
 ```
 mcp__github__pull_request_read  method:get                 owner:$ORG repo:$REPO pullNumber:<n>
-mcp__github__pull_request_read  method:get_reviews         owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__pull_request_read  method:get_reviews         owner:$ORG repo:$REPO pullNumber:<n> perPage:100
 mcp__github__pull_request_read  method:get_check_runs      owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_status          owner:$ORG repo:$REPO pullNumber:<n>
 mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO pullNumber:<n>
@@ -64,8 +64,14 @@ mcp__github__pull_request_read  method:get_review_comments owner:$ORG repo:$REPO
 #   ls $REPO/.github/workflows/*.yml $REPO/.github/workflows/*.yaml 2>/dev/null | head -1
 ```
 
+⚠ **Page `get_reviews` to the end.** Without `perPage` it returns 30, and one inline reply is one
+`COMMENTED` review, so 30 arrives on an ordinary PR — with the verdict on the page you did not
+read. Fetch `page:2, 3, …` until one comes back short, pass every page, then add
+`"reviewsComplete": true`. The script refuses a list that stops on a page boundary.
+(why: docs/why.md#a-review-list-arrives-one-page-at-a-time)
+
 ```bash
-echo '{"repo":"'$ORG/$REPO'","hasWorkflows":true,"reviews":[…],
+echo '{"repo":"'$ORG/$REPO'","hasWorkflows":true,"reviews":[…],"reviewsComplete":true,
        "pr":{…},"checkRuns":{…},"statuses":{…},"reviewThreads":{…}}' \
   | ${CLAUDE_PLUGIN_ROOT}/skills/work-routine/merge-verdict.mjs
 ```
@@ -268,7 +274,7 @@ Per candidate, until the budget runs out:
 - **Green by rung 1's definition** — same gathering, same script, reading only its `ci` verdict. A
   PR held only for want of an approval is still worth reviewing. Not green means skip.
 - **Re-check for an existing review immediately before writing**, with `method:get_reviews`
-  filtered to the own login. Search lags. Any own-login review of any state means skip. An
+  `perPage:100`, paged to the end as in rung 1, filtered to the own login. Search lags. Any own-login review of any state means skip. An
   own-login `PENDING` review is a crashed run's residue: delete it if a tool resolves, otherwise
   submit it, and journal either way. (why: docs/why.md#one-review-per-pr-ever)
 - **Spawn a fresh subagent (`Task`) to conduct the review.** Its prompt carries the repo, the PR
