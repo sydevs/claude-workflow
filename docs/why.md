@@ -1039,11 +1039,19 @@ on the rebuttals. A two-file, twenty-line PR rarely has the shape problem the cr
 find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip on it.
 `@sydevs-bot review` forces a review at any size.
 
-## Approved is the implement queue
+## There is no WIP cap
 
-`@sydevs-bot implement` on a ticket is the authorisation. When the repo is at `wipCapPerRepo`,
-the polling loop's answer was to consume the verb and ask for it again later. Now the ticket
-moves to Status `Approved` and waits. When a lock releases or a PR closes in that repo, the
-dispatcher drains the queue oldest verb first. A drag to `Approved` on the board is not a verb.
-The dispatcher requires the comment, so the board can display the queue without becoming a way
-to authorise code.
+The polling loop capped open bot PRs per repo at `wipCapPerRepo` because it chose its own work:
+without a cap, one nightly pass could have started every approved ticket at once. Under event
+dispatch nothing starts without a human verb, so the person who types `@sydevs-bot implement`
+is the throttle — they can see the open PRs, and each verb is a decision to spend a session. A
+queue behind a cap would only delay a decision already taken and add a state, approved but
+waiting, to explain. So an `implement` verb fires at once, and `Approved` is the Status of a
+ticket whose implementation was authorised, not a queue. A drag to `Approved` on the board is
+still not a verb; the dispatcher requires the comment.
+
+What replaces the cap is visibility. Each day's journal issue carries a tally the sweeper keeps
+current — dispatches per handler and per repo, and the items that took the most sessions — and
+the weekly reflect reads seven of those and reports usage back: a PR that needed six sessions,
+a review that arrived one comment at a time and fired `address-review` for each. That is
+feedback to the people who type the verbs, never a limit on them.
