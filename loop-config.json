@@ -10,7 +10,7 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps and per-run backstops, never a flow quota. The dispatcher enforces wipCapPerRepo and ciFixIterations. Rules in the handler skills.",
+    "$comment": "Stock caps and per-run backstops, never a flow quota. The dispatcher enforces ciFixIterations only; there is no WIP cap (why: docs/why.md#there-is-no-wip-cap). wipCapPerRepo, ciPollAttempts and maxWorkItemsPerRun are read by the legacy work-routine alone and go with it.",
     "wipCapPerRepo": 3,
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
@@ -136,7 +136,7 @@
     "recordHistory": 20,
     "workflow": ".github/workflows/dispatcher.yml",
     "callerWorkflow": ".github/workflows/workflow-state.yml",
-    "tokenSecret": "ADD_TO_PROJECT_PAT",
+    "tokenSecret": "SYDEVS_BOT_PAT",
     "routineTokenSecretPrefix": "ROUTINE_TOKEN_",
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
@@ -272,7 +272,7 @@
     "$comment": "The workflow that owns every mechanical Stage, assignee, and awaiting transition. Values only. The division of labor is in preflight/SKILL.md and docs/why.md#the-state-machine-is-not-the-loops-job.",
     "workflow": ".github/workflows/state-machine.yml",
     "callerWorkflow": ".github/workflows/workflow-state.yml",
-    "tokenSecret": "ADD_TO_PROJECT_PAT"
+    "tokenSecret": "SYDEVS_BOT_PAT"
   },
   "writing": {
     "$comment": "Character budgets for everything the loop writes, counted including <details>. Bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in preflight/SKILL.md.",
