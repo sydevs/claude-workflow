@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR. Then watch CI with a capped fix loop. User-invoked. Also run by /implement-issue as its final step. Does not run unless explicitly triggered.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of implement-issue, address-review, survey-deps, and reflect.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -10,14 +10,15 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 The reusable **ship pipeline**: take the branch's accumulated local commits and ship them —
 simplify → review → conditional security review → lean gate → docs sync → push → open or refresh
-the PR → get CI green → report.
+the PR as a draft → report. CI, the critic, mark-ready, and the merge are events the dispatcher
+acts on after you end. (why: docs/why.md#push-and-end)
 
 Phase 3 of Implement → Adjust → **Finalize**. `/implement-issue` calls this at the end. You also
 run it directly once you are happy with a batch of local-only Adjust-phase commits — it turns
 un-pushed commits into one pushed PR and one CI run.
 
 Every analysis step delegates to something maintained elsewhere. What stays here — sequencing, the
-docs-sync commit, PR create/refresh, and the capped CI loop — is genuinely ours.
+docs-sync commit, and PR create/refresh — is genuinely ours.
 
 Rules here are imperatives. `docs/why.md` in `sydevs/claude-workflow` carries the failure each one
 prevents, cited as `(why: …)`.
@@ -38,12 +39,12 @@ Never hard-code a repo's gate command, trigger paths, or package manager into th
 
 ## Trigger-agnostic
 
-This skill runs from a local session **and** from a GitHub event via `claude-code-action`. Assume
-no TTY, no dev server, no populated `.env.local`, and nobody to answer a prompt. Where a step
-would prompt, take the non-interactive branch and record the decision in the report instead.
+This skill runs from a local session **and** inside a cloud routine session. Assume no TTY, no
+dev server, no populated `.env.local`, and nobody to answer a prompt. Where a step would prompt,
+take the non-interactive branch and record the decision in the report instead.
 
 ```bash
-[ -n "$GITHUB_ACTIONS" ] && NONINTERACTIVE=1
+[ -n "$CLAUDE_CODE_REMOTE_SESSION_ID" ] && NONINTERACTIVE=1
 ```
 
 The one place this changes behaviour is pre-flight. Locally, unexpected uncommitted changes stop
@@ -73,7 +74,7 @@ git rev-list --count origin/main..HEAD
 - **Commit pending working-tree changes** — the Adjust phase ends here, so those edits ship too.
   If anything looks unrelated, stop and ask (or abort, non-interactively). Never commit secrets or
   `.env`.
-- **Nothing ahead of `origin/main`**, and the PR is already green → say so and exit.
+- **Nothing ahead of `origin/main`**, and the PR exists → say so and exit.
 
 ### 1. Simplify
 
@@ -233,102 +234,49 @@ mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
-- **No PR** → **create it as a draft**, then one follow-up, from `loop-config.json`:
-  ```bash
-  gh pr edit <n> --repo "$ORG/$REPO" --add-reviewer <assignment.reviewer>
-  ```
-  **Set no assignee at all** — see `/workflow:triage-issue`'s baton section for the full rule. A
-  PR is ours by `author:<bot>`, never by assignee. The state machine assigns the bot at `opened`,
-  for the record only, and never again.
+- **No PR** → **create it as a draft. Set no assignee and request no reviewer.** A PR is ours by
+  `author:<bot>`. The dispatcher requests `assignment.reviewer` when it marks the PR ready, after
+  CI and the adversarial review — a request at open puts unfinished work in their queue.
 
-  **Every PR opens as a draft, without exception.** Draft is the PR's baton — it means *the loop
-  is still working on this*, and step 9 clears it once CI is green. A PR born ready-for-review
-  puts unfinished work in the reviewer's queue and makes rung 5 review a moving target.
-  (why: docs/why.md#draft-is-the-prs-baton)
-
-  **Always request the review, on every PR, the moment it opens** — including drafts, where it
-  costs nothing and is already in place by ready-for-review. Assignment and review request answer
-  different questions: the assignee is *who works on it*, the reviewer is *who must look*. Handing
-  the PR back sets the first. Only this sets the second, and a PR with no request waits in a list
-  the reviewer has no reason to open.
+  **Every PR opens as a draft, without exception.** Draft means *the loop is still working on
+  this*. The dispatcher clears the flag once CI is green and the critic has run, or at once for a
+  PR under `review.skipWhen`. (why: docs/why.md#draft-is-the-prs-baton,
+  docs/why.md#the-critic-skips-small-prs)
 - **PR exists** → refresh **title and body**, both re-derived from the current
   `origin/main...HEAD`. **Leave the assignee alone**, and **never put a ready PR back into
-  draft** — `draft:false` means "has been ready at least once", and rung 5's once-ever review
-  depends on that staying true. Re-add the reviewer if a completed review dismissed the request
-  and the PR has since changed.
+  draft** — `draft:false` means "has been ready at least once", and the once-ever review depends
+  on that staying true.
 
-### 8. Watch CI, fix, capped at 3
+### 8. Push and end
 
-**`workflow/lib/merge-gate.mjs` is the one definition of "green".** Gather with MCP —
-`get_check_runs`, `get_status`, and `actions_get` for a failing run's logs — and pipe the first two
-to `merge-verdict.mjs`, which applies `merge-gate.mjs`'s rule and returns a verdict. Do not restate
-the rule here or re-derive it from `get_status` alone: that surface reports commit statuses, our CI
-reports check runs, and reading only `get_status` once held an approved SahajCloud PR green for
-seventeen minutes while its test job still ran.
-(why: docs/why.md#ci-truth-lives-in-check-runs)
+**This skill never watches CI, never marks a PR ready, and never merges.** CI completion is an
+event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
+"green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
+request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
-```
-mcp__github__pull_request_read  method:get_check_runs  owner:$ORG repo:$REPO pullNumber:<pr>
-mcp__github__pull_request_read  method:get_status      owner:$ORG repo:$REPO pullNumber:<pr>
-mcp__github__actions_get        # for a failing run's logs
-```
+- **A conflicted PR schedules zero CI runs.** Merge `origin/main` in and resolve before you push,
+  so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
+- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Mark it ready yourself
+  when CI is green.
 
-- **`CONFLICTING` / `dirty`** → a conflicted PR has no computable merge commit, so GitHub schedules
-  **zero** workflow runs for it, silently — waiting is futile. Merge the base branch in, resolve,
-  push. CI fires on that push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
-- **Compare the last green run's `head_sha` against the current branch head** — a run that predates
-  the base moving is stale.
-- **Poll. Never call `subscribe_pr_activity`.** Poll up to `ceilings.ciPollAttempts` times. If CI has
-  not settled by then, report that and hand the PR back — an unfinished watch is a fact to report,
-  not a reason to stay awake. (why: docs/why.md#never-subscribe-to-pr-activity)
-- **Green** → report.
-- **Red** → fetch the failing job's logs via `actions_get`, diagnose, fix, re-run the relevant part
-  of the lean gate, commit, push, re-watch.
-- **Cap at 3 iterations.** Still red after three rounds → stop and summarize the remaining
-  failures rather than looping.
-- A failure **pre-existing on `main`** → fix it here and note it.
-
-**This skill never merges.** Merge authority is the user's approving review. `/workflow:work-routine`
-rung 1 performs the merge once approval, green CI, and zero unresolved threads all hold. Green CI
-here means *ready for review*, not *done*. No field ever authorises a merge — `Stage: Implement`
-says code may be written, never that it may ship.
-
-### 9. Mark it ready for review, then report
-
-- **Once CI is green, clear the draft flag** —
-  `mcp__github__pull_request_write method:update pullNumber:<n> draft:false`. This is the run's
-  final action, and it means *done*: nothing further until someone responds. It also fires
-  `pull_request: ready_for_review`, so the state machine adds `labels.awaiting` for you — **do not
-  add it yourself**, and do not touch `Stage` on the linked ticket, which went to `Implemented`
-  when this PR opened.
-- **Do not mark it ready while CI is red or a fix loop still runs** — that puts a broken PR into
-  the reviewer's queue as though ready.
-- **But an unsettled CI is not a reason to leave it in draft.** If the poll budget runs out with CI
-  still in progress, mark it ready anyway and say so plainly — "marked ready with CI unsettled
-  after N polls, last seen lint/typecheck green". A draft PR nobody works on is invisible to
-  everyone, worse than a ready one with a caveat.
-- **Never end a run leaving a PR you opened in draft**, and never change its assignee to do so.
-  (why: docs/why.md#mark-the-pr-ready-despite-unsettled-ci)
-
-Then report: PR URL, final CI status, dismissed findings with reasons, and the acceptance criteria
-a human should verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the
-user to save it to memory.
+Then report: PR URL, dismissed findings with reasons, and the acceptance criteria a human should
+verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the user to save it
+to memory.
 
 ## Hard rules
 
 - **Never** force-push a shared branch, `--no-verify`, or commit secrets.
-- **Never** report success while CI is red.
 - **Always** operate on the full branch diff, not the last commit.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Always** run the docs sync before pushing.
-- **Cap** the CI fix loop at 3, then hand back.
-- **Always** open a PR as a draft, and clear the flag only once CI is green — a PR that never
-  leaves draft is invisible to the reviewer.
-- **Never** set or change a PR's assignee, on creation or after — the state machine does it at
-  `opened` (`/workflow:triage-issue`).
-- **Never** write `labels.awaiting` or the linked ticket's `Stage` here. Opening the PR and
-  clearing its draft flag are events. The state machine turns them into state within seconds.
+- **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
+  the critic agree.
+- **Never** wait for CI, and **never** merge. Push and end.
+- **Never** set an assignee, and **never** request a reviewer — the dispatcher requests
+  `assignment.reviewer` at ready.
+- **Never** write `awaiting` or a board Status here. Opening the PR is an event. The dispatcher
+  turns it into state within seconds. (why: docs/why.md#awaiting-has-one-writer)
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References

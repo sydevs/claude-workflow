@@ -66,17 +66,20 @@ claude --plugin-dir ./workflow                 # load the plugin without install
 CI here. It checks only the plugin manifest and skill frontmatter, never whether the prose is
 *right*, because the skills are prose.
 
-⚠ **`.github/workflows/` exists, and it is not CI.** It holds `state-machine.yml` — the reusable
-workflow that owns every mechanical `Stage`, assignee, and `awaiting` transition for all five
-repos, plus this repo's own thin caller. Editing it changes behaviour in every sydevs repo on the
-next event, with no merge anywhere else, so it carries a skill's blast radius and the same
-rules: keep the edit small and reversible, and state what failure it prevents.
-(why: docs/why.md#the-state-machine-is-not-the-loops-job)
+⚠ **`.github/workflows/` exists, and it is not CI.** It holds `dispatcher.yml` — the reusable
+workflow that observes every GitHub event in all five repos, classifies it, locks the item, fires
+the cloud session, and does every mechanical write (Status, `awaiting`, merge, mark-ready) — plus
+this repo's own thin caller. `state-machine.yml` is its predecessor, kept until the cutover
+cleanup. Editing either changes behaviour in every sydevs repo on the next event, with no merge
+anywhere else, so it carries a skill's blast radius and the same rules: keep the edit small and
+reversible, and state what failure it prevents. `dispatcher/` beside it is the code, with
+`node --test dispatcher/test/*.test.mjs` as its gate.
+(why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
-The real gate is a **supervised loop run**: `/workflow:work-routine --dry-run` locally, or a
-manually fired routine whose journal entry and transcript you then read (`docs/routine-setup.md`
-§6). A green run status means only that no infrastructure error occurred — task-level failures
-appear only in the transcript.
+The real gate is a **supervised dispatch**: `BOT_DISPATCH=dry` logs every plan without writing,
+and a scratch `@sydevs-bot answer …` watched end to end (`docs/routine-setup.md` §6). A green
+workflow run means only that no infrastructure error occurred — task-level failures appear only
+in the session transcript and its journal comment.
 
 ## No package manager
 
@@ -97,16 +100,17 @@ much.
 | `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv) and `merge-gate.mjs` (the one definition of "green" and "mergeable"). |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `ceilings`, `labels`, `assignment`, `issueFields`, `projects`, `stateMachine`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each run. |
-| `.github/workflows/state-machine.yml` | The mechanical state machine, called by all five repos. **Not CI** — see the warning above. |
+| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `ci`, `labels`, `assignment`, `ceilings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
+| `.github/workflows/dispatcher.yml` + `dispatcher/*.mjs` | The event dispatcher, called by all five repos. **Not CI** — see the warning above. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, same shape as every product repo, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Bootstrapping the loop on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
 
 ### ⚠ A skill's length is a running cost
 
-`preflight`, `work-routine`, `journal`, and `loop-config.json` are read on **every** run — about
-9,250 tokens, eleven times a day. A paragraph added to any of them is paid for daily, forever.
+`handler-preflight`, `handler-journal`, the handler's own skill, and `loop-config.json` are read
+on **every** dispatch — 25 to 40 times a day. A paragraph added to any of them is paid for on
+every one, forever.
 Before you add prose to a run-loaded skill, check the rule is not stated elsewhere already. Put
 the story in `docs/why.md`, behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
 
@@ -150,11 +154,11 @@ wherever a rule can be evaluated. (why: docs/why.md#a-script-here-never-fetches)
   routine-invoked skill carries it, so nothing fires on a stray phrase. Only `dev-server` and
   `triage-issue` — both invoked *by* other skills — omit it.
 - **Write for one busy reader.** The loop's own writing rules (lead with the outcome, detail in
-  `<details>`, no throat-clearing) live in `preflight/SKILL.md` and apply to skill bodies as much
-  as to what they emit.
-- **The rule lives in the skill. The story lives in [`docs/why.md`](docs/why.md).** `work-routine`
-  is re-read about eleven times a day, so length there costs tokens each time and dilutes the
-  rules it carries. Move a retrospective justification one hop away: add a heading in
+  `<details>`, no throat-clearing) live in `handler-preflight/SKILL.md` and apply to skill bodies
+  as much as to what they emit.
+- **The rule lives in the skill. The story lives in [`docs/why.md`](docs/why.md).**
+  `handler-preflight` is re-read on every dispatch, so length there costs tokens each time and
+  dilutes the rules it carries. Move a retrospective justification one hop away: add a heading in
   `docs/why.md` named after the rule, and cite it as `(why: docs/why.md#anchor)`.
   **Never let a story be a rule's only statement.** Check that the instruction survives inline as
   an imperative before you move the narrative.
@@ -200,7 +204,6 @@ attended.
   directly. This repo ships prose and config, so the PR body *is* the proposal. File a ticket only
   when the change needs a **decision** before code — competing designs, or a cost worth agreeing
   on before it is paid.
-- Merge authority is still **an approving review**, and `wipCapPerRepo` still bounds how many loop
-  PRs may be open here at once. The skill/ceiling split above binds harder now that
-  nothing upstream forces a pause, and a PR carrying more than one behaviour still owes one
-  commit per behaviour.
+- Merge authority is still **an approving review**. There is no WIP cap — the human who types
+  the verb is the throttle. The skill/ceiling split above binds harder now that nothing upstream
+  forces a pause, and a PR carrying more than one behaviour still owes one commit per behaviour.

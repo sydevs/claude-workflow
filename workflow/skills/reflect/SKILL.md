@@ -1,6 +1,6 @@
 ---
 name: reflect
-description: Grade last week's changes. Read the week's flight-recorder journals, PR outcomes, and the reviewer's review activity. Refine the reviewer profile and propose changes to the loop's own configuration and skills as a PR. Sunday's survey — the loop improves itself through its own pipeline.
+description: Sunday's survey. Grade last week's changes, read the week's journals, report usage, refine the reviewer profile, and propose loop changes as a PR.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
@@ -9,8 +9,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 
 Sunday's survey. The loop reads its own week and proposes changes to itself, through the same
 review-and-merge path as everything else — the loop's behaviour never changes without the user's
-approval. Because routines clone `main` fresh each run, a merged change takes effect next run with
-no redeploy.
+approval. Because routines clone `main` fresh each run, a merged change takes effect on the next
+dispatch with no redeploy.
 
 ## Start by grading last week
 
@@ -32,18 +32,20 @@ With no previous reflection, say so in one line and continue.
 ## Evidence
 
 Read. Do not recall. Every run starts with no memory of the last. `$ORG`, `$JOURNAL_REPO`, `$BOT`
-and `$REVIEWER` come from `loop-config.json` (`org`, `journalRepo`, `assignment.bot`,
+and `$REVIEWER` come from `loop-config.json` (`org`, `journalRepo`, `identity.expectedLogin`,
 `assignment.reviewer`) — never typed literally.
 
-**A journal is one document now, so the week is seven reads.** Each day's body carries that day's
-`⚠️ Failed`, `⏭️ Ceiling` and `🧭 Friction` lines, each stamped with its run's time. **Journals
-have no comments — never call `get_comments` on one.**
+**A journal day is one issue: a title with the counts, a body with the usage tally, and one
+comment per session.** The week is seven titles and seven bodies. Open a day's comments only when
+its title reports a failure or an anomaly.
 
 ```
 # the week's journal issues — one per day, all still open
 mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:ops-journal"
-# the body IS the day. Seven of these is the whole week.
+# title: "<Day> — <n> dispatches · <n> failed · <n> anomalies". Body: the <!-- tally --> block.
 mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
+# a flagged day only: one comment per session, newest first, small pages
+mcp__github__issue_read  method:get_comments  issue_number:<n>  perPage:20  page:<from the comments count>
 
 # what actually happened to the PRs
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
@@ -55,16 +57,23 @@ mcp__github__search_issues  query:"$SCOPE is:pr author:$BOT reviewed-by:$REVIEWE
 # keep author == $REVIEWER and created_at inside the window — and READ THE TEXT, not the count
 ```
 
+**`perPage` on a journal never exceeds 20.** One oversized reply once broke the run that read it.
+(why: docs/why.md#ground-from-the-body-never-the-thread)
+
 `$WINDOW` is the previous reflection PR's merge date (find it in this repo's merged PRs). With no
 previous reflection, use seven days.
 
+Each session comment starts with a `<!-- sydevs-dispatch-done v1 {…} -->` marker naming the
+handler, the item, the session, and its failure count. Each dispatcher line starts with
+`<!-- sydevs-dispatcher-anomaly v1 {…} -->`. Count from the markers, not from prose.
+
 ## What to look for
 
-The useful signals are about **friction**, not volume, and the journal now states them directly
-rather than leaving them to be inferred. Count across the seven days before you conclude anything.
+The useful signals are about **friction**, not volume, and the journal states them directly.
+Count across the seven days before you conclude anything.
 
 **Recurrence gates every change, not just profile edits.** One occurrence is weather — name it in
-the PR body as observed, and nothing else. Propose a change only when the same failure, ceiling,
+the PR body as observed, and nothing else. Propose a change only when the same failure, anomaly,
 or friction appears **on two or more distinct days**, and state the count in the proposal. A rule
 added for one bad night outlives its cause.
 (why: docs/why.md#reflect-edits-the-profile-only-on-recurrence)
@@ -73,18 +82,20 @@ added for one bad night outlives its cause.
 | --- | --- |
 | The same `⚠️ Failed` bullet on 2+ days | A real defect, not an environment blip |
 | A `🧭 Friction` entry repeating | The rule misfires in practice. The rule is usually wrong |
-| The `awaiting` drift sweep fixing the same shape twice | A state-machine gap — fix the workflow |
-| A ceiling hit every run | The ceiling is wrong, or the rung above it is not clearing work |
-| PRs needing 3+ revision rounds | Tickets are underspecified, or `implement-issue` is guessing |
-| CI fix-loop capping out repeatedly | A flaky gate, or a change class the lean gate misses |
-| Proposals sitting unreviewed | Surveys outrun review capacity — lower `maxProposalsPerSurvey` |
+| `timed out` anomalies for one handler | Its `dispatch.timeoutsMinutes` is wrong, or the skill does not push and end |
+| `session ended silently` anomalies | A handler skipped its journal or its summary comment |
+| `ci-capped` on 2+ PRs | A flaky gate, or a change class the lean gate misses |
+| `429` or `paused` anomalies on 2+ days | Usage is the binding constraint — say so in the usage report |
+| PRs needing 3+ `address-review` sessions | Tickets are underspecified, or `implement-issue` is guessing |
+| Rebuttals the reviewer then overrode | The bot argues where it should adopt — a profile gap |
 | The same reviewer comment theme on 2+ PRs | A missing profile value, or a missing skill rule |
 | The reviewer flagged something the adversarial review passed clean | A profile gap |
-| Adversarial-review findings the reviewer resolved without change, or overrode | The bot review over-flags — trim the profile, not the code |
-| A rung never reached | Everything above it is saturated. Say so plainly |
-| Runs that did nothing | Cadence does not match the actual pace of work |
+| Adversarial-review findings the reviewer resolved without change | The bot review over-flags — trim the profile, not the code |
+| A PR under `review.skipWhen` that the reviewer then changed | The threshold is too generous |
+| Proposals sitting unreviewed | Surveys outrun review capacity — lower `maxProposalsPerSurvey` |
+| A recheck storm on one item | Humans comment while the bot works — a note for the usage report, not a rule |
 
-Prefer **removing** a rule to adding one. Every run reads these skills in full, and a skill that
+Prefer **removing** a rule to adding one. Every dispatch reads its skill in full, and a skill that
 grows a paragraph per incident becomes unreadable — how the previous three-fork workflow decayed.
 
 **When your PR edits a skill, run the rule delta and account for every removal in the body:**
@@ -96,6 +107,26 @@ node workflow/lib/rule-delta.mjs --base main workflow/skills
 It exits non-zero on a directive that vanished with no close match. Each one is a rule you meant
 to drop, or a rule that fell out — only you can say which, since this repo cannot validate a skill
 by running it. (why: docs/why.md#lint-measures-style-not-content)
+
+## Report usage — feedback, never a gate
+
+There is no WIP cap. The people who type the verbs are the throttle, and this report is what
+they see. (why: docs/why.md#there-is-no-wip-cap)
+
+From the seven titles and `<!-- tally -->` blocks, with no comment reads:
+
+- dispatches per repo and per handler, beside last week's reflection PR's numbers,
+- sessions per merged PR — the week's dispatches on PR items divided by the PRs merged,
+- every item with **three or more sessions**, with its count and handlers,
+- `address-review` sessions per PR, where a review arrived one comment at a time.
+
+Then **one or two concrete suggestions to the humans**, each tied to a number: batch review
+comments into one review, one verb at a time, split a ticket that took six sessions, a
+`Re-check:` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
+
+The report is a `## 📊 Usage` section of the reflection PR body. With no PR this week, it goes
+into tonight's journal entry under `📄 Did`, fitted like any entry. The report is written every
+week, even when nothing else is.
 
 ## Refining the reviewer profile
 
@@ -116,16 +147,17 @@ never a second one.
 ## Proposing
 
 At most one PR to `claude-workflow` per week. Ticketless (`prAllowlistGlobs`). Scope it to changes
-the evidence supports: a ceiling number, a clarified instruction, a removed rule that never fired,
-a profile refinement.
+the evidence supports: a timeout, a threshold, a clarified instruction, a removed rule that never
+fired, a profile refinement. Open it through `/workflow:finalize-pr` — it is a draft bot PR like
+any other, and the dispatcher takes it through the critic to the reviewer.
 
 The PR body must show the evidence **as arithmetic over the week, not impression**. Count the
-`⏭️ Ceiling` bullets rather than characterise them: "raise `maxWorkItemsPerRun` to 4: it was the
-binding constraint on 5 of 7 days, and cost 3 adversarial reviews and 2 ticket replies." A
-proposal with no count is a guess the reviewer cannot check.
+anomaly markers rather than characterise them: "raise `timeoutsMinutes.implement` to 180: 4 of 9
+implement sessions timed out at 150, and each resumed session finished." A proposal with no count
+is a guess the reviewer cannot check.
 
 **Lead the body with the grading section** from the top of this skill — what last week's changes
-meant to fix, and whether they did.
+meant to fix, and whether they did. **Then the usage report.**
 
 **Lessons that belong to a product repo, not the loop**, follow the evidence to that repo. A
 recurring reviewer comment is often a convention nobody wrote down, and the fix belongs where the
@@ -133,14 +165,15 @@ next author reads it:
 
 - **A small documentation fix** — a `CLAUDE.md`/`AGENTS.md` correction, a missing convention, a
   stale instruction — becomes a direct ticketless PR to that repo (its `prAllowlistGlobs` covers
-  `**/*.md`), bounded by `wipCapPerRepo` like any loop PR. **Never touch anything under
-  `.claude/`** — Protected Paths stall an unattended run, invisibly.
+  `**/*.md`). **Never touch anything under `.claude/`** — Protected Paths stall an unattended
+  run, invisibly.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
   proposal issue in that repo instead, under `maxOpenProposals` like every survey proposal. The
-  state machine sets its `Stage` and `labels.awaiting`.
+  dispatcher sets its Status and `awaiting`.
 
 If the week gives no clear signal, **say so and open no PR.** A quiet week is a legitimate
-outcome, and an unneeded change to the machinery costs more than none.
+outcome, and an unneeded change to the machinery costs more than none. The usage report still
+goes in the journal.
 
 ## Close the week's journals
 
@@ -149,13 +182,16 @@ a one-line comment linking the reflection PR. They are working memory for a week
 record — left open, they make next Sunday's read grow without bound and clutter the issue list.
 
 Close them **last**. A crash midway through the reflection should leave the journals intact — they
-are the only input that cannot be reconstructed.
+are the only input that cannot be reconstructed. Leave today's issue open: tonight's entry still
+goes on it.
 
 ## Hard rules
 
 - **Never** change loop behaviour outside a reviewed PR.
-- **Never** raise a ceiling without evidence it was the binding constraint.
+- **Never** raise a timeout or a threshold without evidence it was the binding constraint.
 - **Never** open a reflection PR while a previous one is unreviewed — stack findings into next week.
 - **Never** propose a change on a single occurrence. Name it as observed and wait for a second.
 - **Never** open the PR body without last week's grading at the top.
 - **Never** ship a skill change and a ceiling change in one PR — split across weeks if both apply.
+- **Never** turn the usage report into a rule or a cap. It is feedback to people.
+- **Never** read a journal's comments with `perPage` above 20.

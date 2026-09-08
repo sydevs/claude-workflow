@@ -26,7 +26,8 @@ For each finding, in this order:
    runs in production is not worth a PR. Journal it and move on. Reachability beats severity — the
    CVSS score describes the vulnerable code, not our use of it.
 2. **Is a fix available?** No patched version means no PR. Journal it. If the risk is genuinely
-   live, file a `Bug` at `Stage: Blocked` with a `Hold Until` date for the likely fix, and say why.
+   live, file a `Bug` with a `Re-check: <date>` line in `## Notes` for the likely fix, and say
+   why. The dispatcher parks it as `blocked` until then.
 3. **Read the changelog before you bump.** A major needs its breaking-changes section read and its
    call sites checked. This is why this is a survey, not Dependabot.
 
@@ -41,7 +42,8 @@ pinned at `2.36.0` in SahajAtlasWeb, and `patches/` exists for a reason.
 ## Shipping
 
 Branch `claude/chore-deps-<scope>`, then run `/workflow:finalize-pr`. These PRs are ticketless —
-`prAllowlistGlobs` covers them because review is mechanical.
+`prAllowlistGlobs` covers them because review is mechanical. They open as drafts. The dispatcher
+runs CI and marks them ready. Push and end.
 
 State each dependency's **from → to, why (advisory ID or "routine"), and what you checked for
 breakage.** "Bumped 6 packages" is not reviewable.
