@@ -45,23 +45,20 @@ upstream fails the plugin's build until its copy is updated.
    mcp__github__issue_write  method:create  owner:sydevs  repo:<producer>
      title:"<title>"  body:"<body>"  type:"Feature"
      issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
-                   {field_name:"Effort",   field_option_name:"<...>"},
-                   {field_name:"Stage",    field_option_name:"Proposed"}]
-     labels:["awaiting"]
+                   {field_name:"Effort",   field_option_name:"<...>"}]
    ```
 
-   ⚠ This skill needs `gh` for Relationships, so it runs **locally as you**. No bot event fires
-   here, so set `Stage` and `awaiting` yourself instead of leaving them to the state machine.
-   Assign nobody.
+   The dispatcher sets Status Proposed and `awaiting` on `issues.opened`, whoever files. Set no
+   label and no Status. Assign nobody.
 
 4. **Create one child issue per consumer** with the same call as step 3, `repo:<consumer>`, then
    record the dependency natively so GitHub enforces and displays it — not just prose in the body.
 
-   File the child `Proposed`, like anything else, **not** `Blocked` — the `Blocked by:` line and
-   the native relationship already carry the ordering, and `Blocked` would need a `Hold Until` for
-   a wait that ends at a merge, not a date.
+   File the child like anything else. The `Blocked by:` line carries the ordering: the
+   dispatcher converts it into the native relationship, applies `blocked`, and when the tracker
+   closes removes it and mentions the reviewer.
 
-   Then link it — the **one step with no MCP tool**, so it needs `gh` and a local session.
+   Locally you may link it at once — the **one step with no MCP tool**, so it needs `gh`.
    **Cross-repo dependencies need the full issue URL.** `owner/repo#N` is rejected as
    `invalid issue format`:
 
@@ -77,10 +74,9 @@ upstream fails the plugin's build until its copy is updated.
    gh api repos/sydevs/<producer>/issues/<N>/dependencies/blocking   --jq '.[].number'
    ```
 
-   **Then put the same constraint in the child's body** — load-bearing, not decoration. The loop
-   runs in the cloud, where **no MCP tool can read Relationships**, so a blocker recorded only in
-   the panel is invisible to it, and the child gets picked up as ready. Use the exact marker the
-   loop greps for:
+   **Then put the same constraint in the child's body** — load-bearing, not decoration. The
+   dispatcher reads the line, and a session reads the body. A blocker recorded only in the panel
+   gets no `blocked` label. Use the exact marker:
 
    ```markdown
    Blocked by: https://github.com/sydevs/<producer>/issues/<N> — `pnpm types:cms` reads from `main`, so running it before that merges silently pulls the old shape
@@ -107,5 +103,5 @@ upstream fails the plugin's build until its copy is updated.
 - **Never** file a cross-repo change as independent issues with no parent. The ordering constraint
   is the most important thing this records.
 - **Never** file the children before the tracker exists.
-- **Always** restate the blocking condition as a `Blocked by: <url>` line in each child's body — a
-  cloud run sees only the line, never the Relationship.
+- **Always** restate the blocking condition as a `Blocked by: <url>` line in each child's body —
+  the line is what the dispatcher converts and what a session reads.

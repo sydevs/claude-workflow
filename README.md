@@ -45,81 +45,85 @@ so each person runs `claude plugin install` once.
 | Skill | Purpose |
 | --- | --- |
 | `/workflow:draft-ticket` | Draft a GitHub issue: clarify ambiguity, then write acceptance criteria and a checklist. |
-| `/workflow:triage-issue` | The metadata rules — type, Priority, Effort, Stage, Hold Until, assignment, relationships, body format. |
-| `/workflow:implement-issue` | Implement a `Stage: Implement` issue in a worktree, then ship it via `finalize-pr`. |
-| `/workflow:finalize-pr` | Simplify, review, security-review, lean-gate, sync docs, push, open the PR, poll CI. Never merges. |
+| `/workflow:triage-issue` | The metadata rules — type, Priority, Effort, `Blocked by:` and `Re-check:` markers, body format. |
+| `/workflow:implement-issue` | Implement an authorised ticket in a worktree, open a draft PR through `finalize-pr`, push, end. |
+| `/workflow:finalize-pr` | Simplify, review, security-review, lean-gate, sync docs, push, open the PR as a draft. Never waits, never merges. |
 | `/workflow:cross-repo-issue` | File a cross-repo change as one tracking issue plus linked children, in dependency order. |
 | `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
-| `/workflow:work-routine` | The working-day ladder: merge, revise, implement, adversarially review. Hourly, via `sydevs-work-hourly`. |
-| `/workflow:survey-routine` | The nightly survey plus reconciliation sweeps. Via `sydevs-survey-nightly`. |
-| `/workflow:preflight` | Ground rules and run start, shared by both run skills. |
-| `/workflow:journal` | The run's journal entry and ending, shared by both run skills. |
+| `/workflow:handler-preflight` | Ground rules and run start for every dispatched handler: identity, the record, the lock. |
+| `/workflow:handler-journal` | The run's journal comment, then the unlock — the closing step of every handler. |
+| `/workflow:address-review` | Answer every open thread on one PR: adopt with a commit, or rebut with evidence. |
+| `/workflow:fix-ci` | One fix commit for a red CI run on a bot PR, then push. |
+| `/workflow:resolve-conflicts` | Merge `main` into a conflicting bot PR, resolve from both sides' intent, push. |
+| `/workflow:adversarial-review` | An advisory, critic-side COMMENT review of one bot PR, once per PR. The human approves. |
+| `/workflow:revise-ticket` | A deep pass: expand a ticket from the codebase, per the human's instruction. |
+| `/workflow:split-ticket` | Split a ticket into ordered children with `Blocked by:` lines. |
+| `/workflow:answer-ticket` | Answer a question on a ticket from source. Never pushes. |
+| `/workflow:survey-routine` | The nightly survey. Via `sydevs-survey-nightly`. |
 | `/workflow:survey-deps` | Monday: vulnerabilities become PRs. Routines update monthly. |
 | `/workflow:survey-sentry` | Tuesday: production errors become tickets. |
 | `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase, as proposals. |
 | `/workflow:survey-contracts` | Thursday: check published contracts against reality. |
 | `/workflow:cut-release` | Friday: tag, update the changelog, cut a Release. |
-| `/workflow:reflect` | Sunday: read the journal and review activity, refine the profile, propose loop changes. |
-| `/workflow:adversarial-review` | An advisory, critic-side pass on one loop-authored PR, always fresh-context. The human approves. |
+| `/workflow:reflect` | Sunday: grade last week, read the journals, report usage, refine the profile, propose loop changes. |
+| `/workflow:work-routine`, `preflight`, `journal` | **Legacy** — the hourly ladder. Unused once `BOT_DISPATCH` is `on`. Deleted after the cutover. |
 
 Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
 
 ## The loop
 
-Two scheduled cloud routines cover all five repos, each with its own run skill bracketed by
-`preflight` and `journal`. `sydevs-work-hourly` runs `work-routine` on an hourly-then-two-hourly
-cadence. It climbs a ladder of rungs, ordered by urgency:
+Nothing runs on a clock. **GitHub Actions observes every event, classifies it, and fires one
+cloud session per unit of work.** A reusable workflow, `dispatcher.yml`, is called by a thin
+`workflow-state.yml` in each of the five repos. Sessions do judgement only. They push and end.
+Everything an event determines — merge, mark ready, board Status, the `awaiting` label, Sentry
+resolve, unblocking — is mechanical and free.
+(why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
-1. Merge what you approved.
-2. Revise what you commented on.
-3. Implement what you cleared.
-4. Adversarially review what it built.
+**You start work with a verb.** On an issue, a comment from a `respondTo` human:
+`@sydevs-bot implement`, `revise`, `split`, or `answer` (case-insensitive, unknown → `answer`).
+Nothing happens on an issue without a mention. On a bot PR, any review, comment, or thread reply
+from you dispatches `address-review` with no mention needed. `@sydevs-bot review` asks for a
+second adversarial review.
 
-`sydevs-survey-nightly` runs `survey-routine` once nightly, with no ladder — just the day's survey
-and the unheard-replies sweep. It stays separate so it always runs, even on a busy queue. State
-lives entirely in GitHub: **the assignee field is the queue**, PRs are the work, a daily issue is
-the memory, `loop-config.json` holds the knobs.
+**One label, `bot:working`, is the lease.** Actions applies it before it fires. The session
+removes it as its last write. A comment that lands while the lock is held is not lost — the
+dispatcher re-derives on unlock. (why: docs/why.md#the-lock-label-is-the-lease)
 
-**The baton.** `assignee:sydevs-bot` is the worklist. **Only you assign it**, and it stays assigned
-until you take it back, so assignment answers one question: *is this the loop's to touch*. The
-loop's one write is removing itself once a PR exists. Unassign the bot on anything and it stops
-touching that thing — a per-item kill switch needing no documentation.
+**A bot PR's life is a chain of events**: draft → CI green → adversarial review (one COMMENT
+review, skipped under `review.skipWhen`) → `address-review` adopts or rebuts each thread → CI
+green → **ready + reviewer requested** → your approval → squash merge. Red CI fires `fix-ci`, at
+most `ciFixIterations` times. An approved PR with conflicts gets `resolve-conflicts`, then merges
+on the next green run. Nobody waits for CI, ever. (why: docs/why.md#push-and-end)
 
-**One label, `awaiting`, marks what needs you.** It covers issues and PRs alike. A GitHub workflow,
-not the loop, maintains it from events, so it appears the moment a PR is ready and clears the moment
-you reply. Filter any board view by `label:awaiting` for your queue.
+**Labels say whose turn it is. Status says where it sits.**
 
-**Two org-level issue fields name the kind of turn it is:**
+| Marker | Means | Writer |
+| --- | --- | --- |
+| `awaiting` | Your turn. | Actions only |
+| `bot:working` | A session holds it. Its status comment names the handler and links the session. | Actions applies, the session removes |
+| `stuck` | The machinery owes a retry — usage limit, paused routines, a dead session. Nothing needed from you yet. | Actions only |
+| `blocked` | An open `Blocked by:` target, or a `Re-check:` date still ahead. Cleared with a mention. | Actions only |
+| `proposal` | Bot-filed, no verdict yet. | Actions only |
+| Status `Proposed` / `Revising` / `Approved` / `Done`, none = backlog | The board column. | Actions only |
 
-| `Stage` | Means |
-| --- | --- |
-| `Proposed` | Filed, awaiting your verdict |
-| `Revising` | Being worked out — whoever commented last has the turn |
-| `Blocked` | Parked, with a `Hold Until` date saying when it comes back |
-| `Implement` | You cleared it for code |
-| `Implemented` | A PR is in flight |
+**There is no WIP cap.** Every session follows a human's verb or a human's event, so the person
+typing is the throttle. Each day's journal issue carries a usage tally, and the Sunday reflection
+reports usage back as feedback. (why: docs/why.md#there-is-no-wip-cap)
 
-`Hold Until` is a date. While it is in the future, the item stays hidden, even from the journal,
-because the loop has already promised to look again that day.
+**Three properties keep it safe to leave running:**
 
-**A PR has no fields, so its `draft` flag marks its turn.** The loop opens every PR as a draft and
-clears the flag once CI is green. Draft means it is still working. Ready-for-review means it is your
-turn. The loop finds its own PRs by `author:sydevs-bot`. It never writes an assignee on one. That
-frees a PR's assignee to mean the opposite: **assign the bot to a PR it did not write, and it works
-on that PR.**
+- **Only a `respondTo` human's `@sydevs-bot implement` authorises code.** Not a field, not a drag
+  on the board, not a request in prose.
+- **A merge needs all three:** your approving review, green CI, and zero unresolved threads.
+  `loopMayNotMerge` repos never auto-merge.
+- **Nothing is lost in an outage.** A fire that fails, or a session that dies, leaves the item
+  `stuck`. A 30-minute Actions sweeper retries up to `dispatch.maxAttempts`, then hands it to you
+  as `awaiting`. Pausing the routines in the UI is the only kill switch, and it is global.
 
-Three properties keep it safe to leave running:
-
-- **`Stage: Implement` is the only code gate**, and only you can set it. The loop never writes that
-  value, and never implements without it. It may move a ticket off `Implement` when a question needs
-  an answer first — revoking only ever reduces its own autonomy. Everything else it finds is filed
-  as `Proposed`, for you to judge.
-- **A merge needs all three:** an approving review, green CI, and zero unresolved threads.
-- **Assignment gates attention.** Unassigned from the bot means untouched by the bot.
-
-`loop-config.json` sets ceilings on what one run can spend, since a cloud session cannot read its own
-remaining quota. The Sunday reflection survey proposes changes to those numbers as a PR, so the loop
-tunes itself through the same review path as everything else.
+State lives entirely in GitHub. A daily `ops-journal` issue is the memory: one comment per
+session, one line per dispatcher anomaly, the counts in the title. `loop-config.json` holds the
+knobs. The Sunday reflection proposes changes to them as a PR, so the loop tunes itself through
+the same review path as everything else.
 
 ## Configuration
 
@@ -133,7 +137,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
 | `securityReview.contentPattern` / `.contentPaths` | Newly introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
-| `prAllowlistGlobs` | Where a **ticketless** PR may open (dep bumps, doc fixes, type re-syncs). `**` here, since the PR body is the proposal. Elsewhere, ticket work needs `Stage: Implement`. |
+| `prAllowlistGlobs` | Where a **ticketless** PR may open (dep bumps, doc fixes, type re-syncs). `**` here, since the PR body is the proposal. Elsewhere, ticket work needs a human's `@sydevs-bot implement`. |
 | `worktreeSetup` | Commands run after `EnterWorktree`. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 

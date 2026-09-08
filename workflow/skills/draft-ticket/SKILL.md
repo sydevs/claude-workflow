@@ -67,36 +67,26 @@ carry enough resolved detail to survive being picked up cold, possibly by an aut
    made `--body` unusable with `gh` never arises. Setting type and fields here also stops a ticket
    landing untyped.
 
-9. **File it at `Stage: Proposed` with `labels.awaiting`, assigned to nobody.**
+9. **File it and let the dispatcher place it.** `issues.opened` sets Status Proposed and
+   `awaiting` for every author, so set neither. Assign nobody.
 
-   ⚠ **This skill is the exception that writes its own state.** The state machine sets those two
-   fields on `issues: opened`, but only for issues the *bot* authored. This skill files as you, so
-   no bot event fires and a ticket left without them is invisible on the board. Set both in the
-   create call. Assign nobody: `awaiting` is the signal now.
+   Then ask whether to hand it to the loop now. One comment authorises code, and only a
+   `respondTo` human can write it. Ask explicitly. Never post it on your own initiative, and
+   never infer it from enthusiasm in the request:
 
-   Then ask whether to hand it to the loop now. Two fields put a ticket into the implementation
-   queue, and **both** are required: `Stage: Implement` says code may be written, and assigning
-   `assignment.bot` says now — see `/workflow:preflight` for the full rule set the loop itself
-   follows. Ask explicitly. Never set either on your own initiative, and never infer them from
-   enthusiasm in the request:
-
-   > Filed as sydevs/SahajCloud#661 (Feature, Medium, Proposed). Hand it to the loop now — set
-   > `Stage: Implement` and assign `sydevs-bot` — or leave it with you to review first?
+   > Filed as sydevs/SahajCloud#661 (Feature, Medium, Proposed). Hand it to the loop now — I
+   > will comment `@sydevs-bot implement` as you — or leave it with you to review first?
 
    On a yes:
 
    ```
-   mcp__github__issue_write  method:update  issue_number:<n>
-     issue_fields:[{field_name:"Stage", field_option_name:"Implement"}]
-     assignees:["sydevs-bot"]
+   mcp__github__add_issue_comment  owner:$ORG  repo:$REPO  issue_number:<n>  body:"@sydevs-bot implement"
    ```
 
-   On a no, leave it exactly as filed. `Proposed` plus `awaiting` is not a parking space — it is
-   the queue for things genuinely needing a verdict, which is what this is.
-
-   ⚠ **`Stage: Implement` is the one value the loop may never set for itself** (why:
-   docs/why.md#the-loop-may-never-write-implement). Writing it here is legitimate only because a
-   human just said yes in this session.
+   That comment is the authorisation. The dispatcher moves the ticket to Approved and fires a
+   session within a minute. On a no, leave it exactly as filed. `Proposed` plus `awaiting` is not
+   a parking space — it is the queue for things genuinely needing a verdict, which is what this
+   is. (why: docs/why.md#a-request-in-prose-is-not-permission)
 
 ## Body structure, type, priority and relationships
 
@@ -104,10 +94,10 @@ All of it is defined once in **`/workflow:triage-issue`** — read it and follow
 the *conversation* that produces a good ticket. `triage-issue` owns what the ticket must look like
 when it lands, so a hand-filed ticket is indistinguishable from one the loop files.
 
-The most common omission: **a blocker goes in two places** — the Relationships panel *and* a
-`Blocked by: <url>` line in the body (see `triage-issue`'s Relationships section for why). The
-loop runs in the cloud, where no tool can see Relationships, so a blocker recorded only in the
-panel gets picked up as ready.
+The most common omission: **a blocker is a `Blocked by: <url>` line in the body** (see
+`triage-issue`'s Relationships section). The dispatcher converts the line into the native
+relationship and the `blocked` label. A blocker recorded only in the Relationships panel gets no
+label, and a session reading the body never sees it.
 
 ## Cross-repo work
 
@@ -122,5 +112,4 @@ producer-before-consumer constraint.
 - No acceptance criteria — the implementer cannot know when they are done.
 - No reproduction steps on a bug — describe the smallest path to the symptom.
 - Three features in one body — draft three tickets.
-- Scope touching a published contract — say so explicitly. It changes the autonomy gate in
-  `/implement-issue` from "draft a PR" to "file and stop".
+- Scope touching a published contract — say so explicitly, and use `/workflow:cross-repo-issue`.

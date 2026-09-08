@@ -69,3 +69,8 @@ with the outcome. (why: docs/why.md#budgets-not-adjectives)
 
 `survey-routine` runs on a schedule with no record and no lock. Steps 2, 3 and 5 do not apply.
 Everything else does.
+
+## Local mode
+
+A person invoked the skill by name, with an argument. No record, no lock, no journal. Steps 2, 3
+and 5 do not apply. You still push and end, and you report to the person instead.

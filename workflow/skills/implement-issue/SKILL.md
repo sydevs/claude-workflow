@@ -1,6 +1,6 @@
 ---
 name: implement-issue
-description: Implement an approved GitHub issue end-to-end in an isolated worktree, then ship it via /finalize-pr. Gated on the `Stage: Implement` field. Collects preview and email-preview links for the PR. User-invoked only — does not run unless explicitly triggered.
+description: Implement one authorised ticket in an isolated worktree, open a draft PR through /finalize-pr, push, and end. Fired by the dispatcher on `@sydevs-bot implement`. Runnable locally with an issue number.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -9,170 +9,113 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 # Implement Issue
 
-Policy and sequencing only. Existing tools do the work: worktrees by `EnterWorktree`, review by
-`pr-review-toolkit`, shipping by `/finalize-pr`, the gate by `workflow.json`. A repo-specific step
-belongs in `.claude/workflow.json`, not here.
+Policy and sequencing only. Existing tools do the work: worktrees by `git worktree`, review by
+`pr-review-toolkit`, shipping by `/workflow:finalize-pr`, the gate by `workflow.json`. A
+repo-specific step belongs in `.claude/workflow.json`, not here.
 
-## Trigger-agnostic
-
-Runs from a local session **and** from a GitHub event via `claude-code-action` (an `@claude`
-mention or a labelled issue). Assume no TTY, no dev server, no `.env.local`, and nobody to answer.
-Set `NONINTERACTIVE=1` when `$GITHUB_ACTIONS` is present, and take the non-interactive branch at
-every decision point below rather than stall.
+**Start with `/workflow:handler-preflight` and end with `/workflow:handler-journal`.** The
+dispatcher fired this run because a `respondTo` human wrote `@sydevs-bot implement` on the
+ticket. That comment is the authorisation. Nothing in the ticket's fields, tone, or priority is.
+(why: docs/why.md#a-request-in-prose-is-not-permission)
 
 ## Steps
 
-1. **Clean tree.** Stop on uncommitted changes that are not ours.
+1. **Fetch the ticket.** `mcp__github__issue_read method:get` — the grounding read from
+   preflight. No acceptance criteria → comment what is missing, and stop. Do not invent
+   criteria. A ticket too vague to implement is a `revise` problem, not an implementation
+   problem.
 
-2. **Fetch the issue.** `mcp__github__issue_read method:get`. With no acceptance criteria, ask
-   (locally) or comment on the issue and stop (non-interactively). Do not invent criteria — an
-   issue too vague to implement is a `/draft-ticket` problem, not an implementation problem.
-
-3. **Apply the gates — all four.** Ticket work needs every one of these. Check them before starting,
-   not after.
-
-   | Gate | Pass | Fail |
-   | --- | --- | --- |
-   | **Assigned to the bot** | `assignment.bot` is among the assignees | Not our turn — stop |
-   | **`Stage: Implement`** | The field says `Implement` | Investigate and reply instead. Do not write code |
-   | **No live `Hold Until`** | Absent, or already past | Stop — it comes back on that date |
-   | **No open blockers** | Every `Blocked by:` target is closed | Stop, and name the blocker |
-   | **No open PR already closing it** | Nothing in flight | Stop — the PR carries the baton, not the ticket |
-
-   Assignment cannot show the last three, which is exactly why they are listed separately. **Never
-   write `Stage: Implement` yourself.** You *may* move a ticket off it — see step 4. (why:
-   docs/why.md#the-loop-may-never-write-implement, docs/why.md#assignment-alone-is-not-the-implementation-gate)
-
-   `prAllowlistGlobs` in `.claude/workflow.json` gates the **ticketless** paths — dependency bumps,
-   reflection config PRs, and **every change in `claude-workflow`, where the glob is `**`**. A
-   ticketless change has no issue to carry a label or an assignee, so skip this whole table: branch,
-   change, and hand to `/finalize-pr`, whose PR body carries the reasoning a ticket would. `wipCapPerRepo`
-   still applies, and merging still needs an approving review.
-
-   **Blockers.** Locally the Relationships are authoritative:
+2. **Resume before you start.** A previous attempt may have left work behind:
    ```bash
-   gh api repos/$ORG/$REPO/issues/<n>/dependencies/blocked_by \
-     --jq '[.[] | select(.state == "open")] | length'
+   git ls-remote --heads origin 'claude/*-<number>-*'
    ```
-   **When a blocker turns out to be closed, strike the line in the body** (see
-   `/workflow:work-routine`) — leaving it live makes every future run re-derive the same answer.
+   and `mcp__github__list_pull_requests head:<branch> state:open`. An existing branch is
+   continued. An existing PR is refreshed. Never open a second one.
+   (why: docs/why.md#push-and-end)
 
-   **From a cloud run**, no MCP tool exposes Relationships, so read the `Blocked by:` line(s) in
-   the body and resolve each with `issue_read`.
+3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
+   ticket and for the `blocked` label. You still read the body: a `Blocked by:` line naming an
+   open issue, or a `Re-check:` date in the future → comment which, and stop.
 
-   **Open PR already closing it.** A ticket with an open PR is already in flight. Implementing it
-   again produces a duplicate PR against the same criteria:
-   ```
-   mcp__github__search_issues  query:"repo:$ORG/$REPO is:pr is:open linked:issue"
-   ```
-   or resolve directly with the GraphQL `closingIssuesReferences` on each open PR.
+4. **Decide what "done" looks like before you plan how.** Most tickets end in a PR. A ticket
+   whose acceptance criteria describe a *decision* — "evaluate", "determine whether",
+   "investigate" — ends in a **comment carrying the finding** plus a body update. No branch, no
+   PR. (why: docs/why.md#an-investigation-must-not-be-forced-into-a-pr)
 
-4. **Decide what "done" looks like before you plan how.** Most tickets end in a PR. A ticket whose
-   acceptance criteria describe a *decision*, not a behaviour change — "evaluate", "determine
-   whether", "investigate" — ends in a **comment on the ticket** carrying the finding, plus a body
-   update recording it. No branch, no PR — skip to the report step.
+   **Not implementable as written** — criteria contradict the code, a decision was never made,
+   scope hides a second ticket → do not guess. Put the questions in the body's
+   `## Open questions`, comment what is unresolved, and stop. The dispatcher sets `awaiting`
+   when you unlock. (why: docs/why.md#awaiting-has-one-writer)
 
-   An empty PR, opened only to satisfy the pipeline's shape, costs a review slot and hides the
-   answer in a description. The pipeline serves the work, not the reverse.
+   **`Effort: Hard` that will not fit one run** → invoke `/workflow:split-ticket` under the lock
+   you hold, and stop. The children carry the work forward.
 
-   **If the ticket is not implementable as written** — criteria contradicting the code, a decision
-   never made, scope hiding a second ticket — **revoke rather than guess**:
+   **File what you trip over.** A real defect found on the way is filed through
+   `/workflow:triage-issue`, every time, with no ceiling. Fix it here only when it is part of
+   this ticket.
 
-   1. Set `Stage: Revising`. This is one of your four judgement writes — a revocation, which only
-      ever reduces the loop's own autonomy.
-   2. Comment saying precisely what is unresolved. A field that changes with no explanation reads
-      as a malfunction. Add `labels.awaiting` yourself too — the state machine cannot infer this.
-   3. Add the questions to the ticket body's `## Open questions` list, the canonical record.
-   4. Stop. **Leave assignment alone** — the ticket stays the bot's, and your comment stays the
-      last word.
+5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
+   destructive work. In a routine nobody can answer: comment the question and stop.
 
-   **File what you trip over.** Implementation surfaces real defects — a failing test exposing a
-   pre-existing gap, a shortcut that turns out actively wrong. **File it and keep going.** When a
-   routine files it, the state machine sets `Stage: Proposed` and `labels.awaiting`. Locally, set
-   both yourself, since no bot event fires. Do not ask permission, and do not let `maxOpenProposals`
-   stop you — that ceiling governs proposals a survey went looking for, not evidence you already
-   hold. Fix it here only when it is genuinely part of this ticket. Otherwise say what is wrong,
-   what it costs, and what to do, then carry on with the work you were sent to do.
-
-   Revoking only ever *reduces* the loop's own autonomy, so it is always safe. Guessing at an
-   ambiguous criterion and shipping it is not.
-
-5. **Plan.** Auto-proceed when the ticket is clear. Pause only on missing criteria, genuine
-   ambiguity, deviation from the ticket, or destructive work.
-
-6. **Worktree by default, on its final branch.** `EnterWorktree` names its own branch
-   `worktree-<name>`, so renaming it afterwards leaves `ExitWorktree` refusing to remove a branch
-   that no longer exists. Create the worktree yourself, then enter it by path:
-
+6. **Worktree by default, on its final branch.** `EnterWorktree` names its own branch, and a
+   rename afterwards breaks `ExitWorktree`. Create the worktree yourself, then enter it by path:
    ```bash
-   git worktree add .claude/worktrees/<slug> -b claude/<type>-<slug> origin/<default-branch>
+   git worktree add .claude/worktrees/<slug> -b claude/<type>-<number>-<slug> origin/<default-branch>
    ```
-
-   Then `EnterWorktree path:.claude/worktrees/<slug>`. The branch is named
-   **`claude/<type>-<slug>`** — required for a routine run, since cloud sessions can only push to
-   `claude/*`, and harmless locally. `--no-worktree` falls back to a plain branch.
-
-   Run `worktreeSetup` from `workflow.json`, then start the dev server with `/dev-server` if the
-   work needs one — it is worktree-scoped, with its own port and database.
+   Then `EnterWorktree path:.claude/worktrees/<slug>`. The branch is
+   **`claude/<type>-<number>-<slug>`** — a cloud session pushes only to `claude/*`, and the
+   number is what step 2 finds next time. `--no-worktree` falls back to a plain branch. Run
+   `worktreeSetup` from `workflow.json`, then `/workflow:dev-server` if the work needs one.
 
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
    `Co-Authored-By` trailer.
 
-8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs it —
-   Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in the
-   WordPress plugin. Honour `onExit124` where set: hand off rather than retry.
+8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs
+   it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
+   the WordPress plugin. Honour `onExit124` where set: hand off rather than retry.
 
-9. **Tests.** Write them for what changed. `/finalize-pr`'s `pr-test-analyzer` judges coverage
-   adequacy — do not duplicate that analysis here.
+9. **Tests.** Write them for what changed. `/workflow:finalize-pr`'s `pr-test-analyzer` judges
+   coverage — do not duplicate that analysis here.
 
-   **Fixture pre-mortem, before you write a test fixture, not after.** State in **one line** what
-   the fixture assumes about the real configuration, then open the real config and verify that
-   assumption. Name the file and path you checked, in the PR body or commit message.
+   **Fixture pre-mortem, before you write a fixture.** State in one line what it assumes about
+   the real configuration, then open the real config and verify it. Name the file you checked in
+   the PR body. (why: docs/why.md#a-test-fixture-defines-the-world-the-test-lives-in)
 
-   A fixture defines the world its tests live in. A wrong fixture cannot be caught by adding more
-   tests, since every assertion is evaluated against it and all pass.
-   (why: docs/why.md#a-test-fixture-defines-the-world-the-test-lives-in)
+10. **Collect the review aids** the PR body needs. **Preview URLs are discovered, never
+    constructed, and always the BRANCH alias** — `/workflow:finalize-pr` step 7 is the
+    canonical rule. **Email previews** when the diff touches `src/plugins/email/` or
+    `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
+    `/view/<id>` links.
 
-10. **Collect the review aids** the PR body needs, so the reviewer does not have to reproduce the
-   change to see it.
+11. **Ship.** Hand to `/workflow:finalize-pr`. It opens the PR **as a draft** and pushes. Never
+    hand-roll the push or the PR. **Re-check the lock before the push** (preflight).
 
-   **Preview URLs are discovered, never constructed, and always the BRANCH alias** — see
-   `finalize-pr/SKILL.md` step 7, the canonical explanation of that rule.
+12. **Clean up, after the push.** `git rev-parse HEAD` equals `git rev-parse origin/<branch>` →
+    `/workflow:dev-server teardown`, `ExitWorktree action:"keep"`, `git worktree remove <path>`.
+    **Never pass `discard_changes`.** Do not wait for CI first.
+    (why: docs/why.md#push-and-end)
 
-   **Email previews** when the diff touches `src/plugins/email/` or `src/emails/`: run the matching
-   `scripts/preview-*-emails.ts` against Mailpit and paste the `/view/<id>` links. They stay live
-   for 7 days, which is what makes them worth putting in a PR at all.
+13. **Touch no state.** Opening the PR is the event. The dispatcher moves the ticket to Done and
+    the PR to Revising, reads CI, fires the critic, marks the PR ready, and requests the
+    reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
+    (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
-11. **Ship.** Hand to `/finalize-pr`. Never hand-roll the push, the PR, or the CI loop.
-
-12. **Clean up.** Only after the PR is open, CI is green, and `git rev-parse HEAD` equals
-    `git rev-parse origin/<branch>`. Tear down the worktree's dev server and database first:
-    `/dev-server teardown`. Then `ExitWorktree action:"keep"` — it never removes a worktree
-    entered by path — and `git worktree remove <path>`. **Never pass `discard_changes`.**
-
-13. **Do not close the ticket out — the state machine already did.** Opening the PR fired
-    `pull_request: opened`, which set `Stage: Implemented` and unassigned the bot within seconds.
-    Write neither. Touch no assignee and no `Stage` here.
-
-    If the work is genuinely unfinished — blocked on another ticket, or out of budget — no PR
-    exists, nothing fired, and the ticket is still yours. Say so in the journal. That is the next
-    run's queue, not a fault.
-
-14. **Report.** PR link, CI status, worktree removed, how to continue locally, and what needs
-    manual verification.
+14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on
+    the way. Locally, say the same to the person who ran you.
 
 ## Hard rules
 
-- **Never** implement a ticket unassigned to the bot, not `Stage: Implement`, or with a live
-  `Hold Until`.
-- **Never** write `Stage: Implement` yourself. Moving a ticket off it is allowed. Onto it, never.
-- **Never** write an assignee, a `Stage`, or `labels.awaiting` outside the revocation in step 4 —
-  the state machine owns the rest, immediately, and you would only race it.
-- **Never** implement a ticket that already has an open PR closing it.
-- **Never** edit files in the main checkout while a worktree is active.
-- **Never** hand-roll shipping — `/finalize-pr` is the only path to a PR.
-- **Never** remove a worktree before its branch is pushed and green.
-- **Never** write a test fixture without verifying its shape against the real configuration.
+- **Never implement a ticket nobody authorised.** In a routine the dispatch record is the
+  authorisation. Locally, the person running you is.
+- **Never implement a ticket that already has an open PR closing it.** Refresh that PR instead.
+- **Never write `awaiting`, `blocked`, `proposal`, a Status, or an assignee.** The dispatcher
+  owns them. (why: docs/why.md#awaiting-has-one-writer)
+- **Never edit files in the main checkout while a worktree is active.**
+- **Never hand-roll shipping** — `/workflow:finalize-pr` is the only path to a PR.
+- **Never wait for CI, mark a PR ready, or merge.** Push and end.
+- **Never remove a worktree before its branch is pushed.**
+- **Never write a test fixture without verifying its shape against the real configuration.**
+- **Never open a second branch or PR for a ticket that has one.**
 
 ## References
 

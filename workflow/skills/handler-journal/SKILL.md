@@ -62,3 +62,7 @@ event tells Actions the item is free. (why: docs/why.md#the-lock-label-is-the-le
 
 No polling. No timers. Do not try to end the session — a run cannot. Leave nothing that could
 wake you. Cron mode has no lock to release. (why: docs/why.md#sessions-linger)
+
+## Local mode
+
+No journal comment and no lock. Report the same three sections to the person who invoked you.

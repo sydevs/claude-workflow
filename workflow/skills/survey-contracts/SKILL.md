@@ -63,7 +63,7 @@ grep -oE 'pnpm [a-z:]+' CLAUDE.md | sort -u   # then compare against package.jso
 File one ticket per drifted contract, per `/workflow:triage-issue`. Do not list everything in one
 ticket — each is fixed by a different change at a different time.
 
-Type `Task`. The state machine sets `Stage` and `labels.awaiting`. Assign nobody. Set priority by
+Type `Task`. The dispatcher sets Status Proposed, `proposal`, and `awaiting`. Assign nobody. Set priority by
 who is hurt: `High` for a wrong embed guide (it breaks integrations we do not control), `Low` for
 a stale command.
 

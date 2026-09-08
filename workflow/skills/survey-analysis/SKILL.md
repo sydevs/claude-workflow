@@ -51,8 +51,8 @@ trust in the rest of your findings.
 
 ## Filing
 
-Follow `/workflow:triage-issue`. The state machine sets `Stage` and `labels.awaiting` on
-`issues: opened`. Assign nobody. Set type by the work — usually `Task` for a refactor, `Bug` for
+Follow `/workflow:triage-issue`. The dispatcher sets Status Proposed, `proposal`, and `awaiting`
+on `issues.opened`. Assign nobody. Set type by the work — usually `Task` for a refactor, `Bug` for
 a defect analysis found. Set priority by consequence, honestly: most findings are `Medium` or
 `Low`, and inflating one makes the field useless.
 

@@ -8,8 +8,8 @@ allowed-tools: Bash(*), Read, Grep, Glob
 # Survey Sentry
 
 Tuesday's survey. Turn production errors into tickets a human can approve — **not** into fixes.
-An error's fix is usually a judgement call about intended behaviour, and `Stage: Implement`
-exists to capture that call.
+An error's fix is usually a judgement call about intended behaviour, and the reviewer's
+`@sydevs-bot implement` exists to capture that call.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
 `loop-config.json`. The token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. On a
@@ -53,13 +53,13 @@ as fixed. Reopen it with new evidence — that beats a second ticket.
 
 ## Filing
 
-Follow `/workflow:triage-issue`. Type `Bug`. The state machine sets `Stage` and `labels.awaiting`
-on `issues: opened`. Assign nobody. Set priority by consequence: `Critical` for data loss or a
+Follow `/workflow:triage-issue`. Type `Bug`. The dispatcher sets Status Proposed, `proposal`, and
+`awaiting` on `issues.opened`. Assign nobody. Set priority by consequence: `Critical` for data loss or a
 security path, `High` for a broken user journey, `Medium` for a degraded one, `Low` for a logged
 error nobody experiences.
 
-The `## Notes` section must carry the link back, in this exact form, so rung 1 can find it on
-merge:
+The `## Notes` section must carry the link back, in this exact form, so the dispatcher can
+resolve it when the fixing PR merges:
 
 ```markdown
 Sentry: https://sy-developers.sentry.io/issues/<id>/  (id: <id>)
@@ -70,5 +70,5 @@ Respect `maxProposalsPerSurvey`. Over the ceiling, journal what you found and fi
 ## Hard rules
 
 - **Never** file a ticket you have not traced into our source.
-- **Never** resolve a Sentry issue here. Rung 1 resolves it when the fix merges.
+- **Never** resolve a Sentry issue here. The dispatcher resolves it when the fix merges.
 - **Never** file more than the ceiling, even for a bad week.

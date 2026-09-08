@@ -1,9 +1,8 @@
 ---
 name: adversarial-review
-description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Invoked by work-routine rung 5 in a fresh subagent. Runnable locally against a PR number.
+description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a draft bot PR goes green, or on `@sydevs-bot review`. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
-context: fork
 effort: max
 allowed-tools: Bash(*), Read, Grep, Glob
 ---
@@ -16,8 +15,12 @@ not a gap in your context. (why: docs/why.md#the-review-never-shares-the-impleme
 
 The review is **advisory**. Approval stays with `assignment.reviewer` — this pass exists so the
 obvious questions are already asked and answered by the time they read the PR. It runs **once,
-ever, per PR**: make this one count. (why: docs/why.md#one-review-per-pr-ever) Work-routine rung 5
-invokes it in a fresh subagent. It never runs otherwise, except locally against a PR number.
+ever, per PR**: make this one count. (why: docs/why.md#one-review-per-pr-ever) The one second
+look is `flags.onDemand` in the record — a human wrote `@sydevs-bot review`.
+
+**Start with `/workflow:handler-preflight` and end with `/workflow:handler-journal`.** On
+arrival, `pull_request_read method:get` (still open) and `method:get_reviews`: an own-login
+review already exists and `flags.onDemand` is false → post nothing, journal that, and end.
 
 GitHub access follows the loop's rule: `mcp__github__*` in a routine or subagent, `gh` only when
 invoked locally. Names and values below come from `loop-config.json` — read it first.
@@ -94,10 +97,15 @@ is about. A finding with no line belongs in the holistic assessment.
 ## Verdicts
 
 - **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
-  draft flag, not a field. The unresolved threads *are* the handoff — a later run's rung 2 finds
-  them on the PR and treats them as a change request.
+  draft flag, not a label. The unresolved threads *are* the handoff — when you unlock, the
+  dispatcher fires `address-review`, which adopts or rebuts each one.
 - **Clean** → submit the review with the body only, no inline comments, and **touch nothing
-  else** — no reassignment, no labels. The reviewer sees a checked PR, not a changed one.
+  else**. The dispatcher marks the PR ready and requests the reviewer once CI is green.
+
+**Why a COMMENT review, never "Changes requested".** GitHub rejects `APPROVE` and
+`REQUEST_CHANGES` on a PR you authored, and the bot authored it. The threads carry the effect: an
+own-rooted thread with no reply blocks mark-ready, and an unresolved one blocks the merge.
+(why: docs/why.md#reviews-are-comment-only)
 
 ## If the pending-review tools do not resolve
 
@@ -110,8 +118,10 @@ the header is the idempotency key on this path only. Journal that you used the f
 
 - **Never modify the branch.** A critic with a keyboard is an author — `git` here is read-only.
 - **Never `APPROVE` or `REQUEST_CHANGES`**, even where the API allows it.
-- **One review per PR, ever.** An existing own-login review on arrival means stop and report that
-  nothing was posted.
-- **Starting review threads is this skill's exclusive channel.** Reply threads belong to rung 2.
+- **One review per PR, ever**, unless `flags.onDemand`. An existing own-login review on arrival
+  means stop and report that nothing was posted.
+- **Starting review threads is this skill's exclusive channel.** Reply threads belong to
+  `address-review`.
+- **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.
 - **Never duplicate the author-side pass.** Style, formatting, and naming taste are not yours.
