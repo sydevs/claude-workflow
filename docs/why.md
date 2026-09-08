@@ -943,3 +943,98 @@ carried through the rest of the run's context, and used for nothing.
 
 Four consecutive runs that day (12:05 to 15:04) stopped at `wipCapPerRepo` with no work to start.
 Each paid for all five.
+
+## Actions observes, classifies, locks, and fires
+
+The polling loop paid the same census on every fire whether anything had happened or not. On
+2026-09-07 it fired eleven times. Four consecutive runs, 12:05 to 15:04, started nothing at rung
+3 because three PRs still awaited one Approve click, and each paid for the census and a journal
+rewrite to learn that. A run that shipped a PR then sat twelve minutes watching CI, and its
+47-minute length left thirteen minutes before the next fire.
+
+Every rung waited on a GitHub event: a review, a comment, an approval, a check completing. The
+clock was a proxy for those events. GitHub Actions already ran on every one of them — the state
+machine — so the dispatcher is that workflow grown up. It classifies the event with no tokens,
+applies the lock, and fires one routine per handler with a pointer. Routine GitHub triggers could
+not do this alone: they see `pull_request`, `issues` and `release` events only, never a comment,
+a review or a check, and they carry no author filter.
+
+## The lock label is the lease
+
+Two sessions on one item write over each other, and neither can tell. GitHub offers no
+compare-and-swap. What it offers is a label the dispatcher applies before it fires and the
+session removes as its last write. While the label is on, the dispatcher fires nothing else at
+that item and records any new event as a recheck. When the label comes off, that event is the
+handoff: the dispatcher re-derives from live state and dispatches whatever is pending.
+
+One label, `bot:working`, serves issues and PRs alike. A field cannot: a PR has none. The handler
+name, the attempt and the session link live in a status comment the dispatcher edits. The session
+reads the label before its first write and before every push. Gone means stop. The sweeper
+removes a label whose session passed its deadline, so a dead session holds nothing forever.
+
+## Push and end
+
+`finalize-pr` step 8 polled CI up to twenty times. On 2026-09-07 the 17:03 run pushed at 17:36
+and CI went green at 17:45. In between it started five overlapping waiters, called
+`get_check_runs` eight times, and had one foreground `sleep` refused by the hook. Twelve minutes
+of an Opus session asking the same question.
+
+CI completion is an event. Actions receives it, settles the head SHA with `merge-gate.mjs`, and
+dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge gate on a green
+approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
+session ever holds a lock while doing nothing.
+
+## The bot-actor exception
+
+The dispatcher ignores the bot's own comments and reviews, or every reply it posts would fire a
+run that finds nothing to do. One bot event is load-bearing: the adversarial review. It is a
+`COMMENT` review by the bot, on the bot's own PR, whose body starts with `review.bodyHeader`.
+Its threads are the critic's findings, and `address-review` adopts or rebuts them. The dispatcher
+keys on all three — the header, the author, the PR's author — so an on-demand review of a human's
+PR never dispatches the bot to answer itself.
+
+The other bot events that matter are pushes. They cause CI, and CI is wanted.
+
+## The payload is a pointer
+
+The `/fire` endpoint wraps whatever the caller sent in a block the session is told not to obey.
+The caller is our own workflow, but the bearer token that authorises it could leak, and a leaked
+token could fire any text. So the dispatch record carries pointers only: repo, number, handler,
+lock, deadline, journal. `payload.mjs` validates the shape and refuses anything else. The
+session re-reads every fact from GitHub. An instruction inside the record is data.
+
+## Thirteen prompts, one template
+
+The two polling routines carried a prompt that restated nothing, because restated rules went
+stale twice. Thirteen routines are six times the drift surface. So there is one template with one
+substitution, the skill name, kept verbatim in `docs/routine-setup.md` so a change to it is a
+diff. It restates two rules — the lock is the lease, push and end — because they must hold even
+when the `claude-workflow` clone fails and no skill loads at all.
+
+## awaiting has one writer
+
+The `awaiting` label drifted because two writers set it: the state machine on events, and the
+loop on its own dead ends. A nightly sweep recomputed the whole backlog to catch the
+disagreements. Now the dispatcher is the only writer. It sets the label when the bot's turn ends
+and clears it when a human acts. A session never touches it. The sweeper still re-derives, and
+journals any correction it makes, because a correction is evidence of a missed event.
+
+`stuck` is the other label with one writer. It means the machinery owes a retry — a usage limit,
+a paused routine, a session that died — and no human is needed yet. The sweeper retries up to
+`dispatch.maxAttempts`, then hands over to `awaiting`. The two never coexist.
+
+## The critic skips small PRs
+
+An adversarial review costs an Opus session, a CI cycle, and a round of the reviewer's attention
+on the rebuttals. A two-file, twenty-line PR rarely has the shape problem the critic exists to
+find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip on it.
+`@sydevs-bot review` forces a review at any size.
+
+## Approved is the implement queue
+
+`@sydevs-bot implement` on a ticket is the authorisation. When the repo is at `wipCapPerRepo`,
+the polling loop's answer was to consume the verb and ask for it again later. Now the ticket
+moves to Status `Approved` and waits. When a lock releases or a PR closes in that repo, the
+dispatcher drains the queue oldest verb first. A drag to `Approved` on the board is not a verb.
+The dispatcher requires the comment, so the board can display the queue without becoming a way
+to authorise code.
