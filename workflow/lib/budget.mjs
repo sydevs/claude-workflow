@@ -38,6 +38,7 @@ import { loadLoopConfig } from './config.mjs'
 export const DEFAULT_BUDGETS = {
   comment: 1200,
   reviewReply: 600,
+  journalEntry: 1500,
   journalComment: 4000,
 }
 
@@ -79,8 +80,9 @@ export function detailsShare(text = '') {
  */
 export const FIT_RESERVE = 200
 
-const DID_HEADING = /^##\s+(?:\u{1F4C4}\s*)?Did\s*$/u
-const SECTION_HEADING = /^##\s/
+// `##` in the day's journal body, `###` in a run's journal comment. Both are the Did section.
+const DID_HEADING = /^#{2,3}\s+(?:\u{1F4C4}\s*)?Did\s*$/u
+const SECTION_HEADING = /^#{2,3}\s/
 const DROPPABLE = /^-\s/
 
 /**
@@ -126,6 +128,23 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE
     }
     lines.splice(head + 1 + victim, 1)
     dropped += 1
+  }
+
+  // A Did section that lost its last line keeps its heading only while the
+  // loop is still cutting. Once the text fits, drop an empty heading too —
+  // the skill omits an empty section, and an orphaned heading reads as one.
+  if (dropped > 0) {
+    const head = lines.findIndex((l) => DID_HEADING.test(l))
+    if (head !== -1) {
+      let end = lines.length
+      for (let i = head + 1; i < lines.length; i += 1) {
+        if (SECTION_HEADING.test(lines[i])) { end = i; break }
+      }
+      if (!lines.slice(head + 1, end).some((l) => DROPPABLE.test(l))) {
+        const cutTo = lines[head + 1] === '' ? head + 2 : head + 1
+        lines = [...lines.slice(0, head), ...lines.slice(cutTo)]
+      }
+    }
   }
 
   const out = lines.join('\n')
