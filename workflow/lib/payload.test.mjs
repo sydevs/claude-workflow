@@ -117,3 +117,12 @@ test('extractJson finds the record inside a payload block', () => {
   assert.equal(extractJson(wrapped).number, 712)
   assert.throws(() => extractJson('no json here'), /no JSON object/)
 })
+
+test('journal.issue 0 is legal — the handler finds the day itself', () => {
+  const out = validate(record({ journal: { repo: 'sydevs/claude-workflow', issue: 0 } }), config, { now: NOW })
+  assert.ok(out.ok, JSON.stringify(out.errors))
+  assert.equal(out.record.journalKnown, false)
+  assert.equal(validate(record(), config, { now: NOW }).record.journalKnown, true)
+  const neg = validate(record({ journal: { repo: 'sydevs/claude-workflow', issue: -1 } }), config, { now: NOW })
+  assert.ok(!neg.ok)
+})

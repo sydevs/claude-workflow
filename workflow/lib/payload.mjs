@@ -86,7 +86,9 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
 
   const journalRepo = `${org}/${config?.journalRepo}`
   if (r.journal?.repo !== journalRepo) errors.push(`journal.repo must be ${journalRepo}`)
-  if (!Number.isInteger(r.journal?.issue) || r.journal.issue < 1) errors.push('journal.issue must be a positive integer')
+  // 0 means the dispatcher could not name the day's issue. The handler finds
+  // or creates it. (why: docs/why.md#the-journal-pointer-is-an-optimisation)
+  if (!Number.isInteger(r.journal?.issue) || r.journal.issue < 0) errors.push('journal.issue must be 0 or a positive integer')
 
   if (attachedDir && name) {
     const dir = join(resolve(attachedDir), name)
@@ -109,6 +111,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
       model: typeof h.model === 'string' ? h.model : null,
       deadlineMs: Date.parse(r.deadline),
       resume: r.attempt > 1,
+      journalKnown: r.journal.issue > 0,
     },
   }
 }

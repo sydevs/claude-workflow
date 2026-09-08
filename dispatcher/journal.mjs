@@ -23,32 +23,49 @@ export function titleFor(day, counts) {
   return `${day} — ${counts.dispatches} dispatch${counts.dispatches === 1 ? '' : 'es'} · ${counts.failed} failed · ${counts.anomalies} anomal${counts.anomalies === 1 ? 'y' : 'ies'}`
 }
 
-/** Find or create today's journal issue. Returns `{ number, created }`. */
+/**
+ * Find or create today's journal issue. Returns `{ number, created, failed }`.
+ * **Never throws.** `number: 0` means the day has no issue and the dispatcher
+ * could not make one — the handler finds or creates it, as in cron mode.
+ * (why: docs/why.md#the-journal-pointer-is-an-optimisation)
+ */
 export async function ensureJournalDay(gh, config, now = new Date()) {
   const owner = config.org
   const repo = config.journalRepo
   const tz = config.journal.timezone
   const today = localDate(now, tz)
-  const { data } = await gh.rest.issues.listForRepo({ owner, repo, labels: config.labels.journal, state: 'open', sort: 'created', direction: 'desc', per_page: 20 })
+  let data = []
+  try {
+    ({ data } = await gh.rest.issues.listForRepo({ owner, repo, labels: config.labels.journal, state: 'open', sort: 'created', direction: 'desc', per_page: 20 }))
+  } catch (e) {
+    return { number: 0, created: false, failed: `cannot list ${config.labels.journal} issues: ${e.message}` }
+  }
   for (const i of data) {
     if (i.pull_request) continue
     const marked = String(i.body || '').includes(`${DAY_MARKER}${today} -->`)
     if (marked || localDate(new Date(i.created_at), tz) === today) return { number: i.number, created: false }
   }
-  const { data: created } = await gh.rest.issues.create({
+  let created
+  try {
+    ({ data: created } = await gh.rest.issues.create({
     owner,
     repo,
     title: titleFor(weekday(now, tz), { dispatches: 0, failed: 0, anomalies: 0 }),
     body: `${DAY_MARKER}${today} -->\n**Dispatches today.** [Board](${config.projects.url})\n\nEach session posts one comment when it ends. The dispatcher posts only anomalies.`,
     labels: [config.labels.journal],
-  })
+    }))
+  } catch (e) {
+    return { number: 0, created: false, failed: `cannot create today's journal issue: ${e.message}` }
+  }
   return { number: created.number, created: true }
 }
 
 /** One anomaly line from the dispatcher. `id` is the dispatch id when there is one. */
 export async function postAnomaly(gh, config, journalNumber, { kind, text, id = null }) {
+  if (!journalNumber) return false
   const body = `${ANOMALY_MARKER}${JSON.stringify({ kind, id })} -->\n⚠️ **${kind}** · ${text}`
   await gh.rest.issues.createComment({ owner: config.org, repo: config.journalRepo, issue_number: journalNumber, body })
+  return true
 }
 
 /** Count the day's dispatch-done and anomaly markers. Pure. */
@@ -88,6 +105,7 @@ function withTally(body, block) {
 
 /** Recount the day from its comment markers; patch the title and the body's tally block. */
 export async function refreshTally(gh, config, journalNumber, now = new Date()) {
+  if (!journalNumber) return null
   const owner = config.org
   const repo = config.journalRepo
   const bodies = []
