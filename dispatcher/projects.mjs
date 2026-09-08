@@ -2,7 +2,19 @@
  * The org Projects v2 board, written by the dispatcher only. Field and
  * option ids are resolved by name once per run; loop-config.json names the
  * vocabulary, never an id. (why: docs/why.md#the-board-is-a-lens)
+ *
+ * Every function here throws `BoardUnreachable` when the token cannot see
+ * the board. The caller logs that and carries on: the board is a lens over
+ * state the labels already carry, and a lens must never stop the machine.
+ * (why: docs/why.md#the-board-is-a-lens-so-it-may-fail-alone)
  */
+
+export class BoardUnreachable extends Error {
+  constructor(detail) {
+    super(`the org project is unreachable: ${detail}. Check that the dispatch token has organization Projects read and write.`)
+    this.name = 'BoardUnreachable'
+  }
+}
 
 let cache = null
 
@@ -10,8 +22,14 @@ export async function projectIds(gh, config) {
   if (cache) return cache
   const q = `query($org:String!,$n:Int!){ organization(login:$org){ projectV2(number:$n){ id
     status: field(name:"Status"){ ... on ProjectV2SingleSelectField { id options { id name } } } } } }`
-  const d = await gh.graphql(q, { org: config.org, n: config.projects.number })
-  const p = d.organization.projectV2
+  let d
+  try {
+    d = await gh.graphql(q, { org: config.org, n: config.projects.number })
+  } catch (e) {
+    throw new BoardUnreachable(e.message)
+  }
+  const p = d?.organization?.projectV2
+  if (!p) throw new BoardUnreachable(`projectV2(number: ${config.projects.number}) came back null for ${config.org}`)
   const options = {}
   for (const o of p.status?.options || []) options[o.name] = o.id
   cache = { projectId: p.id, statusFieldId: p.status?.id || null, options }
@@ -23,7 +41,12 @@ export async function itemOf(gh, config, contentNodeId) {
   const q = `query($id:ID!,$n:Int!){ node(id:$id){
     ... on Issue { projectItems(first:10){ nodes { id project { number } fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }
     ... on PullRequest { projectItems(first:10){ nodes { id project { number } fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } }`
-  const d = await gh.graphql(q, { id: contentNodeId, n: config.projects.number })
+  let d
+  try {
+    d = await gh.graphql(q, { id: contentNodeId, n: config.projects.number })
+  } catch (e) {
+    throw new BoardUnreachable(e.message)
+  }
   const item = (d.node?.projectItems?.nodes || []).find((i) => i.project?.number === config.projects.number)
   return item ? { itemId: item.id, status: item.fieldValueByName?.name || null } : { itemId: null, status: null }
 }

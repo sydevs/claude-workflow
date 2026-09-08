@@ -50,16 +50,28 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   let recordDirty = false
   const rec = snapshot.record
 
+  // The board is a lens. A token that cannot reach it must not stop the
+  // dispatch, which is the part that matters — the labels carry the state.
+  // The failure is journalled once per run, not swallowed.
+  let boardFailed = null
+  const board = async (fn) => {
+    try { return await fn() } catch (e) {
+      if (e?.name !== 'BoardUnreachable') throw e
+      log(`board write skipped — ${e.message}`)
+      boardFailed = boardFailed || e.message
+    }
+  }
+
   for (const a of plan) {
     switch (a.type) {
       case 'note': log(a.text); break
       case 'ensure':
         log('ensure on project')
-        if (!dryRun) await ensureItem(gh, config, nodeId)
+        if (!dryRun) await board(() => ensureItem(gh, config, nodeId))
         break
       case 'status': {
         log(`status → ${a.value}`)
-        if (!dryRun) { const w = await setStatus(gh, config, nodeId, a.value); if (w) log(`status written: ${w}`) }
+        if (!dryRun) await board(async () => { const w = await setStatus(gh, config, nodeId, a.value); if (w) log(`status written: ${w}`) })
         break
       }
       case 'label': await labels(gh, t, snapshot, a.add, a.remove, dryRun, log); break
@@ -171,6 +183,12 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     }
   }
 
+  if (boardFailed && !dryRun) {
+    try {
+      const j = await ensureJournalDay(gh, config, now)
+      await postAnomaly(gh, config, j.number, { kind: 'board-unreachable', text: `${t.repo.full}#${t.number}: ${boardFailed}` })
+    } catch { /* the journal is not the board's keeper */ }
+  }
   if (recordDirty && !dryRun) snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   return emitted
 }
