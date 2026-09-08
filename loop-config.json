@@ -39,62 +39,48 @@
     ]
   },
   "handlers": {
-    "$comment": "One routine per handler. skill is the SKILL.md the routine's prompt names; routine is its trig_ id (implement has one per repo). Labels are shared: the lock is labels.lock for every handler. Rules in handler-preflight/SKILL.md.",
+    "$comment": "One skill per handler; the dispatch record's handler field selects it. model is documentary — every handler runs on the repo's routine (dispatch.routines). Rules in handler-preflight/SKILL.md.",
     "implement": {
       "model": "opus",
-      "skill": "implement-issue",
-      "routines": {
-        "SahajCloud": "trig_01CiCX4hDrAiP32S2FAM2phy",
-        "SahajAtlasWeb": "trig_01P1f8mXn767iQ6Ve6nZ5jcW",
-        "WeMeditateWeb": "trig_01Gdqck1nQggS1Rxmrz9GuW9",
-        "SahajAtlasWordpress": "trig_0144RjvvF3qRkqfugMyR6oY2",
-        "claude-workflow": "trig_013eDcX1APf1f5NfUzodGE75"
-      }
+      "skill": "implement-issue"
     },
     "address-review": {
       "model": "opus",
-      "skill": "address-review",
-      "routine": "trig_01EBDyjfzd85e3nVQzueuF5X"
+      "skill": "address-review"
     },
     "fix-ci": {
       "model": "opus",
-      "skill": "fix-ci",
-      "routine": "trig_01Ji9hDoczNGHstqqP4Jbt7w"
+      "skill": "fix-ci"
     },
     "resolve-conflicts": {
       "model": "opus",
-      "skill": "resolve-conflicts",
-      "routine": "trig_01APjE2Q14VTAZys3RQ6qt1o"
+      "skill": "resolve-conflicts"
     },
     "adversarial-review": {
       "model": "opus",
-      "skill": "adversarial-review",
-      "routine": "trig_01Sm8ebShHyPTgN5WddTfhfY"
+      "skill": "adversarial-review"
     },
     "revise": {
       "model": "opus",
-      "skill": "revise-ticket",
-      "routine": "trig_0181gQjC8SFP12KBrKQ29wju"
+      "skill": "revise-ticket"
     },
     "split": {
       "model": "opus",
-      "skill": "split-ticket",
-      "routine": "trig_0153XSAc4e8ruNNYeexDMxiw"
+      "skill": "split-ticket"
     },
     "answer": {
-      "model": "sonnet",
-      "skill": "answer-ticket",
-      "routine": "trig_01NopMyYNGRR3utHWM84AWfR"
+      "model": "opus",
+      "skill": "answer-ticket"
     },
     "survey-nightly": {
       "model": "opus",
       "skill": "survey-routine",
-      "routine": "trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6",
-      "cron": "0 8 * * *"
+      "cron": "0 8 * * *",
+      "routine": "trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6"
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
@@ -107,9 +93,13 @@
       "split",
       "answer"
     ],
-    "perRepoHandlers": [
-      "implement"
-    ],
+    "routines": {
+      "SahajCloud": "trig_01CiCX4hDrAiP32S2FAM2phy",
+      "SahajAtlasWeb": "trig_01P1f8mXn767iQ6Ve6nZ5jcW",
+      "WeMeditateWeb": "trig_01Gdqck1nQggS1Rxmrz9GuW9",
+      "SahajAtlasWordpress": "trig_0144RjvvF3qRkqfugMyR6oY2",
+      "claude-workflow": "trig_013eDcX1APf1f5NfUzodGE75"
+    },
     "enabledHandlers": null,
     "verbs": {
       "issue": [
