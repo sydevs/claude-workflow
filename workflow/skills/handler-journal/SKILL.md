@@ -14,6 +14,10 @@ stop.** The unlock is the event Actions acts on, so the journal comes first.
 The record names it: `journal.repo` and `journal.issue`. Never search for it. **Never call
 `get_comments` on a journal issue.** (why: docs/why.md#ground-from-the-body-never-the-thread)
 
+**`journal.issue` of 0 means the dispatcher could not name it.** Find it yourself, as in cron
+mode, and say so under `🧭 Friction`.
+(why: docs/why.md#the-journal-pointer-is-an-optimisation)
+
 Cron mode (the survey) has no record. Search open `labels.journal` issues in `journalRepo`, take
 the one created today in `journal.timezone`, and create it with a one-line body if absent.
 

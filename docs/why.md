@@ -1086,3 +1086,20 @@ status comment already carry, so **a board write that fails must never stop the 
 Projects call now degrades: the plan continues, the run fires, and one `board-unreachable`
 anomaly goes in the day's journal. A board that is merely stale is a cosmetic problem someone
 notices. A dispatch that never fired is work that silently does not happen.
+
+## The journal pointer is an optimisation
+
+The second live dispatch got past the board and died on `POST /repos/.../issues` — 403,
+`Resource not accessible by personal access token`. The dispatcher was creating the day's
+journal issue so it could name it in the record, and the fire happened after that. One missing
+token permission had again stopped the work.
+
+The record's `journal.issue` saves the handler one search. It is not what makes a run possible.
+So `ensureJournalDay` never throws: it returns `0` when it cannot list or create, the record
+carries the `0`, `payload.mjs` accepts it, and `handler-journal` finds or creates today's issue
+itself — the same path the nightly survey already takes, with no record at all.
+
+The pattern is the same as the board's, and worth stating once for anything the dispatcher
+writes: **the fire is the work, and everything else is bookkeeping around it.** Bookkeeping that
+fails should be visible and should not be fatal. A run that never started leaves nothing to
+notice.

@@ -205,6 +205,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
     return
   }
   const journal = dryRun ? { number: 0 } : await ensureJournalDay(gh, config, now)
+  // The journal pointer is an optimisation. Without it the handler finds or
+  // creates today's issue itself, so a journal failure never stops a fire.
+  if (journal.failed) log(`journal pointer unavailable — ${journal.failed}`)
   const record = buildRecord({ handler, target: t, snapshot, flags, attempt, journalNumber: journal.number, config, now })
   log(`fire ${handler} attempt ${attempt} → routine ${routineId}${dryRun ? ' (dry run — not fired)' : ''}`)
   if (dryRun) { log(`record: ${JSON.stringify(record)}`); return }
