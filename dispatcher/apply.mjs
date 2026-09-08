@@ -177,11 +177,11 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
 }
 
 async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec }) {
-  const routineId = routineIdFor(handler, t.repo.name, config, env)
-  const token = tokenFor(handler, t.repo.name, config, env)
+  const routineId = routineIdFor(t.repo.name, config, env)
+  const token = tokenFor(t.repo.name, config, env)
   const L = config.labels
   if (!routineId || !token) {
-    log(`no routine id or token for ${handler} (${t.repo.name}) — cannot fire`)
+    log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)
     rec.pending = { handler, flags, attempt, reason: 'no routine configured', retryAfter: null }
     await labels(gh, t, snapshot, [L.stuck], [], dryRun, log)
     if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'unconfigured', text: `${t.repo.full}#${t.number} ${handler}: no routine id or token` }) }

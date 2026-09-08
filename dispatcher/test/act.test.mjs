@@ -5,9 +5,7 @@ import { readFileSync } from 'node:fs'
 import { act, resolveTargets } from '../index.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
-config.handlers.answer.routine = 'trig_answer'
-config.handlers.implement.routines.SahajCloud = 'trig_impl'
-config.handlers['adversarial-review'].routine = 'trig_adv'
+config.dispatch.routines.SahajCloud = 'trig_sc'
 
 function fakeGithub(world) {
   const calls = []
@@ -86,7 +84,7 @@ test('dry-run implement: the plan is logged and nothing is written or fired', as
   const github = fakeGithub(issueWorld())
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot implement it', association: 'MEMBER', commentId: 77 } }
   let fired = 0
-  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_IMPLEMENT_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { fired += 1 } })
+  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { fired += 1 } })
   assert.equal(fired, 0)
   assert.ok(!github.calls.some((c) => ['addLabels', 'removeLabel', 'createComment', 'updateComment'].includes(c.name)), 'no writes in dry run')
 })
@@ -96,10 +94,10 @@ test('live implement: labels, status, lock, fire, status comment', async () => {
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot implement it', association: 'MEMBER', commentId: 77 } }
   const fetches = []
   const fetchImpl = async (url, init) => { fetches.push({ url, init }); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_1', claude_code_session_url: 'https://claude.ai/code/session_1' }), headers: new Map() } }
-  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_IMPLEMENT_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
+  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
   // the blocker in the body is not open (fake returns none), so implement proceeds
   assert.equal(fetches.length, 1)
-  assert.match(fetches[0].url, /routines\/trig_impl\/fire$/)
+  assert.match(fetches[0].url, /routines\/trig_sc\/fire$/)
   const body = JSON.parse(JSON.parse(fetches[0].init.body).text)
   assert.equal(body.handler, 'implement')
   assert.equal(body.number, 9)
@@ -116,7 +114,7 @@ test('a 429 on fire releases the lock, marks stuck, and records the retry window
   const github = fakeGithub(issueWorld())
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot answer?', association: 'MEMBER', commentId: 77 } }
   const fetchImpl = async () => ({ status: 429, headers: new Map([['retry-after', '3600']]), text: async () => 'limit' })
-  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_ANSWER: 'tok' }, dryRun: false, now, fetchImpl })
+  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
   const final = github.rest.issues.get && (await github.rest.issues.get({ issue_number: 9 })).data.labels.map((l) => l.name)
   assert.ok(final.includes('stuck'))
   assert.ok(!final.includes('bot:working'))
@@ -132,9 +130,9 @@ test('green draft bot PR above the threshold fires the critic; under it marks re
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'ci', event: 'workflow_run.completed', facts: { sha: 'abc' } }
   const fetches = []
   const fetchImpl = async (url) => { fetches.push(url); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_2', claude_code_session_url: 'u' }), headers: new Map() } }
-  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_ADVERSARIAL_REVIEW: 'tok' }, dryRun: false, now, fetchImpl })
+  await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
   assert.equal(fetches.length, 1, 'the dispatcher\'s own in_progress check run was ignored (L11)')
-  assert.match(fetches[0], /trig_adv/)
+  assert.match(fetches[0], /trig_sc/)
 
   const small = fakeGithub({ ...world, prs: { 5: pr({ changed_files: 1, additions: 3, deletions: 1 }) }, issues: { 5: { ...world.issues[5], labels: [] } } })
   await act({ github: small, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })

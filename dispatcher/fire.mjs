@@ -1,30 +1,28 @@
 /**
  * The `/fire` client. Builds the dispatch record (a pointer, never
- * instructions) and starts one routine session.
+ * instructions) and starts one session on the repo's routine; the
+ * record's `handler` field selects the skill inside that session.
  * (why: docs/why.md#the-payload-is-a-pointer)
  */
 
 const ENDPOINT = 'https://api.anthropic.com/v1/claude_code/routines'
 const BETA = 'experimental-cc-routine-2026-04-01'
 
-export function secretKey(handler, repoName, config) {
-  const perRepo = (config.dispatch.perRepoHandlers || []).includes(handler)
-  const up = (s) => String(s).toUpperCase().replace(/-/g, '_')
-  return up(handler) + (perRepo ? '_' + up(repoName) : '')
+/** `SahajCloud` → `SAHAJCLOUD`, `claude-workflow` → `CLAUDE_WORKFLOW`. One routine per repo. */
+export function secretKey(repoName) {
+  return String(repoName).toUpperCase().replace(/-/g, '_')
 }
 
-/** Routine id from the environment (`ROUTINE_ID_*`), else from loop-config.json. */
-export function routineIdFor(handler, repoName, config, env = process.env) {
-  const key = secretKey(handler, repoName, config)
-  const fromEnv = env[`${config.dispatch.routineIdVarPrefix || 'ROUTINE_ID_'}${key}`]
+/** Routine id from the environment (`ROUTINE_ID_<REPO>`), else `dispatch.routines[repo]`. */
+export function routineIdFor(repoName, config, env = process.env) {
+  const fromEnv = env[`${config.dispatch.routineIdVarPrefix || 'ROUTINE_ID_'}${secretKey(repoName)}`]
   if (fromEnv) return fromEnv
-  const h = config.handlers?.[handler]
-  if (!h) return null
-  return h.routines ? h.routines[repoName] || null : h.routine || null
+  return config.dispatch.routines?.[repoName] || null
 }
 
-export function tokenFor(handler, repoName, config, env = process.env) {
-  return env[`${config.dispatch.routineTokenSecretPrefix || 'ROUTINE_TOKEN_'}${secretKey(handler, repoName, config)}`] || null
+/** Bearer token from the environment (`ROUTINE_TOKEN_<REPO>`). */
+export function tokenFor(repoName, config, env = process.env) {
+  return env[`${config.dispatch.routineTokenSecretPrefix || 'ROUTINE_TOKEN_'}${secretKey(repoName)}`] || null
 }
 
 export function buildRecord({ handler, target, snapshot, flags, attempt, journalNumber, config, now }) {
