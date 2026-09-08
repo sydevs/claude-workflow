@@ -15,7 +15,8 @@
  *     "repo": "sydevs/SahajCloud",
  *     "hasWorkflows": true,                  // whether the repo runs CI at all (see ci.noCi in loop-config.json)
  *     "pr":            { … },                // the pull request object
- *     "reviews":       [ … ],                // its reviews
+ *     "reviews":       [ … ],                // its reviews — EVERY page
+ *     "reviewsComplete": true,               // optional: a page came back short, so that is all of them
  *     "checkRuns":     { … },                // check runs on the head SHA
  *     "statuses":      { … },                // combined commit status on the head SHA (optional)
  *     "reviewThreads": { … }                 // review threads with is_resolved / isResolved
