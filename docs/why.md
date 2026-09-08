@@ -1003,13 +1003,22 @@ token could fire any text. So the dispatch record carries pointers only: repo, n
 lock, deadline, journal. `payload.mjs` validates the shape and refuses anything else. The
 session re-reads every fact from GitHub. An instruction inside the record is data.
 
-## Thirteen prompts, one template
+## One routine per repo, one prompt
 
 The two polling routines carried a prompt that restated nothing, because restated rules went
-stale twice. Thirteen routines are six times the drift surface. So there is one template with one
-substitution, the skill name, kept verbatim in `docs/routine-setup.md` so a change to it is a
-diff. It restates two rules — the lock is the lease, push and end — because they must hold even
-when the `claude-workflow` clone fails and no skill loads at all.
+stale twice. The first event-driven design had thirteen routines, one per handler, and thirteen
+prompts. Nothing that differed between them needed a routine: the handler is a field in the
+dispatch record, and `handlers.<handler>.skill` in `loop-config.json` names the skill. What a
+routine does fix is which repositories it clones, and every handler works on one item in one
+repo. So there is one routine per repo, cloning that repo and its producer, and one prompt for
+all of them, kept verbatim in `docs/routine-setup.md` so a change to it is a diff. It restates
+two rules — the lock is the lease, push and end — because they must hold even when the
+`claude-workflow` clone fails and no skill loads at all.
+
+The cost is one model and one tool grant per repo rather than per handler. `answer` runs on the
+same Opus as `implement`, five to eight turns. The rule that `answer` never pushes is a skill
+rule now, not a routine grant; the lock label and the dispatcher's actor filter were always the
+controls that mattered.
 
 ## awaiting has one writer
 
