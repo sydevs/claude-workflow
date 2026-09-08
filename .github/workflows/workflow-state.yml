@@ -1,26 +1,55 @@
-# This workflow maintains Stage, assignees, and the `awaiting` label from
-# GitHub events. It adds new items to the org workflow board. All rules
-# live in the reusable workflow below, so the five repos cannot drift apart:
-# https://github.com/sydevs/claude-workflow/blob/main/.github/workflows/state-machine.yml
+# Every GitHub event in this repo reaches one of two reusable workflows in
+# sydevs/claude-workflow, selected by the org variable BOT_DISPATCH:
+#
+#   off        the legacy state machine (Stage, assignees, awaiting)
+#   dry        the dispatcher, logging what it would do, writing nothing
+#   on         the dispatcher — classifies, locks, fires cloud routines
+#   migrating  neither, while the backfill runs
+#
+# All rules live in claude-workflow, so the five repos cannot drift apart.
+# This copy is the journal repo's: it also carries the daily journal crons.
+# https://github.com/sydevs/claude-workflow/blob/main/.github/workflows/dispatcher.yml
 name: Workflow state
 
 on:
   issues:
-    types: [opened, reopened, transferred, closed, assigned, field_added, field_removed]
+    types: [opened, edited, reopened, transferred, closed, assigned, unlabeled, field_added, field_removed]
   issue_comment:
     types: [created]
-  # This uses pull_request_target, not pull_request. The org secret must be
-  # available. Nothing here checks out the PR code. That combination keeps
-  # the secret safe.
+  # pull_request_target, not pull_request: the org secrets must be present,
+  # and nothing gets checked out from the PR. That is what makes it safe.
   pull_request_target:
-    types: [opened, reopened, ready_for_review, synchronize, closed]
+    types: [opened, reopened, ready_for_review, synchronize, closed, unlabeled]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review_thread:
+    types: [resolved, unresolved]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  check_suite:
+    types: [completed]
+  status:
+  schedule:
+    - cron: '*/30 * * * *'   # residue sweeper
+    - cron: '5 7 * * *'      # journal day, 00:05 America/Vancouver (PDT)
+    - cron: '5 8 * * *'      # journal day, 00:05 America/Vancouver (PST)
+  workflow_dispatch:
 
 permissions: {}
 
 jobs:
-  state:
+  legacy:
+    if: vars.BOT_DISPATCH == 'off' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
     secrets:
       token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+
+  dispatch:
+    if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'
+    uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
+    with:
+      dry-run: ${{ vars.BOT_DISPATCH == 'dry' }}
+    secrets: inherit
