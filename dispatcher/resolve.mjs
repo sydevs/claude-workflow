@@ -58,6 +58,8 @@ export async function resolve({ github, context, config, now = new Date() }) {
     return one('pr', ev.pull_request.number, 'issue_comment', { author: c.user?.login, body: c.body, association: c.author_association, commentId: c.id, triggerType: 'review_comment' })
   }
 
+  // `pull_request_review_thread` is a webhook event with no Actions trigger,
+  // so no caller subscribes to it. The mapping stays for a manual re-drive.
   if (name === 'pull_request_review_thread') {
     return one('pr', ev.pull_request.number, 'thread', {})
   }

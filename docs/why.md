@@ -1055,3 +1055,17 @@ current — dispatches per handler and per repo, and the items that took the mos
 the weekly reflect reads seven of those and reports usage back: a PR that needed six sessions,
 a review that arrived one comment at a time and fired `address-review` for each. That is
 feedback to the people who type the verbs, never a limit on them.
+
+## A resolved thread fires no workflow
+
+`pull_request_review_thread` is a webhook event. It is not a GitHub Actions trigger, and naming
+it under `on:` makes GitHub reject the whole workflow file — every event in that repository stops
+being handled, with the only sign a failed run named after the file path. It shipped that way
+once, in the caller merged on 2026-09-08, and `gh workflow run` was what finally printed the
+reason: `Unexpected value 'pull_request_review_thread'`.
+
+The event mattered: a reviewer who resolves the last open thread on an approved PR changes the
+merge verdict, and nothing else about the PR changes. So the sweeper re-derives every open,
+unlocked, non-draft bot PR on each 30-minute pass. That is a handful of items per repo, each
+already cheap, and it also covers a CI event GitHub dropped. The cost is latency: a merge that
+an event would have made instant takes up to half an hour.

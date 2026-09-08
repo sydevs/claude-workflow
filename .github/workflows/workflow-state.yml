@@ -24,8 +24,10 @@ on:
     types: [submitted, dismissed]
   pull_request_review_comment:
     types: [created]
-  pull_request_review_thread:
-    types: [resolved, unresolved]
+  # No pull_request_review_thread: it is a webhook event, not an Actions
+  # trigger — GitHub rejects the whole file. The sweeper re-derives every
+  # open, unlocked bot PR instead, so a resolved thread is seen within 30
+  # minutes. (why: docs/why.md#a-resolved-thread-fires-no-workflow)
   workflow_run:
     workflows: [CI]
     types: [completed]

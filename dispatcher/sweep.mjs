@@ -2,7 +2,8 @@
  * The residue sweeper: every 30 minutes per repo, find what no event will
  * ever move again — a lock past its deadline, a retry whose window has
  * passed, a recheck nobody drained, an orphaned draft, a park whose
- * Re-check date passed, an `awaiting` that drifted — and turn each into a target. Runs on GitHub Actions, so it keeps
+ * Re-check date passed, a resolved review thread, an `awaiting` that
+ * drifted — and turn each into a target. Runs on GitHub Actions, so it keeps
  * working through an outage of the routines.
  * (why: docs/why.md#awaiting-has-one-writer)
  */
@@ -49,7 +50,12 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (!isBot(pr.user?.login, config) || lockedNumbers.has(pr.number)) continue
     const labels = (pr.labels || []).map((l) => l.name)
     if (labels.includes(L.stuck)) continue
-    if (pr.draft && Date.parse(pr.updated_at) < now.getTime() - orphanHours * 3600_000) push('pr', pr.number, 'sweep-orphan')
+    if (pr.draft && Date.parse(pr.updated_at) < now.getTime() - orphanHours * 3600_000) { push('pr', pr.number, 'sweep-orphan'); continue }
+    // Every open, unlocked, non-draft bot PR is re-derived each pass. Resolving
+    // a review thread fires no workflow, so this is the only thing that sees it.
+    // `conflict-scan` is exactly that derivation, and it skips drafts.
+    // (why: docs/why.md#a-resolved-thread-fires-no-workflow)
+    if (!pr.draft) push('pr', pr.number, 'conflict-scan')
   }
 
   // Awaiting drift: open items with neither lock nor stuck nor awaiting, last touched by the bot.
