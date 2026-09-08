@@ -1069,3 +1069,20 @@ merge verdict, and nothing else about the PR changes. So the sweeper re-derives 
 unlocked, non-draft bot PR on each 30-minute pass. That is a handful of items per repo, each
 already cheap, and it also covers a CI event GitHub dropped. The cost is latency: a merge that
 an event would have made instant takes up to half an hour.
+
+## The board is a lens, so it may fail alone
+
+The first live dispatch stopped on `TypeError: Cannot read properties of null (reading 'status')`.
+The plan was right — `label, react, status:revising, fire:answer` — and the labels were already
+written. Setting Status then threw, the job failed, and **the fire never happened**. One
+unreachable board had swallowed the whole run.
+
+`projectV2(number: 2)` returns `null`, with no GraphQL error, when the token cannot see the
+organization's project. That is a permission answer dressed as data, and the code read `.status`
+off it. It now says so by name: `BoardUnreachable`, carrying the fix in its message.
+
+The deeper rule is the one this violated. The board is a lens over state the labels and the
+status comment already carry, so **a board write that fails must never stop the dispatch**. Every
+Projects call now degrades: the plan continues, the run fires, and one `board-unreachable`
+anomaly goes in the day's journal. A board that is merely stale is a cosmetic problem someone
+notices. A dispatch that never fired is work that silently does not happen.
