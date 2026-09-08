@@ -199,3 +199,11 @@ test('a closed issue goes Done and re-checks its dependents', () => {
   assert.ok(p.some((a) => a.type === 'status' && a.value === 'done'))
   assert.equal(p.find((a) => a.type === 'targets').list[0].reason, 'unblock-check')
 })
+
+test('the sweeper unparks a blocked ticket whose Re-check date passed, and leaves a future one alone', () => {
+  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-09-01', recheckPassed: true } }), config)
+  assert.ok(passed.some((a) => a.type === 'label' && a.add.includes('awaiting') && a.remove.includes('blocked')))
+  assert.ok(passed.some((a) => a.type === 'comment' && a.body.includes('@Ardnived')))
+  const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-12-01', recheckPassed: false } }), config)
+  assert.ok(!early.some((a) => a.type === 'label'))
+})

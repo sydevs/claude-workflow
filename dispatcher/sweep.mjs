@@ -1,8 +1,8 @@
 /**
  * The residue sweeper: every 30 minutes per repo, find what no event will
  * ever move again — a lock past its deadline, a retry whose window has
- * passed, a recheck nobody drained, an orphaned draft, an `awaiting` that
- * drifted — and turn each into a target. Runs on GitHub Actions, so it keeps
+ * passed, a recheck nobody drained, an orphaned draft, a park whose
+ * Re-check date passed, an `awaiting` that drifted — and turn each into a target. Runs on GitHub Actions, so it keeps
  * working through an outage of the routines.
  * (why: docs/why.md#awaiting-has-one-writer)
  */
@@ -33,6 +33,11 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (!p) { push(kind, i.number, 'sweep-recheck'); continue }
     if (!p.retryAfter || Date.parse(p.retryAfter) <= now.getTime()) push(kind, i.number, 'sweep-retry', { handler: p.handler, attempt: p.attempt })
   }
+
+  // Parked items: a Re-check date that passed, or blockers that closed with no
+  // event seen. `unblock-check` re-reads both and mentions the reviewer. No
+  // session ever writes `blocked` (why: docs/why.md#awaiting-has-one-writer).
+  for (const i of await byLabel(L.blocked)) push(i.pull_request ? 'pr' : 'issue', i.number, 'unblock-check', {})
 
   // Rechecks recorded while a lock was held but never drained (a missed unlabel event).
   const lockedNumbers = new Set()
