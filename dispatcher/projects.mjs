@@ -55,27 +55,3 @@ export async function setStatus(gh, config, contentNodeId, key) {
   return name
 }
 
-/** Issues in one repo at Status Approved, with their labels — the implement queue. */
-export async function approvedIssues(gh, config, repoName) {
-  const ids = await projectIds(gh, config)
-  const want = config.projects.status.approved
-  const out = []
-  let after = null
-  for (;;) {
-    const q = `query($p:ID!,$after:String){ node(id:$p){ ... on ProjectV2 { items(first:100, after:$after){
-      pageInfo { hasNextPage endCursor }
-      nodes { id fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }
-        content { ... on Issue { number state repository { name } labels(first:30){ nodes { name } } } } } } } } }`
-    const d = await gh.graphql(q, { p: ids.projectId, after })
-    const items = d.node.items
-    for (const it of items.nodes) {
-      const c = it.content
-      if (!c || c.repository?.name !== repoName || c.state !== 'OPEN') continue
-      if (it.fieldValueByName?.name !== want) continue
-      out.push({ number: c.number, labels: (c.labels?.nodes || []).map((l) => l.name) })
-    }
-    if (!items.pageInfo.hasNextPage) break
-    after = items.pageInfo.endCursor
-  }
-  return out
-}

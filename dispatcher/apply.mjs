@@ -135,7 +135,6 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         break
       }
       case 'targets': emitted.push(...(a.list || [])); break
-      case 'drain': emitted.push({ repo: t.repo, kind: 'issue', number: 0, reason: 'drain', event: 'drain', facts: {} }); break
       case 'fire': {
         const enabled = config.dispatch.enabledHandlers
         if (Array.isArray(enabled) && !enabled.includes(a.handler)) { log(`handler ${a.handler} not enabled yet — skipped`); break }

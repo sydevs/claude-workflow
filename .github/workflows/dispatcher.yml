@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
     secrets:
-      ADD_TO_PROJECT_PAT:
+      SYDEVS_BOT_PAT:
         required: true
       SENTRY_CLAUDE_WORKFLOW_TOKEN:
         required: false
@@ -67,7 +67,7 @@ jobs:
       - id: resolve
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { resolveTargets, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -119,7 +119,7 @@ jobs:
       # only through context.payload and the TARGET env var.
       - uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { act, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -146,7 +146,7 @@ jobs:
             dispatcher
       - uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { journalTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)

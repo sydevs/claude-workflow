@@ -113,7 +113,6 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.dependents = Array.isArray(blocking)
       ? blocking.filter((d) => d.state === 'open').map((d) => ({ repo: { owner: d.owner, name: d.repo, full: `${d.owner}/${d.repo}` }, kind: 'issue', number: d.number, facts: { closedNumber: number } }))
       : []
-    s.wip = await wip(gh, config, { owner, repo }, bot)
     return s
   }
 
@@ -159,18 +158,3 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   return s
 }
 
-/** WIP slots in a repo: open bot PRs plus issues locked for `implement`. */
-export async function wip(gh, config, { owner, repo }, bot) {
-  const open = await gh.paginate(gh.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 })
-  const botPrs = open.filter((p) => String(p.user?.login).toLowerCase() === String(bot).toLowerCase())
-  const { data: locked } = await gh.rest.issues.listForRepo({ owner, repo, state: 'open', labels: config.labels.lock, per_page: 100 })
-  let implementing = 0
-  const names = botPrs.map((p) => `#${p.number}`)
-  for (const i of locked) {
-    if (i.pull_request) continue
-    const { rec } = await loadRecord(gh, { owner, repo, number: i.number })
-    if (rec.current?.handler === 'implement') { implementing += 1; names.push(`#${i.number}`) }
-  }
-  const cap = config.ceilings?.wipCapPerRepo ?? 3
-  return { openBotPrs: botPrs.length, implementing, slots: cap - botPrs.length - implementing, names }
-}

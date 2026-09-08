@@ -45,7 +45,7 @@ jobs:
     if: vars.BOT_DISPATCH == 'off' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
     secrets:
-      token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+      token: ${{ secrets.SYDEVS_BOT_PAT }}
 
   dispatch:
     if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'

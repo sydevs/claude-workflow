@@ -27,7 +27,6 @@ export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
-export const drain = () => ({ type: 'drain' })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
 
@@ -184,7 +183,7 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
  * `pull_request.synchronize`, `review`, `thread`, `ci`, `unlock`,
- * `unblock-check`, `conflict-scan`, `drain`, `sweep-*`. `target.facts` carries
+ * `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
  * what the payload said — used only to pick the row; state comes from the
  * snapshot.
  */
@@ -242,7 +241,6 @@ export function decide(target, s, config) {
         if ((s.item.labels || []).includes(L.blocked) || s.blockedByOpen.length) return plan.concat(label([L.blocked, L.awaiting], []), commentOnce('blocked', `This ticket is blocked (${s.blockedByOpen.map((b) => '#' + b.number).join(', ') || 'a Re-check date'}), so I will not implement it yet.`))
         plan.push(status('approved'))
         if (s.locked) return plan.concat(recheck())
-        if (s.wip.slots <= 0) return plan.concat(commentOnce('queued', `Queued: ${config.ceilings.wipCapPerRepo} pieces of work are already open in this repo (${s.wip.names.join(', ')}). I will start this one when a slot frees.`))
         return plan.concat(fire('implement'))
       }
       plan.push(status('revising'))
@@ -287,7 +285,6 @@ export function decide(target, s, config) {
       } else if (isBot(s.pr?.user?.login, config)) {
         plan.push(targets(s.linkedIssues.map((n) => ({ repo: s.repo, kind: 'issue', number: n, reason: 'linked-abandoned', facts: { pr: s.pr.number } }))))
       }
-      plan.push(drain())
       return plan
     }
     case 'linked-abandoned':
@@ -301,26 +298,17 @@ export function decide(target, s, config) {
         const p = evaluatePr(s, config)
         const idle = !p.some((a) => a.type === 'fire' || a.type === 'merge' || a.type === 'markReady')
         if (idle && !s.pr?.draft) p.push(label([L.awaiting], []))
-        return plan.concat(p, finished === 'implement' ? [drain()] : [])
+        return plan.concat(p)
       }
       const v = pendingVerb(s, config, 'issue')
       if (v) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
       if (s.openPrsClosingIt.length) plan.push(status('done'))
       else if (s.botSpokeLast) plan.push(status('revising'), label([L.awaiting], []))
       else plan.push(label([L.awaiting], []), anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
-      if (finished === 'implement') plan.push(drain())
       return plan
     }
     case 'ci':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
-    case 'drain-candidate': {
-      if (s.locked) return [note('locked')]
-      if (s.wip.slots <= 0) return [note('no slot')]
-      const v = pendingVerb(s, config, 'issue')
-      if (!v || v.verb !== 'implement') return [note('no pending implement verb')]
-      if (s.openPrsClosingIt.length) return [status('done'), note('already in flight')]
-      return [fire('implement')]
-    }
     case 'sweep-retry':
       return [{ type: 'retry' }]
     case 'sweep-timeout':

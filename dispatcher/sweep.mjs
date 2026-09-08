@@ -47,9 +47,6 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (pr.draft && Date.parse(pr.updated_at) < now.getTime() - orphanHours * 3600_000) push('pr', pr.number, 'sweep-orphan')
   }
 
-  // Drain the implement queue for this repo.
-  push('issue', 0, 'drain', {})
-
   // Awaiting drift: open items with neither lock nor stuck nor awaiting, last touched by the bot.
   const awaiting = new Set((await byLabel(L.awaiting)).map((i) => i.number))
   const stuck = new Set((await byLabel(L.stuck)).map((i) => i.number))

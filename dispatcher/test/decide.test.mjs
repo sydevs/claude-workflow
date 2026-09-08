@@ -7,7 +7,7 @@ const config = {
   identity: { expectedLogin: 'sydevs-bot' },
   assignment: { reviewer: 'Ardnived', respondTo: ['Ardnived', 'antontcymbal', 'Copilot'] },
   labels: { journal: 'ops-journal', awaiting: 'awaiting', stuck: 'stuck', blocked: 'blocked', lock: 'bot:working', proposal: 'proposal' },
-  ceilings: { wipCapPerRepo: 3, ciFixIterations: 3 },
+  ceilings: { ciFixIterations: 3 },
   mergePolicy: { loopMayNotMerge: ['claude-workflow'] },
   review: { bodyHeader: '## 🧐 Adversarial review', skipWhen: { maxFiles: 2, maxLines: 40 } },
   dispatch: { commandPrefix: '@sydevs-bot', verbs: { issue: ['implement', 'revise', 'split', 'answer'], pr: ['address', 'review'], unknownIssue: 'answer', unknownPr: 'address' } },
@@ -135,24 +135,16 @@ function issueSnap(over = {}) {
     blockedByOpen: [],
     openPrsClosingIt: [],
     dependents: [],
-    wip: { slots: 2, names: [] },
     botSpokeLast: false,
     ...over,
   }
 }
 
-test('an implement verb from a human authorises and fires when a slot is free', () => {
+test('an implement verb from a human authorises and fires at once — there is no WIP cap', () => {
   const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }, issueSnap(), config)
   assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('proposal')))
   assert.ok(p.some((a) => a.type === 'status' && a.value === 'approved'))
   assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'implement'))
-})
-
-test('an implement verb with no WIP slot queues at Approved and consumes nothing', () => {
-  const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }, issueSnap({ wip: { slots: 0, names: ['#1', '#2', '#3'] } }), config)
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'approved'))
-  assert.ok(!p.some((a) => a.type === 'fire'))
-  assert.ok(p.some((a) => a.type === 'comment' && a.key === 'queued'))
 })
 
 test('implement on a blocked or in-flight ticket is refused', () => {
@@ -188,7 +180,7 @@ test('unlock on an issue with a pending verb re-dispatches; silent end sets awai
   const silent = decide({ reason: 'unlock', facts: { handler: 'answer' } }, issueSnap({ botSpokeLast: false }), config)
   assert.ok(silent.some((a) => a.type === 'anomaly'))
   const spoke = decide({ reason: 'unlock', facts: { handler: 'implement' } }, issueSnap({ botSpokeLast: true }), config)
-  assert.ok(spoke.some((a) => a.type === 'drain'))
+  assert.ok(!spoke.some((a) => a.type === 'drain'), 'no queue to drain')
 })
 
 test('journal issues are ignored everywhere', () => {
@@ -200,5 +192,4 @@ test('a merged PR resolves Sentry for linked issues and scans other ready bot PR
   const p = decide({ reason: 'pull_request.closed', facts: { merged: true } }, s, config)
   assert.ok(p.some((a) => a.type === 'sentry' && a.id === '55'))
   assert.equal(p.find((a) => a.type === 'targets').list.length, 2)
-  assert.ok(p.some((a) => a.type === 'drain'))
 })

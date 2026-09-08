@@ -152,11 +152,11 @@ jobs:
   state:
     uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
     secrets:
-      token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+      token: ${{ secrets.SYDEVS_BOT_PAT }}
 ```
 
-**The token.** Org Actions secret `ADD_TO_PROJECT_PAT` — a `sydevs-bot` fine-grained PAT with repo
-**Issues: read/write**, **Pull requests: read/write**, and org **Projects: read/write**. It is used
+**The token.** Org Actions secret `SYDEVS_BOT_PAT` (until 2026-09-08 `ADD_TO_PROJECT_PAT`) — a `sydevs-bot` fine-grained PAT with repo
+**Issues: read/write**, **Pull requests: read/write**, **Contents: read/write** (merging a PR needs it), and org **Projects: read/write**. It is used
 throughout, since whether the default `GITHUB_TOKEN` covers the org-level field endpoint is
 undocumented. A credentials error on a repo's runs usually means its access policy excludes this
 secret.
