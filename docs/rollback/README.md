@@ -5,7 +5,8 @@ The sydevs loop moved from two scheduled cloud routines to GitHub-event dispatch
 else first.
 
 **Nothing here is a plan to carry out.** It is a plan to have. If the event loop works, close
-the tab.
+the tab. Its opposite is [`docs/cleanup.md`](../cleanup.md), which deletes what this file needs —
+after that runs, the fast path below stops working.
 
 ## When you would use it
 
