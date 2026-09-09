@@ -23,41 +23,104 @@ export function titleFor(day, counts) {
   return `${day} — ${counts.dispatches} dispatch${counts.dispatches === 1 ? '' : 'es'} · ${counts.failed} failed · ${counts.anomalies} anomal${counts.anomalies === 1 ? 'y' : 'ies'}`
 }
 
+/** Every open journal issue that belongs to `today`, oldest first. */
+async function daysIssues(gh, config, today, tz) {
+  const { data } = await gh.rest.issues.listForRepo({
+    owner: config.org, repo: config.journalRepo, labels: config.labels.journal,
+    state: 'open', sort: 'created', direction: 'desc', per_page: 20,
+  })
+  return data
+    .filter((i) => !i.pull_request)
+    .filter((i) => String(i.body || '').includes(`${DAY_MARKER}${today} -->`) || localDate(new Date(i.created_at), tz) === today)
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+}
+
+/** Stamp the day marker on an issue that lacks it, so the next lookup is exact. */
+async function stamp(gh, config, issue, today) {
+  if (String(issue.body || '').includes(`${DAY_MARKER}${today} -->`)) return
+  try {
+    await gh.rest.issues.update({
+      owner: config.org, repo: config.journalRepo, issue_number: issue.number,
+      body: `${DAY_MARKER}${today} -->\n${String(issue.body || '').trimStart()}`,
+    })
+  } catch { /* the marker is an optimisation, like the pointer itself */ }
+}
+
 /**
  * Find or create today's journal issue. Returns `{ number, created, failed }`.
  * **Never throws.** `number: 0` means the day has no issue and the dispatcher
  * could not make one — the handler finds or creates it, as in cron mode.
  * (why: docs/why.md#the-journal-pointer-is-an-optimisation)
+ *
+ * **The oldest issue for the day always wins.** Two `act` jobs can look at the
+ * same instant and both find nothing, so after creating we look again and
+ * close our own issue if an older one appeared.
+ * (why: docs/why.md#one-journal-a-day-and-the-oldest-one-wins)
  */
 export async function ensureJournalDay(gh, config, now = new Date()) {
   const owner = config.org
   const repo = config.journalRepo
   const tz = config.journal.timezone
   const today = localDate(now, tz)
-  let data = []
+  let mine = []
   try {
-    ({ data } = await gh.rest.issues.listForRepo({ owner, repo, labels: config.labels.journal, state: 'open', sort: 'created', direction: 'desc', per_page: 20 }))
+    mine = await daysIssues(gh, config, today, tz)
   } catch (e) {
     return { number: 0, created: false, failed: `cannot list ${config.labels.journal} issues: ${e.message}` }
   }
-  for (const i of data) {
-    if (i.pull_request) continue
-    const marked = String(i.body || '').includes(`${DAY_MARKER}${today} -->`)
-    if (marked || localDate(new Date(i.created_at), tz) === today) return { number: i.number, created: false }
+  if (mine.length) {
+    await stamp(gh, config, mine[0], today)
+    return { number: mine[0].number, created: false }
   }
   let created
   try {
     ({ data: created } = await gh.rest.issues.create({
-    owner,
-    repo,
-    title: titleFor(weekday(now, tz), { dispatches: 0, failed: 0, anomalies: 0 }),
-    body: `${DAY_MARKER}${today} -->\n**Dispatches today.** [Board](${config.projects.url})\n\nEach session posts one comment when it ends. The dispatcher posts only anomalies.`,
-    labels: [config.labels.journal],
+      owner,
+      repo,
+      title: titleFor(weekday(now, tz), { dispatches: 0, failed: 0, anomalies: 0 }),
+      body: `${DAY_MARKER}${today} -->\n**Dispatches today.** [Board](${config.projects.url})\n\nEach session posts one comment when it ends. The dispatcher posts only anomalies.`,
+      labels: [config.labels.journal],
     }))
   } catch (e) {
     return { number: 0, created: false, failed: `cannot create today's journal issue: ${e.message}` }
   }
+  // Look again. Another job may have created one in the same second.
+  try {
+    const after = await daysIssues(gh, config, today, tz)
+    const oldest = after[0]
+    if (oldest && oldest.number !== created.number) {
+      await closeDuplicate(gh, config, created.number, oldest.number)
+      return { number: oldest.number, created: false }
+    }
+  } catch { /* the create succeeded; a duplicate is the sweeper's problem */ }
   return { number: created.number, created: true }
+}
+
+/** Close a duplicate day issue, pointing at the one that won. */
+export async function closeDuplicate(gh, config, number, keep) {
+  const args = { owner: config.org, repo: config.journalRepo, issue_number: number }
+  try {
+    await gh.rest.issues.createComment({ ...args, body: `Duplicate of #${keep}, which is today's journal. Closed so the day has one document.` })
+    await gh.rest.issues.update({ ...args, state: 'closed' })
+    return true
+  } catch { return false }
+}
+
+/**
+ * Close every extra open journal issue for today, keeping the oldest. Runs on
+ * the schedule, never on an event, so it is never in a race with itself.
+ * Returns the numbers it closed.
+ */
+export async function closeDuplicateDays(gh, config, now = new Date()) {
+  const tz = config.journal.timezone
+  const today = localDate(now, tz)
+  let mine = []
+  try { mine = await daysIssues(gh, config, today, tz) } catch { return [] }
+  if (mine.length < 2) return []
+  const keep = mine[0].number
+  const closed = []
+  for (const i of mine.slice(1)) if (await closeDuplicate(gh, config, i.number, keep)) closed.push(i.number)
+  return closed
 }
 
 /** One anomaly line from the dispatcher. `id` is the dispatch id when there is one. */
