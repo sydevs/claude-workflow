@@ -140,6 +140,11 @@ export function evaluatePr(s, config) {
   if (!pr || pr.state !== 'open') return [status('done')]
   if (!isBot(pr.user?.login, config)) return []
   if (s.locked) return [recheck()]
+  // The session that holds the linked issue still owns this branch. A repo
+  // with no CI is green the moment the PR opens, so without this the critic
+  // fires while implement is still pushing.
+  // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  if (s.linkedLocked?.length) return [note(`#${s.linkedLocked[0]} is still locked — its session owns this branch`)]
 
   if (pendingReviewVerb(s, config)) return [fire('adversarial-review', { onDemand: true })]
 
@@ -316,8 +321,14 @@ export function decide(target, s, config) {
         return plan.concat(p)
       }
       const v = pendingVerb(s, config, 'issue')
-      if (v) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
-      if (s.openPrsClosingIt.length) plan.push(status('done'))
+      // An implement session answers with a PR, never a comment on the issue,
+      // so the verb that started it still reads as pending. Re-dispatching it
+      // only hits the in-flight guard, and leaves `awaiting` on a ticket whose
+      // PR is open. The PR is the answer.
+      // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
+      const answered = v?.verb === 'implement' && s.openPrsClosingIt.length > 0
+      if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
+      if (s.openPrsClosingIt.length) plan.push(status('done'), label([], [L.awaiting]))
       else if (s.botSpokeLast) plan.push(status('revising'), label([L.awaiting], []))
       else plan.push(label([L.awaiting], []), anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
       return plan

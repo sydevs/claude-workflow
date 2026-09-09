@@ -1196,3 +1196,35 @@ have started, cloned five repositories, read the ticket and stopped itself.
 The refusal belongs in the dispatcher because that is where it is free. A session that stops on
 arrival still cost a fire, a clone and a lease. So the gate now reads the park as well, and says
 which of the three reasons applies rather than guessing at one.
+
+## The lease covers the branch, not the item
+
+`bot:working` sits on the issue an implement session was given. The pull request it opens carries
+no lock, and that is right — no session holds the PR. But the session still owns the **branch**,
+and for a few minutes after `finalize-pr` pushes, it is still running.
+
+Every PR event funnels into one derivation that asks whether the PR itself is locked. It never
+asked whether the session that made it had finished. In a repo with CI that window is hidden: CI
+takes minutes, and the PR is not green until long after the session ends. In `claude-workflow`
+there is no CI, so `ci.noCi` calls a draft green the instant it opens — and the critic would fire
+against a branch implement was still pushing to.
+
+So a PR is held while any issue it closes carries the lock. The cost is one issue read per PR
+event on a bot PR, and it buys the guarantee the lock was always supposed to give: one session per
+piece of work, not one session per item.
+
+## A PR is the answer to an implement verb
+
+A dispatcher comment is never the bot's last word — that rule exists so a refusal cannot silence a
+human's verb. It has a consequence nobody had followed through: an implement session answers with
+a **pull request**, not a comment on the issue, so when it unlocks, the verb that started it still
+reads as pending.
+
+Every implement therefore ended by re-dispatching itself. The second pass hit the in-flight guard
+and refused, which is correct and useless: an act job, a comment, and `awaiting` on a ticket whose
+PR was already open. "Your turn" filled with work that was in flight.
+
+The PR is the answer. On unlock, an `implement` verb with an open PR closing the issue is
+consumed, the ticket goes to `Done`, and `awaiting` comes off. Any other verb still re-derives —
+someone who typed `revise` while the session ran is still owed a run — and an implement verb with
+no PR still re-derives too, because then nothing answered it.

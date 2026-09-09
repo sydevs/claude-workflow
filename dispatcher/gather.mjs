@@ -150,6 +150,16 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.ci = ciVerdict(normalized, `${owner}/${repo}`)
   s.verdict = mergeVerdict(normalized, `${owner}/${repo}`, config.mergePolicy || {})
   s.linkedIssues = await linkedIssues(gh, base)
+  // The lock sits on the issue, and the session it locked owns this branch.
+  // Until it unlocks, nothing else may touch the PR.
+  // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  s.linkedLocked = []
+  if (isBot(pr.user?.login, config)) {
+    for (const n of s.linkedIssues) {
+      const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
+      if ((li.labels || []).some((l) => (l.name || l) === config.labels.lock)) s.linkedLocked.push(n)
+    }
+  }
   if (target.reason === 'pull_request.closed' && target.facts?.merged) {
     s.linkedIssueDetails = []
     for (const n of s.linkedIssues) {
