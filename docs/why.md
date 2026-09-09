@@ -1171,3 +1171,28 @@ could only ever find what it was not looking for. The relationship is reachable 
 alone, as `blockedBy` on `Issue`, so the sweeper asks for every open issue with its labels and
 its blockers in one paginated query per repo. That query also turned up a fifth ticket nobody had
 named.
+
+## A date belongs in a date field
+
+A park used to be `Re-check: 2026-10-01` in `## Notes`, parsed with a regular expression. That
+shape was inherited from `Blocked by:`, which has to be prose because no tool a session can reach
+writes a native relationship. A date never had that constraint. `Hold Until` is an org issue
+field, a session writes it with `issue_write`, and the dispatcher reads it straight off the issue.
+
+So the field is the park. It cannot be malformed, it sorts and filters on the board, and clearing
+it is one call that leaves Priority and Effort alone. The `Re-check:` line is still read, so a
+ticket written before 2026-09-09 still parks, and it stays read until nothing carries it.
+
+`issueFields.holdUntil` is therefore load-bearing again, after the cutover had it slated for
+deletion beside `Stage`. The field survives; only `Stage` goes.
+
+## A park stops the dispatch, not the session
+
+The implement gate tested two things: the `blocked` label, and an open native blocker. Both are
+about a blocker. Neither is about a date, so a ticket parked until October with no label — which
+is every ticket parked before the label existed — would have been dispatched, and a session would
+have started, cloned five repositories, read the ticket and stopped itself.
+
+The refusal belongs in the dispatcher because that is where it is free. A session that stops on
+arrival still cost a fire, a clone and a lease. So the gate now reads the park as well, and says
+which of the three reasons applies rather than guessing at one.

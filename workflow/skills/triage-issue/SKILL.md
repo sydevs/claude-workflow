@@ -158,17 +158,26 @@ A local session may also set the native relationship directly. Cross-repo needs 
 gh issue edit <n> --repo "$ORG/$REPO" --add-blocked-by "https://github.com/$ORG/<other>/issues/<m>"
 ```
 
-### `Re-check:` — a date, and the promise to look again
+### `Hold Until` — a date, and the promise to look again
 
-Park a ticket on a date, not a blocker, with one line in `## Notes`:
+Park a ticket on a date, not a blocker, by setting the **`Hold Until` field**:
 
-```markdown
-Re-check: 2026-10-01 — the upstream fix ships in their October release
+```
+mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
+  issue_fields:[{field_name:"Hold Until", value:"2026-10-01"}]
 ```
 
-Justify the date on the same line. The dispatcher applies `blocked` while the date is ahead. When
-it passes, the sweeper removes `blocked`, sets `awaiting`, and mentions the reviewer. Keep the
-horizon within about a month — a longer park is a ticket that quietly disappears.
+**Say why in a comment**, since the field holds no reason. The dispatcher applies `blocked` while
+the date is ahead and refuses `implement`. When it passes, the sweeper removes `blocked`, sets
+`awaiting`, and mentions the reviewer. Keep the horizon inside
+`issueFields.holdUntil.maxHorizonDays` — a longer park is a ticket that quietly disappears.
+
+Clear it with `issue_fields:[{field_name:"Hold Until", delete:true}]`, which leaves Priority and
+Effort alone.
+
+A `Re-check: <date>` line in `## Notes` is the older spelling. It is still read, so a ticket
+written before 2026-09-09 still parks, but write the field.
+(why: docs/why.md#a-date-belongs-in-a-date-field)
 
 ## Body format
 
@@ -190,7 +199,7 @@ where the fix is not yet known.]
 - [ ] [A concrete command, route, or observation that confirms the criteria]
 
 ## Notes
-[Optional: alternatives rejected, prior art, links. Sentry links, `Blocked by:` and `Re-check:` lines go here.]
+[Optional: alternatives rejected, prior art, links. Sentry links and `Blocked by:` lines go here.]
 ```
 
 **Acceptance criteria vs verification checklist**: criteria say what must be *true*. The checklist
@@ -221,6 +230,7 @@ The shorthand is safe only for issues in the same repository as the comment.
 - **Priority and Effort** — `issue_fields`, with `field_option_name`, so the option is validated
   before the call.
 - **Blockers** — the `Blocked by:` line. The dispatcher makes it a relationship.
+- **A park** — the `Hold Until` field, a date. Nothing else parks a ticket.
 - **No label, no Status, no assignee.** The dispatcher sets Proposed and `awaiting` on
   `issues.opened`, and `proposal` when the bot filed it.
 
@@ -232,7 +242,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 - [ ] Type set
 - [ ] Priority set (reviewer's — leave an existing value alone) **and Effort set, always, by you**
 - [ ] No label, no Status, no assignee
-- [ ] Blockers as `Blocked by:` lines. A date park as a `Re-check:` line
+- [ ] Blockers as `Blocked by:` lines. A date park as the `Hold Until` field
 - [ ] Body in the format above. Checklist items are executable
 - [ ] Searched for a duplicate first (`search_issues`), including closed ones
 
@@ -243,5 +253,5 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 - **Never** authorise work by editing a ticket. Only a `respondTo` human's `@sydevs-bot implement`
   does.
 - **Never** leave a ticket without a Priority field value.
-- **Never** park a ticket without a `Re-check:` line or a `Blocked by:` line.
+- **Never** park a ticket without a `Hold Until` date or a `Blocked by:` line.
 - **Never** file without searching for a duplicate.

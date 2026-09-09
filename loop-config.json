@@ -225,6 +225,8 @@
       ]
     },
     "holdUntil": {
+      "$comment": "Where a park lives: the date a ticket comes back. The dispatcher reads it, applies `blocked` while it is ahead, and unparks when it passes. Load-bearing — do not delete with Stage.",
+      "name": "Hold Until",
       "fieldId": 46423871,
       "maxHorizonDays": 30
     }
@@ -235,7 +237,8 @@
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason> (was: <Stage>)",
     "cloudReadable": false,
     "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch work-routine to the tool and retire the body-marker fallback",
-    "recheckMarker": "Re-check:"
+    "recheckMarker": "Re-check:",
+    "$recheckComment": "The older spelling of a park, still read so a ticket written before 2026-09-09 still parks. Write the Hold Until field instead."
   },
   "identity": {
     "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in work-routine/SKILL.md.",
