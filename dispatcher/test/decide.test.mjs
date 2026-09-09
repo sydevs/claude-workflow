@@ -250,3 +250,27 @@ test('the refusal says which of the three reasons applies', () => {
   const byLabel = decide(verb, issueSnap({ item: { number: 9, labels: ['blocked'] } }), config)
   assert.match(byLabel.find((a) => a.type === 'comment').body, /blocked label/)
 })
+
+test('a PR whose linked issue is still locked belongs to that session alone', () => {
+  // claude-workflow has no CI, so a draft PR is green the moment it opens.
+  // Without this the critic fires while implement is still pushing.
+  const draft = (over) => prSnap({ pr: { ...prSnap().pr, draft: true, changed_files: 8, additions: 120 }, linkedIssues: [729], ...over })
+  assert.deepEqual(types(evaluatePr(draft({ linkedLocked: [729] }), config)), ['note'], 'held')
+  const freed = evaluatePr(draft({ linkedLocked: [] }), config)
+  assert.ok(freed.some((a) => a.type === 'fire' && a.handler === 'adversarial-review'), 'the same PR, once the issue unlocks')
+})
+
+test('an implement verb is answered by the PR, not re-dispatched on unlock', () => {
+  const verb = [{ author: 'Ardnived', createdAt: '2026-09-09T12:00:00Z', body: '@sydevs-bot implement', id: 1 }]
+  const withPr = issueSnap({ comments: verb, openPrsClosingIt: [742], botSpokeLast: false })
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, withPr, config)
+  assert.ok(!p.some((a) => a.type === 'targets'), 'no second dispatch')
+  assert.ok(p.some((a) => a.type === 'status' && a.value === 'done'))
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')), 'a ticket in flight is not your turn')
+
+  // Any other verb still re-derives, and implement does too when no PR exists.
+  const revise = issueSnap({ comments: [{ ...verb[0], body: '@sydevs-bot revise' }], openPrsClosingIt: [742] })
+  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, revise, config).some((a) => a.type === 'targets'))
+  const noPr = issueSnap({ comments: verb, openPrsClosingIt: [] })
+  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, noPr, config).some((a) => a.type === 'targets'))
+})
