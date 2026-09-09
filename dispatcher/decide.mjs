@@ -219,7 +219,7 @@ export function decide(target, s, config) {
       const labelled = (s.item.labels || []).includes(L.blocked)
       const applyIfMissing = (why) => (labelled ? [note(why)] : [label([L.blocked], []), note(`${why} — label applied`)])
       if (s.blockedByOpen.length) return applyIfMissing(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)
-      if (s.markers.recheck && !s.markers.recheckPassed) return applyIfMissing(`parked until ${s.markers.recheck}`)
+      if (s.park?.until && !s.park.passed) return applyIfMissing(`parked until ${s.park.until}`)
       if (!labelled) return [note('not blocked')]
       return [
         label([L.awaiting], [L.blocked]),
@@ -243,7 +243,17 @@ export function decide(target, s, config) {
       plan.push(label([], [L.proposal, L.awaiting, L.stuck]), react('eyes'))
       if (v.verb === 'implement') {
         if (s.openPrsClosingIt.length) return plan.concat(commentOnce(`in-flight ${s.openPrsClosingIt[0]}`, `#${s.openPrsClosingIt[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], []))
-        if ((s.item.labels || []).includes(L.blocked) || s.blockedByOpen.length) return plan.concat(label([L.blocked, L.awaiting], []), commentOnce('blocked', `This ticket is blocked (${s.blockedByOpen.map((b) => '#' + b.number).join(', ') || 'a Re-check date'}), so I will not implement it yet.`))
+        // A park stops the dispatch here, before any session starts. The
+        // label alone is not the test: a ticket parked on a date it never
+        // carried a label for would otherwise be implemented.
+        // (why: docs/why.md#a-park-stops-the-dispatch-not-the-session)
+        const parked = s.park?.until && !s.park.passed
+        if ((s.item.labels || []).includes(L.blocked) || s.blockedByOpen.length || parked) {
+          const why = s.blockedByOpen.length
+            ? `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
+            : parked ? `it is parked until ${s.park.until}` : 'it carries the blocked label'
+          return plan.concat(label([L.blocked, L.awaiting], []), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
+        }
         plan.push(status('approved'))
         if (s.locked) return plan.concat(recheck())
         return plan.concat(fire('implement'))

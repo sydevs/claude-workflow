@@ -26,8 +26,8 @@ For each finding, in this order:
    runs in production is not worth a PR. Journal it and move on. Reachability beats severity — the
    CVSS score describes the vulnerable code, not our use of it.
 2. **Is a fix available?** No patched version means no PR. Journal it. If the risk is genuinely
-   live, file a `Bug` with a `Re-check: <date>` line in `## Notes` for the likely fix, and say
-   why. The dispatcher parks it as `blocked` until then.
+   live, file a `Bug` and set its `Hold Until` field to the date the fix is likely, saying why in
+   a comment. The dispatcher parks it as `blocked` until then.
 3. **Read the changelog before you bump.** A major needs its breaking-changes section read and its
    call sites checked. This is why this is a survey, not Dependabot.
 

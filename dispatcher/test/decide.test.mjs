@@ -132,6 +132,7 @@ function issueSnap(over = {}) {
     record: {},
     comments: [],
     markers: { blockedBy: [], recheck: null, recheckPassed: false },
+    park: { until: null, passed: false, source: null },
     blockedByOpen: [],
     openPrsClosingIt: [],
     dependents: [],
@@ -201,10 +202,10 @@ test('a closed issue goes Done and re-checks its dependents', () => {
 })
 
 test('the sweeper unparks a blocked ticket whose Re-check date passed, and leaves a future one alone', () => {
-  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-09-01', recheckPassed: true } }), config)
+  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
   assert.ok(passed.some((a) => a.type === 'label' && a.add.includes('awaiting') && a.remove.includes('blocked')))
   assert.ok(passed.some((a) => a.type === 'comment' && a.body.includes('@Ardnived')))
-  const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-12-01', recheckPassed: false } }), config)
+  const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } }), config)
   assert.ok(!early.some((a) => a.type === 'label'))
 })
 
@@ -221,9 +222,31 @@ test('unblock-check is quiet when the label already matches the relationship', (
 })
 
 test('unblock-check labels a date park that lost its label, and unparks when the date passes', () => {
-  const ahead = issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-12-01', recheckPassed: false } })
+  const ahead = issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } })
   assert.ok(decide({ reason: 'unblock-check', facts: {} }, ahead, config).some((a) => a.type === 'label' && a.add.includes('blocked')))
-  const past = issueSnap({ item: { number: 9, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-01-01', recheckPassed: true } })
+  const past = issueSnap({ item: { number: 9, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-01-01', passed: true, source: 'field' } })
   const p = decide({ reason: 'unblock-check', facts: {} }, past, config)
   assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked') && a.add.includes('awaiting')))
+})
+
+test('a park stops an implement dispatch before any session starts', () => {
+  // The label is not the test. A ticket parked on a date it never carried a
+  // label for would otherwise be implemented.
+  const verb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }
+  const parked = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-12-01', passed: false, source: 'field' } })
+  const p = decide(verb, parked, config)
+  assert.ok(!p.some((a) => a.type === 'fire'), 'nothing is fired')
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked') && a.add.includes('awaiting')))
+  assert.match(p.find((a) => a.type === 'comment').body, /parked until 2026-12-01/)
+
+  const past = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-01-01', passed: true, source: 'field' } })
+  assert.ok(decide(verb, past, config).some((a) => a.type === 'fire' && a.handler === 'implement'), 'a passed date does not park')
+})
+
+test('the refusal says which of the three reasons applies', () => {
+  const verb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }
+  const byBlocker = decide(verb, issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [{ number: 695 }] }), config)
+  assert.match(byBlocker.find((a) => a.type === 'comment').body, /waits on #695/)
+  const byLabel = decide(verb, issueSnap({ item: { number: 9, labels: ['blocked'] } }), config)
+  assert.match(byLabel.find((a) => a.type === 'comment').body, /blocked label/)
 })
