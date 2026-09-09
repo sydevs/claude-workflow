@@ -1,0 +1,936 @@
+{
+  "takenAt": "2026-09-08T22:22:45.604Z",
+  "repos": [
+    "SahajCloud",
+    "SahajAtlasWeb",
+    "WeMeditateWeb",
+    "SahajAtlasWordpress",
+    "claude-workflow"
+  ],
+  "items": [
+    {
+      "key": "SahajCloud#739",
+      "repo": "SahajCloud",
+      "number": 739,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Proposed",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#738",
+      "repo": "SahajCloud",
+      "number": 738,
+      "kind": "pr",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#737",
+      "repo": "SahajCloud",
+      "number": 737,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Proposed",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#735",
+      "repo": "SahajCloud",
+      "number": 735,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#734",
+      "repo": "SahajCloud",
+      "number": 734,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#733",
+      "repo": "SahajCloud",
+      "number": 733,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Implemented",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#732",
+      "repo": "SahajCloud",
+      "number": 732,
+      "kind": "pr",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#729",
+      "repo": "SahajCloud",
+      "number": 729,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#726",
+      "repo": "SahajCloud",
+      "number": 726,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#725",
+      "repo": "SahajCloud",
+      "number": 725,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#724",
+      "repo": "SahajCloud",
+      "number": 724,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#723",
+      "repo": "SahajCloud",
+      "number": 723,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#721",
+      "repo": "SahajCloud",
+      "number": 721,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#719",
+      "repo": "SahajCloud",
+      "number": 719,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#718",
+      "repo": "SahajCloud",
+      "number": 718,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#713",
+      "repo": "SahajCloud",
+      "number": 713,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#710",
+      "repo": "SahajCloud",
+      "number": 710,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#709",
+      "repo": "SahajCloud",
+      "number": 709,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#708",
+      "repo": "SahajCloud",
+      "number": 708,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#707",
+      "repo": "SahajCloud",
+      "number": 707,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#706",
+      "repo": "SahajCloud",
+      "number": 706,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#704",
+      "repo": "SahajCloud",
+      "number": 704,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implemented",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#702",
+      "repo": "SahajCloud",
+      "number": 702,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#695",
+      "repo": "SahajCloud",
+      "number": 695,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implemented",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#688",
+      "repo": "SahajCloud",
+      "number": 688,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-03"
+    },
+    {
+      "key": "SahajCloud#680",
+      "repo": "SahajCloud",
+      "number": 680,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": "2026-09-11"
+    },
+    {
+      "key": "SahajCloud#664",
+      "repo": "SahajCloud",
+      "number": 664,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#655",
+      "repo": "SahajCloud",
+      "number": 655,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajCloud#644",
+      "repo": "SahajCloud",
+      "number": 644,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#631",
+      "repo": "SahajCloud",
+      "number": 631,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#630",
+      "repo": "SahajCloud",
+      "number": 630,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#628",
+      "repo": "SahajCloud",
+      "number": 628,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajCloud#627",
+      "repo": "SahajCloud",
+      "number": 627,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#570",
+      "repo": "SahajCloud",
+      "number": 570,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#379",
+      "repo": "SahajCloud",
+      "number": 379,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#260",
+      "repo": "SahajCloud",
+      "number": 260,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#249",
+      "repo": "SahajCloud",
+      "number": 249,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-06"
+    },
+    {
+      "key": "SahajCloud#72",
+      "repo": "SahajCloud",
+      "number": 72,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#198",
+      "repo": "SahajAtlasWeb",
+      "number": 198,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#195",
+      "repo": "SahajAtlasWeb",
+      "number": 195,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#173",
+      "repo": "SahajAtlasWeb",
+      "number": 173,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#166",
+      "repo": "SahajAtlasWeb",
+      "number": 166,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#163",
+      "repo": "SahajAtlasWeb",
+      "number": 163,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#160",
+      "repo": "SahajAtlasWeb",
+      "number": 160,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#152",
+      "repo": "SahajAtlasWeb",
+      "number": 152,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#148",
+      "repo": "SahajAtlasWeb",
+      "number": 148,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#147",
+      "repo": "SahajAtlasWeb",
+      "number": 147,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#109",
+      "repo": "SahajAtlasWeb",
+      "number": 109,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajAtlasWeb#51",
+      "repo": "SahajAtlasWeb",
+      "number": 51,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#17",
+      "repo": "SahajAtlasWeb",
+      "number": 17,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajAtlasWeb#2",
+      "repo": "SahajAtlasWeb",
+      "number": 2,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#89",
+      "repo": "WeMeditateWeb",
+      "number": 89,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Revising",
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#82",
+      "repo": "WeMeditateWeb",
+      "number": 82,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#81",
+      "repo": "WeMeditateWeb",
+      "number": 81,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#80",
+      "repo": "WeMeditateWeb",
+      "number": 80,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#78",
+      "repo": "WeMeditateWeb",
+      "number": 78,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": "Implement",
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#64",
+      "repo": "WeMeditateWeb",
+      "number": 64,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "WeMeditateWeb#13",
+      "repo": "WeMeditateWeb",
+      "number": 13,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajAtlasWordpress#16",
+      "repo": "SahajAtlasWordpress",
+      "number": 16,
+      "kind": "issue",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [],
+      "status": null,
+      "stage": "Proposed",
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#72",
+      "repo": "claude-workflow",
+      "number": 72,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#71",
+      "repo": "claude-workflow",
+      "number": 71,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#70",
+      "repo": "claude-workflow",
+      "number": 70,
+      "kind": "pr",
+      "labels": [
+        "awaiting"
+      ],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#31",
+      "repo": "claude-workflow",
+      "number": 31,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "claude-workflow#3",
+      "repo": "claude-workflow",
+      "number": 3,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": "Blocked",
+      "hold": "2026-10-02"
+    },
+    {
+      "key": "SahajCloud#652",
+      "repo": "SahajCloud",
+      "number": 652,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [
+        "Ardnived"
+      ],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#705",
+      "repo": "SahajCloud",
+      "number": 705,
+      "kind": "issue",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#731",
+      "repo": "SahajCloud",
+      "number": 731,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [
+        "sydevs-bot"
+      ],
+      "status": "Revising",
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#66",
+      "repo": "claude-workflow",
+      "number": 66,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#67",
+      "repo": "claude-workflow",
+      "number": 67,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#68",
+      "repo": "claude-workflow",
+      "number": 68,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#69",
+      "repo": "claude-workflow",
+      "number": 69,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajCloud#736",
+      "repo": "SahajCloud",
+      "number": 736,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWeb#202",
+      "repo": "SahajAtlasWeb",
+      "number": 202,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "WeMeditateWeb#91",
+      "repo": "WeMeditateWeb",
+      "number": 91,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "SahajAtlasWordpress#15",
+      "repo": "SahajAtlasWordpress",
+      "number": 15,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    },
+    {
+      "key": "claude-workflow#73",
+      "repo": "claude-workflow",
+      "number": 73,
+      "kind": "pr",
+      "labels": [],
+      "assignees": [],
+      "status": null,
+      "stage": null,
+      "hold": null
+    }
+  ]
+}
