@@ -1081,6 +1081,12 @@ unreachable board had swallowed the whole run.
 organization's project. That is a permission answer dressed as data, and the code read `.status`
 off it. It now says so by name: `BoardUnreachable`, carrying the fix in its message.
 
+A day later the same anchor caught a second failure, and this time the message lied. `itemOf`
+declared `$n` and never used it, so GraphQL rejected the query — and `BoardUnreachable` reported
+it as a missing permission, because that is what the first failure had been. The message now
+says what went wrong first and guesses at a cause only when the error reads like one. A test
+walks every query in the file and fails on a variable it declares but never uses.
+
 The deeper rule is the one this violated. The board is a lens over state the labels and the
 status comment already carry, so **a board write that fails must never stop the dispatch**. Every
 Projects call now degrades: the plan continues, the run fires, and one `board-unreachable`

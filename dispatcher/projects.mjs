@@ -11,7 +11,10 @@
 
 export class BoardUnreachable extends Error {
   constructor(detail) {
-    super(`the org project is unreachable: ${detail}. Check that the dispatch token has organization Projects read and write.`)
+    // Say what went wrong, then guess. The first version asserted a missing
+    // permission and hid a query bug behind it for a day.
+    const denied = /null|not accessible|Resource protected|insufficient|scope/i.test(String(detail))
+    super(`the org project is unreachable: ${detail}${denied ? '. Check that the dispatch token has organization Projects read and write.' : ''}`)
     this.name = 'BoardUnreachable'
   }
 }
@@ -38,12 +41,14 @@ export async function projectIds(gh, config) {
 
 /** The item's project item id and current Status name, or nulls. */
 export async function itemOf(gh, config, contentNodeId) {
-  const q = `query($id:ID!,$n:Int!){ node(id:$id){
+  // No $n here: the project is picked from the result, not by the server.
+  // GraphQL rejects a query that declares a variable it never uses.
+  const q = `query($id:ID!){ node(id:$id){
     ... on Issue { projectItems(first:10){ nodes { id project { number } fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }
     ... on PullRequest { projectItems(first:10){ nodes { id project { number } fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } }`
   let d
   try {
-    d = await gh.graphql(q, { id: contentNodeId, n: config.projects.number })
+    d = await gh.graphql(q, { id: contentNodeId })
   } catch (e) {
     throw new BoardUnreachable(e.message)
   }
