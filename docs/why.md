@@ -1228,3 +1228,26 @@ The PR is the answer. On unlock, an `implement` verb with an open PR closing the
 consumed, the ticket goes to `Done`, and `awaiting` comes off. Any other verb still re-derives —
 someone who typed `revise` while the session ran is still owed a run — and an implement verb with
 no PR still re-derives too, because then nothing answered it.
+
+## Our own check runs are not CI
+
+`ci.ignoreCheckNames` exists because the dispatcher runs on `pull_request_target`, so its jobs
+appear as check runs on the PR head. It listed `dispatch / act`, and it matched by equality.
+
+GitHub does not name a matrix leg that. It names it `dispatch / act (sydevs, SahajCloud,
+sydevs/SahajCloud, pr, 742, review, …)` — the job name, then every matrix parameter. The list
+never matched a single one. And because the `act` jobs are serialized per item with
+`cancel-in-progress`, cancelled legs are routine, and a cancelled run reads as failing.
+
+So the dispatcher watched its own cancelled jobs, called CI red, and fired `fix-ci` against a PR
+whose only real check had passed. Five sessions, three on one PR, then the cap, then `awaiting` on
+sydevs/SahajCloud#742 with the reason naming its own job. The loop had found a way to spend
+sessions arguing with itself.
+
+The list now matches a name, or that name followed by a matrix suffix. `dispatch / journal` and
+`legacy` joined it, since both are ours and both appear on the head. `dispatch / actions-other`
+would not be ignored — the suffix has to be a matrix suffix, not any longer name.
+
+The general shape is worth keeping in view: **anything the dispatcher does on a PR becomes input
+the dispatcher reads.** That is what `pull_request_target` costs, and every filter over it has to
+be written against what GitHub actually emits rather than what the workflow file says.
