@@ -7,13 +7,14 @@ const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const now = new Date('2026-09-08T12:00:00Z')
 
-function fake({ issuesByLabel = {}, prs = [], recent = [] }) {
+function fake({ issuesByLabel = {}, prs = [], recent = [], blockedSearch = [] }) {
   const rest = {
     issues: {
       listForRepo: (args) => ({ data: args.labels ? issuesByLabel[args.labels] || [] : recent }),
       listComments: () => ({ data: [] }),
     },
     pulls: { list: () => ({ data: prs }) },
+    search: { issuesAndPullRequests: async () => ({ data: { items: blockedSearch } }) },
   }
   return { rest, paginate: async (fn, args) => (await fn(args)).data }
 }
@@ -41,4 +42,16 @@ test('a stale draft is an orphan, and is not also re-derived', async () => {
 test('a blocked item is re-checked so a passed Re-check date unparks it', async () => {
   const t = await listSweepTargets({ github: fake({ issuesByLabel: { blocked: [{ number: 3 }] } }), config, repo, now })
   assert.ok(t.some((x) => x.number === 3 && x.reason === 'unblock-check'))
+})
+
+test('an issue GitHub calls blocked is swept even when it carries no label', async () => {
+  // SahajAtlasWeb#195 and #198 on 2026-09-09: correct native relationships,
+  // no `blocked` label, so nothing would ever have re-checked them.
+  const t = await listSweepTargets({
+    github: fake({ issuesByLabel: { blocked: [{ number: 9 }] }, blockedSearch: [{ number: 195 }, { number: 198 }, { number: 9 }] }),
+    config, repo, now,
+  })
+  const checks = t.filter((x) => x.reason === 'unblock-check').map((x) => x.number).sort((a, b) => a - b)
+  assert.deepEqual(checks, [9, 195, 198], 'the labelled one and the two only GitHub knew about')
+  assert.equal(checks.filter((n) => n === 9).length, 1, 'the labelled one is not swept twice')
 })

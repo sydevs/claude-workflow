@@ -2,8 +2,9 @@
  * The residue sweeper: every 30 minutes per repo, find what no event will
  * ever move again — a lock past its deadline, a retry whose window has
  * passed, a recheck nobody drained, an orphaned draft, a park whose
- * Re-check date passed, a resolved review thread, an `awaiting` that
- * drifted — and turn each into a target. Runs on GitHub Actions, so it keeps
+ * Re-check date passed, an issue GitHub calls blocked that carries no label,
+ * a resolved review thread, an `awaiting` that drifted — and turn each into
+ * a target. Runs on GitHub Actions, so it keeps
  * working through an outage of the routines.
  * (why: docs/why.md#awaiting-has-one-writer)
  */
@@ -38,7 +39,18 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   // Parked items: a Re-check date that passed, or blockers that closed with no
   // event seen. `unblock-check` re-reads both and mentions the reviewer. No
   // session ever writes `blocked` (why: docs/why.md#awaiting-has-one-writer).
-  for (const i of await byLabel(L.blocked)) push(i.pull_request ? 'pr' : 'issue', i.number, 'unblock-check', {})
+  const parked = new Set()
+  for (const i of await byLabel(L.blocked)) { parked.add(i.number); push(i.pull_request ? 'pr' : 'issue', i.number, 'unblock-check', {}) }
+
+  // Issues GitHub itself calls blocked, whatever labels they carry. `is:blocked`
+  // reads the native relationships, so this finds a ticket blocked before the
+  // label existed, or one a human linked in the UI and never labelled.
+  // (why: docs/why.md#blocked-follows-the-relationship)
+  try {
+    const q = `repo:${owner}/${name} is:issue is:open is:blocked -label:${L.journal}`
+    const { data } = await github.rest.search.issuesAndPullRequests({ q, per_page: 100 })
+    for (const i of data.items || []) if (!parked.has(i.number)) push('issue', i.number, 'unblock-check', {})
+  } catch { /* search is a convenience; the label sweep above is the guarantee */ }
 
   // Rechecks recorded while a lock was held but never drained (a missed unlabel event).
   const lockedNumbers = new Set()

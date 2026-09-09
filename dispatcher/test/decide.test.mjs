@@ -207,3 +207,23 @@ test('the sweeper unparks a blocked ticket whose Re-check date passed, and leave
   const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-12-01', recheckPassed: false } }), config)
   assert.ok(!early.some((a) => a.type === 'label'))
 })
+
+test('unblock-check applies the label when GitHub says blocked and we never labelled it', () => {
+  const snap = issueSnap({ item: { number: 195, labels: [] }, blockedByOpen: [{ number: 695 }], markers: { blockedBy: [], recheck: null, recheckPassed: false } })
+  const p = decide({ reason: 'unblock-check', facts: {} }, snap, config)
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked')), 'the label follows the relationship')
+  assert.ok(!p.some((a) => a.type === 'comment'), 'nothing to tell anyone yet')
+})
+
+test('unblock-check is quiet when the label already matches the relationship', () => {
+  const snap = issueSnap({ item: { number: 195, labels: ['blocked'] }, blockedByOpen: [{ number: 695 }], markers: { blockedBy: [], recheck: null, recheckPassed: false } })
+  assert.deepEqual(types(decide({ reason: 'unblock-check', facts: {} }, snap, config)), ['note'])
+})
+
+test('unblock-check labels a date park that lost its label, and unparks when the date passes', () => {
+  const ahead = issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-12-01', recheckPassed: false } })
+  assert.ok(decide({ reason: 'unblock-check', facts: {} }, ahead, config).some((a) => a.type === 'label' && a.add.includes('blocked')))
+  const past = issueSnap({ item: { number: 9, labels: ['blocked'] }, blockedByOpen: [], markers: { blockedBy: [], recheck: '2026-01-01', recheckPassed: true } })
+  const p = decide({ reason: 'unblock-check', facts: {} }, past, config)
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked') && a.add.includes('awaiting')))
+})
