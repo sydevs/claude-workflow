@@ -7,16 +7,16 @@ const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const now = new Date('2026-09-08T12:00:00Z')
 
-function fake({ issuesByLabel = {}, prs = [], recent = [], blockedSearch = [] }) {
+function fake({ issuesByLabel = {}, prs = [], recent = [], graphIssues = null }) {
   const rest = {
     issues: {
       listForRepo: (args) => ({ data: args.labels ? issuesByLabel[args.labels] || [] : recent }),
       listComments: () => ({ data: [] }),
     },
     pulls: { list: () => ({ data: prs }) },
-    search: { issuesAndPullRequests: async () => ({ data: { items: blockedSearch } }) },
   }
-  return { rest, paginate: async (fn, args) => (await fn(args)).data }
+  const graphql = async () => ({ repository: { issues: { pageInfo: { hasNextPage: false }, nodes: graphIssues || [] } } })
+  return { rest, graphql, paginate: async (fn, args) => (await fn(args)).data }
 }
 const bot = { login: config.identity.expectedLogin }
 
@@ -44,14 +44,34 @@ test('a blocked item is re-checked so a passed Re-check date unparks it', async 
   assert.ok(t.some((x) => x.number === 3 && x.reason === 'unblock-check'))
 })
 
-test('an issue GitHub calls blocked is swept even when it carries no label', async () => {
-  // SahajAtlasWeb#195 and #198 on 2026-09-09: correct native relationships,
-  // no `blocked` label, so nothing would ever have re-checked them.
+const issue = (number, labels, blockers) => ({ number, labels: { nodes: labels.map((name) => ({ name })) }, blockedBy: { nodes: blockers.map((state) => ({ state })) } })
+
+test('an issue GitHub records as blocked is swept even when it carries no label', async () => {
+  // SahajAtlasWeb#163, #195 and #198 on 2026-09-09: correct native
+  // relationships, no `blocked` label, so nothing ever re-checked them.
   const t = await listSweepTargets({
-    github: fake({ issuesByLabel: { blocked: [{ number: 9 }] }, blockedSearch: [{ number: 195 }, { number: 198 }, { number: 9 }] }),
+    github: fake({
+      issuesByLabel: { blocked: [{ number: 9 }] },
+      graphIssues: [
+        issue(163, [], ['OPEN']),
+        issue(195, [], ['OPEN']),
+        issue(198, [], ['CLOSED', 'OPEN']),
+        issue(9, ['blocked'], ['OPEN']),
+        issue(40, [], ['CLOSED']),
+        issue(41, [], []),
+        issue(42, ['ops-journal'], ['OPEN']),
+      ],
+    }),
     config, repo, now,
   })
   const checks = t.filter((x) => x.reason === 'unblock-check').map((x) => x.number).sort((a, b) => a - b)
-  assert.deepEqual(checks, [9, 195, 198], 'the labelled one and the two only GitHub knew about')
+  assert.deepEqual(checks, [9, 163, 195, 198], 'the labelled one, plus the three only GitHub knew about')
   assert.equal(checks.filter((n) => n === 9).length, 1, 'the labelled one is not swept twice')
+})
+
+test('a GraphQL that cannot answer leaves the label sweep as the guarantee', async () => {
+  const github = fake({ issuesByLabel: { blocked: [{ number: 9 }] } })
+  github.graphql = async () => { throw new Error('Field blockedBy does not exist') }
+  const t = await listSweepTargets({ github, config, repo, now })
+  assert.deepEqual(t.filter((x) => x.reason === 'unblock-check').map((x) => x.number), [9])
 })

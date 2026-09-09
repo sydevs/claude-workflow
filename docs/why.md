@@ -1161,6 +1161,13 @@ the dependent would have been passed over in silence. The thing that tells you a
 depended on a label nothing had applied.
 
 So the label follows the relationship, in both directions, in one place. `unblock-check` applies
-`blocked` when GitHub says the issue is blocked and we have not said so, removes it when the last
-blocker closes, and the sweeper finds candidates with `is:blocked` — one search per repo, reading
-the relationships GitHub already indexes rather than the label we wrote.
+`blocked` when GitHub says the issue is blocked and we have not said so, and removes it when the
+last blocker closes.
+
+Finding the candidates took two tries. `is:blocked` in issue search looked exactly right and is
+not: **it matches the `blocked` label, not the relationship.** The first live sweep returned the
+two tickets that already carried the label and none of the four that needed it — a search that
+could only ever find what it was not looking for. The relationship is reachable through GraphQL
+alone, as `blockedBy` on `Issue`, so the sweeper asks for every open issue with its labels and
+its blockers in one paginated query per repo. That query also turned up a fifth ticket nobody had
+named.
