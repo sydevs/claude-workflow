@@ -133,8 +133,11 @@ Tick items off in the body as they are answered.
 
 ### Relationships — what must happen first
 
-GitHub calls these **Relationships**. The REST resource is `dependencies`. **Write the
-constraint into the body, always**, in exactly this form, one line per blocker, in `## Notes`:
+GitHub calls these **Relationships**. The REST resource is `dependencies`. **The relationship is
+what every gate reads.** The body line exists because a cloud session cannot write one, so the
+dispatcher converts the line. Set the relationship where you can, and write the line always.
+
+Write it in exactly this form, one line per blocker, in `## Notes`:
 
 ```markdown
 Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges
@@ -142,8 +145,12 @@ Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint thi
 
 The dispatcher reads that line on `issues.opened` and `issues.edited`, creates the native
 relationship, and applies `blocked`. When the last blocker closes it removes `blocked`, sets
-`awaiting`, and mentions the reviewer. Nothing is implemented on unblock. In-org issue URLs only —
-a PR URL or prose is ignored.
+`awaiting`, and mentions the reviewer. Nothing is implemented on unblock.
+
+**Write the format. Do not rely on it when reading.** The reader matches the words `Blocked by`,
+with or without a colon, through leading bold or a list bullet, and takes either a full in-org
+issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as are a PR URL and
+a struck-through line. (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
 
 A local session may also set the native relationship directly. Cross-repo needs the full URL:
 

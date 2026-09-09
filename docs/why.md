@@ -1129,3 +1129,38 @@ The scheduled journal job sweeps up whatever still slips through, every half hou
 oldest. It runs on the schedule and never on an event, so it is never racing itself. A split
 journal is not a lost run — but `reflect` counts a week from these titles, and a day counted
 twice at half strength is worse than a day counted once.
+
+## The marker reader matches words, not punctuation
+
+`relationships.bodyMarkerFormat` is what the loop writes: `Blocked by: <url>`, exact, because a
+machine writing to a machine has no reason to vary. The reader used to demand the same thing —
+the line had to *start* with `Blocked by:` and name a full issue URL.
+
+People do not write that. Four live tickets on 2026-09-09 said
+`**Blocked by sydevs/SahajCloud#695.**` — bold, no colon, shorthand instead of a URL — and the
+reader saw no blocker in any of them. Three separate runs on 2026-09-08 journaled *"`Blocked by:`
+ships in three shapes"* under friction, and none acted on it.
+
+The asymmetry decides the direction. A false positive makes a run skip a ticket and say why. A
+false negative makes it write code against a contract that does not exist. So the reader is
+generous: it strips leading emphasis and list bullets, matches the words with or without the
+colon, and takes a URL or `owner/repo#N`. It stays closed where being open would be wrong — a
+bare `#N` names no repository, a PR is not an issue, another org is not ours, and a
+struck-through line is a cleared blocker.
+
+## blocked follows the relationship
+
+The four tickets above had **correct native relationships all along**. Someone had linked them in
+the GitHub UI. What they lacked was the `blocked` label, because the dispatcher only wrote it
+when it converted a marker, and no event had touched those tickets since.
+
+That was nearly harmless and quietly not. The implement gate reads `blockedByOpen`, from the
+relationship, so it refused them correctly. But `unblock-check` began with *"no label, nothing to
+do"*, and the sweeper only ever looked at labelled items — so when the blocker finally closed,
+the dependent would have been passed over in silence. The thing that tells you a ticket is ready
+depended on a label nothing had applied.
+
+So the label follows the relationship, in both directions, in one place. `unblock-check` applies
+`blocked` when GitHub says the issue is blocked and we have not said so, removes it when the last
+blocker closes, and the sweeper finds candidates with `is:blocked` — one search per repo, reading
+the relationships GitHub already indexes rather than the label we wrote.

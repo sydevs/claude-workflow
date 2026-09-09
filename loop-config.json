@@ -230,8 +230,8 @@
     }
   },
   "relationships": {
-    "$comment": "No MCP tool reads blocked_by. So a cloud run reads this marker from the issue body instead. Set the real relationship locally, then mirror it here.",
-    "bodyMarker": "Blocked by:",
+    "$comment": "The cloud-writable input for a blocker: a session cannot write a native relationship, so it writes this line and the dispatcher converts it. bodyMarker is what a READER matches — words only, so a hand-written `**Blocked by owner/repo#9**` is found too. bodyMarkerFormat is what a WRITER emits, exactly. The native relationship is what every gate reads.",
+    "bodyMarker": "Blocked by",
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason> (was: <Stage>)",
     "cloudReadable": false,
     "recheckProbe": "select:mcp__github__issue_dependency_read — if this ever resolves, switch work-routine to the tool and retire the body-marker fallback",

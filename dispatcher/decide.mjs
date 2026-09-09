@@ -212,10 +212,15 @@ export function decide(target, s, config) {
       return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising'), label([L.awaiting], [])]
     case 'issues.closed':
       return [status('done'), label([], [L.awaiting, L.stuck]), targets(s.dependents.map((d) => ({ ...d, reason: 'unblock-check' })))]
+    // Both directions. `blocked` follows the native relationship, so an issue
+    // blocked before the label existed gets one the first time the sweeper
+    // sees it. (why: docs/why.md#blocked-follows-the-relationship)
     case 'unblock-check': {
-      if (!(s.item.labels || []).includes(L.blocked)) return [note('not blocked')]
-      if (s.blockedByOpen.length) return [note(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)]
-      if (s.markers.recheck && !s.markers.recheckPassed) return [note(`parked until ${s.markers.recheck}`)]
+      const labelled = (s.item.labels || []).includes(L.blocked)
+      const applyIfMissing = (why) => (labelled ? [note(why)] : [label([L.blocked], []), note(`${why} — label applied`)])
+      if (s.blockedByOpen.length) return applyIfMissing(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)
+      if (s.markers.recheck && !s.markers.recheckPassed) return applyIfMissing(`parked until ${s.markers.recheck}`)
+      if (!labelled) return [note('not blocked')]
       return [
         label([L.awaiting], [L.blocked]),
         commentOnce(`unblocked ${facts.closedNumber || ''}`, `@${config.assignment.reviewer} unblocked: every blocker is closed. Say \`${config.dispatch.commandPrefix} implement\` to start.`),
