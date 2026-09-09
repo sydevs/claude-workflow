@@ -12,6 +12,37 @@
 import { loadRecord } from './record.mjs'
 import { isBot } from './decide.mjs'
 
+/**
+ * Open issues with at least one OPEN blocker and no `blocked` label.
+ *
+ * The relationship is only reachable through GraphQL. `is:blocked` in issue
+ * search matches the **label**, not the relationship, so a search could never
+ * find what the label was missing — it returned the two tickets that already
+ * had it. (why: docs/why.md#blocked-follows-the-relationship)
+ */
+export async function nativelyBlocked(github, owner, name, L) {
+  const q = `query($o:String!,$n:String!,$after:String){ repository(owner:$o,name:$n){
+    issues(states:OPEN, first:100, after:$after){ pageInfo{ hasNextPage endCursor }
+      nodes{ number labels(first:20){ nodes{ name } } blockedBy(first:20){ nodes{ state } } } } } }`
+  const out = []
+  let after = null
+  try {
+    for (;;) {
+      const d = await github.graphql(q, after ? { o: owner, n: name, after } : { o: owner, n: name })
+      const page = d?.repository?.issues
+      if (!page) break
+      for (const i of page.nodes || []) {
+        const labels = (i.labels?.nodes || []).map((l) => l.name)
+        if (labels.includes(L.blocked) || labels.includes(L.journal)) continue
+        if ((i.blockedBy?.nodes || []).some((b) => b.state === 'OPEN')) out.push(i.number)
+      }
+      if (!page.pageInfo?.hasNextPage) break
+      after = page.pageInfo.endCursor
+    }
+  } catch { /* the label sweep above is the guarantee; this only widens it */ }
+  return out
+}
+
 export async function listSweepTargets({ github, config, repo, now = new Date() }) {
   const { owner, name } = repo
   const L = config.labels
@@ -42,15 +73,12 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   const parked = new Set()
   for (const i of await byLabel(L.blocked)) { parked.add(i.number); push(i.pull_request ? 'pr' : 'issue', i.number, 'unblock-check', {}) }
 
-  // Issues GitHub itself calls blocked, whatever labels they carry. `is:blocked`
-  // reads the native relationships, so this finds a ticket blocked before the
-  // label existed, or one a human linked in the UI and never labelled.
+  // Issues GitHub itself records as blocked, whatever label they carry: a
+  // ticket blocked before the label existed, or one a human linked in the UI.
   // (why: docs/why.md#blocked-follows-the-relationship)
-  try {
-    const q = `repo:${owner}/${name} is:issue is:open is:blocked -label:${L.journal}`
-    const { data } = await github.rest.search.issuesAndPullRequests({ q, per_page: 100 })
-    for (const i of data.items || []) if (!parked.has(i.number)) push('issue', i.number, 'unblock-check', {})
-  } catch { /* search is a convenience; the label sweep above is the guarantee */ }
+  for (const n of await nativelyBlocked(github, owner, name, L)) {
+    if (!parked.has(n)) push('issue', n, 'unblock-check', {})
+  }
 
   // Rechecks recorded while a lock was held but never drained (a missed unlabel event).
   const lockedNumbers = new Set()
