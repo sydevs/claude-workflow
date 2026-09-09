@@ -127,9 +127,14 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   if (pr.state === 'open') pr = await pollMergeable(gh, base, pr)
   const reviews = await gh.paginate(gh.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
   const threads = pr.state === 'open' ? await reviewThreads(gh, base) : []
-  const ignore = new Set(config.ci?.ignoreCheckNames || [])
+  // A matrix job's check run is named `<job> (<params>)`, so an exact-match
+  // ignore list never sees it. The dispatcher's own legs then read as CI —
+  // and `cancel-in-progress` cancels them routinely, which read as failing.
+  // (why: docs/why.md#our-own-check-runs-are-not-ci)
+  const ignored = config.ci?.ignoreCheckNames || []
+  const ignore = (name) => ignored.some((i) => name === i || name.startsWith(`${i} (`))
   const { data: cr } = await gh.rest.checks.listForRef({ owner, repo, ref: pr.head.sha, per_page: 100, filter: 'latest' })
-  const checkRuns = { check_runs: (cr.check_runs || []).filter((c) => !ignore.has(c.name)).map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion })) }
+  const checkRuns = { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion })) }
   const { data: st } = await gh.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha })
   const statuses = { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) }
   setRepoWorkflows(`${owner}/${repo}`, !(config.ci?.noCi || []).includes(repo))

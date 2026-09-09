@@ -141,13 +141,15 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "ci": {
-    "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, which would otherwise read as running while it evaluates itself.",
+    "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci).",
     "noCi": [
       "claude-workflow"
     ],
     "ignoreCheckNames": [
       "dispatch / resolve",
       "dispatch / act",
+      "dispatch / journal",
+      "legacy",
       "state / state"
     ]
   },
