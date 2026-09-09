@@ -1109,3 +1109,23 @@ The pattern is the same as the board's, and worth stating once for anything the 
 writes: **the fire is the work, and everything else is bookkeeping around it.** Bookkeeping that
 fails should be visible and should not be fatal. A run that never started leaves nothing to
 notice.
+
+## One journal a day, and the oldest one wins
+
+The first day of event dispatch produced two journal issues. The nightly survey wrote #77 at
+08:16 in its own format, with no `<!-- ops-journal:YYYY-MM-DD -->` marker. Hours later a
+dispatch wrote #78 for the same day. The session journalled to one and the dispatcher's
+anomalies went to the other, so the day's record was split down the middle and the title on
+each counted only its own half.
+
+Two things caused it, and both are now closed. A journal issue that lacks the day marker is
+matched by its creation date, which is correct but fragile — so an issue adopted that way is
+**stamped with the marker**, and every later lookup is exact. And two `act` jobs can look at the
+same instant, find nothing, and both create; so after creating, the dispatcher looks again and
+**closes its own issue if an older one appeared.** The oldest issue for the day always wins,
+which is a rule two racing jobs can agree on without talking.
+
+The scheduled journal job sweeps up whatever still slips through, every half hour, keeping the
+oldest. It runs on the schedule and never on an event, so it is never racing itself. A split
+journal is not a lost run — but `reflect` counts a week from these titles, and a day counted
+twice at half strength is worse than a day counted once.

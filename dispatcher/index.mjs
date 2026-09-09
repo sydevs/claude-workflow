@@ -14,7 +14,7 @@ import { resolve as resolveEvent } from './resolve.mjs'
 import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
-import { ensureJournalDay, refreshTally } from './journal.mjs'
+import { ensureJournalDay, refreshTally, closeDuplicateDays } from './journal.mjs'
 
 export function loadConfig(path) {
   return JSON.parse(readFileSync(path, 'utf-8'))
@@ -46,6 +46,8 @@ export async function act({ github, context, core, config, target, env = process
 export async function journalTick({ github, core, config, dryRun = false, now = new Date() }) {
   if (dryRun) return core.info('journal tick (dry run)')
   const j = await ensureJournalDay(github, config, now)
+  const closed = await closeDuplicateDays(github, config, now)
+  if (closed.length) core.info(`closed duplicate journal issue(s): ${closed.join(', ')}`)
   const counts = await refreshTally(github, config, j.number, now)
   core.info(`journal #${j.number}${j.created ? ' created' : ''}: ${JSON.stringify(counts)}`)
 }
