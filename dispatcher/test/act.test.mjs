@@ -140,3 +140,29 @@ test('green draft bot PR above the threshold fires the critic; under it marks re
   assert.ok(small.calls.some((c) => c.name === 'requestReviewers'))
   assert.ok(small.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('awaiting')))
 })
+
+test('a write the token is refused hands the step to a human, and the plan finishes', async () => {
+  // sydevs/SahajCloud#744 on 2026-09-09: CI green, the critic done, and
+  // markPullRequestReadyForReview came back FORBIDDEN. The job died, so the
+  // reviewer request and the label after it never ran either.
+  const pr = { number: 5, node_id: 'PR1', state: 'open', draft: true, merged: false, user: { login: 'sydevs-bot' }, head: { ref: 'claude/x', sha: 'abc' }, base: { ref: 'main' }, mergeable: true, mergeable_state: 'clean', changed_files: 1, additions: 3, deletions: 1, requested_reviewers: [] }
+  const world = { issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [], user: { login: 'sydevs-bot' }, pull_request: {}, html_url: 'u', comments: 0 } }, comments: {}, prs: { 5: pr }, checks: [{ name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'success' }] }
+  const github = fakeGithub(world)
+  const realGraphql = github.graphql
+  github.graphql = async (q, v) => {
+    if (String(q).includes('markPullRequestReadyForReview')) {
+      const e = new Error('Resource not accessible by personal access token')
+      e.status = 403
+      throw e
+    }
+    return realGraphql(q, v)
+  }
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'ci', event: 'workflow_run.completed', facts: { sha: 'abc' } }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+
+  const labels = github.calls.filter((c) => c.name === 'addLabels').flatMap((c) => c.args.labels)
+  assert.ok(labels.includes('awaiting'), 'the step is handed to a human')
+  const comment = github.calls.filter((c) => c.name === 'createComment').map((c) => c.args.body).find((b) => b.includes('not allowed to'))
+  assert.ok(comment, 'and the item says which step')
+  assert.match(comment, /mark ready/)
+})

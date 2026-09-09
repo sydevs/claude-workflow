@@ -53,6 +53,21 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   // The board is a lens. A token that cannot reach it must not stop the
   // dispatch, which is the part that matters — the labels carry the state.
   // The failure is journalled once per run, not swallowed.
+  // A write the token is not allowed to make is not a crash. It is a step the
+  // machinery cannot take, so it hands that step to a human: the plan carries
+  // on, the item gets `awaiting`, and the journal says which step and why.
+  // (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+  const handedOver = []
+  const handOver = async (what, fn) => {
+    try { await fn(); return true } catch (e) {
+      const denied = e?.status === 403 || /not accessible|FORBIDDEN|Resource protected/i.test(String(e?.message))
+      if (!denied) throw e
+      log(`cannot ${what} — ${e.message}`)
+      handedOver.push(what)
+      return false
+    }
+  }
+
   let boardFailed = null
   const board = async (fn) => {
     try { return await fn() } catch (e) {
@@ -99,8 +114,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'markReady': {
         log('mark ready')
         if (dryRun) break
-        await gh.graphql(`mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ pullRequest { id } } }`, { id: snapshot.pr.nodeId })
-        snapshot.pr.draft = false
+        const ok = await handOver('mark ready', () =>
+          gh.graphql(`mutation($id:ID!){ markPullRequestReadyForReview(input:{pullRequestId:$id}){ pullRequest { id } } }`, { id: snapshot.pr.nodeId }))
+        if (ok) snapshot.pr.draft = false
         break
       }
       case 'requestReviewer': {
@@ -109,13 +125,13 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           || (snapshot.reviews || []).some((r) => String(r.user?.login).toLowerCase() === reviewer.toLowerCase())
         if (already) { log('reviewer already requested or reviewed'); break }
         log(`request reviewer ${reviewer}`)
-        if (!dryRun) await gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] })
+        if (!dryRun) await handOver('request a reviewer', () => gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] }))
         break
       }
       case 'merge': {
         log('merge (squash)')
         if (dryRun) break
-        await gh.rest.pulls.merge({ ...args, pull_number: t.number, merge_method: 'squash' })
+        await handOver('merge', () => gh.rest.pulls.merge({ ...args, pull_number: t.number, merge_method: 'squash' }))
         break
       }
       case 'sentry': {
@@ -183,6 +199,14 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     }
   }
 
+  if (handedOver.length && !dryRun) {
+    await labels(gh, t, snapshot, [config.labels.awaiting], [], dryRun, log)
+    await commentOnce(gh, t, `handover ${handedOver.join('+')}`, `I could not ${handedOver.join(' or ')} here — the dispatch token is not allowed to. Everything else on this item is done, so this is the one step left for you.`, dryRun, log)
+    try {
+      const j = await ensureJournalDay(gh, config, now)
+      await postAnomaly(gh, config, j.number, { kind: 'handed-over', text: `${t.repo.full}#${t.number}: cannot ${handedOver.join(', ')}` })
+    } catch { /* the journal is not the token's keeper */ }
+  }
   if (boardFailed && !dryRun) {
     try {
       const j = await ensureJournalDay(gh, config, now)

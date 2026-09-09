@@ -1251,3 +1251,23 @@ would not be ignored — the suffix has to be a matrix suffix, not any longer na
 The general shape is worth keeping in view: **anything the dispatcher does on a PR becomes input
 the dispatcher reads.** That is what `pull_request_target` costs, and every filter over it has to
 be written against what GitHub actually emits rather than what the workflow file says.
+
+## A write we cannot make is handed over, not thrown
+
+`markPullRequestReadyForReview` came back `FORBIDDEN` on sydevs/SahajCloud#744 — the dispatch
+token is not allowed to make it. The job died on the unhandled error, so the two actions after it
+in the plan, the reviewer request and the label, never ran. A PR that was finished sat in draft
+with nothing said, which is the worst of the three possible outcomes.
+
+There are two kinds of failure here and they deserve opposite treatment. A bug should throw: it is
+ours, and a loud job is how we find it. **A permission we do not hold is not a bug** — it is a
+step this machinery cannot take. Nothing is gained by dying on it, and something is lost, because
+everything after it in the plan is skipped.
+
+So a denied write hands the step over. The plan finishes, the item gets `awaiting`, one comment
+names the step and says the token could not take it, and the day's journal records a
+`handed-over` anomaly. The reviewer sees a PR that needs one click rather than a PR that stopped.
+
+This is the third time the same shape has come up, after the board and the day's journal, and the
+rule generalises: **the dispatcher's job is to get the work to a person or a session.** Anything
+that fails on the way should be visible and should not take the rest of the run with it.
