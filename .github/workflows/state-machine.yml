@@ -60,7 +60,7 @@ jobs:
           github-token: ${{ secrets.token }}
 
       - name: Apply the state machine
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.token }}
           script: |
