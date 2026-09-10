@@ -20,7 +20,7 @@ function fake({ issuesByLabel = {}, prs = [], recent = [], graphIssues = null })
 }
 const bot = { login: config.identity.expectedLogin }
 
-test('every open, unlocked, non-draft bot PR is re-derived — a resolved thread fires no workflow', async () => {
+test('every open, unlocked bot PR is re-derived, draft included', async () => {
   const prs = [
     { number: 5, draft: false, user: bot, labels: [], updated_at: '2026-09-08T11:00:00Z' },
     { number: 6, draft: true, user: bot, labels: [], updated_at: '2026-09-08T11:00:00Z' },
@@ -28,15 +28,17 @@ test('every open, unlocked, non-draft bot PR is re-derived — a resolved thread
     { number: 8, draft: false, user: bot, labels: [{ name: 'bot:working' }], updated_at: '2026-09-08T11:00:00Z' },
   ]
   const t = await listSweepTargets({ github: fake({ issuesByLabel: { 'bot:working': [{ number: 8, pull_request: {} }] }, prs }), config, repo, now })
-  const scans = t.filter((x) => x.reason === 'conflict-scan').map((x) => x.number)
-  assert.deepEqual(scans, [5], 'only the open, unlocked, non-draft bot PR')
+  const scans = t.filter((x) => x.reason === 'sweep-pr').map((x) => x.number).sort((a, b) => a - b)
+  assert.deepEqual(scans, [5, 6], 'the ready one and the draft; not the human PR, not the locked one')
   assert.ok(!t.some((x) => x.reason === 'sweep-orphan'), 'a fresh draft is not an orphan')
 })
 
-test('a stale draft is an orphan, and is not also re-derived', async () => {
+test('a stale draft is re-derived first, and only then considered an orphan', async () => {
+  // The derivation acts. The orphan notice only tells a human, and stays
+  // quiet when the derivation found something to do.
   const prs = [{ number: 9, draft: true, user: bot, labels: [], updated_at: '2026-09-01T00:00:00Z' }]
   const t = await listSweepTargets({ github: fake({ prs }), config, repo, now })
-  assert.deepEqual(t.filter((x) => x.number === 9).map((x) => x.reason), ['sweep-orphan'])
+  assert.deepEqual(t.filter((x) => x.number === 9).map((x) => x.reason), ['sweep-pr', 'sweep-orphan'], 'in that order')
 })
 
 test('a blocked item is re-checked so a passed Re-check date unparks it', async () => {

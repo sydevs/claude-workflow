@@ -1271,3 +1271,23 @@ names the step and says the token could not take it, and the day's journal recor
 This is the third time the same shape has come up, after the board and the day's journal, and the
 rule generalises: **the dispatcher's job is to get the work to a person or a session.** Anything
 that fails on the way should be visible and should not take the rest of the run with it.
+
+## A draft that is ready is not an orphan
+
+Eight draft PRs sat for six hours on 2026-09-09, and the sweeper told each of them the same
+thing: *"This draft has had no CI activity for hours and no session holds it."* Every word was
+true and the conclusion was wrong. They were green, they had been through the critic, and the one
+step left was mark-ready — which the dispatch token was refused.
+
+The sweeper re-derived only **non-draft** PRs each pass, because the conflict scan it borrowed
+skips drafts. So a draft could only be reached through the orphan rule, which fires after six
+hours and whose whole purpose is to give up and call a human.
+
+Those are two different jobs. **Re-deriving is how a missed event is recovered**, and it should
+happen every pass, on every open unlocked bot PR, because nothing else will notice a resolved
+thread or a write the dispatcher was refused. **The orphan notice is how the loop admits
+defeat**, and it belongs at the end of a long timer. Running them as one thing meant a PR with an
+obvious next step waited six hours to be told it had none.
+
+Now both run: the derivation on every pass, and the notice only when the derivation found nothing
+left to do. A draft moving forward is never called an orphan again.
