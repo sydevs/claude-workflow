@@ -54,7 +54,7 @@ jobs:
       # Our own default branch, never the PR head. The caller runs on
       # pull_request_target with nothing checked out; this job checks out
       # only claude-workflow's dispatcher code.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: sydevs/claude-workflow
           ref: main
@@ -65,7 +65,7 @@ jobs:
             workflow/lib
             dispatcher
       - id: resolve
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
@@ -105,7 +105,7 @@ jobs:
       ROUTINE_ID_SAHAJATLASWORDPRESS: ${{ vars.ROUTINE_ID_SAHAJATLASWORDPRESS }}
       ROUTINE_ID_CLAUDE_WORKFLOW: ${{ vars.ROUTINE_ID_CLAUDE_WORKFLOW }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: sydevs/claude-workflow
           ref: main
@@ -117,7 +117,7 @@ jobs:
             dispatcher
       # No `run:` step interpolates github.event.*; event data reaches node
       # only through context.payload and the TARGET env var.
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
@@ -134,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: sydevs/claude-workflow
           ref: main
@@ -144,7 +144,7 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
