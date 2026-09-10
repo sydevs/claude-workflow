@@ -274,3 +274,14 @@ test('an implement verb is answered by the PR, not re-dispatched on unlock', () 
   const noPr = issueSnap({ comments: verb, openPrsClosingIt: [] })
   assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, noPr, config).some((a) => a.type === 'targets'))
 })
+
+test('a draft that is ready to advance is not reported as an orphan', () => {
+  // The eight PRs of 2026-09-09: green, reviewed, and stuck only because the
+  // token could not mark them ready. The orphan notice said the opposite.
+  const ready = prSnap({ pr: { ...prSnap().pr, draft: true, changed_files: 1, additions: 3, deletions: 1 } })
+  const p = decide({ reason: 'sweep-orphan', facts: {} }, ready, config)
+  assert.deepEqual(types(p), ['note'], 'silent while it still has somewhere to go')
+
+  // And the derivation that acts runs on every pass, draft or not.
+  assert.ok(decide({ reason: 'sweep-pr', facts: {} }, ready, config).some((a) => a.type === 'markReady'))
+})

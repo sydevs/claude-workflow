@@ -90,12 +90,15 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (!isBot(pr.user?.login, config) || lockedNumbers.has(pr.number)) continue
     const labels = (pr.labels || []).map((l) => l.name)
     if (labels.includes(L.stuck)) continue
-    if (pr.draft && Date.parse(pr.updated_at) < now.getTime() - orphanHours * 3600_000) { push('pr', pr.number, 'sweep-orphan'); continue }
-    // Every open, unlocked, non-draft bot PR is re-derived each pass. Resolving
-    // a review thread fires no workflow, so this is the only thing that sees it.
-    // `conflict-scan` is exactly that derivation, and it skips drafts.
-    // (why: docs/why.md#a-resolved-thread-fires-no-workflow)
-    if (!pr.draft) push('pr', pr.number, 'conflict-scan')
+    // Every open, unlocked bot PR is re-derived each pass, draft included.
+    // Resolving a review thread fires no workflow, and neither does a write
+    // the dispatcher was refused, so this is the only thing that sees either.
+    // (why: docs/why.md#a-resolved-thread-fires-no-workflow,
+    //  docs/why.md#a-draft-that-is-ready-is-not-an-orphan)
+    push('pr', pr.number, 'sweep-pr')
+    // The orphan notice is the other half: a draft with nothing left to do and
+    // nobody working on it. `sweep-pr` above acts; this one only tells a human.
+    if (pr.draft && Date.parse(pr.updated_at) < now.getTime() - orphanHours * 3600_000) push('pr', pr.number, 'sweep-orphan')
   }
 
   // Awaiting drift: open items with neither lock nor stuck nor awaiting, last touched by the bot.

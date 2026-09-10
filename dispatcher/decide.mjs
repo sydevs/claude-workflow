@@ -341,9 +341,14 @@ export function decide(target, s, config) {
       return [{ type: 'timeout' }]
     case 'sweep-recheck':
       return decide({ ...target, reason: 'unlock', facts: {} }, s, config)
+    case 'sweep-pr':
+      return evaluatePr(s, config)
     case 'sweep-orphan': {
+      // `sweep-pr` already ran the derivation this pass. If it found work, say
+      // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
-      return p.some((a) => a.type === 'fire') ? p : p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`))
+      if (p.some((a) => ['fire', 'merge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
+      return p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`))
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]
