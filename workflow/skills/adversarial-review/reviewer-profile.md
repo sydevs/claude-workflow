@@ -127,4 +127,22 @@ shape-level problems.**
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 
-- *(none yet — seeded 2026-09-02)*
+- **2026-09-12 — protective machinery is a liability unless someone owns it, and the review's own
+  suggestions pay that rent too.** Three PRs in one week, one answer. On
+  [SahajCloud#761](https://github.com/sydevs/SahajCloud/pull/761) **this review asked for an
+  in-process dedupe window** to bound Sentry volume; the author built it, and the reviewer deleted
+  it — *"Drop the dedupe window… no other fancy features like deduping."* On
+  [#765](https://github.com/sydevs/SahajCloud/pull/765) the review argued about *how* to build a
+  cross-locale read redaction, blunt shape versus reusing the field walk, and never asked whether
+  it should exist; the reviewer removed it whole — *"not sensitive… an unnecessary complication
+  which could create more issues for us going forward."* On
+  [#774](https://github.com/sydevs/SahajCloud/pull/774) the review passed a defaulting wrapper
+  clean; the reviewer: *"This whole function is a completely useless and unnecessary
+  indirection."*
+  The value under all three is value 1, applied to guards rather than layers: a defence against a
+  harm nobody has measured is permanent code, and they would rather carry the risk. Two rules
+  follow. **Weigh whether a protection should exist before weighing its shape** — the question the
+  #765 thread never asked. And **never propose adding machinery this review would flag in the
+  author's diff**; report the exposure, name what bounds it outside the repo, and leave the build
+  to them. Rate limits, caches, dedupe windows, retries and redactions are the shapes this keeps
+  arriving in.
