@@ -133,6 +133,26 @@ function loopMayNotMerge(snapshot, config) {
   return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
+// The actions that move an item. Every other action — a label, a comment, a
+// status, an anomaly — only restates where it already is.
+const MOVES = new Set(['fire', 'merge', 'markReady', 'recheck'])
+
+/**
+ * A sweep pass over an item that already carries `awaiting` says nothing
+ * unless the derivation moves it.
+ *
+ * New activity is anything that clears `awaiting`, and every way to clear it
+ * is an event the dispatcher already wakes on. So a plan with no move is the
+ * plan the last pass ran, and running it again writes the same label, the
+ * same `commentOnce` and the same anomaly.
+ * (why: docs/why.md#a-quiet-awaiting-item-is-swept-in-silence)
+ */
+function quietSweep(plan, s, config) {
+  if (!(s.item?.labels || []).includes(config.labels.awaiting)) return plan
+  if (plan.some((a) => MOVES.has(a.type))) return plan
+  return [note('awaiting with no new activity — nothing to add')]
+}
+
 // ---- the one derivation every PR event funnels into ----------------------
 export function evaluatePr(s, config) {
   const pr = s.pr
@@ -342,13 +362,13 @@ export function decide(target, s, config) {
     case 'sweep-recheck':
       return decide({ ...target, reason: 'unlock', facts: {} }, s, config)
     case 'sweep-pr':
-      return evaluatePr(s, config)
+      return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {
       // `sweep-pr` already ran the derivation this pass. If it found work, say
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
       if (p.some((a) => ['fire', 'merge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
-      return p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`))
+      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]
@@ -360,4 +380,4 @@ export function decide(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, LOCK_FREE_STATUS_ONLY }

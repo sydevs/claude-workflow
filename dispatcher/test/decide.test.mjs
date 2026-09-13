@@ -285,3 +285,51 @@ test('a draft that is ready to advance is not reported as an orphan', () => {
   // And the derivation that acts runs on every pass, draft or not.
   assert.ok(decide({ reason: 'sweep-pr', facts: {} }, ready, config).some((a) => a.type === 'markReady'))
 })
+
+test('a capped PR already labelled awaiting is swept in silence', () => {
+  // SahajCloud#754: capped, awaiting, and re-derived 48 times a day. The first
+  // pass applies the label and says so; every pass after it writes the same
+  // label, the same comment and the same anomaly.
+  const capped = { ci: red, record: { fixCi: 3 }, pr: { ...prSnap().pr, draft: false } }
+  const first = decide({ reason: 'sweep-pr', facts: {} }, prSnap(capped), config)
+  assert.ok(first.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'the first pass hands over')
+  assert.ok(first.some((a) => a.type === 'anomaly'))
+
+  const next = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ...capped, item: { number: 5, labels: ['awaiting'] } }), config)
+  assert.deepEqual(types(next), ['note'], 'the next sweep writes nothing')
+})
+
+test('an awaiting item is still swept, and a move still passes the gate', () => {
+  // Resolving a review thread fires no workflow, so only the sweep sees it.
+  // The derivation still runs; what the gate drops is a plan that repeats.
+  const resolved = prSnap({
+    item: { number: 5, labels: ['awaiting'] },
+    pr: { ...prSnap().pr, draft: false },
+    normalized: { reviewDecision: 'APPROVED' },
+    verdict: { verdict: 'MERGE', reason: 'green' },
+  })
+  assert.deepEqual(types(decide({ reason: 'sweep-pr', facts: {} }, resolved, config)), ['merge', 'status:done'])
+
+  // A human-merge repo holds instead, and holding is not news.
+  const held = prSnap({
+    repo: { owner: 'sydevs', name: 'claude-workflow', full: 'sydevs/claude-workflow' },
+    item: { number: 5, labels: ['awaiting'] },
+    pr: { ...prSnap().pr, draft: false },
+    normalized: { reviewDecision: 'APPROVED' },
+    verdict: { verdict: 'HOLD', reason: 'human' },
+  })
+  assert.deepEqual(types(decide({ reason: 'sweep-pr', facts: {} }, held, config)), ['note'])
+})
+
+test('the orphan notice is said once, then the draft is left alone', () => {
+  const stalled = { pr: { ...prSnap().pr, draft: true }, reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', state: 'COMMENTED', submitted_at: '2026-09-08T10:00:00Z' }], ci: red, record: { fixCi: 3 } }
+  const first = decide({ reason: 'sweep-orphan', facts: {} }, prSnap(stalled), config)
+  assert.ok(first.some((a) => a.type === 'anomaly' && a.kind === 'orphan'))
+  const next = decide({ reason: 'sweep-orphan', facts: {} }, prSnap({ ...stalled, item: { number: 5, labels: ['awaiting'] } }), config)
+  assert.deepEqual(types(next), ['note'])
+})
+
+test('a sweep on an item without awaiting is never silenced', () => {
+  const p = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ci: red, record: { fixCi: 3 } }), config)
+  assert.ok(p.some((a) => a.type === 'comment'), 'the hand-over still speaks')
+})
