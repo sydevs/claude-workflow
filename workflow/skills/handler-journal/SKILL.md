@@ -59,8 +59,9 @@ Exit 1 → cut prose from Friction, and never a failure. Post with
 
 ## Release the lock — the last GitHub write
 
-Read the item's labels, and write them back without `labels.lock`. Touch no other label. That
-event tells Actions the item is free. (why: docs/why.md#the-lock-label-is-the-lease)
+Read the item's labels with `issue_read method:get` — `get_labels` refuses a PR number — and write
+them back without `labels.lock`. Touch no other label. That event tells Actions the item is free.
+(why: docs/why.md#the-lock-label-is-the-lease)
 
 ## Stop
 
