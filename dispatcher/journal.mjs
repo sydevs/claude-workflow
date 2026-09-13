@@ -123,11 +123,46 @@ export async function closeDuplicateDays(gh, config, now = new Date()) {
   return closed
 }
 
-/** One anomaly line from the dispatcher. `id` is the dispatch id when there is one. */
+/** Every comment on an issue, oldest first. */
+async function allComments(gh, owner, repo, issue_number) {
+  const out = []
+  let page = 1
+  for (;;) {
+    const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number, per_page: 100, page })
+    for (const c of data) out.push(c)
+    if (data.length < 100) break
+    page += 1
+  }
+  return out
+}
+
+/** The visible line of an anomaly comment, or null when the body is not one. */
+export function anomalyLine(body) {
+  const b = String(body || '')
+  if (!b.startsWith(ANOMALY_MARKER)) return null
+  const i = b.indexOf(' -->\n')
+  return i < 0 ? null : b.slice(i + 5)
+}
+
+/**
+ * One anomaly line from the dispatcher. `id` is the dispatch id when there is one.
+ * Returns false when nothing was posted.
+ *
+ * **Said once a day, like the `commentOnce` beside it.** The key is the visible
+ * line, so one fact is one comment a day and a changed reason is a new one.
+ * (why: docs/why.md#an-anomaly-says-itself-once-a-day)
+ */
 export async function postAnomaly(gh, config, journalNumber, { kind, text, id = null }) {
   if (!journalNumber) return false
-  const body = `${ANOMALY_MARKER}${JSON.stringify({ kind, id })} -->\n⚠️ **${kind}** · ${text}`
-  await gh.rest.issues.createComment({ owner: config.org, repo: config.journalRepo, issue_number: journalNumber, body })
+  const owner = config.org
+  const repo = config.journalRepo
+  const line = `⚠️ **${kind}** · ${text}`
+  try {
+    const said = await allComments(gh, owner, repo, journalNumber)
+    if (said.some((c) => anomalyLine(c.body) === line)) return false
+  } catch { /* a listing we cannot read must not silence the anomaly */ }
+  const body = `${ANOMALY_MARKER}${JSON.stringify({ kind, id })} -->\n${line}`
+  await gh.rest.issues.createComment({ owner, repo, issue_number: journalNumber, body })
   return true
 }
 
@@ -171,15 +206,7 @@ export async function refreshTally(gh, config, journalNumber, now = new Date()) 
   if (!journalNumber) return null
   const owner = config.org
   const repo = config.journalRepo
-  const bodies = []
-  let page = 1
-  for (;;) {
-    const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: journalNumber, per_page: 100, page })
-    for (const c of data) bodies.push(c.body)
-    if (data.length < 100) break
-    page += 1
-  }
-  const counts = tallyFrom(bodies)
+  const counts = tallyFrom((await allComments(gh, owner, repo, journalNumber)).map((c) => c.body))
   const title = titleFor(weekday(now, config.journal.timezone), counts)
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: journalNumber })
   const body = withTally(issue.body, renderTally(counts))
