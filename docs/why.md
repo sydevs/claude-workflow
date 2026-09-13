@@ -1315,3 +1315,25 @@ The key is the **visible line**, not the marker: the same kind about the same it
 however many dispatch ids produced it, and a changed reason — different failing checks, a
 different attempt — is a new line that still posts. A listing the dispatcher cannot read falls
 through to posting, because a duplicate is cheaper than a silence.
+
+## A quiet awaiting item is swept in silence
+
+Guarding `postAnomaly` stopped the journal repeating itself. It did not stop the repetition. The
+review on #95 asked the question the other way round: `sydevs/SahajCloud#754` is capped and
+already labelled `awaiting`, yet **every** sweep pass still re-derived it and still wrote — a
+`label` call, a `commentOnce` call, an `anomaly` call — 48 passes a day, for a condition no pass
+could clear. Three of those writes were merely deduplicated downstream. The fourth, the label,
+was not deduplicated at all.
+
+`awaiting` is the dispatcher's own record that it has said everything it has to say and the item
+is now a human's. That makes the definition of *new activity* fall out of the label rather than
+needing one of its own: **anything that clears `awaiting` is new activity, and every way to clear
+it — a comment, a review, a push, a verb — is an event the dispatcher already wakes on.** So a
+sweep pass that finds `awaiting` still on and derives no move has, by construction, found the
+state the last pass left. It runs the derivation and drops the plan.
+
+The gate is on the plan, not on the fetch. `sweep-pr` still gathers, because gathering is the
+only thing that sees a resolved review thread or a write the dispatcher was refused, neither of
+which fires a workflow (why: docs/why.md#a-resolved-thread-fires-no-workflow). Both of those show
+up as a *move* — a `merge`, a `markReady`, a `fire` — so they pass the gate and act. What stops
+is the writing, which is the half that was repeating.
