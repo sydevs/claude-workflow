@@ -142,7 +142,7 @@ shape-level problems.**
   The value under all three is value 1, applied to guards rather than layers: a defence against a
   harm nobody has measured is permanent code, and they would rather carry the risk. Two rules
   follow. **Weigh whether a protection should exist before weighing its shape** — the question the
-  #765 thread never asked. And **never propose adding machinery this review would flag in the
-  author's diff**; report the exposure, name what bounds it outside the repo, and leave the build
-  to them. Rate limits, caches, dedupe windows, retries and redactions are the shapes this keeps
-  arriving in.
+  #765 thread never asked. And **never propose machinery against a harm you have not counted** —
+  the machinery this review would flag in the author's own diff; report the exposure, name what
+  bounds it outside the repo, and leave the build to them. Rate limits, caches, dedupe windows,
+  retries and redactions are the shapes this keeps arriving in.
