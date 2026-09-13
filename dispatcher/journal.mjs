@@ -148,12 +148,9 @@ export function anomalyLine(body) {
  * One anomaly line from the dispatcher. `id` is the dispatch id when there is one.
  * Returns false when nothing was posted.
  *
- * **Said once a day, like the comment beside it.** Every emitter pairs this with
- * `commentOnce` on the item, which is keyed and skips a repeat; without the same
- * guard here, a condition no pass can clear is re-reported on every sweep.
- * The key is the visible line, so the same kind about the same item is one
- * fact however many dispatch ids produced it — and a changed reason is a new
- * line, which still posts. (why: docs/why.md#an-anomaly-says-itself-once-a-day)
+ * **Said once a day, like the `commentOnce` beside it.** The key is the visible
+ * line, so one fact is one comment a day and a changed reason is a new one.
+ * (why: docs/why.md#an-anomaly-says-itself-once-a-day)
  */
 export async function postAnomaly(gh, config, journalNumber, { kind, text, id = null }) {
   if (!journalNumber) return false
