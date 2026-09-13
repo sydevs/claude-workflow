@@ -1291,3 +1291,27 @@ obvious next step waited six hours to be told it had none.
 
 Now both run: the derivation on every pass, and the notice only when the derivation found nothing
 left to do. A draft moving forward is never called an orphan again.
+
+## An anomaly says itself once a day
+
+Thursday 2026-09-10 posted **44 comments** on its journal and **zero** sessions ran. Forty-three
+were dispatcher anomalies, and they carried **eleven distinct facts**: nine items whose attempts
+were exhausted, one PR with red CI, the same PR orphaned. `sydevs/SahajCloud#754` alone produced
+12 `ci-capped` lines and 6 `orphan` lines that day. Saturday it produced 22 of the day's 25
+anomaly comments. It was still being re-reported four days later.
+
+Every emitter already had the guard and only used half of it. `attempts-exhausted`, `ci-capped`,
+`orphan` and `handed-over` each pair `commentOnce` on the item — keyed, skips a repeat — with
+`postAnomaly` on the journal, which posted unconditionally. So the PR carried one comment and the
+journal carried one per sweep pass, forever, for a condition no pass could clear. (`sweep-orphan`
+re-runs `evaluatePr`, so a stuck PR spent three comments a pass, not one.)
+
+The cost is not the API calls. It is that **the journal is `reflect`'s only input**, and the
+reader who has to decide whether Thursday was a bad day. A day whose title reads *37 anomalies*
+when eleven things are wrong has lost the number that mattered, and the `<!-- tally -->` count
+inherits the same inflation.
+
+The key is the **visible line**, not the marker: the same kind about the same item is one fact
+however many dispatch ids produced it, and a changed reason — different failing checks, a
+different attempt — is a new line that still posts. A listing the dispatcher cannot read falls
+through to posting, because a duplicate is cheaper than a silence.
