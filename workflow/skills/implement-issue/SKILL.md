@@ -81,9 +81,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    the real configuration, then open the real config and verify it. Name the file you checked in
    the PR body. (why: docs/why.md#a-test-fixture-defines-the-world-the-test-lives-in)
 
-10. **Collect the review aids** the PR body needs. **Preview URLs are discovered, never
-    constructed, and always the BRANCH alias** — `/workflow:finalize-pr` step 7 is the
-    canonical rule. **Email previews** when the diff touches `src/plugins/email/` or
+10. **Collect the review aids** the PR body needs. **A preview host keyed on the pull request number is
+    constructed; one keyed on a branch slug is discovered** — `/workflow:finalize-pr` step 7
+    is the canonical rule. Either way, link the pages a reviewer should open, not the root. **Email previews** when the diff touches `src/plugins/email/` or
     `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
     `/view/<id>` links.
 

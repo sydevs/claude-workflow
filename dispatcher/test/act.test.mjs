@@ -162,7 +162,9 @@ test('a write the token is refused hands the step to a human, and the plan finis
 
   const labels = github.calls.filter((c) => c.name === 'addLabels').flatMap((c) => c.args.labels)
   assert.ok(labels.includes('awaiting'), 'the step is handed to a human')
-  const comment = github.calls.filter((c) => c.name === 'createComment').map((c) => c.args.body).find((b) => b.includes('not allowed to'))
+  const comment = github.calls.filter((c) => c.name === 'createComment').map((c) => c.args.body).find((b) => b.includes('step left for you'))
   assert.ok(comment, 'and the item says which step')
   assert.match(comment, /mark ready/)
+  assert.match(comment, /GitHub said/, 'quoting the refusal, not naming a cause')
+  assert.match(comment, /Resource not accessible/, "in GitHub's own words")
 })

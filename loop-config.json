@@ -80,7 +80,7 @@
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "Values the GitHub Actions dispatcher reads. reviewProposals: a bot-filed ticket is revised before a human reads it (why: docs/why.md#a-proposal-is-reviewed-before-you-read-it). routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
@@ -101,6 +101,7 @@
       "claude-workflow": "trig_013eDcX1APf1f5NfUzodGE75"
     },
     "enabledHandlers": null,
+    "reviewProposals": true,
     "verbs": {
       "issue": [
         "implement",

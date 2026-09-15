@@ -1,0 +1,4 @@
+{
+  "$comment": "Session settings for this repo. outputStyle applies to every Claude Code session that opens it, cloud routines included — the routine config lives on another account, so the repo is where the loop can state it. The skills' own budgets and register agree with it (workflow/skills/handler-preflight/SKILL.md).",
+  "outputStyle": "concise"
+}

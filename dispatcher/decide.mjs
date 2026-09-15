@@ -21,7 +21,7 @@ export const status = (value) => ({ type: 'status', value })
 export const commentOnce = (key, body) => ({ type: 'comment', key, body })
 export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
-export const merge = () => ({ type: 'merge' })
+export const armAutoMerge = () => ({ type: 'armAutoMerge' })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
@@ -129,13 +129,14 @@ function underThreshold(pr, config) {
   return (pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines
 }
 
+/** Repos where a merge is a deploy, so nothing is ever armed. */
 function loopMayNotMerge(snapshot, config) {
   return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is.
-const MOVES = new Set(['fire', 'merge', 'markReady', 'recheck'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck'])
 
 /**
  * A sweep pass over an item that already carries `awaiting` says nothing
@@ -186,16 +187,24 @@ export function evaluatePr(s, config) {
   if (pr.draft) {
     const small = underThreshold(pr, config)
     if (!ownReview(s, config) && !small) return [fire('adversarial-review')]
+    // GitHub refuses auto-merge on a draft, so this is the first moment it can
+    // be armed. From here the ruleset decides: approval, resolved threads and
+    // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     const plan = [markReady(), requestReviewer(), label([awaiting], [])]
+    if (!loopMayNotMerge(s, config)) plan.push(armAutoMerge())
     if (small && !ownReview(s, config)) {
       plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\`. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
     }
     return plan
   }
 
+  // The dispatcher no longer merges. GitHub does, once the ruleset is
+  // satisfied — one approval, every thread resolved, CI green — and the queue
+  // rebases and tests before it lands. All that is left here is arming a PR
+  // that reached ready without it. (why: docs/why.md#github-owns-the-merge)
+  if (!loopMayNotMerge(s, config) && !s.pr?.autoMergeArmed) return [armAutoMerge()]
   if (s.normalized?.reviewDecision !== 'APPROVED') return [status('revising')]
-  if (s.verdict?.verdict === 'MERGE') return [merge(), status('done')]
-  const plan = [status('approved'), note(`approved, held: ${s.verdict?.reason}`)]
+  const plan = [status('approved')]
   if (loopMayNotMerge(s, config)) plan.push(label([awaiting], []))
   return plan
 }
@@ -221,15 +230,24 @@ export function decide(target, s, config) {
 
   switch (target.reason) {
     case 'issues.opened': {
-      plan.push({ type: 'ensure' }, status('proposed'), label([L.awaiting], []))
+      // Parked or your turn, never both: a blocked ticket is waiting on the
+      // blocker, not on you. (why: docs/why.md#blocked-and-awaiting-are-exclusive)
+      const bornBlocked = s.blockedByOpen.length || s.markers.blockedBy.length || s.markers.recheck
+      plan.push({ type: 'ensure' }, status('proposed'))
+      if (!bornBlocked) plan.push(label([L.awaiting], []))
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
-      if (s.blockedByOpen.length || s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], []))
+      if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
+      // A proposal the loop filed is challenged before a human reads it: the
+      // open questions answered from the code, the plan argued with, the body
+      // rewritten. A ticket you file is yours and is left alone.
+      // (why: docs/why.md#a-proposal-is-reviewed-before-you-read-it)
+      if (isBot(s.item.author, config) && config.dispatch?.reviewProposals !== false) plan.push(fire('revise'))
       return plan
     }
     case 'issues.edited': {
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
-      if (s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], []))
+      if (s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], [L.awaiting]))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':
@@ -277,7 +295,7 @@ export function decide(target, s, config) {
           const why = s.blockedByOpen.length
             ? `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
             : parked ? `it is parked until ${s.park.until}` : 'it carries the blocked label'
-          return plan.concat(label([L.blocked, L.awaiting], []), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
+          return plan.concat(label([L.blocked], [L.awaiting]), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
         }
         plan.push(status('approved'))
         if (s.locked) return plan.concat(recheck())
@@ -336,7 +354,12 @@ export function decide(target, s, config) {
       plan.push({ type: 'unlocked', handler: finished })
       if (s.kind === 'pr') {
         const p = evaluatePr(s, config)
-        const idle = !p.some((a) => a.type === 'fire' || a.type === 'merge' || a.type === 'markReady')
+        // A closed PR is nobody's turn. Without this, a session that was
+        // holding the lock when the PR merged unlocks afterwards, finds
+        // nothing left to do, and calls that the human's turn.
+        // (why: docs/why.md#a-closed-item-is-nobodys-turn)
+        if (s.pr?.state !== 'open') return plan.concat(p, label([], [L.awaiting, L.stuck]))
+        const idle = !p.some((a) => a.type === 'fire' || a.type === 'armAutoMerge' || a.type === 'markReady')
         if (idle && !s.pr?.draft) p.push(label([L.awaiting], []))
         return plan.concat(p)
       }
@@ -367,7 +390,7 @@ export function decide(target, s, config) {
       // `sweep-pr` already ran the derivation this pass. If it found work, say
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
-      if (p.some((a) => ['fire', 'merge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
+      if (p.some((a) => ['fire', 'armAutoMerge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
       return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {

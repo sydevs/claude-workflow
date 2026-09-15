@@ -114,8 +114,10 @@ reports usage back as feedback. (why: docs/why.md#there-is-no-wip-cap)
 
 - **Only a `respondTo` human's `@sydevs-bot implement` authorises code.** Not a field, not a drag
   on the board, not a request in prose.
-- **A merge needs all three:** your approving review, green CI, and zero unresolved threads.
-  `loopMayNotMerge` repos never auto-merge.
+- **GitHub decides every merge.** The dispatcher arms auto-merge when a PR is marked ready, and
+  the repository ruleset does the rest: one approval, every review thread resolved, CI green,
+  then the merge queue rebases and tests before it lands. `loopMayNotMerge` repos are never
+  armed. (why: docs/why.md#github-owns-the-merge)
 - **Nothing is lost in an outage.** A fire that fails, or a session that dies, leaves the item
   `stuck`. A 30-minute Actions sweeper retries up to `dispatch.maxAttempts`, then hands it to you
   as `awaiting`. Pausing the routines in the UI is the only kill switch, and it is global.

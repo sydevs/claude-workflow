@@ -89,11 +89,11 @@ test('an approved conflicting PR resolves conflicts before it merges', () => {
   assert.deepEqual(types(evaluatePr(s, config)), ['fire:resolve-conflicts'])
 })
 
-test('an approved green thread-free ready PR merges; a held one shows Approved', () => {
-  const ok = prSnap({ pr: { ...prSnap().pr, draft: false }, normalized: { reviewDecision: 'APPROVED' }, verdict: { verdict: 'MERGE', reason: 'green' } })
-  assert.deepEqual(types(evaluatePr(ok, config)), ['merge', 'status:done'])
-  const held = prSnap({ pr: { ...prSnap().pr, draft: false }, normalized: { reviewDecision: 'APPROVED' }, verdict: { verdict: 'HOLD', reason: '1 unresolved review thread(s)' } })
-  assert.deepEqual(types(evaluatePr(held, config)).slice(0, 1), ['status:approved'])
+test('a ready PR gets auto-merge armed; GitHub decides the rest', () => {
+  const unarmed = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' } })
+  assert.deepEqual(types(evaluatePr(unarmed, config)), ['armAutoMerge'])
+  const armed = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: true }, normalized: { reviewDecision: 'APPROVED' } })
+  assert.deepEqual(types(evaluatePr(armed, config)).slice(0, 1), ['status:approved'])
 })
 
 test('a human-merge repo shows Approved plus awaiting', () => {
@@ -236,7 +236,9 @@ test('a park stops an implement dispatch before any session starts', () => {
   const parked = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-12-01', passed: false, source: 'field' } })
   const p = decide(verb, parked, config)
   assert.ok(!p.some((a) => a.type === 'fire'), 'nothing is fired')
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked') && a.add.includes('awaiting')))
+  const lab = p.find((a) => a.type === 'label' && a.add.includes('blocked'))
+  assert.ok(lab, 'blocked is applied')
+  assert.ok(lab.remove.includes('awaiting'), 'and awaiting comes off — parked is not your turn')
   assert.match(p.find((a) => a.type === 'comment').body, /parked until 2026-12-01/)
 
   const past = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-01-01', passed: true, source: 'field' } })
@@ -306,9 +308,8 @@ test('an awaiting item is still swept, and a move still passes the gate', () => 
     item: { number: 5, labels: ['awaiting'] },
     pr: { ...prSnap().pr, draft: false },
     normalized: { reviewDecision: 'APPROVED' },
-    verdict: { verdict: 'MERGE', reason: 'green' },
   })
-  assert.deepEqual(types(decide({ reason: 'sweep-pr', facts: {} }, resolved, config)), ['merge', 'status:done'])
+  assert.deepEqual(types(decide({ reason: 'sweep-pr', facts: {} }, resolved, config)), ['armAutoMerge'])
 
   // A human-merge repo holds instead, and holding is not news.
   const held = prSnap({
@@ -332,4 +333,54 @@ test('the orphan notice is said once, then the draft is left alone', () => {
 test('a sweep on an item without awaiting is never silenced', () => {
   const p = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ci: red, record: { fixCi: 3 } }), config)
   assert.ok(p.some((a) => a.type === 'comment'), 'the hand-over still speaks')
+})
+
+test('a merged PR is nobody\'s turn when its session finally unlocks', () => {
+  // SahajCloud#747: a session held the lock when the PR merged. It unlocked
+  // two minutes later, found nothing to do, and called that the human's turn.
+  const merged = prSnap({ pr: { ...prSnap().pr, state: 'closed', merged: true, draft: false } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'address-review' } }, merged, config)
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'awaiting is not added')
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')), 'and any stale one comes off')
+})
+
+test('a ticket born blocked never carries awaiting', () => {
+  // SahajCloud#780 got awaiting at 08:23:07 and blocked at 08:23:09.
+  const blocked = issueSnap({ item: { number: 780, labels: [], author: 'sydevs-bot' }, blockedByOpen: [{ number: 700 }] })
+  const p = decide({ reason: 'issues.opened' }, blocked, config)
+  const adds = p.filter((a) => a.type === 'label').flatMap((a) => a.add)
+  assert.ok(adds.includes('blocked'), 'blocked is applied')
+  assert.ok(!adds.includes('awaiting'), 'awaiting never is')
+
+  const free = issueSnap({ item: { number: 781, labels: [], author: 'sydevs-bot' } })
+  const q = decide({ reason: 'issues.opened' }, free, config)
+  assert.ok(q.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('awaiting'), 'an unblocked one still does')
+})
+
+test('claude-workflow is never armed — merging it is the deploy', () => {
+  const cw = { ...config, mergePolicy: { loopMayNotMerge: ['claude-workflow'] } }
+  const repo = { owner: 'sydevs', name: 'claude-workflow', full: 'sydevs/claude-workflow' }
+  const ready = prSnap({ repo, pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' } })
+  assert.ok(!types(evaluatePr(ready, cw)).includes('armAutoMerge'))
+
+  const draft = prSnap({ repo, pr: { ...prSnap().pr, draft: true, changed_files: 1, additions: 3, deletions: 1 } })
+  assert.ok(!types(evaluatePr(draft, cw)).includes('armAutoMerge'), 'not at mark-ready either')
+})
+
+test('a draft is armed at mark-ready, the first moment GitHub allows it', () => {
+  const small = prSnap({ pr: { ...prSnap().pr, draft: true, changed_files: 1, additions: 3, deletions: 1 } })
+  const t = types(evaluatePr(small, config))
+  assert.ok(t.includes('markReady') && t.includes('armAutoMerge'))
+  assert.ok(t.indexOf('markReady') < t.indexOf('armAutoMerge'), 'ready first — GitHub refuses auto-merge on a draft')
+})
+
+test('a bot-filed proposal is revised before a human reads it; yours is left alone', () => {
+  const bot = issueSnap({ item: { number: 800, labels: [], author: 'sydevs-bot' } })
+  assert.ok(decide({ reason: 'issues.opened' }, bot, config).some((a) => a.type === 'fire' && a.handler === 'revise'))
+
+  const mine = issueSnap({ item: { number: 801, labels: [], author: 'Ardnived' } })
+  assert.ok(!decide({ reason: 'issues.opened' }, mine, config).some((a) => a.type === 'fire'))
+
+  const off = { ...config, dispatch: { ...config.dispatch, reviewProposals: false } }
+  assert.ok(!decide({ reason: 'issues.opened' }, bot, off).some((a) => a.type === 'fire'))
 })

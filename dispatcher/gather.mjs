@@ -5,7 +5,7 @@
  * and mergeable. (why: docs/why.md#ci-truth-lives-in-check-runs)
  */
 
-import { ciVerdict, mergeVerdict, normalizeMcp, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
+import { ciVerdict, normalizeMcp, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, parseRecheck, parseSentry, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
@@ -147,13 +147,14 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     reviews: reviewsShaped,
     reviewAuthority: [config.assignment.reviewer],
   })
-  s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha }, base: { ref: pr.base?.ref }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
+  s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha }, base: { ref: pr.base?.ref }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads
   s.normalized = normalized
   s.ci = ciVerdict(normalized, `${owner}/${repo}`)
-  s.verdict = mergeVerdict(normalized, `${owner}/${repo}`, config.mergePolicy || {})
+  // No merge verdict: the ruleset and the merge queue decide that now.
+  // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)
   // The lock sits on the issue, and the session it locked owns this branch.
   // Until it unlocks, nothing else may touch the PR.

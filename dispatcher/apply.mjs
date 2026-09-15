@@ -60,10 +60,15 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   const handedOver = []
   const handOver = async (what, fn) => {
     try { await fn(); return true } catch (e) {
-      const denied = e?.status === 403 || /not accessible|FORBIDDEN|Resource protected/i.test(String(e?.message))
+      const msg = String(e?.message || '').replace(/\s+/g, ' ').trim()
+      const denied = e?.status === 403 || e?.status === 405 || e?.status === 422
+        || /not accessible|FORBIDDEN|Resource protected|protected branch|required status check|approving review/i.test(msg)
       if (!denied) throw e
-      log(`cannot ${what} — ${e.message}`)
-      handedOver.push(what)
+      log(`cannot ${what} — ${e.status || '?'} ${msg}`)
+      // GitHub's own words, not a guess. A branch rule refusing a merge and a
+      // token missing a scope read identically until you quote the reason.
+      // (why: docs/why.md#quote-the-refusal-do-not-name-a-cause)
+      handedOver.push({ what, why: msg.slice(0, 220) })
       return false
     }
   }
@@ -128,10 +133,14 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (!dryRun) await handOver('request a reviewer', () => gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] }))
         break
       }
-      case 'merge': {
-        log('merge (squash)')
+      case 'armAutoMerge': {
+        if (snapshot.pr?.autoMergeArmed) { log('auto-merge already armed'); break }
+        log('arm auto-merge (squash)')
         if (dryRun) break
-        await handOver('merge', () => gh.rest.pulls.merge({ ...args, pull_number: t.number, merge_method: 'squash' }))
+        const armed = await handOver('arm auto-merge', () => gh.graphql(
+          `mutation($id:ID!){ enablePullRequestAutoMerge(input:{pullRequestId:$id, mergeMethod:SQUASH}){ clientMutationId } }`,
+          { id: snapshot.pr.nodeId }))
+        if (armed) snapshot.pr.autoMergeArmed = true
         break
       }
       case 'sentry': {
@@ -200,11 +209,14 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   }
 
   if (handedOver.length && !dryRun) {
+    const steps = handedOver.map((h) => h.what).join(' or ')
+    const reasons = handedOver.map((h) => `- **${h.what}** — GitHub said: \`${h.why}\``).join('\n')
     await labels(gh, t, snapshot, [config.labels.awaiting], [], dryRun, log)
-    await commentOnce(gh, t, `handover ${handedOver.join('+')}`, `I could not ${handedOver.join(' or ')} here — the dispatch token is not allowed to. Everything else on this item is done, so this is the one step left for you.`, dryRun, log)
+    await commentOnce(gh, t, `handover ${handedOver.map((h) => h.what).join('+')}`,
+      `I could not ${steps} here, so this is the step left for you.\n\n${reasons}`, dryRun, log)
     try {
       const j = await ensureJournalDay(gh, config, now)
-      await postAnomaly(gh, config, j.number, { kind: 'handed-over', text: `${t.repo.full}#${t.number}: cannot ${handedOver.join(', ')}` })
+      await postAnomaly(gh, config, j.number, { kind: 'handed-over', text: `${t.repo.full}#${t.number}: cannot ${steps} — ${handedOver[0].why}` })
     } catch { /* the journal is not the token's keeper */ }
   }
   if (boardFailed && !dryRun) {
