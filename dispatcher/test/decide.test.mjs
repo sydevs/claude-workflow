@@ -236,7 +236,9 @@ test('a park stops an implement dispatch before any session starts', () => {
   const parked = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-12-01', passed: false, source: 'field' } })
   const p = decide(verb, parked, config)
   assert.ok(!p.some((a) => a.type === 'fire'), 'nothing is fired')
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked') && a.add.includes('awaiting')))
+  const lab = p.find((a) => a.type === 'label' && a.add.includes('blocked'))
+  assert.ok(lab, 'blocked is applied')
+  assert.ok(lab.remove.includes('awaiting'), 'and awaiting comes off — parked is not your turn')
   assert.match(p.find((a) => a.type === 'comment').body, /parked until 2026-12-01/)
 
   const past = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-01-01', passed: true, source: 'field' } })
@@ -332,4 +334,26 @@ test('the orphan notice is said once, then the draft is left alone', () => {
 test('a sweep on an item without awaiting is never silenced', () => {
   const p = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ci: red, record: { fixCi: 3 } }), config)
   assert.ok(p.some((a) => a.type === 'comment'), 'the hand-over still speaks')
+})
+
+test('a merged PR is nobody\'s turn when its session finally unlocks', () => {
+  // SahajCloud#747: a session held the lock when the PR merged. It unlocked
+  // two minutes later, found nothing to do, and called that the human's turn.
+  const merged = prSnap({ pr: { ...prSnap().pr, state: 'closed', merged: true, draft: false } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'address-review' } }, merged, config)
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'awaiting is not added')
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')), 'and any stale one comes off')
+})
+
+test('a ticket born blocked never carries awaiting', () => {
+  // SahajCloud#780 got awaiting at 08:23:07 and blocked at 08:23:09.
+  const blocked = issueSnap({ item: { number: 780, labels: [], author: 'sydevs-bot' }, blockedByOpen: [{ number: 700 }] })
+  const p = decide({ reason: 'issues.opened' }, blocked, config)
+  const adds = p.filter((a) => a.type === 'label').flatMap((a) => a.add)
+  assert.ok(adds.includes('blocked'), 'blocked is applied')
+  assert.ok(!adds.includes('awaiting'), 'awaiting never is')
+
+  const free = issueSnap({ item: { number: 781, labels: [], author: 'sydevs-bot' } })
+  const q = decide({ reason: 'issues.opened' }, free, config)
+  assert.ok(q.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('awaiting'), 'an unblocked one still does')
 })

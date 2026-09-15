@@ -221,15 +221,19 @@ export function decide(target, s, config) {
 
   switch (target.reason) {
     case 'issues.opened': {
-      plan.push({ type: 'ensure' }, status('proposed'), label([L.awaiting], []))
+      // Parked or your turn, never both: a blocked ticket is waiting on the
+      // blocker, not on you. (why: docs/why.md#blocked-and-awaiting-are-exclusive)
+      const bornBlocked = s.blockedByOpen.length || s.markers.blockedBy.length || s.markers.recheck
+      plan.push({ type: 'ensure' }, status('proposed'))
+      if (!bornBlocked) plan.push(label([L.awaiting], []))
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
-      if (s.blockedByOpen.length || s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], []))
+      if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
       return plan
     }
     case 'issues.edited': {
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
-      if (s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], []))
+      if (s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], [L.awaiting]))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':
@@ -277,7 +281,7 @@ export function decide(target, s, config) {
           const why = s.blockedByOpen.length
             ? `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
             : parked ? `it is parked until ${s.park.until}` : 'it carries the blocked label'
-          return plan.concat(label([L.blocked, L.awaiting], []), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
+          return plan.concat(label([L.blocked], [L.awaiting]), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
         }
         plan.push(status('approved'))
         if (s.locked) return plan.concat(recheck())
@@ -336,6 +340,11 @@ export function decide(target, s, config) {
       plan.push({ type: 'unlocked', handler: finished })
       if (s.kind === 'pr') {
         const p = evaluatePr(s, config)
+        // A closed PR is nobody's turn. Without this, a session that was
+        // holding the lock when the PR merged unlocks afterwards, finds
+        // nothing left to do, and calls that the human's turn.
+        // (why: docs/why.md#a-closed-item-is-nobodys-turn)
+        if (s.pr?.state !== 'open') return plan.concat(p, label([], [L.awaiting, L.stuck]))
         const idle = !p.some((a) => a.type === 'fire' || a.type === 'merge' || a.type === 'markReady')
         if (idle && !s.pr?.draft) p.push(label([L.awaiting], []))
         return plan.concat(p)
