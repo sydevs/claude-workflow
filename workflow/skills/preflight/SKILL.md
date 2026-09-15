@@ -63,8 +63,8 @@ printf '%s' "$TEXT" | ${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --kind comment
 
 ## Non-negotiables
 
-- **Never merge without all three**: an approving review, green CI, zero unresolved threads. On
-  any one missing, comment which, and move on.
+- **Never merge.** GitHub does, once the repository ruleset is satisfied.
+  (why: docs/why.md#github-owns-the-merge)
 - **Never implement a ticket that is not `Stage: Implement` and assigned to `assignment.bot`** —
   check the field, never infer readiness from priority or tone. You **may move a ticket off
   `Implement`** on a blocking question. You may **never write `Implement`**.

@@ -198,12 +198,12 @@ attended.
   `hooks`, `docs`, `fields`, …). The body carries the *reasoning*, on purpose — it is the only
   record a prose change leaves behind.
 - **Branches are `claude/*`.** Cloud sessions cannot push anywhere else.
-- **Open the PR. Never merge it.** Merge authority means an approving review plus zero unresolved
-  threads — never a label. There is no CI here to turn green.
+- **Open the PR. Never merge it.** This repo is `loopMayNotMerge`: merging it is the deploy, so
+  no auto-merge is armed here and no queue runs. You merge it, deliberately.
 - **No ticket is needed for anything in this repo.** `prAllowlistGlobs` is `**` — open the PR
   directly. This repo ships prose and config, so the PR body *is* the proposal. File a ticket only
   when the change needs a **decision** before code — competing designs, or a cost worth agreeing
   on before it is paid.
-- Merge authority is still **an approving review**. There is no WIP cap — the human who types
-  the verb is the throttle. The skill/ceiling split above binds harder now that nothing upstream
-  forces a pause, and a PR carrying more than one behaviour still owes one commit per behaviour.
+- There is no WIP cap — the human who types the verb is the throttle. The skill/ceiling split
+  above binds harder now that nothing upstream forces a pause, and a PR carrying more than one
+  behaviour still owes one commit per behaviour.

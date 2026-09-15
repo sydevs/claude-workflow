@@ -65,6 +65,10 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 Register: active voice, one instruction per sentence, at most 20 words, no semicolons, lead
 with the outcome. (why: docs/why.md#budgets-not-adjectives)
 
+**Shorten by leaving things out, never by compressing.** The `concise` output style each repo
+sets in `.claude/settings.json` says the same thing, and the budget is what makes it checkable.
+One fact a reader cannot re-derive beats three they can.
+
 ## Cron mode
 
 `survey-routine` runs on a schedule with no record and no lock. Steps 2, 3 and 5 do not apply.
