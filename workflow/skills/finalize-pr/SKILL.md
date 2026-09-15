@@ -190,13 +190,35 @@ the template says to omit. **Never rename one or add your own.**
 **The Preview section is mandatory wherever the repo deploys previews** — it lets the reviewer see
 the change with no checkout.
 
-**This skill is the canonical source for the preview-link rule: always link the BRANCH alias,
-never a per-commit alias.** A per-commit alias freezes the moment it is written, so the reviewer
-opens a dead build days and pushes later. One script produces the branch alias, for both
-Cloudflare projects and both platforms. It reads the alias Cloudflare itself labels — from the
-bot's PR comments, or a check run's `output.summary` — and never derives one, because the
-documented slug rule is a guess about a host we do not own, and two branch names agreeing in their
-first 28 characters would collide under it.
+**This skill is the canonical source for the preview-link rule.** There are two kinds of preview
+host, and they need opposite treatment. (why: docs/why.md#construct-a-number-discover-a-slug)
+
+### Constructed, where the key is the pull request number
+
+`previewUrl.pattern` in `.claude/workflow.json` names a host keyed on the PR number, with `{pr}`
+for the number. Railway builds SahajCloud that way, and eight PRs across eight unrelated branch
+names produced eight hosts that differ only in the number. **A number cannot collide**, so the
+host is known the moment the PR exists — before the build starts, and without reading anything.
+
+**Write the pages a reviewer should open, not the root.** A reviewer who has to find the change
+usually does not. Two to four deep links, each naming what it shows:
+
+```markdown
+## Preview
+- [Pages list](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages) — the new `status` column
+- [Any page's editor](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages/1) — per-locale publish state
+```
+
+The build takes minutes, so a link may 404 briefly. That is expected and needs no caveat in the
+body. **Never write "preview pending" for a constructed host** — the host does not depend on the
+build, only the content does.
+
+### Discovered, where the key is a branch slug
+
+Cloudflare, on both Pages and Workers, names a preview after a truncated branch slug or a commit
+hash. The slug rule is a guess about a host we do not own, and two branches agreeing in their
+first 28 characters would collide and serve the wrong branch. So the alias is read, never
+derived:
 
 ```bash
 # Gather with MCP, then pipe the text in:
@@ -206,24 +228,21 @@ echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
   | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
 ```
 
-It prints one `project status url` line per preview. A non-zero exit means no alias exists yet —
-that is "preview pending", **not** a cue to fall back.
+It prints one `project status url` line per preview, and **always the branch alias, never a
+per-commit one** — a per-commit alias freezes, so the reviewer opens a dead build two pushes
+later. A non-zero exit means no alias exists yet: write "preview pending" and move on.
 
-**Never use `scripts/get-cloudflare-preview-url.mjs` for the body.** That script exists for the CI
-smoke gate, which must pin exactly one SHA, so it ranks a per-commit alias above the branch one —
-correct there, wrong here. Reusing it for a PR body is how SahajAtlasWeb#181 linked
-`c76da223.sahajatlas.pages.dev` twice, each link already stale.
-(why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
+**Never use `scripts/get-cloudflare-preview-url.mjs` for the body.** It ranks a per-commit alias
+first on purpose, because its consumer is the CI smoke gate, which must pin one SHA. Reusing it
+here is how SahajAtlasWeb#181 linked `c76da223.sahajatlas.pages.dev` twice, already stale both
+times. (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 
 **A per-commit alias in a PR body is a defect** — its first hostname label is eight hex
-characters, as above. When you are about to write one, write "preview pending" instead.
+characters.
 
-- **SahajCloud** uses Railway, whose preview host is already stable across pushes:
-  `pnpm tsx scripts/get-railway-preview-url.ts`.
 - **SahajAtlasWeb has two previews** — app and Ladle playground. Link both on a UI change.
-- **Deep-link the routes you changed, not the root, and re-verify every link when you revise** —
-  the alias keeps the host current, never the path, so deleting a component deletes its story.
-- The preview builds minutes after the push. Create the PR, then refresh the body.
+- **Deep-link the routes you changed, and re-verify every link when you revise** — an alias keeps
+  the host current, never the path, so deleting a component deletes its story.
 - SahajAtlasWordpress has no preview — omit the section.
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
