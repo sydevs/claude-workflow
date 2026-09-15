@@ -133,10 +133,14 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (!dryRun) await handOver('request a reviewer', () => gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] }))
         break
       }
-      case 'merge': {
-        log('merge (squash)')
+      case 'armAutoMerge': {
+        if (snapshot.pr?.autoMergeArmed) { log('auto-merge already armed'); break }
+        log('arm auto-merge (squash)')
         if (dryRun) break
-        await handOver('merge', () => gh.rest.pulls.merge({ ...args, pull_number: t.number, merge_method: 'squash' }))
+        const armed = await handOver('arm auto-merge', () => gh.graphql(
+          `mutation($id:ID!){ enablePullRequestAutoMerge(input:{pullRequestId:$id, mergeMethod:SQUASH}){ clientMutationId } }`,
+          { id: snapshot.pr.nodeId }))
+        if (armed) snapshot.pr.autoMergeArmed = true
         break
       }
       case 'sentry': {

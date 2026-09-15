@@ -21,7 +21,7 @@ export const status = (value) => ({ type: 'status', value })
 export const commentOnce = (key, body) => ({ type: 'comment', key, body })
 export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
-export const merge = () => ({ type: 'merge' })
+export const armAutoMerge = () => ({ type: 'armAutoMerge' })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
@@ -129,13 +129,14 @@ function underThreshold(pr, config) {
   return (pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines
 }
 
+/** Repos where a merge is a deploy, so nothing is ever armed. */
 function loopMayNotMerge(snapshot, config) {
   return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is.
-const MOVES = new Set(['fire', 'merge', 'markReady', 'recheck'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck'])
 
 /**
  * A sweep pass over an item that already carries `awaiting` says nothing
@@ -186,16 +187,24 @@ export function evaluatePr(s, config) {
   if (pr.draft) {
     const small = underThreshold(pr, config)
     if (!ownReview(s, config) && !small) return [fire('adversarial-review')]
+    // GitHub refuses auto-merge on a draft, so this is the first moment it can
+    // be armed. From here the ruleset decides: approval, resolved threads and
+    // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     const plan = [markReady(), requestReviewer(), label([awaiting], [])]
+    if (!loopMayNotMerge(s, config)) plan.push(armAutoMerge())
     if (small && !ownReview(s, config)) {
       plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\`. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
     }
     return plan
   }
 
+  // The dispatcher no longer merges. GitHub does, once the ruleset is
+  // satisfied — one approval, every thread resolved, CI green — and the queue
+  // rebases and tests before it lands. All that is left here is arming a PR
+  // that reached ready without it. (why: docs/why.md#github-owns-the-merge)
+  if (!loopMayNotMerge(s, config) && !s.pr?.autoMergeArmed) return [armAutoMerge()]
   if (s.normalized?.reviewDecision !== 'APPROVED') return [status('revising')]
-  if (s.verdict?.verdict === 'MERGE') return [merge(), status('done')]
-  const plan = [status('approved'), note(`approved, held: ${s.verdict?.reason}`)]
+  const plan = [status('approved')]
   if (loopMayNotMerge(s, config)) plan.push(label([awaiting], []))
   return plan
 }
@@ -345,7 +354,7 @@ export function decide(target, s, config) {
         // nothing left to do, and calls that the human's turn.
         // (why: docs/why.md#a-closed-item-is-nobodys-turn)
         if (s.pr?.state !== 'open') return plan.concat(p, label([], [L.awaiting, L.stuck]))
-        const idle = !p.some((a) => a.type === 'fire' || a.type === 'merge' || a.type === 'markReady')
+        const idle = !p.some((a) => a.type === 'fire' || a.type === 'armAutoMerge' || a.type === 'markReady')
         if (idle && !s.pr?.draft) p.push(label([L.awaiting], []))
         return plan.concat(p)
       }
@@ -376,7 +385,7 @@ export function decide(target, s, config) {
       // `sweep-pr` already ran the derivation this pass. If it found work, say
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
-      if (p.some((a) => ['fire', 'merge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
+      if (p.some((a) => ['fire', 'armAutoMerge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
       return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {
