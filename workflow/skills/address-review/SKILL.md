@@ -59,8 +59,9 @@ Skip it. That rule is what makes a resumed run safe.
    linking its thread — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 
-**Leave the branch merged with `main` and CI running.** Actions reads CI when it completes. You
-do not wait for it. (why: docs/why.md#push-and-end)
+**Push and stop.** Actions reads CI when it completes. **Do not merge `main` in to bring the
+branch up to date** — the merge queue rebases before it lands, so being behind costs nothing.
+(why: docs/why.md#push-and-end, docs/why.md#the-queue-owns-staleness-you-own-conflicts)
 
 ## A human's PR
 

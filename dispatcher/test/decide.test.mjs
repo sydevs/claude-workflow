@@ -373,3 +373,14 @@ test('a draft is armed at mark-ready, the first moment GitHub allows it', () => 
   assert.ok(t.includes('markReady') && t.includes('armAutoMerge'))
   assert.ok(t.indexOf('markReady') < t.indexOf('armAutoMerge'), 'ready first — GitHub refuses auto-merge on a draft')
 })
+
+test('a bot-filed proposal is revised before a human reads it; yours is left alone', () => {
+  const bot = issueSnap({ item: { number: 800, labels: [], author: 'sydevs-bot' } })
+  assert.ok(decide({ reason: 'issues.opened' }, bot, config).some((a) => a.type === 'fire' && a.handler === 'revise'))
+
+  const mine = issueSnap({ item: { number: 801, labels: [], author: 'Ardnived' } })
+  assert.ok(!decide({ reason: 'issues.opened' }, mine, config).some((a) => a.type === 'fire'))
+
+  const off = { ...config, dispatch: { ...config.dispatch, reviewProposals: false } }
+  assert.ok(!decide({ reason: 'issues.opened' }, bot, off).some((a) => a.type === 'fire'))
+})

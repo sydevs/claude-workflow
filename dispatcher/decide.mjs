@@ -238,6 +238,11 @@ export function decide(target, s, config) {
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
+      // A proposal the loop filed is challenged before a human reads it: the
+      // open questions answered from the code, the plan argued with, the body
+      // rewritten. A ticket you file is yours and is left alone.
+      // (why: docs/why.md#a-proposal-is-reviewed-before-you-read-it)
+      if (isBot(s.item.author, config) && config.dispatch?.reviewProposals !== false) plan.push(fire('revise'))
       return plan
     }
     case 'issues.edited': {
