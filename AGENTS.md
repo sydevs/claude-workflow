@@ -96,7 +96,7 @@ much.
 | --- | --- |
 | `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
 | `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
-| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv) and `merge-gate.mjs` (the one definition of "green" and "mergeable"). |
+| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
 | `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `ci`, `labels`, `assignment`, `ceilings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each dispatch. |

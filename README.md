@@ -66,6 +66,7 @@ so each person runs `claude plugin install` once.
 | `/workflow:survey-contracts` | Thursday: check published contracts against reality. |
 | `/workflow:cut-release` | Friday: tag, update the changelog, cut a Release. |
 | `/workflow:reflect` | Sunday: grade last week, read the journals, report usage, refine the profile, propose loop changes. |
+| `/workflow:comment-cleanup` | Apply the code-comments rule across a file, directory or repo. Comment-only, proved by `comment-fingerprint.mjs`. |
 
 Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
 

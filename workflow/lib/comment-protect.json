@@ -1,0 +1,104 @@
+{
+  "note": "Comment protection rules, consumed by comment-fingerprint.mjs and by any comment codemod. FROZEN means byte-identical text AND an unchanged anchor. KEEP means the information must survive somewhere in the file's comments; rewording is allowed. A repo adds its own under `protectedComments` in its .claude/workflow.json.",
+  "frozen": [
+    {
+      "id": "F1",
+      "name": "tool directives",
+      "pattern": "\\b(prettier-ignore(-start|-end|-attribute|-file)?|eslint-disable(-next-line|-line)?|eslint-enable|@ts-ignore|@ts-expect-error|@ts-nocheck|@vitest-environment(-options)?|@jsx|@jsxImportSource|webpackChunkName|@license|@preserve|#__PURE__|(c8|v8|istanbul) ignore)\\b",
+      "reason": "Each one changes what a compiler, linter, formatter or bundler does. Deleting one is silent: SahajAtlasWeb/src/mocks/regions.ts holds 12 region literals on one line each behind 27 trailing prettier-ignores, and the next format run would explode the file."
+    },
+    {
+      "id": "F2",
+      "name": "legal",
+      "pattern": "\\b(Copyright|SPDX-License-Identifier)\\b",
+      "reason": "Removing a licence notice is a licensing question, never a tidying one."
+    },
+    {
+      "id": "F3",
+      "name": "WordPress plugin header",
+      "pattern": "^\\s*\\*?\\s*(Plugin Name|Plugin URI|Description|Version|Requires at least|Requires PHP|Author|Author URI|License|License URI|Text Domain|Update URI)\\s*:",
+      "reason": "WordPress core parses this block to register the plugin. It looks exactly like a bloated file header to a generic tool."
+    },
+    {
+      "id": "F4",
+      "name": "PHPCS and WordPress conventions",
+      "pattern": "(@package\\s+SahajAtlas|phpcs:(disable|enable|ignore|ignoreFile)|@codingStandardsIgnore)",
+      "reason": "WordPress Coding Standards requires the @package tag on every file header."
+    },
+    {
+      "id": "F5",
+      "name": "i18n translator context",
+      "pattern": "^\\s*translators\\s*:",
+      "adjacency": "__\\(|_e\\(|_n\\(|_x\\(|esc_html__\\(|esc_attr__\\(",
+      "reason": "WP-CLI's i18n extractor reads the comment IMMEDIATELY PRECEDING a gettext call and ships it into the .pot. SahajAtlasWordpress carries 34 .po/.mo pairs. Delete one of the 9, or insert anything between it and its call, and translator context drops for 34 locales. Nothing in that repo lints it — pnpm lint is a token_get_all syntax check."
+    }
+  ],
+  "keep": [
+    {
+      "id": "K1",
+      "name": "explicit load-bearing marker",
+      "pattern": "\\u26A0",
+      "scope": "block",
+      "reason": "These repos already mark their own load-bearing constraints with the warning sign. 362 of them. It is the highest-confidence do-not-delete signal in the corpus, written by the people who paid for each one."
+    },
+    {
+      "id": "K2",
+      "name": "cross-repo sync pointer",
+      "pattern": "((keep|kept|stay|stays) in sync|must match|byte[- ]for[- ]byte|source of truth|(SahajCloud|SahajAtlasWeb|SahajAtlasWordpress|WeMeditateWeb)#\\d+)",
+      "reason": "Nothing enforces the couplings between these five repos except prose. SahajAtlasWeb#170 — that giving <sahaj-atlas> a height is the opt-in for a contained map — lives in four files across three repos, one of them a CSS comment with no type system behind it. Deleting one side leaves the other describing a contract nobody holds."
+    },
+    {
+      "id": "K3",
+      "name": "issue breadcrumb",
+      "pattern": "(?<![\\w\\/])#\\d{1,4}\\b",
+      "reason": "A GitHub issue is immutable and carries the evidence a compressed comment cannot. This over-matches CSS hex colours; that costs nothing, because protection is fail-safe by design. Do not tune it."
+    },
+    {
+      "id": "K4",
+      "name": "cross-file path reference",
+      "pattern": "\\b[\\w.-]+\\/[\\w.\\/-]+\\.(ts|tsx|js|jsx|mjs|php|css|md|json|ya?ml|sh)\\b",
+      "reason": "A pointer to the file that holds the other half of an invariant."
+    },
+    {
+      "id": "K5",
+      "name": "Ladle story description",
+      "pathGlob": "**/*.stories.tsx",
+      "pattern": "^",
+      "position": "leading",
+      "reason": "Ladle renders a story's leading JSDoc as its description in the component explorer. Collapsing it is not a test failure, so nothing catches it — it is a silent docs-UI regression in SahajAtlasWeb and WeMeditateWeb."
+    }
+  ],
+  "denyPaths": [
+    {
+      "path": "SahajAtlasWordpress/sahaj-atlas.php",
+      "lines": [1, 20],
+      "reason": "The plugin header block WordPress core parses. Never sweep it."
+    },
+    {
+      "pathGlob": "**/vendor/**",
+      "reason": "Third-party source. vendor/plugin-update-checker alone is 42 committed PHP files."
+    },
+    {
+      "pathGlob": "**/tests/fixtures/**",
+      "reason": "Vendored third-party shapes, not our prose."
+    }
+  ],
+  "textGuards": [
+    {
+      "id": "T1",
+      "name": "de-branding check",
+      "pattern": "sahaj\\s*atlas|we\\s?meditate",
+      "flags": "i",
+      "paths": [
+        "SahajAtlasWeb/index.html",
+        "SahajAtlasWeb/src/App.tsx",
+        "SahajAtlasWeb/src/lib/ics.ts",
+        "SahajAtlasWeb/src/styles/fonts.ts",
+        "SahajAtlasWeb/src/components/molecules/Fallbacks/Fallbacks.tsx",
+        "SahajAtlasWeb/src/components/molecules/EventMetadata/EventMetadata.tsx",
+        "SahajAtlasWeb/src/views/CompactEmbedView/CompactEmbedView.tsx"
+      ],
+      "reason": "SahajAtlasWeb/src/lib/brand.test.ts reads the RAW TEXT of these seven files, comments included, and fails if a visitor-facing brand name appears (#156). It has already fired once on a comment that got reflowed onto one line (PR #197). Check proposed comment text against this before writing. Hyphenated sahaj-atlas is safe; the spaced form is not."
+    }
+  ]
+}

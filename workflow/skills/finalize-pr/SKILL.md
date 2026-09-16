@@ -112,6 +112,18 @@ read the highest-risk paths yourself. (why: docs/why.md#a-clean-review-report-mu
 For a deeper pass, the user can run the billed `/code-review ultra` themselves — Claude cannot
 launch it.
 
+Then run the deterministic comment check, which the six lenses do not cover — it reads only the
+comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/comment-lint.mjs" --base origin/main
+```
+
+**Advisory. It never fails the gate.** It catches phrasings that are wrong whatever they describe —
+a sentence addressed to a diff reviewer, a pointer at a section number. Fix each, or say in the PR
+body why it stays. It skips anything carrying `⚠`, a `#NNN`, or a sync pointer, because the
+code-comments rule protects those.
+
 ### 3. Security review — conditional
 
 Gate on `securityReview` from `workflow.json`:
