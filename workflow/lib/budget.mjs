@@ -39,7 +39,6 @@ export const DEFAULT_BUDGETS = {
   comment: 1200,
   reviewReply: 600,
   journalEntry: 1500,
-  journalComment: 4000,
 }
 
 /**

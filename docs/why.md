@@ -119,11 +119,6 @@ reviewer, so it finds nothing and exits. Under the old timestamp census, a woken
 seen fresh `updated_at` values and found real work. Handing back the baton is what makes re-entry a
 no-op.
 
-## Rung 2 competes for the same budget
-
-Unblocking a PR the user is waiting on should not starve new work, and new work should not starve
-it either. A blocked PR often delays several tickets that depend on it.
-
 ## You cannot push to a human's PR
 
 A cloud session may only push to `claude/*`. A human's branch also carries their own commits and
@@ -184,57 +179,6 @@ writing one is a habit, not an exception. That is why the rule appears as a bare
 `preflight`, `triage-issue`, and `implement-issue`, rather than something inferred from an ownership
 table.
 
-## Blocked always carries a Hold Until
-
-Three journals in a row called a ticket "blocked" after its blocker had already merged.
-
-A block with no re-check date is not parked. It is lost. Nothing brings it back except a human
-happening to re-read it. `Hold Until` is the promise to look again, and the date makes that promise
-checkable.
-
-This is also why a held item stays *invisible*, not merely skipped. Listing it in the board's
-`awaiting` view would ask for attention that was deliberately deferred, and a queue full of things
-nobody can act on is a queue people stop reading.
-
-## Unblocking never restores Implement
-
-A single-select field cannot remember its previous value, and nothing available to a routine can
-reconstruct it. No MCP tool reads an issue timeline, and the REST timeline event for a field change
-carries an actor and a timestamp, but no field name and no old value. So the prior `Stage` gets
-written into the `Blocked by:` body marker as `(was: X)` — the same trick, for the same reason, that
-mirrors the relationship there in the first place.
-
-Restoring that value verbatim is right for every case but one. A blocker usually changes the shape
-of the work it was blocking. An `Implement` restored automatically would let the loop write code
-against a ticket no human has re-read since the situation changed, which is the one thing this whole
-gate exists to prevent. So `Implement` reverts to `Revising` instead, and the reviewer re-approves.
-
-## Derive the window from comment timestamps
-
-A field write, a label change, or a bulk metadata pass all bump `updated_at`, even when nobody said
-anything. One migration made all 38 open issues look like fresh feedback, on 2026-08-28.
-
-## Selection favours new work and blockers
-
-Rung 3 ordered by oldest `updatedAt` until 2026-09-07. That key carried two faults.
-
-`updatedAt` is not a fact about the ticket. A field write, a label change, or a bulk metadata pass
-bumps it, so the queue reorders itself when nobody touches the work. One backfill of Type and
-Priority bumped 22 tickets in a single pass on 2026-09-07. `createdAt` never moves, so it replaces
-it.
-
-Oldest-first also worked the backlog from the bottom. A ticket filed today describes the code as it
-stands. A ticket filed four months ago describes code that moved since, and a run that starts it
-spends its budget on re-deriving the difference. Newest-first reads the freshest evidence.
-
-A blocker rises only inside its own `Priority` band. Letting it rise further is the other
-defensible design, and the reviewer rejected it on 2026-09-07: a `Low` blocker of another `Low`
-ticket would then outrank an unrelated `High`, and `Priority` would stop measuring consequence.
-
-That choice has a cost, and the cost is real. A `Low` blocker of a `High` ticket waits while any
-`Medium` waits, so the `High` behind it stalls. The fix is to raise the blocker's own `Priority`.
-That is a reviewer decision, and the field then shows it.
-
 ## A request in prose is not permission
 
 The middle row of the rung-4 table fails quietly. A comment asking for work reads like permission to
@@ -261,22 +205,6 @@ skepticism.
 Keying to UTC would split a local day across two issues. The nightly run creates its issue at 1am
 Vancouver time, which is 08:00Z, so the UTC date matches only by coincidence. Creation time is
 intrinsic and cannot drift from the truth, so there is no date field to set or read.
-
-## Do not pin the journal
-
-`pinIssue` is GraphQL-only, and a routine session's GraphQL serves only PR-review operations, so the
-call cannot succeed. Recency does the job instead. The day's journal is the most recently active
-`ops-journal` issue, so it sorts to the top of the issue list on its own.
-
-## Correcting an earlier claim
-
-The MCP surface **cannot edit a comment, but it can edit a body.** That asymmetry is what keeps the
-rolling summary always current, with no addendum machinery needed.
-
-So correcting an earlier claim needs no addendum. Fix it in the body, where the reader looks. The
-comment stays as the historical record of what that run believed at the time — which is what a log
-is for. The record then has one authoritative surface, even though its entries stay immutable.
-Someone catching up reads the body, not eight comments in sequence.
 
 ## details survives the write path
 
@@ -305,14 +233,6 @@ The cost was concrete. Inserting one loop rung forced a renumbering sweep across
 nightly run that had not changed. And the nightly run's spec silently dropped preflight — identity,
 auth, ceilings — because "rung 0" read as the ladder's business, not every run's. So the runs are
 now two skills over shared bookends, and **rung means one thing**: a step of the loop run's ladder.
-
-## The adversarial review runs last and may starve
-
-A pre-filter for the reviewer is worth only the budget nothing else claims. Every rung above it
-serves the reviewer more directly — merging what they approved, fixing what they flagged,
-implementing what they green-lit. Reserving a slot for reviews would tax the very work reviews exist
-to smooth. On a saturated day, this rung simply does not run. The reviewer reads unreviewed PRs as
-they always did, and nothing promised is lost. Starving is the design working as intended.
 
 ## One review per PR, ever
 
@@ -513,60 +433,6 @@ continuously and cannot go stale, so restating it every run was a second impleme
 — exactly the failure this repo exists to avoid. The journal instead keeps what the board cannot
 show: why a run failed, what a ceiling cost, which rule misfired.
 
-## The state machine is not the loop's job
-
-Almost every state write the loop used to make was **mechanical**. An event determined it, with no
-judgment involved. But the loop made them late, up to eight hours late, and could forget them.
-`stateMachine.workflow` makes them from the event instead, within seconds, and cannot forget.
-
-The prize is larger than punctuality. Every *"as your final action, reassign / set Stage"* rule left
-the skills entirely, taking with it a whole class of instruction that was only ever bookkeeping.
-What remains in the skills is judgment: choosing a `Hold Until` date, deciding a block has lifted,
-revoking `Implement`, deciding the work is done. Those need a model. Setting `Implemented` because a
-PR opened does not.
-
-The split is a rule, not a preference: **if an event determines the answer, the workflow owns it.**
-Two writers racing on one field means the loser's write is silent.
-
-Recursion is bounded by idempotency, not by an actor guard. Every writer in the workflow reads
-current state first, and returns early when it already matches, so a write that re-fires
-`field_added` costs one free no-op run. An actor guard was tried first, and it was wrong: the bot
-authors its own issues and PRs, so `github.actor != 'sydevs-bot'` would skip exactly the transitions
-that matter most.
-
-One author guard survived that lesson, inverted, and cost the same thing. `issues: opened` set
-`Stage: Proposed` and `awaiting` only when the **bot** filed the issue, so a ticket filed from a
-local session, from the GitHub UI, or by an outside contributor landed with an empty `Stage` and no
-`awaiting`. It was invisible on the board and absent from the one view that answers "what needs me".
-The skills patched around it: `draft-ticket`, `cross-repo-issue` and `implement-issue` each carried
-a paragraph telling a local run to write that state itself, which is the two-writers shape this
-whole anchor exists to forbid. The event is the same event whoever fires it, so the rule is now
-about the event alone. `BOT` still names whose PR or assignment an event describes. It no longer
-decides whether a rule applies.
-
-`awaiting` is the one label the state machine still maintains, and the only one of six retired
-labels to survive. `Stage` and `Hold Until` cover ticket state, but `awaiting` marks *whose turn it
-is* — a different fact, with two properties no field supplies: it spans issues and pull requests (a
-PR shows an empty `Stage` cell forever), and it is searchable, where `field.<name>:<value>` returns
-zero through REST (`#issue-fields-are-not-searchable`). It stays a boolean on purpose. Sub-labels
-such as `awaiting:review` were considered and rejected, since a boolean cannot contradict itself, and
-the *kind* of attention is already legible from where the item sits.
-
-The state machine clears `awaiting` on any `respondTo` human's comment or review, within seconds, so
-it cannot outlive the reply that answered it. The loop itself still adds it for the dead-end cases no
-event expresses, among them: CI red past `ciFixIterations`, a conflict it could not rebase, a thread
-it rebutted rather than adopted, and an investigation that ended with a finding.
-
-Two transitions were missing from the first draft, both failing silently rather than loudly.
-`synchronize` is the revision handover. Pushing a fix after `changes_requested` returns the turn to
-the reviewer, but no other event says so, so an unguarded rule would leave a revised PR
-unlabelled forever. It is guarded on the reviewer's latest review still reading `CHANGES_REQUESTED`,
-so an ordinary mid-work push does not flag a PR nobody is waiting on. (The loop found this gap
-itself, in `sydevs/claude-workflow#42`.) And approval is gated on `assignment.reviewer`, never on
-`respondTo` — the same allowlist that `reviewDecisionFrom` applies in the merge gate
-(`#only-the-reviewers-approval-counts`), enforced at both sites where an approval is read. The
-nightly drift sweep is the backstop, and it journals every correction it makes.
-
 ## The rules cost more than the output
 
 Measured, after the loop's comments looked like the problem:
@@ -725,22 +591,6 @@ The rule that generalizes: **a search qualifier is safe only for facts the loop 
 `commenter:` describe other people's writes, and those need an authoritative read before anything
 irreversible depends on them.
 
-## A PR's assignee is a record, never a signal
-
-Rungs find the loop's PRs with `author:<bot>`. Nothing reads the assignee on a PR the bot wrote, so
-for a long time nothing wrote it either, and the field sat empty. That was defensible and it read as
-broken — a queue of PRs with no owner, in a UI whose every other row has one.
-
-The state machine now assigns the bot to its own PR, **once, on `opened`**. It is bookkeeping. No
-rung may start reading it, or authorship and assignment become two answers to one question, which
-is the failure `#the-state-machine-is-not-the-loops-job` describes.
-
-**Once is the whole rule.** On a PR the bot did not write, the assignee means the opposite thing —
-a human handing the loop that work — and removing it is the kill switch. Re-asserting the
-assignment on `reopened` or `synchronize` would undo a deliberate removal on the next push, so a
-kill switch that only holds until the author pushes is not a kill switch. `opened` fires once in a
-PR's life, which is why it is the only safe place for this write.
-
 ## Only the reviewer's approval counts
 
 The first draft of rung 1's derivation, written once it became clear no MCP call returns
@@ -796,29 +646,6 @@ stuck scheduler. Waiting is futile.
 
 A run that predates the base moving is stale, and it makes a conflicted PR look tested when it is
 not.
-
-## Mark the PR ready despite unsettled CI
-
-A PR with an uncertain CI status is still *someone's*. A PR left in draft disappears from the system
-entirely — the reviewer's queue is built from `draft:false`, so nobody is waiting on it, and nobody
-knows it exists.
-
-Marking it ready, with a note like "CI unsettled after N polls, last seen lint green," gives the
-reviewer a fact they can act on. Leaving it in draft gives them silence, and silence is
-indistinguishable from the run having crashed.
-
----
-
-# implement-issue
-
-## Assignment alone is not the implementation gate
-
-At backfill time, four tickets already had open PRs closing them. All four would have been
-re-implemented, had assignment alone been the gate. Assignment shows none of an open blocker, an
-in-flight PR, or a live `Hold Until`, which is why each gets its own row.
-
-Assignment answers one question — *is this the loop's to touch* — and it answers that well
-precisely because it answers nothing else.
 
 ## A test fixture defines the world the test lives in
 
@@ -891,27 +718,6 @@ contributor, explicitly, that `version` did not matter. That is why bumping the 
 required part of any skill change, not a release ceremony. This repo has no releases. It does have a
 cache key, and a cache key that never changes is a cache that never updates.
 
-## Rung 4 writes awaiting when it asks a question
-
-Rung 4 carried two rules that contradicted each other. One forbade touching `labels.awaiting` in
-the rung at all. The other, twelve lines below it, required adding the label after a question or a
-finding. A run reading them in order had no defined answer, and the 2026-09-05 journal recorded the
-clash twice.
-
-Both rules had a real reason, and only one of them survives contact with the event stream. The
-prohibition exists because the **human's** comment already fired `issue_comment: created`, so the
-state machine cleared `awaiting` seconds later — a run that clears it again is a second writer on a
-field an event owns. That reasoning covers clearing the label. It says nothing about setting it.
-
-Setting it is the case the state machine cannot see. `state-machine.yml:194` returns early when the
-commenting login sits outside `RESPOND_TO`, and `sydevs-bot` does, so the loop's own reply fires no
-transition at all. Nothing re-raises the label the human's comment cleared. Without a write here the
-ticket ends the run needing a human and carrying no signal that it does. That is the same shape as
-the loop's other `awaiting` writes: a dead end no event sees.
-
-So the prohibition narrows to `Stage`, and the label write stays. The alternative — deleting the
-label write — was rejected because it makes the loop ask a question into silence.
-
 ## Fit the journal, do not negotiate with it
 
 `budget.mjs` answered one question — over or under — and returned nothing about where to cut or by
@@ -931,18 +737,6 @@ The reserve exists because of the second half of that run. A body fitted to the 
 breaks again on the next edit, and the next edit is a timestamp the journal step always writes.
 200 characters buys that edit room. It sits in the script rather than `loop-config.json` so the
 fix could ship without a ceiling change beside it.
-
-## Fetch fields only where a search answered
-
-Issue fields are readable but not searchable, so the census fetches a whole repo's issues to see
-`Stage` at all. That call is unavoidable. Making it five times a run is not.
-
-The searches above it already name every repo with a candidate. A repo none of them named holds
-nothing to attach a field to, so its response — 8 to 29 KB, measured on 2026-09-07 — is read,
-carried through the rest of the run's context, and used for nothing.
-
-Four consecutive runs that day (12:05 to 15:04) stopped at `wipCapPerRepo` with no work to start.
-Each paid for all five.
 
 ## Actions observes, classifies, locks, and fires
 
@@ -1337,3 +1131,257 @@ only thing that sees a resolved review thread or a write the dispatcher was refu
 which fires a workflow (why: docs/why.md#a-resolved-thread-fires-no-workflow). Both of those show
 up as a *move* — a `merge`, a `markReady`, a `fire` — so they pass the gate and act. What stops
 is the writing, which is the half that was repeating.
+
+## Retired
+
+Each of these is a failure someone paid for, under a mechanism that no longer exists. They
+stay so a future reader meets the lesson instead of re-learning it. The line under each
+heading says what took its place.
+
+### Rung 2 competes for the same budget
+
+**Replaced by:** the ladder is gone; every handler is its own session.
+
+
+Unblocking a PR the user is waiting on should not starve new work, and new work should not starve
+it either. A blocked PR often delays several tickets that depend on it.
+
+### The adversarial review runs last and may starve
+
+**Replaced by:** the critic fires on its own event, so nothing can starve it.
+
+
+A pre-filter for the reviewer is worth only the budget nothing else claims. Every rung above it
+serves the reviewer more directly — merging what they approved, fixing what they flagged,
+implementing what they green-lit. Reserving a slot for reviews would tax the very work reviews exist
+to smooth. On a saturated day, this rung simply does not run. The reviewer reads unreviewed PRs as
+they always did, and nothing promised is lost. Starving is the design working as intended.
+
+### Rung 4 writes awaiting when it asks a question
+
+**Replaced by:** `awaiting` has one writer, and it is Actions.
+
+
+Rung 4 carried two rules that contradicted each other. One forbade touching `labels.awaiting` in
+the rung at all. The other, twelve lines below it, required adding the label after a question or a
+finding. A run reading them in order had no defined answer, and the 2026-09-05 journal recorded the
+clash twice.
+
+Both rules had a real reason, and only one of them survives contact with the event stream. The
+prohibition exists because the **human's** comment already fired `issue_comment: created`, so the
+state machine cleared `awaiting` seconds later — a run that clears it again is a second writer on a
+field an event owns. That reasoning covers clearing the label. It says nothing about setting it.
+
+Setting it is the case the state machine cannot see. `state-machine.yml:194` returns early when the
+commenting login sits outside `RESPOND_TO`, and `sydevs-bot` does, so the loop's own reply fires no
+transition at all. Nothing re-raises the label the human's comment cleared. Without a write here the
+ticket ends the run needing a human and carrying no signal that it does. That is the same shape as
+the loop's other `awaiting` writes: a dead end no event sees.
+
+So the prohibition narrows to `Stage`, and the label write stays. The alternative — deleting the
+label write — was rejected because it makes the loop ask a question into silence.
+
+### Selection favours new work and blockers
+
+**Replaced by:** nothing selects work; a human's verb does.
+
+
+Rung 3 ordered by oldest `updatedAt` until 2026-09-07. That key carried two faults.
+
+`updatedAt` is not a fact about the ticket. A field write, a label change, or a bulk metadata pass
+bumps it, so the queue reorders itself when nobody touches the work. One backfill of Type and
+Priority bumped 22 tickets in a single pass on 2026-09-07. `createdAt` never moves, so it replaces
+it.
+
+Oldest-first also worked the backlog from the bottom. A ticket filed today describes the code as it
+stands. A ticket filed four months ago describes code that moved since, and a run that starts it
+spends its budget on re-deriving the difference. Newest-first reads the freshest evidence.
+
+A blocker rises only inside its own `Priority` band. Letting it rise further is the other
+defensible design, and the reviewer rejected it on 2026-09-07: a `Low` blocker of another `Low`
+ticket would then outrank an unrelated `High`, and `Priority` would stop measuring consequence.
+
+That choice has a cost, and the cost is real. A `Low` blocker of a `High` ticket waits while any
+`Medium` waits, so the `High` behind it stalls. The fix is to raise the blocker's own `Priority`.
+That is a reviewer decision, and the field then shows it.
+
+### Derive the window from comment timestamps
+
+**Replaced by:** there is no run window; an event carries its own item.
+
+
+A field write, a label change, or a bulk metadata pass all bump `updated_at`, even when nobody said
+anything. One migration made all 38 open issues look like fresh feedback, on 2026-08-28.
+
+### Blocked always carries a Hold Until
+
+**Replaced by:** a park is the `Hold Until` field, and a blocker is a relationship.
+
+
+Three journals in a row called a ticket "blocked" after its blocker had already merged.
+
+A block with no re-check date is not parked. It is lost. Nothing brings it back except a human
+happening to re-read it. `Hold Until` is the promise to look again, and the date makes that promise
+checkable.
+
+This is also why a held item stays *invisible*, not merely skipped. Listing it in the board's
+`awaiting` view would ask for attention that was deliberately deferred, and a queue full of things
+nobody can act on is a queue people stop reading.
+
+### Unblocking never restores Implement
+
+**Replaced by:** unblocking mentions the reviewer and implements nothing, by construction.
+
+
+A single-select field cannot remember its previous value, and nothing available to a routine can
+reconstruct it. No MCP tool reads an issue timeline, and the REST timeline event for a field change
+carries an actor and a timestamp, but no field name and no old value. So the prior `Stage` gets
+written into the `Blocked by:` body marker as `(was: X)` — the same trick, for the same reason, that
+mirrors the relationship there in the first place.
+
+Restoring that value verbatim is right for every case but one. A blocker usually changes the shape
+of the work it was blocking. An `Implement` restored automatically would let the loop write code
+against a ticket no human has re-read since the situation changed, which is the one thing this whole
+gate exists to prevent. So `Implement` reverts to `Revising` instead, and the reviewer re-approves.
+
+### A PR's assignee is a record, never a signal
+
+**Replaced by:** no assignee means anything now.
+
+
+Rungs find the loop's PRs with `author:<bot>`. Nothing reads the assignee on a PR the bot wrote, so
+for a long time nothing wrote it either, and the field sat empty. That was defensible and it read as
+broken — a queue of PRs with no owner, in a UI whose every other row has one.
+
+The state machine now assigns the bot to its own PR, **once, on `opened`**. It is bookkeeping. No
+rung may start reading it, or authorship and assignment become two answers to one question, which
+is the failure `#the-state-machine-is-not-the-loops-job` describes.
+
+**Once is the whole rule.** On a PR the bot did not write, the assignee means the opposite thing —
+a human handing the loop that work — and removing it is the kill switch. Re-asserting the
+assignment on `reopened` or `synchronize` would undo a deliberate removal on the next push, so a
+kill switch that only holds until the author pushes is not a kill switch. `opened` fires once in a
+PR's life, which is why it is the only safe place for this write.
+
+### Mark the PR ready despite unsettled CI
+
+**Replaced by:** Actions marks a PR ready, and only on green.
+
+
+A PR with an uncertain CI status is still *someone's*. A PR left in draft disappears from the system
+entirely — the reviewer's queue is built from `draft:false`, so nobody is waiting on it, and nobody
+knows it exists.
+
+Marking it ready, with a note like "CI unsettled after N polls, last seen lint green," gives the
+reviewer a fact they can act on. Leaving it in draft gives them silence, and silence is
+indistinguishable from the run having crashed.
+
+---
+
+# implement-issue
+
+### Assignment alone is not the implementation gate
+
+**Replaced by:** the gate is a `respondTo` human's verb.
+
+
+At backfill time, four tickets already had open PRs closing them. All four would have been
+re-implemented, had assignment alone been the gate. Assignment shows none of an open blocker, an
+in-flight PR, or a live `Hold Until`, which is why each gets its own row.
+
+Assignment answers one question — *is this the loop's to touch* — and it answers that well
+precisely because it answers nothing else.
+
+### Fetch fields only where a search answered
+
+**Replaced by:** there is no census to fetch fields for.
+
+
+Issue fields are readable but not searchable, so the census fetches a whole repo's issues to see
+`Stage` at all. That call is unavoidable. Making it five times a run is not.
+
+The searches above it already name every repo with a candidate. A repo none of them named holds
+nothing to attach a field to, so its response — 8 to 29 KB, measured on 2026-09-07 — is read,
+carried through the rest of the run's context, and used for nothing.
+
+Four consecutive runs that day (12:05 to 15:04) stopped at `wipCapPerRepo` with no work to start.
+Each paid for all five.
+
+### The state machine is not the loop's job
+
+**Replaced by:** the state machine is deleted; the dispatcher owns every mechanical write.
+
+
+Almost every state write the loop used to make was **mechanical**. An event determined it, with no
+judgment involved. But the loop made them late, up to eight hours late, and could forget them.
+`stateMachine.workflow` makes them from the event instead, within seconds, and cannot forget.
+
+The prize is larger than punctuality. Every *"as your final action, reassign / set Stage"* rule left
+the skills entirely, taking with it a whole class of instruction that was only ever bookkeeping.
+What remains in the skills is judgment: choosing a `Hold Until` date, deciding a block has lifted,
+revoking `Implement`, deciding the work is done. Those need a model. Setting `Implemented` because a
+PR opened does not.
+
+The split is a rule, not a preference: **if an event determines the answer, the workflow owns it.**
+Two writers racing on one field means the loser's write is silent.
+
+Recursion is bounded by idempotency, not by an actor guard. Every writer in the workflow reads
+current state first, and returns early when it already matches, so a write that re-fires
+`field_added` costs one free no-op run. An actor guard was tried first, and it was wrong: the bot
+authors its own issues and PRs, so `github.actor != 'sydevs-bot'` would skip exactly the transitions
+that matter most.
+
+One author guard survived that lesson, inverted, and cost the same thing. `issues: opened` set
+`Stage: Proposed` and `awaiting` only when the **bot** filed the issue, so a ticket filed from a
+local session, from the GitHub UI, or by an outside contributor landed with an empty `Stage` and no
+`awaiting`. It was invisible on the board and absent from the one view that answers "what needs me".
+The skills patched around it: `draft-ticket`, `cross-repo-issue` and `implement-issue` each carried
+a paragraph telling a local run to write that state itself, which is the two-writers shape this
+whole anchor exists to forbid. The event is the same event whoever fires it, so the rule is now
+about the event alone. `BOT` still names whose PR or assignment an event describes. It no longer
+decides whether a rule applies.
+
+`awaiting` is the one label the state machine still maintains, and the only one of six retired
+labels to survive. `Stage` and `Hold Until` cover ticket state, but `awaiting` marks *whose turn it
+is* — a different fact, with two properties no field supplies: it spans issues and pull requests (a
+PR shows an empty `Stage` cell forever), and it is searchable, where `field.<name>:<value>` returns
+zero through REST (`#issue-fields-are-not-searchable`). It stays a boolean on purpose. Sub-labels
+such as `awaiting:review` were considered and rejected, since a boolean cannot contradict itself, and
+the *kind* of attention is already legible from where the item sits.
+
+The state machine clears `awaiting` on any `respondTo` human's comment or review, within seconds, so
+it cannot outlive the reply that answered it. The loop itself still adds it for the dead-end cases no
+event expresses, among them: CI red past `ciFixIterations`, a conflict it could not rebase, a thread
+it rebutted rather than adopted, and an investigation that ended with a finding.
+
+Two transitions were missing from the first draft, both failing silently rather than loudly.
+`synchronize` is the revision handover. Pushing a fix after `changes_requested` returns the turn to
+the reviewer, but no other event says so, so an unguarded rule would leave a revised PR
+unlabelled forever. It is guarded on the reviewer's latest review still reading `CHANGES_REQUESTED`,
+so an ordinary mid-work push does not flag a PR nobody is waiting on. (The loop found this gap
+itself, in `sydevs/claude-workflow#42`.) And approval is gated on `assignment.reviewer`, never on
+`respondTo` — the same allowlist that `reviewDecisionFrom` applies in the merge gate
+(`#only-the-reviewers-approval-counts`), enforced at both sites where an approval is read. The
+nightly drift sweep is the backstop, and it journals every correction it makes.
+
+### Do not pin the journal
+
+**Replaced by:** the journal is found by a body marker, not by position.
+
+
+`pinIssue` is GraphQL-only, and a routine session's GraphQL serves only PR-review operations, so the
+call cannot succeed. Recency does the job instead. The day's journal is the most recently active
+`ops-journal` issue, so it sorts to the top of the issue list on its own.
+
+### Correcting an earlier claim
+
+**Replaced by:** the journal is comments, and a comment is never rewritten.
+
+
+The MCP surface **cannot edit a comment, but it can edit a body.** That asymmetry is what keeps the
+rolling summary always current, with no addendum machinery needed.
+
+So correcting an earlier claim needs no addendum. Fix it in the body, where the reader looks. The
+comment stays as the historical record of what that run believed at the time — which is what a log
+is for. The record then has one authoritative surface, even though its entries stay immutable.
+Someone catching up reads the body, not eight comments in sequence.

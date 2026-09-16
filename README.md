@@ -66,7 +66,6 @@ so each person runs `claude plugin install` once.
 | `/workflow:survey-contracts` | Thursday: check published contracts against reality. |
 | `/workflow:cut-release` | Friday: tag, update the changelog, cut a Release. |
 | `/workflow:reflect` | Sunday: grade last week, read the journals, report usage, refine the profile, propose loop changes. |
-| `/workflow:work-routine`, `preflight`, `journal` | **Legacy** — the hourly ladder. Unused once `BOT_DISPATCH` is `on`. Deleted after the cutover. |
 
 Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
 

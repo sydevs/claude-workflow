@@ -68,11 +68,10 @@ CI here. It checks only the plugin manifest and skill frontmatter, never whether
 
 ⚠ **`.github/workflows/` exists, and it is not CI.** It holds `dispatcher.yml` — the reusable
 workflow that observes every GitHub event in all five repos, classifies it, locks the item, fires
-the cloud session, and does every mechanical write (Status, `awaiting`, merge, mark-ready) — plus
-this repo's own thin caller. `state-machine.yml` is its predecessor, kept until the cutover
-cleanup. Editing either changes behaviour in every sydevs repo on the next event, with no merge
-anywhere else, so it carries a skill's blast radius and the same rules: keep the edit small and
-reversible, and state what failure it prevents. `dispatcher/` beside it is the code, with
+the cloud session, and does every mechanical write — plus this repo's own thin caller. Editing it
+changes behaviour in every sydevs repo on the next event, with no merge anywhere else, so it
+carries a skill's blast radius and the same rules: keep the edit small and reversible, and state
+what failure it prevents. `dispatcher/` beside it is the code, with
 `node --test dispatcher/test/*.test.mjs` as its gate.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
