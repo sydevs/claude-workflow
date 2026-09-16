@@ -1,10 +1,9 @@
-# Every GitHub event in this repo reaches one of two reusable workflows in
-# sydevs/claude-workflow, selected by the org variable BOT_DISPATCH:
+# Every GitHub event in this repo reaches the dispatcher in
+# sydevs/claude-workflow, gated by the org variable BOT_DISPATCH:
 #
-#   off        the legacy state machine (Stage, assignees, awaiting)
-#   dry        the dispatcher, logging what it would do, writing nothing
-#   on         the dispatcher — classifies, locks, fires cloud routines
-#   migrating  neither, while the backfill runs
+#   on    the dispatcher — classifies, locks, fires cloud routines
+#   dry   the dispatcher, logging what it would do, writing nothing
+#   any other value, including unset: nothing runs
 #
 # All rules live in claude-workflow, so the five repos cannot drift apart.
 # This copy is the journal repo's: it also carries the daily journal crons.
@@ -43,12 +42,6 @@ on:
 permissions: {}
 
 jobs:
-  legacy:
-    if: vars.BOT_DISPATCH == 'off' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-    uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
-    secrets:
-      token: ${{ secrets.SYDEVS_BOT_PAT }}
-
   dispatch:
     if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'
     uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
