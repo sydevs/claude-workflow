@@ -58,6 +58,28 @@ command is the first thing a new contributor, or a fresh cloud session, hits.
 grep -oE 'pnpm [a-z:]+' CLAUDE.md | sort -u   # then compare against package.json scripts
 ```
 
+### 5. The shared code-comments rule
+
+`docs/code-comments.md` here is canonical. Each product repo carries a copy at
+`docs/rules/code-comments.md`, symlinked into `.claude/rules/`, and four copies drift silently —
+that drift is exactly what this plugin exists to prevent.
+
+Compare the block between the `canonical:start` and `canonical:end` markers. Below those markers
+each repo keeps its own carve-outs, which must differ:
+
+```bash
+node workflow/lib/comment-rule-sync.mjs ..      # exits 1 on drift
+```
+
+Check the symlink still resolves too. A rule file that stops loading fails open and silently:
+
+```bash
+ls -l <repo>/.claude/rules/code-comments.md
+```
+
+File one ticket naming which repos drifted and in which direction. Type `Task`, priority `Low` —
+a drifted rule degrades output slowly rather than breaking anything.
+
 ## Filing
 
 File one ticket per drifted contract, per `/workflow:triage-issue`. Do not list everything in one
