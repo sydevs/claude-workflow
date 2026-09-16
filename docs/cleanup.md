@@ -4,9 +4,9 @@ The event-driven loop went live on 2026-09-09. Every piece of the loop it replac
 here, on purpose: [`docs/rollback/`](rollback/) needs all of it. This file is the other half — how
 to delete it once you no longer want that option.
 
-**Do not start until the loop has run a supervised week**, including one Sunday `reflect`, and you
-have seen the whole chain once: a verb, a draft PR, CI, the adversarial review, a revision, ready,
-approval, merge. Deleting is the moment the switch stops being reversible.
+**This ran on 2026-09-15**, before the supervised week, at the maintainer's instruction. The
+log at the bottom says what was done and what it cost. The steps below stay as written: they are
+the record of what was deleted and why, and the rollback doc reads them.
 
 Order matters only where it says so. Everything else is independent.
 
@@ -146,3 +146,21 @@ final skill set.
   the fast path no longer exists.
 - **The five `loop-*` routines and their tokens.** Obviously.
 - **`dispatcher/` and `dispatcher.yml`.** That is the loop now.
+
+## What was actually done — 2026-09-15
+
+The maintainer chose not to wait for the supervised week. Every step ran in one pass.
+
+| Step | What shipped |
+| --- | --- |
+| 1 config | [#100](https://github.com/sydevs/claude-workflow/pull/100) — twelve keys, config only. `relationships.recheckMarker` went too: `gh search issues 'org:sydevs is:open "Re-check:"'` returned nothing, and `parseRecheck` defaults to the same string. |
+| 2 skills · 3 workflow | [#101](https://github.com/sydevs/claude-workflow/pull/101) — `work-routine/`, `preflight/`, `journal/`, `state-machine.yml` and this repo's own `legacy` job, in one commit because the workflow and the skills that called it die together. Fourteen `docs/why.md` sections moved under `## Retired` rather than deleted; 71 live sections remain. **v2.0.0.** |
+| 6 product repos | SahajCloud#793 · SahajAtlasWeb#210 · WeMeditateWeb#101 · SahajAtlasWordpress#26 — each repo's `legacy` job, the output styles, the three WeMeditateWeb skills, `railway-config`, and the `AGENTS.md` lines that named them. Callers merged **before** #101, so no repo ever pointed at a workflow that had gone. |
+| 4 org field · 5 routine · 7 sweep | this PR and the hand-writes beside it |
+
+Two tools were less help than they looked, and both are worth knowing about next time:
+
+- **`rule-delta.mjs` never visits a deleted file.** It reported 61 → 61 directives across a
+  change that deleted three skills carrying 25 of them. All 25 were adjudicated by hand.
+- **A stale local checkout greps clean.** Two repos' `origin/main` were behind, one because its
+  SSH agent could not sign. Every sweep result here was re-run against the contents API.

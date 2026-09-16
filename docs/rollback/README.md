@@ -1,127 +1,188 @@
 # Going back to the hourly loop
 
 The sydevs loop moved from two scheduled cloud routines to GitHub-event dispatch on
-2026-09-08. This file is the way back. Someone who was not there can follow it without reading anything
-else first.
+2026-09-08. This file was the way back. On 2026-09-15 the cleanup ran and **the fast path
+stopped existing**. Rolling back is now a rebuild, not a switch.
 
 **Nothing here is a plan to carry out.** It is a plan to have. If the event loop works, close
-the tab. Its opposite is [`docs/cleanup.md`](../cleanup.md), which deletes what this file needs —
-after that runs, the fast path below stops working.
+the tab.
 
-## When you would use it
+## Read this before anything else
 
-- Dispatch is firing sessions nobody asked for, and pausing the routines is not enough.
-- GitHub Actions is failing across all five repos and you need work to continue.
-- Something in the event model turns out to be wrong in a way that needs a rewrite, and you
-  want a working loop while you do it.
+Until the cleanup, the old loop sat on `main` beside the new one, gated on a variable. Flipping
+`BOT_DISPATCH=off` started it. That is over. `off` now means **nothing runs** — not the old
+loop, not the new one. Every caller says so in its own header.
 
-**When you would not.** A single bad handler is `dispatch.enabledHandlers` in
-`loop-config.json`, not a rollback. A noisy day is `BOT_DISPATCH=off`, which stops the
-dispatcher and starts nothing. One misbehaving item is closing it, or removing `bot:working`.
+What was deleted, and by what:
 
-## What still exists, deliberately
-
-The cutover deleted nothing. Every piece of the old loop is still on `main` and still works.
-
-| Piece | Where |
+| Piece | Deleted by |
 | --- | --- |
-| `work-routine`, `preflight`, `journal` skills | `workflow/skills/` |
-| The old state machine | `.github/workflows/state-machine.yml` |
-| Its caller job | the `legacy` job in each repo's `.github/workflows/workflow-state.yml`, gated on `BOT_DISPATCH == 'off'` |
-| `sydevs-work-hourly` | routine `trig_01BUwH4WjazMXjG2bnC3TVRL`, **disabled** 2026-09-08 |
-| `sydevs-survey-nightly` | routine `trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6`, enabled, shared by both models |
-| Org field `Stage` | id `46423931` — **values untouched by the cutover** |
-| Org field `Hold Until` | id `46423871` — values untouched |
-| `ceilings.wipCapPerRepo`, `ciPollAttempts`, `maxWorkItemsPerRun` | `loop-config.json`, kept for exactly this |
-| The last polling-era plugin | tag `v0.3.1` |
+| `work-routine`, `preflight`, `journal` skills | [#101](https://github.com/sydevs/claude-workflow/pull/101) |
+| `.github/workflows/state-machine.yml` | [#101](https://github.com/sydevs/claude-workflow/pull/101) |
+| claude-workflow's own `legacy` caller job | [#101](https://github.com/sydevs/claude-workflow/pull/101) |
+| The four product repos' `legacy` caller jobs | SahajCloud#793 · SahajAtlasWeb#210 · WeMeditateWeb#101 · SahajAtlasWordpress#26 |
+| `ceilings.wipCapPerRepo`, `ciPollAttempts`, `maxWorkItemsPerRun` and nine more keys | [#100](https://github.com/sydevs/claude-workflow/pull/100) |
+| Org field `Stage` (id `46423931`) | deleted by hand, 2026-09-15 |
+| `sydevs-work-hourly` (`trig_01BUwH4WjazMXjG2bnC3TVRL`) | deleted by hand in the routines UI, 2026-09-15 |
 
-The backfill wrote Status, labels, `Re-check:` lines and comments. **It never wrote `Stage` or
-`Hold Until`**, so the old loop's own inputs are exactly as it left them. That is what makes
-this cheap.
+## What survived, and why each one matters
 
-The one thing it did take away: it **unassigned `sydevs-bot`** from 30 items. The old loop's
-worklist is `assignee:sydevs-bot`, so that has to come back. Both files you need are here.
+| Piece | Where | What it buys you |
+| --- | --- | --- |
+| Tag **`v0.3.1`** (`f1b6e39`) | this repo | Every deleted file, whole and working. This is the recovery source, not a diff to reconstruct. |
+| `cutover-snapshot-2026-09-08.json` | beside this file | The **only remaining copy** of every issue's old `Stage` and `Hold Until`. The field is gone; the values are here. |
+| `migrate-to-status.mjs` | beside this file | `--restore` re-adds the `awaiting` set and the `sydevs-bot` assignments the old loop reads as its worklist. |
+| Org field `Hold Until` (`46423871`) | org settings | Never retired. A park still lives there. |
+| `sydevs/claude-workflow#74` | GitHub | The 20 tickets that held `Stage: Implement` at the cutover, grouped by repo. Human-readable, and it outlives these files. |
 
-## The fast path — minutes, no merge
+## Before you decide to do any of this
 
-Do these four in order. After step 2 the old loop is running.
+Three cheaper things stop the loop, and one of them is almost certainly what you want.
+
+| Symptom | Reach for |
+| --- | --- |
+| One handler misbehaves | `dispatch.enabledHandlers` in `loop-config.json` — a list, and everything else stops |
+| A noisy day, or dispatch firing sessions nobody asked for | `gh variable set BOT_DISPATCH --org sydevs --body off` — every repo goes quiet in one write |
+| You want to see plans without writes | `BOT_DISPATCH=dry` |
+| One item is stuck | close it, or remove its `bot:working` label |
+| The platform is the problem | pause the five routines in the UI; the dispatcher degrades to `stuck` and the sweeper retries when you unpause |
+
+`off` is instant, total and free. **A rollback is only for a wrong event model** — something
+about the design turns out to be unworkable and you need a loop running while you rewrite it.
+Anything short of that, stop at the table above.
+
+## The rebuild, in the order it has to happen
+
+Budget half a day, and do not start it tired. Steps 1 and 2 are irreversible-ish; the rest is
+ordinary work.
+
+### 1. Re-create the `Stage` org field, and record its new id
+
+The delete was permanent and the new field gets a **new id**, so the config and the restored
+skills both need editing.
 
 ```bash
-# 1. Stop the dispatcher. The `legacy` job starts on the next event.
-gh variable set BOT_DISPATCH --org sydevs --visibility all --body off
-gh variable list --repo sydevs/<repo>          # delete any repo-level override you find
-
-# 2. Start the hourly routine again (or do it in the routines UI).
-#    RemoteTrigger update trig_01BUwH4WjazMXjG2bnC3TVRL  {"enabled": true}
-
-# 3. Put the assignees and `awaiting` back.
-node docs/rollback/migrate-to-status.mjs \
-  --config loop-config.json \
-  --restore docs/rollback/cutover-snapshot-2026-09-08.json --apply
-
-# 4. Pause the five per-repo routines so nothing can fire mid-run.
-#    loop-SahajCloud          trig_01CiCX4hDrAiP32S2FAM2phy
-#    loop-SahajAtlasWeb       trig_01P1f8mXn767iQ6Ve6nZ5jcW
-#    loop-WeMeditateWeb       trig_01Gdqck1nQggS1Rxmrz9GuW9
-#    loop-SahajAtlasWordpress trig_0144RjvvF3qRkqfugMyR6oY2
-#    loop-claude-workflow     trig_013eDcX1APf1f5NfUzodGE75
+gh api -X POST orgs/sydevs/issue-fields --input - <<'JSON'
+{"name":"Stage","data_type":"single_select","options":[
+  {"name":"Proposed","color":"blue","priority":1},
+  {"name":"Revising","color":"yellow","priority":2},
+  {"name":"Blocked","color":"gray","priority":3},
+  {"name":"Implement","color":"green","priority":4},
+  {"name":"Implemented","color":"purple","priority":5}]}
+JSON
+gh api orgs/sydevs/issue-fields --jq '.[] | "\(.name) id=\(.id)"'
 ```
 
-**Wait for any in-flight session to end before step 4**, or its final write lands after you
-have moved on. Look for open items carrying `bot:working`; the longest lease is
-`dispatch.timeoutsMinutes.implement`, 150 minutes.
+Then write the new id into `loop-config.json` → `issueFields.stage` and into the restored
+`state-machine.yml`, which hard-codes it.
 
-`--restore` is idempotent and additive. It re-adds `awaiting` and `sydevs-bot` where the
-snapshot had them and deletes nothing, so running it twice is harmless. A dry run without
-`--apply` prints the 30 writes it would make.
+`Status` and `State` are reserved names and return `422`. `Stage` is the workaround, and that is
+the whole reason for the odd name.
 
-## Undo the merge queue first
+### 2. Re-create the hourly routine
 
-Added 2026-09-15, and the fast path above is not enough on its own. The old `work-routine` merges
-with `PUT /pulls/{n}/merge`, which **a queue-protected branch rejects**. Roll back without this
-step and every approved PR fails to merge.
+The API cannot create a routine or its token. This is the routines UI, by hand, once:
+name `sydevs-work-hourly`, all five repos attached, opus, cron
+`0 1,12,13,14,15,16,17,18,19,21,23 * * *` UTC (11 fires a day — hourly 05:00–12:00 PT, then
+14/16/18), prompt naming `work-routine/SKILL.md`, `persist_session: false`. Then pause the five `loop-*` routines so nothing fires mid-run.
 
-On each of the four product repos — SahajCloud, SahajAtlasWeb, WeMeditateWeb, SahajAtlasWordpress:
+### 3. Restore the code from `v0.3.1`
+
+Not a revert — the intervening commits contain fixes worth keeping, and `main` has moved a long
+way. Take the deleted files back whole:
 
 ```bash
-# find the ruleset, then drop its merge_queue rule (keep the rest)
+git checkout v0.3.1 -- \
+  workflow/skills/work-routine workflow/skills/preflight workflow/skills/journal \
+  .github/workflows/state-machine.yml
+```
+
+Then, in the same PR:
+
+- **Revert `4b46afb`** (`feat(loop)!: the flip`, #71). The current `finalize-pr` does not watch
+  CI and does not mark a PR ready, so a PR opened under the old loop would sit in draft forever.
+- **Revert `138d613`** (`feat(loop)!: GitHub owns the merge`, #98). The old `work-routine` merges
+  with `PUT /pulls/{n}/merge`; without this the loop arms auto-merge on a branch whose queue you
+  are about to remove.
+- **Restore the twelve config keys** #100 deleted. `git show 9547824 -- loop-config.json` names
+  every one.
+- **Bump `workflow/.claude-plugin/plugin.json`** above 2.0.0 — it is a cache key, and an
+  installed plugin ignores `main` until the version changes.
+
+Leave the fixes between the flip and today alone (#73, #75, #76, #79, #80, #95): they touch
+`dispatcher/` and `docs/`, and reverting them buys nothing.
+
+Check with `node workflow/lib/rule-delta.mjs --base main workflow/skills` — it names anything
+that did not come back. It does **not** see deleted files, so read the restored tree yourself.
+
+### 4. Put the five `legacy` caller jobs back
+
+One per repo, in `.github/workflows/workflow-state.yml`, above the `dispatch` job:
+
+```yaml
+  legacy:
+    if: vars.BOT_DISPATCH == 'off' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
+    secrets:
+      token: ${{ secrets.SYDEVS_BOT_PAT }}
+```
+
+Fix each file's header comment too: it currently says `off` means nothing runs.
+
+**Merge claude-workflow's `state-machine.yml` first.** A caller naming a workflow that does not
+exist fails the entire run, and the only sign is a failed run named after the file path.
+
+### 5. Undo the merge queue
+
+The old loop merges with `PUT /pulls/{n}/merge`, which **a queue-protected branch rejects**. Skip
+this and every approved PR fails to merge.
+
+On SahajCloud, SahajAtlasWeb, WeMeditateWeb and SahajAtlasWordpress:
+
+```bash
 gh api repos/sydevs/<repo>/rulesets --jq '.[]|"\(.id) \(.name)"'
 ```
 
-Remove the `merge_queue` rule from the ruleset, and set `required_approving_review_count` back to
+Drop the `merge_queue` rule from the ruleset, and set `required_approving_review_count` back to
 `0` if you want the old loop to merge unattended as it used to. Leave `deletion`,
-`non_fast_forward` and `pull_request` in place — none of them troubles the polling loop.
+`non_fast_forward` and `pull_request` — none of them troubles the polling loop. `claude-workflow`
+has no queue and needs nothing.
 
-`claude-workflow` has no queue, so it needs nothing here.
+Leave `allow_auto_merge` on: harmless once nothing arms it. Leave the `merge_group` trigger in
+each `ci.yml`: an event that never fires. Any PR still armed loses its arming with the rule.
 
-**What you can leave alone.** `allow_auto_merge` on the four repos: harmless once nothing arms it.
-The `merge_group` trigger in each `ci.yml`: an event that never fires. Any PR still armed loses
-its arming when the queue rule goes.
-
-## Then revert the skills
-
-The fast path leaves the **new** skills on `main`. The old `work-routine` calls `finalize-pr`,
-which no longer watches CI and no longer marks a PR ready. A PR opened after rollback would sit
-in draft forever, invisible to everyone.
-
-So revert the flip, in its own PR, and bump the plugin version — it is a cache key, and a
-locally installed plugin ignores `main` until it changes.
+### 6. Restore the worklist, then start it
 
 ```bash
-git revert --no-commit 4b46afb        # feat(loop)!: the flip (#71)
-# bump workflow/.claude-plugin/plugin.json to 1.1.0 (or higher than whatever is live)
+gh variable set BOT_DISPATCH --org sydevs --visibility all --body off
+gh variable list --repo sydevs/<repo>     # delete any repo-level override
+
+node docs/rollback/migrate-to-status.mjs \
+  --config loop-config.json \
+  --restore docs/rollback/cutover-snapshot-2026-09-08.json --apply
 ```
 
-Reverting the flip alone is no longer enough either: the dispatcher stopped merging on
-2026-09-15, so the old loop needs that back. Revert `138d613` too — the commit that made GitHub
-own the merge — or the loop will arm auto-merge on a branch whose queue you have just removed.
+`--restore` is idempotent and additive: it re-adds `awaiting` and `sydevs-bot` where the snapshot
+had them, deletes nothing, and a run without `--apply` prints the 30 writes first.
 
-Revert those two commits. **Leave the fixes between them alone** (#73, #75, #76, #79, #80) —
-they touch `dispatcher/` and `docs/`, and reverting them buys nothing.
+It does **not** write `Stage` back, even though the snapshot holds every value. Until the
+cleanup that did not matter — the field was untouched. Now the field is new and empty, so
+either teach `--restore` to write `stage` from the snapshot, or accept that the old loop starts
+with an empty worklist and re-authorize from #74.
 
-Check `finalize-pr` afterwards. It must have step 8 (watch CI) and step 9 (mark ready) back,
-and `implement-issue` must have its four-gate table. `node workflow/lib/rule-delta.mjs --base
-main workflow/skills` names anything that did not come back.
+**Wait for every in-flight session to end before you enable anything.** Look for open items
+carrying `bot:working`; the longest lease is `dispatch.timeoutsMinutes.implement`, 150 minutes.
+
+## Check it worked
+
+| Check | Expect |
+| --- | --- |
+| Any repo's next event | the `legacy` job runs and GitHub skips `dispatch` |
+| `gh issue list --label awaiting` | roughly the 13 items in the snapshot |
+| `assignee:sydevs-bot` across the five repos | roughly 30 items, once `Stage` is back |
+| The next hourly fire | a journal entry in the old body-rewrite format |
+| An open bot PR | `finalize-pr` marks it ready once CI is green |
+| An approved PR | merges within a minute, with no queue in the way |
 
 ## What you can leave alone
 
@@ -130,35 +191,13 @@ main workflow/skills` names anything that did not come back.
   forward again free.
 - **Board Status.** The old loop never reads Projects v2.
 - **`Blocked by:` and `Re-check:` lines.** Prose in `## Notes`. Harmless.
-- **The five routines and their tokens.** Paused is enough. Deleting them is a one-way door:
-  the API cannot create a routine token, so re-creating one means the UI, once per repo.
-- **`dispatcher/` and `dispatcher.yml`.** Inert under `BOT_DISPATCH=off`.
-
-## What you cannot get back
-
-**A parked ticket's old `Stage`.** Parking used to be `Stage: Blocked` plus a `Hold Until`
-date, and the `(was: <Stage>)` suffix recorded what to restore on unblock. The event model
-dropped the suffix. The cutover parked eleven tickets. The snapshot holds their `stage`
-and `hold` values, so `--restore` could write them back, but it does not today. Nothing ever
-modified those field values, so in practice they still hold.
-
-**The 20 re-authorized tickets.** `sydevs/claude-workflow#74` lists every ticket that held
-`Stage: Implement` at the cutover, grouped by repo. It is the human-readable half of the
-snapshot, and it survives even if these files do not.
-
-## Check it worked
-
-| Check | Expect |
-| --- | --- |
-| Any repo's next event | the `legacy` job runs and GitHub skips `dispatch` |
-| `gh issue list --label awaiting` | roughly the 13 items in the snapshot |
-| `assignee:sydevs-bot` across the five repos | roughly 30 items |
-| The next hourly fire | a journal entry in the old body-rewrite format |
-| An open bot PR | `finalize-pr` marks it ready once CI is green |
+- **The five `loop-*` routines and their tokens.** Paused is enough, and deleting them is a
+  one-way door — the API cannot create a routine token, so each one costs a UI visit to rebuild.
+- **`dispatcher/` and `dispatcher.yml`.** Inert once no caller reaches them.
 
 ## Rolling forward again
 
-`BOT_DISPATCH=on`, re-enable the five routines, un-revert the flip. The event model needs no
-migration a second time: Status, labels and markers were never removed, so the board is still
-correct. The one repeat step is unassigning `sydevs-bot`, which the old loop starts writing again the
-moment it runs.
+Un-revert the two commits, restore the `dispatch` job, delete the `legacy` job, `BOT_DISPATCH=on`,
+re-enable the five routines. The event model needs no migration a second time: Status, labels and
+markers were never removed, so the board is still correct. The one repeat step is unassigning
+`sydevs-bot`, which the old loop starts writing again the moment it runs.

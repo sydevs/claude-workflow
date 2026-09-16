@@ -69,10 +69,11 @@ no per-repo setup.
 | Effort | single select | Easy · Moderate · Hard | `implement-issue`, to decide whether to split |
 | Hold Until | date | — | the dispatcher: a park, refusing `implement` until the date passes |
 
-> ⚠ A fourth field, **`Stage`**, is retired. The event model replaced it with the board's `Status`
-> and the labels below. Its values are untouched so a rollback can read them
-> (`docs/rollback/`), and it is deleted at the end of the cutover. **`Hold Until` is not
-> retired** — it is where a park lives. (why: docs/why.md#a-date-belongs-in-a-date-field)
+> ⚠ A fourth field, **`Stage`**, was deleted on 2026-09-15. The event model replaced it with the
+> board's `Status` and the labels below. Its values survive only in
+> [`docs/rollback/cutover-snapshot-2026-09-08.json`](rollback/cutover-snapshot-2026-09-08.json),
+> and a re-created field would get a new id. **`Hold Until` is not retired** — it is where a park
+> lives. (why: docs/why.md#a-date-belongs-in-a-date-field)
 
 Creating them from the CLI needs `admin:org`. Every select **option** needs `name`, `color`, and
 `priority` (omitting `priority` returns `422 object is missing required key: priority`). Valid
@@ -80,18 +81,18 @@ colors: `gray`, `blue`, `green`, `yellow`, `orange`, `red`, `pink`, `purple`.
 
 ```bash
 gh api -X POST orgs/<org>/issue-fields --input - <<'JSON'
-{"name":"Stage","data_type":"single_select","options":[
-  {"name":"Proposed","color":"blue","priority":1},
-  {"name":"Revising","color":"yellow","priority":2},
-  {"name":"Blocked","color":"gray","priority":3},
-  {"name":"Implement","color":"green","priority":4},
-  {"name":"Implemented","color":"purple","priority":5}]}
+{"name":"Priority","data_type":"single_select","options":[
+  {"name":"Critical","color":"red","priority":1},
+  {"name":"High","color":"orange","priority":2},
+  {"name":"Medium","color":"yellow","priority":3},
+  {"name":"Low","color":"gray","priority":4}]}
 JSON
 gh api -X POST orgs/<org>/issue-fields -f name='Hold Until' -f data_type=date
 ```
 
 > ⚠ **`Status` and `State` are reserved names** — both return
-> `422 Name cannot have a reserved value`. That is why the field is called `Stage`.
+> `422 Name cannot have a reserved value`. Anything that means "where is this in the process"
+> needs another word; the retired field was called `Stage` for exactly that reason.
 
 ```bash
 gh api orgs/<org>/issue-fields --jq '.[] | "\(.name) id=\(.id) \([.options[]?.name]|join("/"))"'
@@ -110,15 +111,16 @@ gh api -X PUT repos/OWNER/REPO/issues/N/issue-field-values --input - <<< \
 > does nothing.
 
 > ⚠ **The PUT replaces the issue's entire field-value set.** A PUT carrying only Priority silently
-> clears Stage, Effort and Hold Until. Send every value you want kept, or use the single-field
+> clears Effort and Hold Until. Send every value you want kept, or use the single-field
 > `DELETE .../issue-field-values/<field_id>` to clear just one.
 
 A routine reads field values with `list_issues(fields:["field_values"])`, one call per repo. It
 writes them with `issue_write`: `field_option_name` for a select, `value` for a date (ISO
 `YYYY-MM-DD`), `delete:true` to clear one field without disturbing the others.
 
-> ⚠ **Fields are not searchable through REST.** See `workflow/skills/preflight/SKILL.md` for the
-> rule and the worklist-query pattern this forces.
+> ⚠ **Fields are not searchable through REST.** Nothing searches them any more: the dispatcher
+> reads `Hold Until` on the one issue an event names, and the survey reads Priority and Effort on
+> issues a search already returned. (why: docs/why.md#issue-fields-are-not-searchable)
 
 ### Labels (every repo, identical)
 
@@ -195,12 +197,6 @@ through the `/fire` API. (why: docs/why.md#actions-observes-classifies-locks-and
 
 ```yaml
 jobs:
-  legacy:
-    if: vars.BOT_DISPATCH == 'off' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-    uses: sydevs/claude-workflow/.github/workflows/state-machine.yml@main
-    secrets:
-      token: ${{ secrets.SYDEVS_BOT_PAT }}
-
   dispatch:
     if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'
     uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
@@ -537,7 +533,6 @@ Three API quirks:
 | `loop-SahajAtlasWordpress` | `trig_0144RjvvF3qRkqfugMyR6oY2` |
 | `loop-claude-workflow` | `trig_013eDcX1APf1f5NfUzodGE75` |
 | `sydevs-survey-nightly` | `trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6` |
-| `sydevs-work-hourly` (retired, disabled) | `trig_01BUwH4WjazMXjG2bnC3TVRL` |
 
 Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 <https://claude.ai/code/routines>.
