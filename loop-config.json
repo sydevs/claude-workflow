@@ -223,10 +223,10 @@
   "relationships": {
     "$comment": "No MCP tool writes a native relationship, so a session writes this marker and the dispatcher converts it. The reader matches the words, not the punctuation (why: docs/why.md#the-marker-reader-matches-words-not-punctuation). A date park is the Hold Until field, not a marker.",
     "bodyMarker": "Blocked by",
-    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason> (was: <Stage>)"
+    "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>"
   },
   "identity": {
-    "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in work-routine/SKILL.md.",
+    "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in implement-issue/SKILL.md.",
     "expectedLogin": "sydevs-bot",
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
