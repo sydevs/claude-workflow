@@ -41,7 +41,7 @@ import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -120,10 +120,20 @@ export function commentRanges(src, path, ts) {
   return { ranges: [...out.values()].sort((a, b) => a.pos - b.pos), sf }
 }
 
-/** Non-trivia leaf tokens, in source order. The anchor check compares these. */
+/**
+ * Non-trivia leaf tokens, in source order. The anchor check compares these.
+ *
+ * ⚠ **TypeScript puts JSDoc nodes in `getChildren()`.** A doc comment is
+ * trivia, but the parser hangs a `JSDoc` node off the declaration it
+ * documents, so a naive leaf walk returns the comment's own text as though it
+ * were code. That made every JSDoc edit look like it moved the next comment:
+ * collapsing one block reported `// --- Constants ---` below it as DISPLACED,
+ * in a file whose code was untouched. Skip the whole JSDoc subtree.
+ */
 export function leafTokens(sf, ts) {
   const out = []
   ;(function walk(n) {
+    if (ts.SyntaxKind[n.kind]?.startsWith('JSDoc')) return
     const kids = n.getChildren(sf)
     if (kids.length === 0) {
       const t = n.getText(sf)
@@ -482,7 +492,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const ri = args.indexOf('--repo')
   const repoRoot =
     ri !== -1
-      ? args[ri + 1]
+      ? resolve(args[ri + 1])
       : execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 
   if (args.includes('--selftest')) process.exit((await selftest(repoRoot)) ? 1 : 0)

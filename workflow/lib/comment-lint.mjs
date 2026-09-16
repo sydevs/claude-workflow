@@ -37,7 +37,7 @@
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { commentRanges } from './comment-fingerprint.mjs'
 
 /**
@@ -156,7 +156,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const ri = args.indexOf('--repo')
   const root =
     ri !== -1
-      ? args[ri + 1]
+      ? resolve(args[ri + 1])
       : execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   const bi = args.indexOf('--base')
   if (bi === -1) {
