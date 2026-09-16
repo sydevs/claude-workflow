@@ -75,6 +75,29 @@ have moved on. Look for open items carrying `bot:working`; the longest lease is
 snapshot had them and deletes nothing, so running it twice is harmless. A dry run without
 `--apply` prints the 30 writes it would make.
 
+## Undo the merge queue first
+
+Added 2026-09-15, and the fast path above is not enough on its own. The old `work-routine` merges
+with `PUT /pulls/{n}/merge`, which **a queue-protected branch rejects**. Roll back without this
+step and every approved PR fails to merge.
+
+On each of the four product repos — SahajCloud, SahajAtlasWeb, WeMeditateWeb, SahajAtlasWordpress:
+
+```bash
+# find the ruleset, then drop its merge_queue rule (keep the rest)
+gh api repos/sydevs/<repo>/rulesets --jq '.[]|"\(.id) \(.name)"'
+```
+
+Remove the `merge_queue` rule from the ruleset, and set `required_approving_review_count` back to
+`0` if you want the old loop to merge unattended as it used to. Leave `deletion`,
+`non_fast_forward` and `pull_request` in place — none of them troubles the polling loop.
+
+`claude-workflow` has no queue, so it needs nothing here.
+
+**What you can leave alone.** `allow_auto_merge` on the four repos: harmless once nothing arms it.
+The `merge_group` trigger in each `ci.yml`: an event that never fires. Any PR still armed loses
+its arming when the queue rule goes.
+
 ## Then revert the skills
 
 The fast path leaves the **new** skills on `main`. The old `work-routine` calls `finalize-pr`,
@@ -89,7 +112,11 @@ git revert --no-commit 4b46afb        # feat(loop)!: the flip (#71)
 # bump workflow/.claude-plugin/plugin.json to 1.1.0 (or higher than whatever is live)
 ```
 
-Revert only that commit. **Leave the four fixes after it alone** (#73, #75, #76, #79, #80) —
+Reverting the flip alone is no longer enough either: the dispatcher stopped merging on
+2026-09-15, so the old loop needs that back. Revert `138d613` too — the commit that made GitHub
+own the merge — or the loop will arm auto-merge on a branch whose queue you have just removed.
+
+Revert those two commits. **Leave the fixes between them alone** (#73, #75, #76, #79, #80) —
 they touch `dispatcher/` and `docs/`, and reverting them buys nothing.
 
 Check `finalize-pr` afterwards. It must have step 8 (watch CI) and step 9 (mark ready) back,
