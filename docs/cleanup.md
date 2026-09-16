@@ -61,7 +61,12 @@ Delete `.github/workflows/state-machine.yml`, then the `legacy` job from **all f
 
 **The callers first, then the reusable workflow.** A caller naming a workflow that no longer
 exists fails the whole run, so leaving `legacy` behind for even one repo breaks that repo's
-dispatch. SahajCloud needs a PR; the other four take a direct commit.
+dispatch.
+
+**Every repo needs a pull request now.** All five carry a branch ruleset since 2026-09-15, so
+there is no direct commit to `main` anywhere. The four product repos also run a merge queue, so
+each caller change waits for its own CI and one approval. Budget five PRs, not one plus four
+commits.
 
 Once the last `legacy` job is gone, `BOT_DISPATCH=off` no longer falls back to anything — it just
 stops. Say so in `docs/rollback/`, which currently promises otherwise, and delete the old
