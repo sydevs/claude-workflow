@@ -53,12 +53,19 @@ Each explanation was coherent, detailed, and wrong. All four read as measured fa
 Diagnosing the harness is a human's job, and a harness theory that becomes the stated evidence for
 a code change puts a wrong premise into `main`.
 
-## You cannot detect having been blocked
+## A blocked run cannot see that it is blocked
 
-An approval prompt in an unattended run does not fail. It **waits, invisibly**, and the run resumes
-with no memory of the gap. One WeMeditateWeb run lost about 75 minutes this way, against Claude
-Code's Protected Paths guard. So when wall-clock time jumps, being blocked *is* the explanation. Do
-not look for a second one.
+An approval prompt in an unattended run does not fail. It **waits**, and the run resumes with no
+memory of the gap. One WeMeditateWeb run lost about 75 minutes this way, against Claude Code's
+Protected Paths guard. So when wall-clock time jumps, being blocked *is* the explanation. Do not
+look for a second one.
+
+From *inside* the run this is invisible. From outside it is not: the routines API reports a stalled
+session as `worker_status: requires_action`, within about 90 seconds of it stalling. Six
+consecutive `loop-WeMeditateWeb` runs sat in that state on WeMeditateWeb#97 — each burning its full
+150-minute lease — because the dispatcher does not poll for it. That is a known gap, not a law of
+nature. Until it is closed, a stalled run still costs a whole lease, and `handler-preflight`'s
+protected-path check is what keeps runs out of the trap in the first place.
 
 Wake events carry an authoritative `current-time` in GitHub's own frame. Prefer it over the local
 clock for anything compared against a GitHub timestamp.
@@ -297,9 +304,15 @@ reviewer returned "no correctness bugs, production ready" after a **single tool 
 ## Documentation lives outside .claude/
 
 Writes under `.claude/` hit Claude Code's Protected Paths guard. It requires interactive approval
-and runs *before* `permissions.allow`, so an unattended run stalls there forever, unable to even
+and runs *before* `permissions.allow`, so an unattended run stalls there, unable from the inside to
 perceive it is blocked. That is why the guides are nested `AGENTS.md` files, each with a `CLAUDE.md`
 symlink beside it — they load when Claude reads files in that directory, and stay freely editable.
+
+Two corrections to how this rule was long stated here. **`.claude/worktrees` is exempt** from the
+guard, so working in a worktree is not what stalls a run, and `--no-worktree` was never the remedy.
+And **the guard reaches well beyond `.claude/`** — `.npmrc`, `.gitconfig`, `.pre-commit-config.yaml`
+and the rest of the list in `AGENTS.md` stall a run exactly the same way, which is how six
+consecutive runs died on a one-line `.npmrc` change.
 
 ## Contract surfaces are mandatory
 

@@ -165,8 +165,9 @@ next author reads it:
 
 - **A small documentation fix** — a `CLAUDE.md`/`AGENTS.md` correction, a missing convention, a
   stale instruction — becomes a direct ticketless PR to that repo (its `prAllowlistGlobs` covers
-  `**/*.md`). **Never touch anything under `.claude/`** — Protected Paths stall an unattended
-  run, invisibly.
+  `**/*.md`). **Never write a protected path** — `.claude/` (bar `.claude/worktrees`), `.npmrc`,
+  `.gitconfig` and the rest of the list in `AGENTS.md`. The prompt stalls an unattended run until
+  its lease expires. Propose the change instead.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
   proposal issue in that repo instead, under `maxOpenProposals` like every survey proposal. The
   dispatcher sets its Status and `awaiting`.
