@@ -277,6 +277,32 @@ test('an implement verb is answered by the PR, not re-dispatched on unlock', () 
   assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, noPr, config).some((a) => a.type === 'targets'))
 })
 
+test('the awaiting sweep leaves a ticket whose PR is open, and does not throw on a PR', () => {
+  // session-end takes `awaiting` off a ticket a PR closes. Any bot comment
+  // after that makes the bot last speaker, and the sweep put the label back —
+  // claiming the reviewer twice for one piece of work.
+  const bare = (over) => issueSnap({ item: { number: 9, labels: [] }, botSpokeLast: true, ...over })
+  const open = (over) => decide({ reason: 'sweep-awaiting', facts: {} }, bare({ openPrsClosingIt: [742], ...over }), config)
+  // `types()` renders every note as 'note', so the text is pinned too: without
+  // the guard the botSpokeLast: false case says 'human spoke last' and passes.
+  for (const spoke of [true, false]) {
+    const p = open({ botSpokeLast: spoke })
+    assert.deepEqual(types(p), ['note'], 'no label, no anomaly')
+    assert.match(p[0].text, /open PR/, 'the PR is the turn, whoever spoke last')
+  }
+
+  // With no PR open, the correction the sweep exists for still fires.
+  const noPr = decide({ reason: 'sweep-awaiting', facts: {} }, bare(), config)
+  assert.ok(noPr.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.ok(noPr.some((a) => a.type === 'anomaly' && a.kind === 'awaiting-drift'))
+
+  // sweep.mjs pushes this reason for PRs too, and a PR snapshot carries no
+  // `openPrsClosingIt` key — gather.mjs sets it on the issue arm alone. The
+  // guard must fall through it rather than throw, leaving the PR arm as it was.
+  const pr = decide({ reason: 'sweep-awaiting', facts: {} }, prSnap({ botSpokeLast: true }), config)
+  assert.deepEqual(types(pr), ['label', 'anomaly'])
+})
+
 test('a draft that is ready to advance is not reported as an orphan', () => {
   // The eight PRs of 2026-09-09: green, reviewed, and stuck only because the
   // token could not mark them ready. The orphan notice said the opposite.

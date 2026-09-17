@@ -395,6 +395,8 @@ export function decide(target, s, config) {
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]
+      // `?.`: this arm takes PR snapshots, which carry no such key. (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
+      if (s.openPrsClosingIt?.length) return [note('an open PR closes it — the PR is the turn')]
       if (s.botSpokeLast) return [label([L.awaiting], []), anomaly('awaiting-drift', `${s.repo.full}#${s.item.number} awaiting was missing`)]
       return [note('human spoke last')]
     }
