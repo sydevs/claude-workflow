@@ -178,18 +178,36 @@ Hooks run in a maintainer's own session with their credentials, on every matchin
 
 ## ⚠ Protected paths, and why the docs are where they are
 
-Claude Code's **Protected Paths** guard makes any write under `.claude/` require interactive
-approval. That guard runs *before* `permissions.allow`, so no allowlist entry can pre-empt it. An
-unattended run does not fail on the prompt — it **waits, invisibly**, with no way to detect the
-block. One WeMeditateWeb run lost about 75 minutes this way.
+Claude Code's **Protected Paths** guard never auto-approves a write to a small set of files and
+directories. It runs *before* `permissions.allow`, so no allowlist entry pre-empts it — not in a
+repo's `.claude/settings.json`, and not in a routine's `allowed_tools`. In an unattended run the
+write is **prompted**, and the prompt does not fail: the session waits until its lease expires,
+having written nothing. One WeMeditateWeb run lost about 75 minutes this way, and six consecutive
+runs later stalled on `.npmrc` for WeMeditateWeb#97.
 
-That is why documentation lives **outside** `.claude/` in all five repos: this file, the nested
-`AGENTS.md` guides in the product repos, and `docs/`. Here the only protected file is
-`.claude/workflow.json`. Note that `.claude-plugin/` and `workflow/.claude-plugin/` are *not* under
-`.claude/`, and stay freely writable.
+**The set is much wider than `.claude/`**, and that is the part that keeps catching runs out. The
+authoritative list is in [Claude Code's docs](https://code.claude.com/docs/en/permission-modes#protected-paths).
+What bites this org:
 
-When a change genuinely needs `.claude/workflow.json` edited, expect the prompt and do the edit
-attended.
+- **Package-manager config** — `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.pnpmfile.cjs`, `bunfig.toml`
+- **Git config** — `.gitconfig`, `.gitmodules`, and the `.git` and `.config/git` directories
+- **Hook and tooling config** — `.pre-commit-config.yaml`, `lefthook.*`, `.husky/`, `.bazelrc`
+- **Claude's own config** — `.mcp.json`, `.claude.json`, and `.claude/`
+- Shell rc files, `.devcontainer/`, `.vscode/`, `.idea/`, `.cargo/`, `.yarn/`, `.mvn/`
+
+**`.claude/worktrees` is exempt.** `git worktree add .claude/worktrees/<slug>`, and every edit
+inside that worktree, are ordinary writes. `implement-issue` step 6 is correct as written, and
+`--no-worktree` is not a workaround for this guard. Several past runs took it believing otherwise,
+and journalled the belief as fact.
+
+Documentation still lives **outside** `.claude/` in all five repos — this file, the nested
+`AGENTS.md` guides in the product repos, and `docs/` — because the rest of `.claude/` really is
+protected. Here the only protected file is `.claude/workflow.json`. Note that `.claude-plugin/` and
+`workflow/.claude-plugin/` are *not* under `.claude/`, and stay freely writable.
+
+When a change genuinely needs a protected path edited, expect the prompt and do the edit attended.
+A handler that finds one in its way hands the ticket back rather than attempting the write — see
+`handler-preflight`.
 
 ## Conventions
 

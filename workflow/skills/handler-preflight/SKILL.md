@@ -57,6 +57,29 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   jump — record it and move on. (why: docs/why.md#report-anomalies-do-not-explain-them)
 - **Append `identity.commentMarker`** to every comment.
 
+## Protected paths — check before you plan
+
+Claude Code never auto-approves a write to a protected path. You cannot write one, and neither
+`permissions.allow` nor the routine's `allowed_tools` changes that. The prompt does not fail: your
+session waits until the lease expires, having written nothing and having journalled nothing. Six
+consecutive runs died this way on a one-line `.npmrc` change (WeMeditateWeb#97).
+
+The list lives in `AGENTS.md` and, authoritatively, in
+[Claude Code's docs](https://code.claude.com/docs/en/permission-modes#protected-paths). The ones
+that come up here: `.npmrc`, `.yarnrc*`, `.pnpmfile.cjs`, `bunfig.toml`, `.gitconfig`,
+`.gitmodules`, `.pre-commit-config.yaml`, `lefthook.*`, `.mcp.json`, `.claude.json`, and the
+directories `.git`, `.husky`, `.vscode`, `.devcontainer`, `.yarn`, `.claude`.
+
+**Before you plan how, decide whether you can.** A ticket whose acceptance criteria require writing
+one of these cannot be done by this run. Comment which file forces it and that the change needs an
+attended run, then unlock and stop. Do not start the work. Do not open a partial PR.
+
+**`.claude/worktrees` is exempt.** `git worktree add .claude/worktrees/<slug>` and every edit inside
+that worktree are ordinary writes. `--no-worktree` is not a workaround for this guard.
+
+**Never route around the guard.** `sed -i`, a heredoc redirect, `git apply`, or a script that writes
+the file are all answering a safety prompt with nobody present. Hand the ticket back instead.
+
 ## Budgets and register
 
 `writing.budgets`: `comment` for a ticket or PR comment, `reviewReply` for a thread reply,
