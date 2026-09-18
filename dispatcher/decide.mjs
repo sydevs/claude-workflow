@@ -305,13 +305,10 @@ export function decide(target, s, config) {
       if (s.locked) return plan.concat(recheck())
       return plan.concat(fire(v.verb))
     }
-    // Everything a review says, whether it arrives as the review or as one of
-    // its inline comments. Submitting a review with inline comments emits one
-    // `pull_request_review.submitted` plus one event per comment, all in one
-    // concurrency group, so most are cancelled — safe only because whichever
-    // survives re-derives the PR's whole state. The bot guard is the only
-    // thing this row does not share: `case 'review'`'s own bot branch carries
-    // the critic-header exception, which belongs to reviews alone.
+    // A review comment is a review, so it re-derives the PR like one — the
+    // invariant the concurrency group rests on. The bot guard is the only
+    // thing this row does not share: `case 'review'`'s bot branch carries the
+    // critic-header exception, which belongs to a submitted review alone.
     // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
     case 'review_comment': {
       if (isBot(facts.author, config)) return [note('own review comment — ignored')]

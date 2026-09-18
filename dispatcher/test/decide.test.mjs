@@ -123,12 +123,7 @@ test("the bot's own non-critic review is ignored; its critic review is the excep
   assert.ok(decide({ reason: 'review', facts: { author: 'sydevs-bot', body: '## 🧐 Adversarial review\n…' } }, critic, config).some((a) => a.type === 'fire' && a.handler === 'address-review'))
 })
 
-// sydevs/SahajAtlasWeb#212 on 2026-09-17: a CHANGES_REQUESTED review with four
-// inline comments dispatched nothing. GitHub stamps a review comment
-// CONTRIBUTOR for the same login it stamps MEMBER on every issue comment, so
-// the `issue_comment` row those events used to take refused them, and the
-// review's own run — the one path with no such gate — was cancelled by its
-// four siblings in the same concurrency group.
+// SahajAtlasWeb#212: a review with four inline comments dispatched nothing.
 // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
 test('a review comment on a bot PR re-derives the PR, whatever association GitHub sent', () => {
   const s = prSnap({
@@ -142,13 +137,18 @@ test('a review comment on a bot PR re-derives the PR, whatever association GitHu
 
 // The note text, not just the shape: an unhandled reason is also one note, so
 // both halves stay green against the old mapping unless the text is pinned.
+//
+// The bot half is what the row's own guard buys, so the fixture is built to
+// punish its removal: an inline comment opening with the critic header on a
+// bot PR with an unanswered own-rooted thread. Delegate it to `case 'review'`
+// and the critic-header exception fires address-review on the bot's own words.
 test('a review comment from the bot, or from outside the allowlist, dispatches nothing', () => {
   const s = prSnap({
     pr: { ...prSnap().pr, draft: false },
     reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', state: 'COMMENTED', submitted_at: '2026-09-17T00:00:00Z' }],
     threads: [{ isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-09-17T00:00:00Z', body: 'finding' }] }],
   })
-  const own = decide({ reason: 'review_comment', facts: { author: 'sydevs-bot', body: 'finding' } }, s, config)
+  const own = decide({ reason: 'review_comment', facts: { author: 'sydevs-bot', body: '## 🧐 Adversarial review\n…' } }, s, config)
   assert.deepEqual(own.map((a) => a.text), ['own review comment — ignored'])
   const stranger = decide({ reason: 'review_comment', facts: { author: 'drive-by', body: 'a nit', association: 'MEMBER' } }, s, config)
   assert.deepEqual(stranger.map((a) => a.text), ['review by drive-by — ignored'])
