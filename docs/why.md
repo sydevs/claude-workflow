@@ -731,6 +731,24 @@ contributor, explicitly, that `version` did not matter. That is why bumping the 
 required part of any skill change, not a release ceremony. This repo has no releases. It does have a
 cache key, and a cache key that never changes is a cache that never updates.
 
+## A missed version declaration passes CI
+
+`cut-release` named three places SahajAtlasWordpress declares its version: the plugin header,
+`readme.txt`'s `Stable tag`, and `package.json`. Two were right. `package.json` there is dev
+tooling, declares no version at all, and `.distignore` keeps it out of the zip. The list omitted
+`SAHAJ_ATLAS_VERSION` in `sahaj-atlas.php` and `version` in `blocks/embed/block.json`.
+
+`SAHAJ_ATLAS_VERSION` is the `$ver` argument on every asset the plugin enqueues. Left behind, a
+site that takes the update runs the new PHP against the previous release's cached
+`atlas-page.css` and `atlas-page.js`.
+
+Nothing downstream would have caught it. `release.yml` compares the tag against the plugin header
+and nothing else, so the build stays green and the zip attaches. The v0.2.0 run found it only by
+grepping for the old version before it committed.
+
+A list of declarations is a copy of the repo's shape, and a copy goes stale. Grep for the version
+being replaced instead.
+
 ## Fit the journal, do not negotiate with it
 
 `budget.mjs` answered one question — over or under — and returned nothing about where to cut or by
