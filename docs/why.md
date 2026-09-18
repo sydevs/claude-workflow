@@ -1036,6 +1036,13 @@ consumed, the ticket goes to `Done`, and `awaiting` comes off. Any other verb st
 someone who typed `revise` while the session ran is still owed a run — and an implement verb with
 no PR still re-derives too, because then nothing answered it.
 
+The awaiting sweep obeys the same fact, or it undoes the unlock within the hour. `sweep-awaiting`
+re-applies `awaiting` wherever the bot spoke last, and an `answer` or `revise` comment on a ticket
+whose PR is open makes the bot the last speaker. The sweep put the label back, claiming the
+reviewer on the PR and on a ticket with nothing left to do, and called its own correct write an
+`awaiting-drift` anomaly. An issue with an open PR closing it is the PR's turn, in the sweep as at
+session end.
+
 ## Our own check runs are not CI
 
 `ci.ignoreCheckNames` exists because the dispatcher runs on `pull_request_target`, so its jobs
