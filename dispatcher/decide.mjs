@@ -216,8 +216,8 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  * `decide(target, snapshot, config)` → plan[].
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
- * `pull_request.synchronize`, `review`, `thread`, `ci`, `unlock`,
- * `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
+ * `pull_request.synchronize`, `review`, `review_comment`, `thread`, `ci`,
+ * `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
  * what the payload said — used only to pick the row; state comes from the
  * snapshot.
  */
@@ -304,6 +304,18 @@ export function decide(target, s, config) {
       plan.push(status('revising'))
       if (s.locked) return plan.concat(recheck())
       return plan.concat(fire(v.verb))
+    }
+    // Everything a review says, whether it arrives as the review or as one of
+    // its inline comments. Submitting a review with inline comments emits one
+    // `pull_request_review.submitted` plus one event per comment, all in one
+    // concurrency group, so most are cancelled — safe only because whichever
+    // survives re-derives the PR's whole state. The bot guard is the only
+    // thing this row does not share: `case 'review'`'s own bot branch carries
+    // the critic-header exception, which belongs to reviews alone.
+    // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
+    case 'review_comment': {
+      if (isBot(facts.author, config)) return [note('own review comment — ignored')]
+      return decide({ ...target, reason: 'review' }, s, config)
     }
     case 'review': {
       if (isBot(facts.author, config)) {
