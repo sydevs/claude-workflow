@@ -72,10 +72,12 @@ Only when **all** hold:
    reader: for the WordPress plugin that is one non-technical volunteer per site, so "the atlas
    page now keeps your site header" beats "fixed containing-block establishment".
 3. **Version bump** everywhere the artifact declares one. **Find them, never trust a list:**
-   `grep -rn "$OLD_VERSION" .`, dependencies excluded. `release.yml` compares the tag against the
-   plugin header alone, so a declaration you miss still passes CI and ships — and
-   `SAHAJ_ATLAS_VERSION` is the asset cache-buster, so missing that one leaves every updated site
-   on the previous release's CSS and JS.
+   ```bash
+   grep -rn "<previous version>" . --exclude-dir={.git,vendor,node_modules}
+   ```
+   `release.yml` compares the tag against the plugin header alone, so a declaration you miss still
+   passes CI and ships — and `SAHAJ_ATLAS_VERSION` is the asset cache-buster, so missing that one
+   leaves every updated site on the previous release's CSS and JS.
    (why: docs/why.md#a-missed-version-declaration-passes-ci)
 4. **Ship it** through `/workflow:finalize-pr`. Tag only after it merges:
    ```bash
