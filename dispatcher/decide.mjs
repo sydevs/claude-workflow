@@ -305,13 +305,13 @@ export function decide(target, s, config) {
       if (s.locked) return plan.concat(recheck())
       return plan.concat(fire(v.verb))
     }
-    // A review comment is a review. On a bot PR that means `evaluatePr`, so a
-    // cancelled sibling costs nothing — the invariant the concurrency group
-    // rests on. ⚠ On a human PR it means the verb tail, which reads this one
-    // body, so a verb left in the review body is still lost when that leg is
-    // the cancelled one. The bot guard is the only thing this row does not
-    // share: `case 'review'`'s bot branch carries the critic-header exception,
-    // which belongs to a submitted review alone.
+    // A review comment is a review. From a human on a bot PR that means
+    // `evaluatePr`, so a cancelled sibling costs nothing — the invariant the
+    // concurrency group rests on. ⚠ On a human PR it means the verb tail,
+    // which reads this one body, so a verb left in the review body is still
+    // lost when that leg is the cancelled one. The bot guard is the only
+    // thing this row does not share: `case 'review'`'s bot branch carries the
+    // critic-header exception, which belongs to a submitted review alone.
     // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
     case 'review_comment': {
       if (isBot(facts.author, config)) return [note('own review comment — ignored')]

@@ -1181,10 +1181,16 @@ rests on quietly stopped holding.
 
 The fix restores that invariant rather than adding a second mechanism: review comments get their
 own reason and re-derive through `evaluatePr`, as reviews already did. On a bot PR — every PR the
-loop opens, and so every PR this outage can happen on — whichever of the five survives now reads
-the PR's whole state, including the thread the cancelled comment created, since `gather.mjs`
-fetches review threads for any open PR. Cancellation costs nothing again. `association` left the
-facts with the reason, because nothing on the new path reads it.
+loop opens, and so every PR this outage can happen on — whichever of a human's five legs survives
+now reads the PR's whole state, including the thread the cancelled comment created, since
+`gather.mjs` fetches review threads for any open PR. Cancellation costs nothing again.
+`association` left the facts with the reason, because nothing on the new path reads it.
+
+**One storm still turns on which leg survives: the loop's own critic review.** Every
+review-comment leg stops at the bot guard, so `pull_request_review.submitted` is the only leg that
+re-derives, and cancelling it leaves nothing behind it. Nothing is lost, because the critic holds
+the lock while it posts and the `unlock` that follows re-derives the PR — a different mechanism
+than this one, and the reason the gap has never shown.
 
 **The invariant is restored for bot PRs only, and that is worth knowing before the next outage.**
 A human PR takes `case 'review'`'s verb tail instead, which reads the one body the event carried,
