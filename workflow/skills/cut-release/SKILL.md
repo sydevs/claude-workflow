@@ -20,10 +20,6 @@ exception is the repo that matters most to end users.
 | SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract: see `survey-contracts`. |
 | **claude-workflow** | **No tag, but yes a version** — see below. |
 
-`v0.1.0` of the WordPress plugin shipped on 2026-08-27, so the install path in its README now
-works. Its README status line still says "complete, not yet tagged" — stale. Correct it whenever
-that file is next touched.
-
 ### claude-workflow — bump the manifest, never tag
 
 This repo wants no releases. Instead it has a **cache key**: an installed plugin lives in
@@ -75,9 +71,12 @@ Only when **all** hold:
 2. **Changelog** from the merge log, grouped Added / Changed / Fixed / Removed. Write for the
    reader: for the WordPress plugin that is one non-technical volunteer per site, so "the atlas
    page now keeps your site header" beats "fixed containing-block establishment".
-3. **Version bump** everywhere the artifact declares one — the plugin header in
-   `sahaj-atlas.php`, `readme.txt` (`Stable tag`), and `package.json`. All must agree: WordPress
-   reads the header, the Update Checker reads the tag.
+3. **Version bump** everywhere the artifact declares one. **Find them, never trust a list:**
+   `grep -rn "$OLD_VERSION" .`, dependencies excluded. `release.yml` compares the tag against the
+   plugin header alone, so a declaration you miss still passes CI and ships — and
+   `SAHAJ_ATLAS_VERSION` is the asset cache-buster, so missing that one leaves every updated site
+   on the previous release's CSS and JS.
+   (why: docs/why.md#a-missed-version-declaration-passes-ci)
 4. **Ship it** through `/workflow:finalize-pr`. Tag only after it merges:
    ```bash
    git tag -a v<version> -m "v<version>" && git push origin v<version>
