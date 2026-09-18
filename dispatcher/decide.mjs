@@ -49,6 +49,17 @@ export function hasAccess(association) {
 export function isReviewer(login, config) {
   return lower(login) === lower(config.assignment?.reviewer)
 }
+/**
+ * The open PRs that close this issue, or null when none does. An issue whose
+ * PR is open is the PR's turn, not the human's.
+ * (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
+ *
+ * The read is bare, not optional. Only an issue snapshot carries the key
+ * (gather.mjs:117), and on one a missing key is a gather.mjs bug worth throwing
+ * on. The single arm that also takes PR snapshots tests `kind` instead, so no
+ * caller pays for that arm's input with a silent "no PR is open".
+ */
+const inFlight = (s) => (s.openPrsClosingIt.length ? s.openPrsClosingIt : null)
 
 /** The bot's newest comment that is not a dispatcher comment. */
 export function botLastWordAt(comments, config) {
@@ -285,7 +296,8 @@ export function decide(target, s, config) {
       if (!v.mentioned) return [note('no mention — ignored')]
       plan.push(label([], [L.proposal, L.awaiting, L.stuck]), react('eyes'))
       if (v.verb === 'implement') {
-        if (s.openPrsClosingIt.length) return plan.concat(commentOnce(`in-flight ${s.openPrsClosingIt[0]}`, `#${s.openPrsClosingIt[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], []))
+        const inFlightPrs = inFlight(s)
+        if (inFlightPrs) return plan.concat(commentOnce(`in-flight ${inFlightPrs[0]}`, `#${inFlightPrs[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], []))
         // A park stops the dispatch here, before any session starts. The
         // label alone is not the test: a ticket parked on a date it never
         // carried a label for would otherwise be implemented.
@@ -369,9 +381,9 @@ export function decide(target, s, config) {
       // only hits the in-flight guard, and leaves `awaiting` on a ticket whose
       // PR is open. The PR is the answer.
       // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
-      const answered = v?.verb === 'implement' && s.openPrsClosingIt.length > 0
+      const answered = v?.verb === 'implement' && Boolean(inFlight(s))
       if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
-      if (s.openPrsClosingIt.length) plan.push(status('done'), label([], [L.awaiting]))
+      if (inFlight(s)) plan.push(status('done'), label([], [L.awaiting]))
       else if (s.botSpokeLast) plan.push(status('revising'), label([L.awaiting], []))
       else plan.push(label([L.awaiting], []), anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
       return plan
@@ -395,8 +407,10 @@ export function decide(target, s, config) {
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]
-      // `?.`: this arm takes PR snapshots, which carry no such key. (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
-      if (s.openPrsClosingIt?.length) return [note('an open PR closes it — the PR is the turn')]
+      // This arm alone is pushed for PRs as well as issues (sweep.mjs:112), and
+      // a PR snapshot carries no such key. The `kind` test is what lets every
+      // read of it stay bare. (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
+      if (s.kind === 'issue' && inFlight(s)) return [note('an open PR closes it — the PR is the turn')]
       if (s.botSpokeLast) return [label([L.awaiting], []), anomaly('awaiting-drift', `${s.repo.full}#${s.item.number} awaiting was missing`)]
       return [note('human spoke last')]
     }
