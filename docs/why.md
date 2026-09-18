@@ -1180,10 +1180,19 @@ reaching `evaluatePr`, so nothing re-derived anything, and the invariant the con
 rests on quietly stopped holding.
 
 The fix restores that invariant rather than adding a second mechanism: review comments get their
-own reason and re-derive through `evaluatePr`, as reviews already did. Whichever of the five
-survives now reads the PR's whole state, including the thread the cancelled comment created —
-`gather.mjs` fetches review threads for any open PR — so cancellation costs nothing again.
-`association` left the facts with the reason, because nothing on the new path reads it.
+own reason and re-derive through `evaluatePr`, as reviews already did. On a bot PR — every PR the
+loop opens, and so every PR this outage can happen on — whichever of the five survives now reads
+the PR's whole state, including the thread the cancelled comment created, since `gather.mjs`
+fetches review threads for any open PR. Cancellation costs nothing again. `association` left the
+facts with the reason, because nothing on the new path reads it.
+
+**The invariant is restored for bot PRs only, and that is worth knowing before the next outage.**
+A human PR takes `case 'review'`'s verb tail instead, which reads the one body the event carried,
+not the snapshot. Leave a verb in the review body, add inline comments, and a surviving
+review-comment leg still parses text with no mention in it and stops. That gap predates this
+change and is unchanged by it: the snapshot carries issue comments, not review-comment bodies, so
+closing it means widening what `gather.mjs` collects. Nothing forces the rule structurally — every
+PR-surface row still has to reach `evaluatePr` by hand, one case at a time.
 
 Why prose could not catch this: nothing is wrong with any line in isolation. The gate reads
 sensible, the concurrency comment states its own precondition correctly, and the association value
