@@ -227,8 +227,8 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  * `decide(target, snapshot, config)` → plan[].
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
- * `pull_request.synchronize`, `review`, `thread`, `ci`, `unlock`,
- * `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
+ * `pull_request.synchronize`, `review`, `review_comment`, `thread`, `ci`,
+ * `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
  * what the payload said — used only to pick the row; state comes from the
  * snapshot.
  */
@@ -316,6 +316,18 @@ export function decide(target, s, config) {
       plan.push(status('revising'))
       if (s.locked) return plan.concat(recheck())
       return plan.concat(fire(v.verb))
+    }
+    // A review comment is a review. From a human on a bot PR that means
+    // `evaluatePr`, so a cancelled sibling costs nothing — the invariant the
+    // concurrency group rests on. ⚠ On a human PR it means the verb tail,
+    // which reads this one body, so a verb left in the review body is still
+    // lost when that leg is the cancelled one. The bot guard is the only
+    // thing this row does not share: `case 'review'`'s bot branch carries the
+    // critic-header exception, which belongs to a submitted review alone.
+    // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
+    case 'review_comment': {
+      if (isBot(facts.author, config)) return [note('own review comment — ignored')]
+      return decide({ ...target, reason: 'review' }, s, config)
     }
     case 'review': {
       if (isBot(facts.author, config)) {

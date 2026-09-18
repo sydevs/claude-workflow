@@ -80,6 +80,23 @@ test('resolve maps an issue_comment event to one issue target', async () => {
   assert.equal(t[0].kind, 'issue')
 })
 
+test('resolve gives a review comment its own reason, and carries no association', async () => {
+  const github = fakeGithub(issueWorld())
+  const context = {
+    eventName: 'pull_request_review_comment',
+    repo: { owner: 'sydevs', repo: 'SahajCloud' },
+    payload: { action: 'created', pull_request: { number: 212 }, comment: { id: 88, body: 'this is wrong', user: { login: 'Ardnived' }, author_association: 'CONTRIBUTOR' } },
+  }
+  const t = await resolveTargets({ github, context, core, config })
+  assert.equal(t.length, 1)
+  assert.equal(t[0].reason, 'review_comment')
+  assert.equal(t[0].kind, 'pr')
+  assert.equal(t[0].facts.association, undefined)
+  // The record still points a handler at the comment it was woken for.
+  assert.equal(t[0].facts.triggerType, 'review_comment')
+  assert.equal(t[0].facts.commentId, 88)
+})
+
 test('dry-run implement: the plan is logged and nothing is written or fired', async () => {
   const github = fakeGithub(issueWorld())
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot implement it', association: 'MEMBER', commentId: 77 } }

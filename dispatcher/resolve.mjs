@@ -53,9 +53,12 @@ export async function resolve({ github, context, config, now = new Date() }) {
     return one('pr', ev.pull_request.number, 'review', { author: r.user?.login, body: r.body, state: r.state, reviewId: r.id, triggerType: 'review' })
   }
 
+  // Its own reason, not `issue_comment`, whose row refuses the `CONTRIBUTOR`
+  // GitHub stamps here. `association` goes with it — nothing reads it on this
+  // path. (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
   if (name === 'pull_request_review_comment' && action === 'created') {
     const c = ev.comment
-    return one('pr', ev.pull_request.number, 'issue_comment', { author: c.user?.login, body: c.body, association: c.author_association, commentId: c.id, triggerType: 'review_comment' })
+    return one('pr', ev.pull_request.number, 'review_comment', { author: c.user?.login, body: c.body, commentId: c.id, triggerType: 'review_comment' })
   }
 
   // `pull_request_review_thread` is a webhook event with no Actions trigger,

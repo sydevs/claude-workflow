@@ -1152,6 +1152,60 @@ which fires a workflow (why: docs/why.md#a-resolved-thread-fires-no-workflow). B
 up as a *move* — a `merge`, a `markReady`, a `fire` — so they pass the gate and act. What stops
 is the writing, which is the half that was repeating.
 
+## A review comment is feedback, whatever its association
+
+A `CHANGES_REQUESTED` review with four inline comments landed on `sydevs/SahajAtlasWeb#212` at
+`00:56:35Z` and dispatched nothing at all. The PR sat untouched until the reviewer wrote a plain
+comment eleven minutes later asking why.
+
+Two faults compounded, and either alone would have been survivable.
+
+The first is that **GitHub stamps a review comment `CONTRIBUTOR` for the same login it stamps
+`MEMBER` on every issue comment.** `resolve.mjs` sent review comments to reason `issue_comment`,
+whose row gates on `hasAccess(association)` — `OWNER | MEMBER | COLLABORATOR`. Both surviving runs
+logged the refusal verbatim: `comment by Ardnived without write access — not feedback`. The gate
+was also redundant where it fired: the line above it already required `respondTo(author)`, a
+hand-maintained allowlist of three logins. A second, payload-derived authorization check over an
+explicit allowlist can only ever subtract, and here it did.
+
+The second is that **submitting a review with inline comments emits five events in the same
+second** — one `pull_request_review.submitted` plus one `pull_request_review_comment.created` per
+comment — all resolving to the same target, so all five land in one concurrency group. One runs,
+one pends, the rest are cancelled. Three of the five were, `pull_request_review.submitted` among
+them: the only path with no association gate, and the only one that would have worked.
+
+`dispatcher.yml` says cancelling is "safe only because the decision is re-derived". That is
+exactly right, and exactly what the first fault broke. The survivors returned a `note` before
+reaching `evaluatePr`, so nothing re-derived anything, and the invariant the concurrency block
+rests on quietly stopped holding.
+
+The fix restores that invariant rather than adding a second mechanism: review comments get their
+own reason and re-derive through `evaluatePr`, as reviews already did. On a bot PR — every PR the
+loop opens, and so every PR this outage can happen on — whichever of a human's five legs survives
+now reads the PR's whole state, including the thread the cancelled comment created, since
+`gather.mjs` fetches review threads for any open PR. Cancellation costs nothing again.
+`association` left the facts with the reason, because nothing on the new path reads it.
+
+**One storm still turns on which leg survives: the loop's own critic review.** Every
+review-comment leg stops at the bot guard, so `pull_request_review.submitted` is the only leg that
+re-derives, and cancelling it leaves nothing behind it. Nothing is lost, because the critic holds
+the lock while it posts and the `unlock` that follows re-derives the PR — a different mechanism
+than this one, and the reason the gap has never shown.
+
+**The invariant is restored for bot PRs only, and that is worth knowing before the next outage.**
+A human PR takes `case 'review'`'s verb tail instead, which reads the one body the event carried,
+not the snapshot. Leave a verb in the review body, add inline comments, and a surviving
+review-comment leg still parses text with no mention in it and stops. That gap predates this
+change and is unchanged by it: the snapshot carries issue comments, not review-comment bodies, so
+closing it means widening what `gather.mjs` collects. Nothing forces the rule structurally — every
+PR-surface row still has to reach `evaluatePr` by hand, one case at a time.
+
+Why prose could not catch this: nothing is wrong with any line in isolation. The gate reads
+sensible, the concurrency comment states its own precondition correctly, and the association value
+comes from GitHub. Only a live review with inline comments produces the combination, and no test
+in this repo can post one. All 76 tests passed with and without the patch, because nothing covered
+the mapping — which is why the new cases were written first and committed red.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
