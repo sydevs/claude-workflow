@@ -75,9 +75,8 @@ Only when **all** hold:
    ```bash
    grep -rn "<previous version>" . --exclude-dir={.git,vendor,node_modules}
    ```
-   `release.yml` compares the tag against the plugin header alone, so a declaration you miss still
-   passes CI and ships — and `SAHAJ_ATLAS_VERSION` is the asset cache-buster, so missing that one
-   leaves every updated site on the previous release's CSS and JS.
+   Nothing downstream catches a miss. Check `SAHAJ_ATLAS_VERSION` twice: it is the asset
+   cache-buster.
    (why: docs/why.md#a-missed-version-declaration-passes-ci)
 4. **Ship it** through `/workflow:finalize-pr`. Tag only after it merges:
    ```bash
