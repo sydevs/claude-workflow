@@ -27,8 +27,8 @@ function entry(padding = '', didPad = '') {
 }
 
 // Sized into the band `--fit` used to eat: under the 1500 budget, over the
-// 1300 the FIT_RESERVE headroom targets. A 1,355-character entry lost its
-// whole Did section here and was told it had 532 characters to spare.
+// 1300 its headroom aimed at. A 1,355-character entry lost its whole Did
+// section here and was told it had 532 characters to spare.
 test('an entry inside its budget is returned untouched', () => {
   const text = entry('z'.repeat(1100))
   assert.ok(text.length > budgets.journalEntry - 200)
@@ -46,6 +46,18 @@ test('a cut takes the LAST Did line, and keeps the PR the run pushed', () => {
   assert.ok(f.dropped > 0)
   assert.ok(f.text.includes('SahajCloud/pull/801'))
   assert.ok(!f.text.includes('the least important line'))
+})
+
+// The 200-character headroom `--fit` used to target cut past the budget. One
+// line takes this entry to 1,433 — inside the 1,500 budget, outside the 1,300
+// the headroom aimed at — so a second line went with it.
+test('a cut stops at the budget, not below it', () => {
+  const text = entry('x'.repeat(900), 'z'.repeat(140))
+  assert.ok(text.length > budgets.journalEntry)
+  const f = fit(text, 'journalEntry', budgets)
+  assert.equal(f.dropped, 1)
+  assert.ok(f.chars > budgets.journalEntry - 200)
+  assert.ok(f.text.includes('a second line'))
 })
 
 test('a failure is never cut, whatever the overage', () => {

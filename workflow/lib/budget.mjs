@@ -67,18 +67,6 @@ export function detailsShare(text = '') {
   return { inside, total, pct: Math.round((inside / total) * 100) }
 }
 
-/**
- * How much room `--fit` leaves below the budget.
- *
- * A body fitted to the last character breaks again on the next edit. One
- * 2026-09-07 run converged at 3,999 of 4,000, then wrote a fresher timestamp
- * into the same body and spent four more re-checks getting back under.
- *
- * This is a script constant, not a `loop-config.json` value, so that this
- * change ships without a ceiling change beside it. Override with `--reserve`.
- */
-export const FIT_RESERVE = 200
-
 // `##` in the day's journal body, `###` in a run's journal comment. Both are the Did section.
 const DID_HEADING = /^#{2,3}\s+(?:\u{1F4C4}\s*)?Did\s*$/u
 const SECTION_HEADING = /^#{2,3}\s/
@@ -94,10 +82,12 @@ const DROPPABLE = /^-\s/
  * Two rules bound the cut, and both exist because breaking them lost the record
  * this script was written to protect.
  *
- * **It cuts nothing from text that already fits.** The `FIT_RESERVE` headroom
- * is for a body that gets re-edited, and a per-session journal comment is
- * written once. Applied to one, `--fit` deleted the whole `\u{1F4C4} Did` section of a
- * 1,355-character entry against a 1,500 budget, and reported "532 to spare".
+ * **It cuts to the budget, and no further.** The 200-character headroom it
+ * used to target was for a body that gets re-edited, and since #71 a journal
+ * entry is a per-session comment written once. Against that, the headroom only
+ * over-cut: a 1,355-character entry against a 1,500 budget lost its whole
+ * `\u{1F4C4} Did` section and was told it had "532 to spare", and a 1,599-character one
+ * dropped a second line after the first left it at 1,433.
  *
  * **It cuts from the END of `\u{1F4C4} Did`.** `handler-journal`'s template leads that
  * section with the PR the run pushed, and the register rule leads with the
@@ -112,21 +102,15 @@ const DROPPABLE = /^-\s/
  * the heading goes with it, which is what the skill already requires of an
  * empty section.
  */
-export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE) {
+export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
   const limit = budgets?.[kind]
   if (typeof limit !== 'number') {
     return { text: String(text), dropped: 0, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
   }
-  const target = Math.max(0, limit - reserve)
-  const whole = String(text)
-  if (whole.length <= limit) {
-    return { text: whole, dropped: 0, chars: whole.length, limit, target, verdict: 'OK',
-      reason: `${whole.length}/${limit}, nothing cut` }
-  }
-  let lines = whole.split('\n')
+  let lines = String(text).split('\n')
   let dropped = 0
 
-  while (lines.join('\n').length > target) {
+  while (lines.join('\n').length > limit) {
     const head = lines.findIndex((l) => DID_HEADING.test(l))
     if (head === -1) break
 
@@ -165,11 +149,14 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE
   const out = lines.join('\n')
   const chars = out.length
   const shed = dropped === 1 ? '1 line' : `${dropped} lines`
-  return chars > limit
-    ? { text: out, dropped, chars, limit, target, verdict: 'OVER',
-        reason: `${chars} chars after dropping ${shed}, still ${chars - limit} over ${limit} — cut prose, never a failure` }
-    : { text: out, dropped, chars, limit, target, verdict: 'OK',
-        reason: `${chars}/${limit} after dropping the last ${shed} of \u{1F4C4} Did` }
+  if (chars > limit) {
+    return { text: out, dropped, chars, limit, verdict: 'OVER',
+      reason: `${chars} chars after dropping ${shed}, still ${chars - limit} over ${limit} — cut prose, never a failure` }
+  }
+  return { text: out, dropped, chars, limit, verdict: 'OK',
+    reason: dropped === 0
+      ? `${chars}/${limit}, nothing cut`
+      : `${chars}/${limit} after dropping the last ${shed} of \u{1F4C4} Did` }
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
@@ -178,9 +165,6 @@ if (isMain) {
   const kind = (argv.find((a) => a.startsWith('--kind=')) || '').split('=')[1]
     || argv[argv.indexOf('--kind') + 1]
   const wantsFit = argv.includes('--fit')
-  const reserveRaw = (argv.find((a) => a.startsWith('--reserve=')) || '').split('=')[1]
-    ?? (argv.includes('--reserve') ? argv[argv.indexOf('--reserve') + 1] : undefined)
-  const reserve = Number.isFinite(Number(reserveRaw)) ? Number(reserveRaw) : FIT_RESERVE
   let text = ''
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {
@@ -198,7 +182,7 @@ if (isMain) {
     if (wantsFit) {
       // The fitted body goes to stdout so the caller can redirect it. The
       // verdict goes to stderr, so a redirect never swallows the report.
-      const f = fit(text, kind, budgets, reserve)
+      const f = fit(text, kind, budgets)
       process.stdout.write(f.text)
       console.error(`${f.verdict} — ${f.reason} (${source})`)
       process.exit(f.verdict === 'OK' ? 0 : 1)

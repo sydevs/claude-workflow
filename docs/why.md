@@ -764,10 +764,15 @@ the oldest `📄 Did` lines first, never cut a failure. A fixed rule evaluated b
 run, eleven times a day, is eleven chances to evaluate it differently — the same reason
 `merge-gate.mjs` exists. So the script cuts, and the run writes.
 
-The reserve exists because of the second half of that run. A body fitted to the last character
-breaks again on the next edit, and the next edit is a timestamp the journal step always writes.
-200 characters buys that edit room. It sits in the script rather than `loop-config.json` so the
-fix could ship without a ceiling change beside it.
+A reserve of 200 characters below the budget came out of the second half of that run. A body
+fitted to the last character breaks again on the next edit, and that edit was a `Last:` timestamp
+the journal step rewrote every time.
+
+Since #71 the entry is a per-session comment, written once, so nothing re-edits it — and against
+a write-once comment the headroom only over-cut. It ate the whole `📄 Did` section of a
+1,355-character entry against a 1,500 budget and reported "532 to spare", and it took a second
+line off a 1,599-character one that the first cut had already brought to 1,433. `--fit` now cuts
+to the budget and stops there.
 
 ## Actions observes, classifies, locks, and fires
 
