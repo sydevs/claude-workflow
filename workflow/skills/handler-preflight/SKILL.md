@@ -87,7 +87,7 @@ the file are all answering a safety prompt with nobody present. Hand the ticket 
 
 `writing.budgets`: `comment` for a ticket or PR comment, `reviewReply` for a thread reply,
 `journalEntry` for the run's journal entry. Bodies are unbudgeted. Measure with
-`${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --kind <kind>`, `<details>` included. Over means cut.
+`node <claude-workflow>/workflow/lib/budget.mjs --kind <kind>`, `<details>` included. Over means cut.
 Register: active voice, one instruction per sentence, at most 20 words, no semicolons, lead
 with the outcome. (why: docs/why.md#budgets-not-adjectives)
 
