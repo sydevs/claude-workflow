@@ -60,12 +60,12 @@ carry enough resolved detail to survive being picked up cold, possibly by an aut
    ```
    mcp__github__issue_write  method:create  owner:$ORG  repo:$REPO
      title:"<title>"  body:"<body>"  type:"Feature"
-     issue_fields:[{field_name:"Priority", field_option_name:"Medium"}]
+     issue_fields:[{field_name:"Effort", field_option_name:"Moderate"}]
    ```
 
    No temp file, no `--body-file` — the body is a parameter, so the markdown-fidelity problem that
    made `--body` unusable with `gh` never arises. Setting type and fields here also stops a ticket
-   landing untyped.
+   landing untyped. **No Priority** — the reviewer sets it, and a new ticket has none to carry.
 
 9. **File it and let the dispatcher place it.** `issues.opened` sets Status Proposed and
    `awaiting` for every author, so set neither. Assign nobody.

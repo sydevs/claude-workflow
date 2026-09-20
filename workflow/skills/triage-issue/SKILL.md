@@ -47,7 +47,7 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 | --- | --- | --- |
 | **Priority** | `Critical` | Data loss, outage, or security exposure. Drop other work. |
 | | `High` | User-visible breakage, or it blocks other work. |
-| | `Medium` | Planned work. **The default** — most tickets are this. |
+| | `Medium` | Planned work. Most tickets are this. |
 | | `Low` | Do when nothing above it waits. Deferred or speculative. |
 | **Effort** | `Easy` / `Moderate` / `Hard` | Rough size, set honestly — `implement-issue` splits a `Hard` ticket it cannot finish in one run. |
 
@@ -56,9 +56,9 @@ a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
 **The two fields have different owners.** The reviewer sets **Priority** — consequence to the
 product is a business judgement — so you never choose one, and a ticket with none stays empty
-until they say. On the raw PUT below, which replaces every field, carrying their existing value
-through the call is how you leave it alone. **You set Effort, always**, since it estimates work
-and you just read the code.
+until they say. The `issue_write` call below merges, so omitting Priority leaves theirs alone.
+Only the raw PUT in the details replaces every field, and there you carry their value back.
+**You set Effort, always**, since it estimates work and you just read the code.
 
 **Always set Effort.** Understanding the ticket well enough to write it means understanding it
 well enough to size it. When you truly cannot, say what makes it unsizable rather than leave it
@@ -66,8 +66,7 @@ empty — a run once wrote a full estimate, then discarded it as "yours to set".
 
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
-  issue_fields:[{field_name:"Priority", field_option_name:"High"},
-                {field_name:"Effort",   field_option_name:"Moderate"}]
+  issue_fields:[{field_name:"Effort", field_option_name:"Moderate"}]
 ```
 
 By **name** — the tool validates the option before it calls. Read values back with
@@ -242,8 +241,8 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Priority never chosen by you — carry an existing value through the write, else leave it
-      empty. **Effort set, always, by you**
+- [ ] Priority never chosen by you — omit it, and it keeps whatever the reviewer set.
+      **Effort set, always, by you**
 - [ ] No label, no Status, no assignee
 - [ ] Blockers as `Blocked by:` lines. A date park as the `Hold Until` field
 - [ ] Body in the format above. Checklist items are executable
