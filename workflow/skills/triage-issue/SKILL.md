@@ -55,8 +55,10 @@ Priority measures the **consequence of not doing it**, never effort or appetite.
 a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
 **The two fields have different owners.** The reviewer sets **Priority** — consequence to the
-product is a business judgement. **You set Effort, always**, since it estimates work and you just
-read the code.
+product is a business judgement — so you never choose one, and a ticket with none stays empty
+until they say. On the raw PUT below, which replaces every field, carrying their existing value
+through the call is how you leave it alone. **You set Effort, always**, since it estimates work
+and you just read the code.
 
 **Always set Effort.** Understanding the ticket well enough to write it means understanding it
 well enough to size it. When you truly cannot, say what makes it unsizable rather than leave it
@@ -240,7 +242,8 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Priority set (reviewer's — leave an existing value alone) **and Effort set, always, by you**
+- [ ] Priority never chosen by you — carry an existing value through the write, else leave it
+      empty. **Effort set, always, by you**
 - [ ] No label, no Status, no assignee
 - [ ] Blockers as `Blocked by:` lines. A date park as the `Hold Until` field
 - [ ] Body in the format above. Checklist items are executable
@@ -252,6 +255,5 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
   assignee. The dispatcher owns them.
 - **Never** authorise work by editing a ticket. Only a `respondTo` human's `@sydevs-bot implement`
   does.
-- **Never** leave a ticket without a Priority field value.
 - **Never** park a ticket without a `Hold Until` date or a `Blocked by:` line.
 - **Never** file without searching for a duplicate.
