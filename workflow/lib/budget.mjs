@@ -91,15 +91,26 @@ const DROPPABLE = /^-\s/
  * to regenerate the whole body and re-check. One 2026-09-07 run did that
  * thirteen times across eleven minutes to shed 1,557 characters.
  *
- * The cut order is not a judgement call. `journal/SKILL.md` fixes it: drop the
- * oldest `\u{1F4C4} Did` lines first, because GitHub already records those events, and
- * never cut a failure. A fixed rule belongs in a script.
+ * Two rules bound the cut, and both exist because breaking them lost the record
+ * this script was written to protect.
+ *
+ * **It cuts nothing from text that already fits.** The `FIT_RESERVE` headroom
+ * is for a body that gets re-edited, and a per-session journal comment is
+ * written once. Applied to one, `--fit` deleted the whole `\u{1F4C4} Did` section of a
+ * 1,355-character entry against a 1,500 budget, and reported "532 to spare".
+ *
+ * **It cuts from the END of `\u{1F4C4} Did`.** `handler-journal`'s template leads that
+ * section with the PR the run pushed, and the register rule leads with the
+ * outcome, so the first line is the most important one. Cutting top-down took
+ * the PR link from three entries in the week to 2026-09-20, and taught a
+ * fourth run to order its Did section least-important-first to survive.
+ * Nothing outside `\u{1F4C4} Did` is ever touched, so a failure, a ceiling and a
+ * friction line all survive a fit.
  * (why: docs/why.md#fit-the-journal-do-not-negotiate-with-it)
  *
- * Nothing outside the `\u{1F4C4} Did` section is ever touched, so a failure, a ceiling
- * and a friction line all survive a fit. The run table survives too — it is
- * not a list item. When the section empties, the heading goes with it, which
- * is what the skill already requires of an empty section.
+ * The run table survives too — it is not a list item. When the section empties,
+ * the heading goes with it, which is what the skill already requires of an
+ * empty section.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE) {
   const limit = budgets?.[kind]
@@ -107,7 +118,12 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE
     return { text: String(text), dropped: 0, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
   }
   const target = Math.max(0, limit - reserve)
-  let lines = String(text).split('\n')
+  const whole = String(text)
+  if (whole.length <= limit) {
+    return { text: whole, dropped: 0, chars: whole.length, limit, target, verdict: 'OK',
+      reason: `${whole.length}/${limit}, nothing cut` }
+  }
+  let lines = whole.split('\n')
   let dropped = 0
 
   while (lines.join('\n').length > target) {
@@ -119,7 +135,7 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE
       if (SECTION_HEADING.test(lines[i])) { end = i; break }
     }
 
-    const victim = lines.slice(head + 1, end).findIndex((l) => DROPPABLE.test(l))
+    const victim = lines.slice(head + 1, end).findLastIndex((l) => DROPPABLE.test(l))
     if (victim === -1) {
       const cutTo = lines[head + 1] === '' ? head + 2 : head + 1
       lines = [...lines.slice(0, head), ...lines.slice(cutTo)]
@@ -153,7 +169,7 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS, reserve = FIT_RESERVE
     ? { text: out, dropped, chars, limit, target, verdict: 'OVER',
         reason: `${chars} chars after dropping ${shed}, still ${chars - limit} over ${limit} — cut prose, never a failure` }
     : { text: out, dropped, chars, limit, target, verdict: 'OK',
-        reason: `${chars}/${limit}, ${limit - chars} to spare, dropped ${shed}` }
+        reason: `${chars}/${limit} after dropping the last ${shed} of \u{1F4C4} Did` }
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
