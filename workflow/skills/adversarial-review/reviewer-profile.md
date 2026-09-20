@@ -80,11 +80,8 @@
 
 ## What they rarely flag — do not manufacture findings here
 
-- **Style, formatting, naming taste.** Near-absent from the corpus (one "seems generic" naming
-  question, one rename with the replacement supplied —
-  [SahajAtlasWeb#184](https://github.com/sydevs/SahajAtlasWeb/pull/184),
-  [SahajCloud#668](https://github.com/sydevs/SahajCloud/pull/668)). Hooks and the author-side
-  review own this.
+- **Style and formatting.** Near-absent from the corpus. Hooks and the author-side review own
+  this. **Naming is not in this list — see the 2026-09-20 refinement below.**
 - **Test coverage volume.** No "add more tests" comment appears anywhere in the history.
 - **Performance micro-optimisation.** Never raised except where it is really a simplicity issue.
 - **Defensive edge-case handling.** They accept dropping a validation when it buys simplicity —
@@ -126,6 +123,29 @@ shape-level problems.**
 <!-- Appended by /workflow:reflect, newest first, one dated bullet per refinement, each citing
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
+
+- **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
+  was near-absent and told the review not to manufacture findings there. Three PRs in one week
+  say otherwise, and this review passed every one of them clean on naming.
+  [WeMeditateWeb#107](https://github.com/sydevs/WeMeditateWeb/pull/107) came back
+  `CHANGES_REQUESTED` on nothing else: *"`readCms` seems like a confusing function name for a
+  method which is supposed to handle retry, plus isn't there already a `withRetry` function?
+  Basically, `readCms` is a badly named function."* On
+  [SahajAtlasWeb#213](https://github.com/sydevs/SahajAtlasWeb/pull/213), four: two renames with
+  the replacement supplied, and the shape behind them — *"We seem to have some conflicting and
+  overlapping naming conventions between `Report`, `Registration`, and `Submission`… shouldn't
+  they be unified under a common name? Probably this should be `UserSubmission` for consistency
+  with the CMS."* On [WeMeditateWeb#112](https://github.com/sydevs/WeMeditateWeb/pull/112): *"I
+  also don't like the name `cms-forms`, this is generally an unclear naming convention"*, and
+  *"The name of this story is still incorrectly set to 'CMS Form'"*.
+  This is not taste. It is value 4 — the generated types are the source of truth — applied to
+  vocabulary: **a name must say what the thing does, in the words the system already uses.**
+  `readCms` claimed a read and did a retry, beside an existing `withRetry`. The atlas types
+  claimed `Registration` for a guard that refuses every submission kind, while the CMS collection
+  next door was already called `user-submissions`. So flag a name that describes the wrong thing,
+  shadows an existing helper, or invents a second word for something the CMS or a sibling repo
+  has already named — and supply the replacement, as they do. Leave spelling, casing and
+  house-style alone; those are still the hooks' job.
 
 - **2026-09-12 — protective machinery is a liability unless someone owns it, and the review's own
   suggestions pay that rent too.** Three PRs in one week, one answer. On
