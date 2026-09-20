@@ -19,7 +19,11 @@
  *
  * Usage, from a handler skill:
  *
- *   ${CLAUDE_PLUGIN_ROOT}/lib/payload.mjs --expect-handler answer < record.json
+ *   node <claude-workflow>/workflow/lib/payload.mjs --expect-handler answer < record.json
+ *
+ * `CLAUDE_PLUGIN_ROOT` is set only for an installed plugin, and a routine is
+ * not one, so nothing here reads it. `--attached` defaults to the directory
+ * holding the five checkouts, derived from this file's own path.
  *
  * stdout: the normalized record as JSON, with `owner`, `name`, `lock`,
  * `skill`, `model`, `deadlineMs` and `resume` added.
@@ -28,10 +32,23 @@
  */
 
 import { existsSync, readFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
+import { fileURLToPath } from 'url'
 import { loadLoopConfig, flag } from './config.mjs'
 
 export const SCHEMA_VERSION = 1
+
+/**
+ * The directory holding the five checkouts, from this file's own path:
+ * `<workspace>/claude-workflow/workflow/lib/payload.mjs`.
+ *
+ * A routine's skills used to spell this `${CLAUDE_PLUGIN_ROOT}/../..`, which
+ * is empty there, so every run guessed it — 52 sessions in the week to
+ * 2026-09-20, each costing a refused call and a retry.
+ */
+export function defaultAttachedDir() {
+  return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+}
 
 const KINDS = new Set(['issue', 'pr'])
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
@@ -161,7 +178,7 @@ if (isMain) {
     const result = validate(input, config, {
       expectHandler: flag(argv, 'expect-handler'),
       now,
-      attachedDir: flag(argv, 'attached'),
+      attachedDir: flag(argv, 'attached', defaultAttachedDir()),
     })
 
     if (!result.ok) {

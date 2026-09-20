@@ -1,7 +1,10 @@
 // node --test workflow/lib/payload.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { validate, extractJson } from './payload.mjs'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { validate, extractJson, defaultAttachedDir } from './payload.mjs'
 
 const config = {
   org: 'sydevs',
@@ -125,4 +128,17 @@ test('journal.issue 0 is legal — the handler finds the day itself', () => {
   assert.equal(validate(record(), config, { now: NOW }).record.journalKnown, true)
   const neg = validate(record({ journal: { repo: 'sydevs/claude-workflow', issue: -1 } }), config, { now: NOW })
   assert.ok(!neg.ok)
+})
+
+// The default `--attached` root, which the skills used to spell
+// `${CLAUDE_PLUGIN_ROOT}/../..` — empty in a routine.
+test('defaultAttachedDir is the directory holding the checkouts', () => {
+  const expected = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+  assert.equal(defaultAttachedDir(), expected)
+  assert.ok(existsSync(join(defaultAttachedDir(), 'claude-workflow')))
+})
+
+test('the default root satisfies the attached check', () => {
+  const r = validate(record(), config, { now: NOW, attachedDir: defaultAttachedDir() })
+  assert.equal(r.ok, true)
 })
