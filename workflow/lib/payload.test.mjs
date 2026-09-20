@@ -138,7 +138,10 @@ test('defaultAttachedDir is the directory holding the checkouts', () => {
   assert.ok(existsSync(join(defaultAttachedDir(), 'claude-workflow')))
 })
 
+// Against `claude-workflow`, the one checkout `defaultAttachedDir()` can
+// promise. A dispatch clones the repo it works on, and nothing else.
 test('the default root satisfies the attached check', () => {
-  const r = validate(record(), config, { now: NOW, attachedDir: defaultAttachedDir() })
+  const here = { repo: 'sydevs/claude-workflow', url: 'https://github.com/sydevs/claude-workflow/issues/712' }
+  const r = validate(record(here), config, { now: NOW, attachedDir: defaultAttachedDir() })
   assert.equal(r.ok, true)
 })
