@@ -37,8 +37,8 @@ correcting what the code disproves:
 - `## Downstream impact` when a consumer repo changes.
 - `## Notes`: keep every `Blocked by:`, `Re-check:` and `Sentry:` line. Add a `Blocked by:` line
   when the code shows a dependency the ticket missed.
-- The **Effort** field, re-estimated with `mcp__github__issue_write`. Leave **Priority** alone —
-  it is the reviewer's.
+- The **Effort** field, re-estimated with `mcp__github__issue_write`, and a **Priority** where
+  the ticket has none. A Priority the reviewer set stands.
 - **One summary comment**, inside `writing.budgets.comment`, saying what changed and why, with
   `identity.commentMarker`.
 

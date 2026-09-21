@@ -50,7 +50,7 @@ Your session URL is `https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse
 Fit it with the script. Never trim by hand:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/lib/budget.mjs --fit --kind journalEntry < entry.md > fitted.md
+node <claude-workflow>/workflow/lib/budget.mjs --fit --kind journalEntry < entry.md > fitted.md
 ```
 
 Exit 1 → cut prose from Friction, and never a failure. Post with

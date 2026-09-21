@@ -54,9 +54,11 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 Priority measures the **consequence of not doing it**, never effort or appetite. A one-line fix to
 a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
-**The two fields have different owners.** The reviewer sets **Priority** — consequence to the
-product is a business judgement. **You set Effort, always**, since it estimates work and you just
-read the code.
+**You set both fields, always.** Priority comes from the table above — never leave a ticket
+without one, and choose `Medium` when the consequence is not clear. **You set Effort, always**,
+since it estimates work and you just read the code. A Priority the reviewer already set stands:
+the `issue_write` call below merges, so omitting it keeps their value, and only the raw PUT in
+the details needs it carried back.
 
 **Always set Effort.** Understanding the ticket well enough to write it means understanding it
 well enough to size it. When you truly cannot, say what makes it unsizable rather than leave it
@@ -240,7 +242,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Priority set (reviewer's — leave an existing value alone) **and Effort set, always, by you**
+- [ ] **Priority and Effort set, always, by you** — a Priority the reviewer set stands
 - [ ] No label, no Status, no assignee
 - [ ] Blockers as `Blocked by:` lines. A date park as the `Hold Until` field
 - [ ] Body in the format above. Checklist items are executable
