@@ -241,7 +241,6 @@
   },
   "journal": {
     "$comment": "One issue per day in journalRepo, created lazily. The title reports run health. Volume lives on the board. No issue number appears here, since the run finds today's by creation date.",
-    "titleFormat": "<Day> — <n> runs · <n> failed · <n> ceiling stops",
     "timezone": "America/Vancouver"
   },
   "projects": {
