@@ -44,11 +44,12 @@ upstream fails the plugin's build until its copy is updated.
    ```
    mcp__github__issue_write  method:create  owner:sydevs  repo:<producer>
      title:"<title>"  body:"<body>"  type:"Feature"
-     issue_fields:[{field_name:"Effort", field_option_name:"<...>"}]
+     issue_fields:[{field_name:"Priority", field_option_name:"<...>"},
+                   {field_name:"Effort",   field_option_name:"<...>"}]
    ```
 
    The dispatcher sets Status Proposed and `awaiting` on `issues.opened`, whoever files. Set no
-   label, no Status and no Priority. Assign nobody.
+   label and no Status. Assign nobody.
 
 4. **Create one child issue per consumer** with the same call as step 3, `repo:<consumer>`, then
    record the dependency natively so GitHub enforces and displays it — not just prose in the body.

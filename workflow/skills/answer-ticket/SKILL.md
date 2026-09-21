@@ -40,5 +40,6 @@ One comment gets one substantive reply. **Start with `/workflow:handler-prefligh
 - **Never branch, commit, push, or implement.** The tool grant makes this mechanical.
 - **Never read the whole thread.** The newest page, and what the comment cites.
 - **Never write `labels.awaiting`, `labels.blocked`, an assignee, Priority, or a Status.**
-  Actions owns the labels. The reviewer owns Priority. (why: docs/why.md#awaiting-has-one-writer)
+  Actions owns the labels. Answering is not triage — `@sydevs-bot revise` sets the fields.
+  (why: docs/why.md#awaiting-has-one-writer)
 - **Never file more than one incidental ticket.**

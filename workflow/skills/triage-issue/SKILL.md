@@ -47,18 +47,18 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 | --- | --- | --- |
 | **Priority** | `Critical` | Data loss, outage, or security exposure. Drop other work. |
 | | `High` | User-visible breakage, or it blocks other work. |
-| | `Medium` | Planned work. Most tickets are this. |
+| | `Medium` | Planned work. **The default** — most tickets are this. |
 | | `Low` | Do when nothing above it waits. Deferred or speculative. |
 | **Effort** | `Easy` / `Moderate` / `Hard` | Rough size, set honestly — `implement-issue` splits a `Hard` ticket it cannot finish in one run. |
 
 Priority measures the **consequence of not doing it**, never effort or appetite. A one-line fix to
 a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
-**The two fields have different owners.** The reviewer sets **Priority** — consequence to the
-product is a business judgement — so you never choose one, and a ticket with none stays empty
-until they say. The `issue_write` call below merges, so omitting Priority leaves theirs alone.
-Only the raw PUT in the details replaces every field, and there you carry their value back.
-**You set Effort, always**, since it estimates work and you just read the code.
+**You set both fields, always.** Priority comes from the table above — never leave a ticket
+without one, and choose `Medium` when the consequence is not clear. **You set Effort, always**,
+since it estimates work and you just read the code. A Priority the reviewer already set stands:
+the `issue_write` call below merges, so omitting it keeps their value, and only the raw PUT in
+the details needs it carried back.
 
 **Always set Effort.** Understanding the ticket well enough to write it means understanding it
 well enough to size it. When you truly cannot, say what makes it unsizable rather than leave it
@@ -66,7 +66,8 @@ empty — a run once wrote a full estimate, then discarded it as "yours to set".
 
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
-  issue_fields:[{field_name:"Effort", field_option_name:"Moderate"}]
+  issue_fields:[{field_name:"Priority", field_option_name:"High"},
+                {field_name:"Effort",   field_option_name:"Moderate"}]
 ```
 
 By **name** — the tool validates the option before it calls. Read values back with
@@ -241,8 +242,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 ## Filing checklist
 
 - [ ] Type set
-- [ ] Priority never chosen by you — omit it, and it keeps whatever the reviewer set.
-      **Effort set, always, by you**
+- [ ] **Priority and Effort set, always, by you** — a Priority the reviewer set stands
 - [ ] No label, no Status, no assignee
 - [ ] Blockers as `Blocked by:` lines. A date park as the `Hold Until` field
 - [ ] Body in the format above. Checklist items are executable
@@ -254,5 +254,6 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
   assignee. The dispatcher owns them.
 - **Never** authorise work by editing a ticket. Only a `respondTo` human's `@sydevs-bot implement`
   does.
+- **Never** leave a ticket without a Priority field value.
 - **Never** park a ticket without a `Hold Until` date or a `Blocked by:` line.
 - **Never** file without searching for a duplicate.
