@@ -399,6 +399,21 @@ what the fetched values meant, and that half had no single home. `docs/routine-s
 opposite for weeks, that `gh` "ships in the image," which is exactly the license needed to write
 scripts that pass every local test and fail silently where it counts.
 
+## A routine cannot send SMTP
+
+A routine reaches the network only through an HTTPS proxy. SMTP to Mailpit's Railway TCP proxy
+times out there, whatever the credentials (SahajCloud#807). So for weeks no loop PR carried an email
+preview. #847 and #853 put that down to a missing `SMTP_URL`, and this repo's setup guide told you
+to add `SMTP_URL` to the cloud environment — which could never have worked.
+
+The preview scripts post to Mailpit's HTTP send API (`POST /api/v1/send`) instead, which a routine
+and a laptop reach alike (SahajCloud#854). The cloud environment carries `MAILPIT_SEND_AUTH`, a
+credential Mailpit accepts on that endpoint alone (`MP_SEND_API_AUTH`), and never the UI login: the
+environment has no secret store, and the UI login reads every captured message.
+
+`SMTP_URL` still matters, but only where the **app** sends mail: Railway previews and a local
+`pnpm dev`.
+
 ## Draft is the PR's baton
 
 Tickets carry their state in fields. **Pull requests have no fields at all**, so a PR's state must

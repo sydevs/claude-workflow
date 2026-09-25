@@ -190,7 +190,7 @@
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
   "mailpit": {
-    "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here.",
+    "$comment": "The routine sends with MAILPIT_SEND_AUTH (send-only) from the cloud environment, never here.",
     "url": "https://mailpit-production-db88.up.railway.app",
     "retentionDays": 7
   },
