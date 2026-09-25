@@ -315,9 +315,17 @@ Returns the public host and port. Assemble `SMTP_URL=smtp://<user>:<pass>@<domai
 
 ### Wire it up
 
-- Add `SMTP_URL` to **every Railway PR preview environment**, so preview mail is captured.
-- Add `MAILPIT_URL`, `MAILPIT_UI_AUTH`, `SMTP_URL` to `SahajCloud/.env.claude.local` (gitignored)
-  for local use, and to the Claude cloud environment for the loop.
+- Add `SMTP_URL` to **the SahajCloud service's production variables**. Railway copies production's
+  variables into every PR environment it creates, so this is what captures preview mail. A
+  per-preview setting would not survive the next PR. It is inert on production, where
+  `isProductionDeployment()` selects Resend first. A preview created before it was set needs it by
+  hand. Use the TCP-proxy address, never `mailpit.railway.internal` — private networking does not
+  cross environments.
+- Add `MAILPIT_URL`, `MAILPIT_UI_AUTH` and `SMTP_URL` to `SahajCloud/.env.claude.local`
+  (gitignored) for local use.
+- Add **only** `MAILPIT_URL` and `MAILPIT_UI_AUTH` to the Claude cloud environment (§4). A routine
+  cannot send SMTP, so the preview scripts post to Mailpit's HTTP send API instead, and
+  `SMTP_URL` there does nothing. (why: docs/why.md#a-routine-cannot-send-smtp)
 - **Never** put `SMTP_URL` in the tracked `.env`. It carries a credential (SahajCloud#570 tracks
   removing committed secrets from that file).
 
@@ -372,13 +380,14 @@ At **claude.ai/code → Environments → New**. UI only — there is no API for 
 SENTRY_CLAUDE_WORKFLOW_TOKEN=<the Token, not the Client Secret>
 MAILPIT_URL=https://<mailpit-host>
 MAILPIT_UI_AUTH=<user>:<password>
-SMTP_URL=smtp://<user>:<password>@<proxy-host>:<port>
 SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 ```
 
 > ⚠ **There is no secret store.** Anything here is readable by anyone who can use the environment.
-> Scope every token to the minimum: the Sentry token is Issues-only, the SahajCloud key is a
-> read-scoped client. Never put a production admin credential here.
+> Scope every token to the minimum: the Sentry token is Issues-only, and the SahajCloud key is a
+> read-scoped client. The Mailpit login reads every captured message, which is acceptable only because
+> Mailpit holds fixtures and preview traffic: previews have their own databases, and production mail
+> goes to Resend. Never put a production admin credential here.
 
 **Setup script** (runs as root, must exit 0, ~5 min limit):
 
@@ -444,8 +453,7 @@ PR it creates is attributed to that identity. Check it with `gh api user --jq .l
 
 **Network access:** set `Full`. The implementation rung does real research — changelogs, upstream
 issues, library docs — and a curated allowlist fails as an opaque `403 host_not_allowed` mid-task.
-If you do curate it, `raw.githubusercontent.com`, the Sentry regional host, the Mailpit host and TCP
-proxy, and `*.up.railway.app` / `*.pages.dev` / `*.workers.dev` are load-bearing.
+If you do curate it, `raw.githubusercontent.com`, the Sentry regional host, the Mailpit host, and `*.up.railway.app` / `*.pages.dev` / `*.workers.dev` are load-bearing.
 
 ---
 
@@ -570,6 +578,7 @@ a red CI run, a conflicting PR, and one nightly survey.
 - [ ] The PAT can write a label, create an issue, and read `projectV2` — the three that failed
 - [ ] Mailpit UI: `200` with credentials, `401` without
 - [ ] A message sent through the SMTP proxy appears, and its `/view/<id>` link resolves
+- [ ] `POST /api/v1/send` with `{}` and the UI login returns `400 from not set`, and `401` without it
 - [ ] Sentry: read `200` on every project, and `PUT /issues/<id>/` returns `200`
 - [ ] Cloud session: `pg_isready` reports the cluster up, and `pnpm test:int` passes in SahajCloud
 - [ ] One full cycle observed: verb → draft PR → CI green → adversarial review → revision → ready → approval → merge
@@ -628,6 +637,8 @@ judgement is the only thing that costs a session.
 | `railway` exits 1 silently, even `--help` | pnpm blocked the postinstall that downloads the binary. Run `pnpm approve-builds -g`, or run `npm-install/postinstall.js` by hand. |
 | Mailpit UI `502`, container logs healthy | `PORT` not set to `8025`. |
 | Mailpit crash-loops on first deploy | Volume not attached at `/data`. |
+| A preview script in a routine: `MAILPIT_URL and MAILPIT_UI_AUTH must be set` | The cloud environment lacks them (§4). Adding `SMTP_URL` there does not help. |
+| A preview script: `Mailpit refused the message: 401` | `MAILPIT_UI_AUTH` does not match the service's `MP_UI_AUTH`. |
 | Sentry `401 Invalid token` | Client Secret copied instead of Token. |
 | Sentry `404` on a project that exists | Wrong regional host. |
 | Plugin installs but reports `disabled` | `enabledPlugins` written as an array. It must be an object map. |
