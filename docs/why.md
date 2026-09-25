@@ -407,9 +407,10 @@ preview. #847 and #853 put that down to a missing `SMTP_URL`, and this repo's se
 to add `SMTP_URL` to the cloud environment — which could never have worked.
 
 The preview scripts post to Mailpit's HTTP send API (`POST /api/v1/send`) instead, which a routine
-and a laptop reach alike (SahajCloud#854). The cloud environment carries `MAILPIT_SEND_AUTH`, a
-credential Mailpit accepts on that endpoint alone (`MP_SEND_API_AUTH`), and never the UI login: the
-environment has no secret store, and the UI login reads every captured message.
+and a laptop reach alike (SahajCloud#854). The cloud environment carries the ordinary Mailpit login, `MAILPIT_UI_AUTH`. It
+reads every captured message, and that is safe only because none of them is real: previews have their
+own databases, and production mail goes to Resend. If Mailpit ever captures production mail, the
+routine needs a send-only credential (`MP_SEND_API_AUTH`) instead.
 
 `SMTP_URL` still matters, but only where the **app** sends mail: Railway previews and a local
 `pnpm dev`.
