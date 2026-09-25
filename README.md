@@ -64,7 +64,7 @@ so each person runs `claude plugin install` once.
 | `/workflow:survey-sentry` | Tuesday: production errors become tickets. |
 | `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase, as proposals. |
 | `/workflow:survey-contracts` | Thursday: check published contracts against reality. |
-| `/workflow:cut-release` | Friday: tag, update the changelog, cut a Release. |
+| `/workflow:cut-release` | Friday: update the changelog and open the version bump. Merging it publishes the Release. |
 | `/workflow:reflect` | Sunday: grade last week, read the journals, report usage, refine the profile, propose loop changes. |
 | `/workflow:comment-cleanup` | Apply the code-comments rule across a file, directory or repo. Comment-only, proved by `comment-fingerprint.mjs`. |
 

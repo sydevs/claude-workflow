@@ -1,6 +1,6 @@
 ---
 name: cut-release
-description: Cut a release where merged work has accumulated unreleased — tag, changelog, and GitHub Release. Friday's survey. SahajAtlasWordpress ships a versioned artifact. claude-workflow ships a version-keyed plugin cache.
+description: Cut a release where merged work has accumulated unreleased — the changelog and version-bump PR, whose merge publishes the GitHub Release. Friday's survey. SahajAtlasWordpress ships a versioned artifact. claude-workflow ships a version-keyed plugin cache.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
@@ -14,7 +14,7 @@ exception is the repo that matters most to end users.
 
 | Repo | Releases? |
 | --- | --- |
-| **SahajAtlasWordpress** | **Yes** — a GitHub Releases zip is the only way 13 volunteer-run sites get the plugin. The Plugin Update Checker reads Releases. |
+| **SahajAtlasWordpress** | **Yes** — a GitHub Releases zip is the only way 13 volunteer-run sites get the plugin. The Plugin Update Checker reads Releases. **Merging a version bump is the release:** its `release.yml` tags, builds and publishes. |
 | SahajCloud | No — Railway deploys on merge. |
 | WeMeditateWeb | No — Cloudflare Workers deploys on merge. |
 | SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract: see `survey-contracts`. |
@@ -52,6 +52,22 @@ git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1
 No semver tag in a repo that should release: this is the first release. No semver tag in a repo
 that should not: nothing to do, and not a finding.
 
+## Did the last bump publish?
+
+Check before deciding to cut. Read the `Version:` header of `sahaj-atlas.php` on `main`. If it is
+newer than the last semver tag, or `mcp__github__get_release_by_tag` for `v<header>` shows no
+`sahaj-atlas-<header>.zip` asset, a bump merged and did not publish. A `Release` run still in
+progress is not a failure yet.
+
+- **Never** bump again over it. A second bump stacks another unreleased version on the first.
+- File one Bug ticket in SahajAtlasWordpress through `/workflow:triage-issue`. Name the version,
+  the failed `Release` run where the Actions tools show it, and the fix: make that run pass, then
+  re-run it. It is a defect you tripped over, so no proposal ceiling applies.
+- **Search first**, open and closed, for a ticket naming `v<header>`. Open: comment only when the
+  evidence changed. Closed: reopen it with the new evidence. Never file a second.
+
+That ticket is the whole Friday for this repo. Stop.
+
 ## When to cut
 
 Only when **all** hold:
@@ -75,19 +91,20 @@ Only when **all** hold:
    ```bash
    grep -rn "<previous version>" . --exclude-dir={.git,vendor,node_modules}
    ```
-   Nothing downstream catches a miss. Check `SAHAJ_ATLAS_VERSION` twice: it is the asset
-   cache-buster.
+   CI fails the PR on a miss among the four declarations its `package.sh` knows. Only this grep
+   finds a fifth. Check `SAHAJ_ATLAS_VERSION` twice: it is the asset cache-buster.
    (why: docs/why.md#a-missed-version-declaration-passes-ci)
-4. **Ship it** through `/workflow:finalize-pr`. Tag only after it merges:
-   ```bash
-   git tag -a v<version> -m "v<version>" && git push origin v<version>
-   ```
-   `release.yml` builds the zip. **Confirm the release asset exists afterward** — a tag with no
-   asset looks successful and delivers nothing.
+4. **Ship it** through `/workflow:finalize-pr`, and end there. **Merging it is the release:**
+   `release.yml` tags the version, builds the zip, and publishes it. A human
+   approves every PR in that repo, so open the PR body with "Merging this releases v<version> to
+   every site." Next Friday's publish check confirms the asset.
+   (why: docs/why.md#merging-a-version-bump-is-the-release)
 
 ## Hard rules
 
-- **Never** tag a commit that is not on `main` with green CI.
-- **Never** tag before the version-bump PR merges — the tag must point at the bumped commit.
+- **Never** push a tag or create a Release. `release.yml` owns both, and tags only a commit on
+  `main` that the merge queue ran CI on. When its run fails, the ticket carries the command its
+  error names — a hand-pushed tag is a maintainer's step, never a run's.
+- **Never** change a version declaration outside the version-bump PR. Merging one releases it.
 - **Never** hand-edit a published changelog entry. Correct it in a new entry.
-- **Always** confirm the release asset built.
+- **Always** check that the last bump published before cutting another.
