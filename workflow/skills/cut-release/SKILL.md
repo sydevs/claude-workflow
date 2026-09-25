@@ -95,15 +95,16 @@ Only when **all** hold:
    finds a fifth. Check `SAHAJ_ATLAS_VERSION` twice: it is the asset cache-buster.
    (why: docs/why.md#a-missed-version-declaration-passes-ci)
 4. **Ship it** through `/workflow:finalize-pr`, and end there. **Merging it is the release:**
-   `release.yml` tags the commit that set the version, builds the zip, and publishes it. A human
+   `release.yml` tags the version, builds the zip, and publishes it. A human
    approves every PR in that repo, so open the PR body with "Merging this releases v<version> to
    every site." Next Friday's publish check confirms the asset.
    (why: docs/why.md#merging-a-version-bump-is-the-release)
 
 ## Hard rules
 
-- **Never** push a tag or create a Release. `release.yml` owns both. It tags only the bump commit,
-  on `main`, after the merge queue ran CI on it.
+- **Never** push a tag or create a Release. `release.yml` owns both, and tags only a commit on
+  `main` that the merge queue ran CI on. When its run fails, the ticket carries the command its
+  error names — a hand-pushed tag is a maintainer's step, never a run's.
 - **Never** change a version declaration outside the version-bump PR. Merging one releases it.
 - **Never** hand-edit a published changelog entry. Correct it in a new entry.
 - **Always** check that the last bump published before cutting another.

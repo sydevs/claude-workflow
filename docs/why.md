@@ -771,6 +771,13 @@ human decision sits where a human already acts: the required approval on the bum
 It must stay one job. A tag pushed with `GITHUB_TOKEN` starts no other workflow, so a job that
 only tagged, feeding the old tag-triggered build, would have published nothing and shown no error.
 
+The first run found a third wall. `GITHUB_TOKEN` may push a tag only at a commit whose
+`.github/workflows/` matches some branch tip, and v0.2.0's bump commit predated the workflow edits
+that shipped release-on-merge, so GitHub refused the tag as a workflow edit
+(sydevs/SahajAtlasWordpress#34). The job now tags the bump commit when it can, and `main`'s tip when
+that ships byte-identical plugin files. Otherwise it fails, naming the one command a maintainer
+runs to push the tag by hand.
+
 A failed publish now shows red on `main`. Friday's publish check turns it into a ticket.
 
 ## Fit the journal, do not negotiate with it
