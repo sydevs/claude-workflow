@@ -749,6 +749,30 @@ grepping for the old version before it committed.
 A list of declarations is a copy of the repo's shape, and a copy goes stale. Grep for the version
 being replaced instead.
 
+Since sydevs/SahajAtlasWordpress#33, that repo's CI checks the four known declarations on every PR.
+The grep stays, for a fifth.
+
+## Merging a version bump is the release
+
+`cut-release` ended with the run pushing a `v*` tag once the bump PR merged. That step never
+worked. On 2026-09-25 the push to SahajAtlasWordpress got `HTTP 403`: a cloud session pushes
+`claude/*` refs only, and no MCP tool creates a tag or a Release. The step was unreachable a second
+way too. The run that writes the bump ends before the PR merges (`#push-and-end`), and no handler
+runs after a merge. So the v0.2.0 bump merged on 2026-09-18 and sat untagged for a week while 13
+sites stayed on 0.1.0 (sydevs/SahajAtlasWordpress#31, sydevs/claude-workflow#126).
+
+A write the loop cannot make is normally handed to a person
+(`#a-write-we-cannot-make-is-handed-over-not-thrown`). This one GitHub Actions can make, and a
+person-owned step on every release is exactly the step that had just gone undone for a week. So
+that repo's `release.yml` now runs on every push to `main`. When the plugin header names a version
+with no released zip, it tags the commit that set the version, builds the zip, and publishes. The
+human decision sits where a human already acts: the required approval on the bump PR.
+
+It must stay one job. A tag pushed with `GITHUB_TOKEN` starts no other workflow, so a job that
+only tagged, feeding the old tag-triggered build, would have published nothing and shown no error.
+
+A failed publish now shows red on `main`. Friday's publish check turns it into a ticket.
+
 ## Fit the journal, do not negotiate with it
 
 `budget.mjs` answered one question — over or under — and returned nothing about where to cut or by
