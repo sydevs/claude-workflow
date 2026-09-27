@@ -41,6 +41,10 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
 ## Rules that hold in every handler
 
+- **Set a checkout up before your first command in it.** Run its `.claude/workflow.json`
+  `worktreeSetup`, then `git remote set-head origin <default-branch>`. A routine clone ships
+  neither, whether or not the run takes a worktree.
+  (why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
 - **Re-check the lock before your first write to the item and before every push.** Gone → stop.
   Write nothing more. Journal a stop.
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.

@@ -64,8 +64,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    ```
    Then `EnterWorktree path:.claude/worktrees/<slug>`. The branch is
    **`claude/<type>-<number>-<slug>`** — a cloud session pushes only to `claude/*`, and the
-   number is what step 2 finds next time. `--no-worktree` falls back to a plain branch. Run
-   `worktreeSetup` from `workflow.json`, then `/workflow:dev-server` if the work needs one.
+   number is what step 2 finds next time. `--no-worktree` falls back to a plain branch. Set the
+   checkout up as preflight says, then `/workflow:dev-server` if the work needs one.
 
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
    `Co-Authored-By` trailer.

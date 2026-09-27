@@ -1276,6 +1276,28 @@ comes from GitHub. Only a live review with inline comments produces the combinat
 in this repo can post one. All 76 tests passed with and without the patch, because nothing covered
 the mapping — which is why the new cases were written first and committed red.
 
+## A routine clone is not a developer's checkout
+
+`worktreeSetup` was named in one place: `implement-issue` step 6, beside `git worktree add`. Every
+other handler works the checkout directly and never read it. So the install never ran for them, and
+a fresh clone ships no `node_modules`.
+
+**37 sessions across five days paid for it**, in the week to 2026-09-27 — 17 on Monday alone — and
+30-odd the week before. The cost is not only the 8 to 60 seconds of the install. Runs that did not
+spot the cause worked around it: `npm pack payload@3.86.0` into the scratchpad, `curl` of the
+registry tarball, reads off `unpkg` and `jsdelivr`. Runs that could not worked without: one
+adversarial review left the two files its central claims rested on unread and said so, and four
+`revise` runs rested every framework citation on a repo-side line instead.
+
+`/security-review` has the same shape and a different missing thing. Its own prompt runs
+`git diff origin/HEAD...`, and a clone made by a routine sets no `origin/HEAD`, so the skill aborts
+before it reads a line — **11 sessions across four days**, each one fixing it with the same
+`git remote set-head origin main`.
+
+Both belong to the checkout, not to the worktree, so the rule moved to the one file every handler
+reads. The `worktreeSetup` key keeps its name because it lives in each repo's
+`.claude/workflow.json`, a protected path an unattended run cannot rewrite.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
