@@ -148,7 +148,10 @@ shape-level problems.**
   So read the diff as a whole before reading it file by file, and ask of each part: **does
   something else here already do this, and is this the shared thing or one of its callers?** When a
   diff introduces a plugin, a layout or a helper module, every sibling it leaves outside is a
-  finding until you can say why it stayed out. Both #826 and #846 were rebutted first and adopted
+  finding until you can say why it stayed out. That scope is the tie-breaker against the
+  2026-09-12 bullet below, which governs whether a layer should exist at all. This one applies
+  only where the diff already creates the shared owner, so it proposes no new layer and asks
+  only about membership. Both #826 and #846 were rebutted first and adopted
   after the reviewer repeated themselves, which is the tell: on this question their prior is
   strong, so a rebuttal needs a reason the shared owner *cannot* hold the thing, not a reason the
   caller may.
