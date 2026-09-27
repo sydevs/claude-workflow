@@ -140,7 +140,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.contentPattern` / `.contentPaths` | Newly introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
 | `prAllowlistGlobs` | Where a **ticketless** PR may open (dep bumps, doc fixes, type re-syncs). `**` here, since the PR body is the proposal. Elsewhere, ticket work needs a human's `@sydevs-bot implement`. |
-| `worktreeSetup` | Commands run after `EnterWorktree`. |
+| `worktreeSetup` | Commands run to set a checkout up, worktree or not. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 
 ## Deliberately not here
