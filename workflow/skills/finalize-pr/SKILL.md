@@ -100,7 +100,7 @@ scores: `code-reviewer`, `pr-test-analyzer`, `silent-failure-hunter`, `type-desi
 **No routine has it, so check before you reach for it** — `ListPlugins` answers, and no routine has
 answered yes in three weeks. There the pass is `/code-review high` beside step 1's `/simplify`,
 which is what every run converged on unaided. Say in the report which one ran.
-(why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
+(why: docs/why.md#a-skill-can-name-a-plugin-no-routine-has)
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 

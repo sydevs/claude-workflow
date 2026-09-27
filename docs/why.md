@@ -1298,12 +1298,17 @@ Both belong to the checkout, not to the worktree, so the rule moved to the one f
 reads. The `worktreeSetup` key keeps its name because it lives in each repo's
 `.claude/workflow.json`, a protected path an unattended run cannot rewrite.
 
-**`finalize-pr` step 2 named a plugin with the same confidence, for three weeks.**
-`/pr-review-toolkit:review-pr all` is the whole of the review pass as written, and `ListPlugins`
-returns nothing in a routine — 14 sessions across four days this week, on top of 17 across four
-last week. Every one of them substituted the same thing without being told to: `/simplify`'s
-lenses, `/code-review`, `/security-review`. So the step now names both, and says to check which it
-has. A skill that names one environment serves whichever of its two readers it was written for.
+## A skill can name a plugin no routine has
+
+`finalize-pr` step 2 named `/pr-review-toolkit:review-pr all` as the whole of its review pass, for
+three weeks. `ListPlugins` returns nothing in a routine — **14 sessions across four days** in the
+week to 2026-09-27, on top of 17 across four the week before. Every one of them substituted the
+same thing without being told to: `/simplify`'s lenses, `/code-review`, `/security-review`. So the
+step now names both, and says to check which it has. A skill that names one environment serves
+whichever of its two readers it was written for.
+
+The heading above is the same class with a different missing thing — a clone's `node_modules` and
+`origin/HEAD` there, a plugin that was never installed here — so each rule keeps its own story.
 
 ## Retired
 
