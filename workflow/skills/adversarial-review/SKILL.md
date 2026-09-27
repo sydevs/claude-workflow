@@ -80,10 +80,10 @@ mcp__github__add_comment_to_pending_review  … path:<file> line:<n> body:<findi
 mcp__github__pull_request_review_write   method:"submit_pending" … event:"COMMENT" body:<the body below>
 ```
 
-End every inline comment with `identity.commentMarker`. Anchor every finding to a line **this diff
-changed** — the comment call refuses any other, and re-anchoring to the nearest changed line moves
-the finding away from what it is about. A finding with no line of its own belongs in the holistic
-assessment, which is where it reads better anyway.
+End every inline comment with `identity.commentMarker`. Anchor every finding to a line **inside a
+diff hunk** — the call refuses any other, unchanged context lines included. Never move a finding
+onto an unrelated line to satisfy it. That one belongs in the holistic assessment, which is where
+it reads better anyway.
 
 **The body, in this order, starting with `review.bodyHeader` as its first line:**
 
