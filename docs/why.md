@@ -1345,6 +1345,26 @@ A session that ends with nothing ticked — or runs out of attempts — stalls t
 `awaiting` and one comment, and any comment from the reviewer re-arms it. No ceiling was needed,
 because the plan itself says how many sessions it should take.
 
+## A contract sync is a PR, not a ticket
+
+A consumer's copy of a producer's file — SahajCloud's generated types in WeMeditateWeb and
+SahajAtlasWeb, the atlas URL contract in the WordPress plugin — has exactly one correct content:
+the producer's, on `main`. Bringing it up to date is not a decision. Yet Thursday's survey filed a
+`Task` for a stale copy, and `cross-repo-issue` filed a child in every consumer. Each then waited
+for a proposal review, a human `implement` verb and a session, to run one command whose output
+nobody could have chosen differently.
+
+So a sync goes straight to a PR. `contractSync` in `loop-config.json` names each copy: the
+producer's sources, and each consumer's command and paths. When a merged producer PR touches a
+source, the dispatcher runs the consumer's command on its `main` and opens one bot PR, which the
+loop carries like any other. If the new shape breaks the consumer, CI goes red and `fix-ci` adapts
+the code. The survey opens any sync the dispatcher missed. `cross-repo-issue` files a child only
+for consumer work that needs a decision.
+
+The same holds for the rest of survey-contracts' findings where the source is plainly right: a
+document that misdescribes the code, a missing changelog entry, a command that no longer exists.
+A ticket is kept for the case where the code may be the wrong side.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They

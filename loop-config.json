@@ -187,6 +187,42 @@
     "url": "https://mailpit-production-db88.up.railway.app",
     "retentionDays": 7
   },
+  "contractSync": {
+    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command on its main, in one bot PR on branch. Rules in survey-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
+    "producer": "SahajCloud",
+    "branch": "claude/chore-sync-contracts",
+    "consumers": {
+      "WeMeditateWeb": {
+        "sources": [
+          "src/payload-types.ts"
+        ],
+        "command": "pnpm run types:cms",
+        "paths": [
+          "server/payload-types.ts"
+        ]
+      },
+      "SahajAtlasWeb": {
+        "sources": [
+          "src/payload-types.ts",
+          "src/collections/Events/endpoints/responseTypes.ts"
+        ],
+        "command": "pnpm run types:cms",
+        "paths": [
+          "src/types/payload/payload-types.ts",
+          "src/types/payload/response-types.ts"
+        ]
+      },
+      "SahajAtlasWordpress": {
+        "sources": [
+          "src/lib/atlas/atlas-url-contract.json"
+        ],
+        "command": "curl -fsSL --retry 3 -o tests/atlas-url-contract.json https://raw.githubusercontent.com/sydevs/SahajCloud/main/src/lib/atlas/atlas-url-contract.json",
+        "paths": [
+          "tests/atlas-url-contract.json"
+        ]
+      }
+    }
+  },
   "issueFields": {
     "$comment": "GitHub's native org-level issue fields, not Projects v2, not labels. You can read and write them, but not search them. See triage-issue/SKILL.md for read/write rules and the PUT-replaces-everything trap.",
     "priority": {

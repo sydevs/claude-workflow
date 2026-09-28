@@ -53,7 +53,9 @@ Otherwise delete this section.]
 
 [Include ONLY when the diff touches something a consumer observes: the atlas
 embed contract, generated Payload types, the atlas URL contract. Name the
-consumer repos and link their issues. Otherwise delete this section.]
+consumer repos. A copied contract is re-synced in a bot PR after this merges;
+link an issue only for consumer work that needs one. Otherwise delete this
+section.]
 
 ## Migration
 
