@@ -124,37 +124,31 @@ shape-level problems.**
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 
-- **2026-09-27 — value 1 asks whether a layer should exist. They also ask whether it should exist
-  *separately from that one*.** The bimodal rule above triggers on a layer with one consumer, and
-  this review applies it file by file. Every file on
+- **2026-09-27 — value 1 asks whether a layer should exist. They also ask what belongs *inside*
+  a shared owner the diff creates.** The bimodal rule above triggers on a layer with one consumer,
+  and this review applies it file by file. Every file on
   [SahajCloud#847](https://github.com/sydevs/SahajCloud/pull/847) and
   [#849](https://github.com/sydevs/SahajCloud/pull/849) passed that question, because each one did
-  need to exist. The reviewer asked a different one, fourteen times across four PRs, and this
-  review had passed clean on all of it.
-  Two shapes, one value. **A second thing doing the first thing's job**: *"What is the difference
-  between `redeemMagicLink` and `confirmMagicLink`? These seem like overlapping endpoints"*,
-  *"This feels like a reimplementation of `requestMagicLink`. Consider the both and resolve this
-  apparent overlap"* (#849), *"How does this differ from `SessionDocument`? Do we have two
-  overlapping systems here?"*, *"This feels like we are re-implementing the built-in PayloadCMS
-  emailing system"* (#847). And **a mechanism sitting outside the shared owner the same diff
-  creates**: *"Shouldn't this endpoint and also the `requestLink` endpoint be part of the `login`
-  plugin and then attached to any auth collection that the plugin manages?"*, *"Couldn't this be
-  done generically within the plugin for any consumer?"*, *"It seems like we are off-loading too
-  much to each collection"* (#847), *"Change CardShell to something a bit more generic… Make it a
-  layout which can be used by all public frontend pages"*, *"Probably we should get rid of this
-  file in favour of actual pages in `src/app/(frontend)`"* (#849), a generic `createSession(slug,
+  need to exist. The reviewer asked a different one across four PRs, and this review had passed
+  clean on all of it: **a mechanism sitting outside the shared owner the same diff creates**.
+  *"Shouldn't this endpoint and also the `requestLink` endpoint be part of the `login` plugin and
+  then attached to any auth collection that the plugin manages?"*, *"Couldn't this be done
+  generically within the plugin for any consumer?"*, *"It seems like we are off-loading too much
+  to each collection"* (#847), *"Change CardShell to something a bit more generic… Make it a
+  layout which can be used by all public frontend pages"* (#849), a generic `createSession(slug,
   id)` ([#846](https://github.com/sydevs/SahajCloud/pull/846)), and the strip hook they moved out
   of `Clients` into `accessPlugin` ([#826](https://github.com/sydevs/SahajCloud/pull/826)).
-  So read the diff as a whole before reading it file by file, and ask of each part: **does
-  something else here already do this, and is this the shared thing or one of its callers?** When a
-  diff introduces a plugin, a layout or a helper module, every sibling it leaves outside is a
-  finding until you can say why it stayed out. That scope is the tie-breaker against the
-  2026-09-12 bullet below, which governs whether a layer should exist at all. This one applies
-  only where the diff already creates the shared owner, so it proposes no new layer and asks
-  only about membership. Both #826 and #846 were rebutted first and adopted
-  after the reviewer repeated themselves, which is the tell: on this question their prior is
-  strong, so a rebuttal needs a reason the shared owner *cannot* hold the thing, not a reason the
-  caller may.
+  So read the diff as a whole before reading it file by file. When a diff introduces a plugin, a
+  layout or a helper module, every sibling it leaves outside is a finding until you can say why it
+  stayed out. That scope is the tie-breaker against the 2026-09-12 bullet below, which governs
+  whether a layer should exist at all. This one applies only where the diff already creates the
+  shared owner, so it proposes no new layer and asks only about membership. Both #826 and #846
+  were rebutted first and adopted after the reviewer repeated themselves, which is the tell: on
+  this question their prior is strong, so a rebuttal needs a reason the shared owner *cannot*
+  hold the thing, not a reason the caller may.
+  **Not evidence for this bullet:** the same PRs' *"what is the difference between X and Y"*
+  questions and the renames that followed them. The reviewer says those were them learning new
+  code, not a design both things shared. Do not turn such a question into a duplication finding.
 
 - **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
   was near-absent and told the review not to manufacture findings there. Three PRs in one week

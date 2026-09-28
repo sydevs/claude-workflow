@@ -81,9 +81,9 @@ mcp__github__pull_request_review_write   method:"submit_pending" … event:"COMM
 ```
 
 End every inline comment with `identity.commentMarker`. Anchor every finding to a line **inside a
-diff hunk** — the call refuses any other, unchanged context lines included. Never move a finding
-onto an unrelated line to satisfy it. That one belongs in the holistic assessment, which is where
-it reads better anyway.
+diff hunk**, the unchanged context lines of a hunk included. The call refuses any line outside
+one. Never move a finding onto an unrelated line to satisfy it. That one belongs in the holistic
+assessment, which is where it reads better anyway.
 
 **The body, in this order, starting with `review.bodyHeader` as its first line:**
 
