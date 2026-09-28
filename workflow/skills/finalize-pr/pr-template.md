@@ -16,6 +16,17 @@ not implementation detail.]
 - [bullet]
 - [bullet]
 
+## Phases
+
+[ONLY when implement-issue builds the ticket across sessions. One box per
+phase, in build order, ticked once the phase is pushed with its review done.
+The dispatcher reads this list: while a box is unticked it starts the next
+implement session instead of the critic. Carry it forward on every refresh,
+ticks included. Otherwise delete this section.]
+
+- [x] [phase 1 — what it leaves working]
+- [ ] [phase 2]
+
 ## Changes
 
 [Optional. Only when the file list does not make it obvious — multi-file
@@ -42,7 +53,9 @@ Otherwise delete this section.]
 
 [Include ONLY when the diff touches something a consumer observes: the atlas
 embed contract, generated Payload types, the atlas URL contract. Name the
-consumer repos and link their issues. Otherwise delete this section.]
+consumer repos. A copied contract is re-synced in a bot PR after this merges;
+link an issue only for consumer work that needs one. Otherwise delete this
+section.]
 
 ## Migration
 

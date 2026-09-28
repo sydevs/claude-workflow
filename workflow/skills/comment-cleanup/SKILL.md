@@ -18,8 +18,9 @@ does not.
 
 ## How this differs from the review that already runs
 
-`finalize-pr` step 2 runs `pr-review-toolkit`'s `comment-analyzer` over a branch diff. That reviews
-one diff and reports. **This applies fixes, across files nobody is currently touching.** Do not run
+`finalize-pr` step 2 reviews a branch diff and reports — as `comment-analyzer` where the toolkit is
+installed, as `/code-review` where it is not. **This applies fixes, across files nobody is
+currently touching.** Do not run
 this as a substitute for that review, and do not re-review a diff this skill just produced.
 
 ## Scope

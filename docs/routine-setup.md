@@ -66,7 +66,7 @@ no per-repo setup.
 | Field | Type | Options | Read by |
 | --- | --- | --- | --- |
 | Priority | single select | Critical · High · Medium · Low | people, and the survey |
-| Effort | single select | Easy · Moderate · Hard | `implement-issue`, to decide whether to split |
+| Effort | single select | Easy · Moderate · Hard | `implement-issue`, to decide whether to build in phases |
 | Hold Until | date | — | the dispatcher: a park, refusing `implement` until the date passes |
 
 > ⚠ A fourth field, **`Stage`**, was deleted on 2026-09-15. The event model replaced it with the

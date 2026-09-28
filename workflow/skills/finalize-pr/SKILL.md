@@ -86,16 +86,21 @@ altitude. It does not hunt for bugs.
 - **Do not edit the same files while `/simplify` runs.** Wait for its report, then read `git diff`
   as one unit. (why: docs/why.md#simplify-fans-out)
 
-### 2. Review — one pass, six lenses
+### 2. Review — one pass, several lenses
 
 ```
-/pr-review-toolkit:review-pr all
+/pr-review-toolkit:review-pr all        # only where the plugin is installed
+/code-review high                       # otherwise, plus step 1's /simplify pass
 ```
 
-Six specialist agents run over the branch diff with confidence scores: `code-reviewer`,
-`pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`, `comment-analyzer`,
-`code-simplifier`. This replaces the single dispatched `/code-review` pass. The toolkit runs each
-agent in its own context, so the main thread needs no wrapper subagent to stay lean.
+The toolkit runs six specialist agents over the branch diff in their own contexts, with confidence
+scores: `code-reviewer`, `pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`,
+`comment-analyzer`, `code-simplifier`.
+
+**No routine has it, so check before you reach for it** — `ListPlugins` answers, and no routine has
+answered yes in three weeks. There the pass is `/code-review high` beside step 1's `/simplify`,
+which is what every run converged on unaided. Say in the report which one ran.
+(why: docs/why.md#a-skill-can-name-a-plugin-no-routine-has)
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 
@@ -283,7 +288,8 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
 **This skill never watches CI, never marks a PR ready, and never merges.** Nothing in the loop
 merges: the dispatcher arms auto-merge at mark-ready and GitHub's ruleset and queue do the rest.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
-"green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
+"green": red → `fix-ci`, green on a draft → the next phase while `## Phases` has an unticked
+box, else the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
 - **A conflicted PR schedules zero CI runs.** Merge `origin/main` in and resolve before you push,

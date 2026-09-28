@@ -2,13 +2,14 @@
 name: survey-contracts
 description: Check that the published contracts between the sydevs repos still describe reality — the embed guide, changelogs, generated type freshness, and documented commands. Thursday's survey.
 disable-model-invocation: true
-allowed-tools: Bash(*), Read, Grep, Glob
+allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
 
 # Survey Contracts
 
 Thursday's survey. Prose documents the couplings between these repos, and nothing enforces them, so
-they drift silently. This sweep catches the drift.
+they drift silently. This sweep catches the drift and **fixes it in a PR** — a sync is the fix,
+not a proposal, so it needs no ticket. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
 
 Real precedent: SahajAtlasWeb's README told host sites to load a filename the build had never
 emitted, for months (#93). Nothing broke. The document was simply wrong, and only a reader
@@ -33,16 +34,19 @@ The only documentation a host site reads. Verify it against the source, not agai
 Then check the two in-tree consumers still match: `WeMeditateWeb/lib/atlas-embed.ts` and the
 WordPress plugin's templates.
 
-### 2. Generated type freshness
+### 2. Copied contracts are current
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/sydevs/SahajCloud/main/src/payload-types.ts \
-  | diff -q - src/types/payload/payload-types.ts   # SahajAtlasWeb
-# WeMeditateWeb: server/payload-types.ts
-```
+`contractSync` in `loop-config.json` names each copy: the producer's `sources`, and each
+consumer's `command` and `paths`. The dispatcher runs that sync whenever a merged producer PR
+touches a source, so this check catches only what it missed — a push straight to `main`, or a sync
+PR closed unmerged.
 
-A consumer behind `main` has types that are quietly wrong, not broken — no build error, just a
-shape that no longer matches the API. If stale, file a `Task` naming the drift.
+Run the consumer's `command` in its checkout, on `origin/main`. A clean `git status -- <paths>`
+means current. A diff means stale: a consumer behind `main` has types that are quietly wrong, not
+broken — no build error, just a shape that no longer matches the API.
+
+**Stale → open the sync PR yourself**, on `contractSync.branch`, through `/workflow:finalize-pr`.
+An open PR on that branch already → push your commit onto it instead.
 
 ### 3. Changelogs
 
@@ -77,19 +81,27 @@ Check the symlink still resolves too. A rule file that stops loading fails open 
 ls -l <repo>/.claude/rules/code-comments.md
 ```
 
-File one ticket naming which repos drifted and in which direction. Type `Task`, priority `Low` —
-a drifted rule degrades output slowly rather than breaking anything.
+Fix it in one PR per drifted repo, copying the canonical block into the copy.
 
-## Filing
+## Fixing
 
-File one ticket per drifted contract, per `/workflow:triage-issue`. Do not list everything in one
-ticket — each is fixed by a different change at a different time.
+**Open one PR per drifted contract, not a ticket.** A copy that is behind, a document that
+misdescribes the code, a missing changelog entry, a command that no longer exists — each is fixed
+by making the copy or the document match its source. Branch `claude/<type>-contract-<scope>`
+(`contractSync.branch` for a copied contract), then run `/workflow:finalize-pr`. The PR opens as a
+draft, and the dispatcher carries it from there. Name the source you checked it against in the
+body.
 
-Type `Task`. The dispatcher sets Status Proposed, `proposal`, and `awaiting`. Assign nobody. Set priority by
-who is hurt: `High` for a wrong embed guide (it breaks integrations we do not control), `Low` for
-a stale command.
+**File a ticket only when the code may be the wrong side** — when the document describes what a
+host needs and the code does something else, which is right is a decision, not a sync. Then file
+per `/workflow:triage-issue`, type `Task`. The dispatcher sets Status Proposed, `proposal`, and
+`awaiting`. Assign nobody. Set priority by who is hurt: `High` for a wrong embed guide (it breaks
+integrations we do not control), `Low` for a stale command.
+
+Do not bundle: each contract is fixed by a different change at a different time.
 
 ## Hard rules
 
 - **Never** trust a document as evidence about itself — check it against the code it describes.
-- **Never** bundle unrelated drift into one ticket.
+- **Never** bundle unrelated drift into one PR or one ticket.
+- **Never** file a ticket for a sync. A copy that is behind its source gets a PR.

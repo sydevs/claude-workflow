@@ -1276,11 +1276,107 @@ comes from GitHub. Only a live review with inline comments produces the combinat
 in this repo can post one. All 76 tests passed with and without the patch, because nothing covered
 the mapping — which is why the new cases were written first and committed red.
 
+## A routine clone is not a developer's checkout
+
+`worktreeSetup` was named in one place: `implement-issue` step 6, beside `git worktree add`. Every
+other handler works the checkout directly and never read it. So the install never ran for them, and
+a fresh clone ships no `node_modules`.
+
+**37 sessions across five days paid for it**, in the week to 2026-09-27 — 17 on Monday alone — and
+30-odd the week before. The cost is not only the 8 to 60 seconds of the install. Runs that did not
+spot the cause worked around it: `npm pack payload@3.86.0` into the scratchpad, `curl` of the
+registry tarball, reads off `unpkg` and `jsdelivr`. Runs that could not worked without: one
+adversarial review left the two files its central claims rested on unread and said so, and four
+`revise` runs rested every framework citation on a repo-side line instead.
+
+`/security-review` has the same shape and a different missing thing. Its own prompt runs
+`git diff origin/HEAD...`, and a clone made by a routine sets no `origin/HEAD`, so the skill aborts
+before it reads a line — **11 sessions across four days**, each one fixing it with the same
+`git remote set-head origin main`.
+
+Both belong to the checkout, not to the worktree, so the rule moved to the one file every handler
+reads. The `worktreeSetup` key keeps its name because it lives in each repo's
+`.claude/workflow.json`, a protected path an unattended run cannot rewrite.
+
+## A skill can name a plugin no routine has
+
+`finalize-pr` step 2 named `/pr-review-toolkit:review-pr all` as the whole of its review pass, for
+three weeks. `ListPlugins` returns nothing in a routine — **14 sessions across four days** in the
+week to 2026-09-27, on top of 17 across four the week before. Every one of them substituted the
+same thing without being told to: `/simplify`'s lenses, `/code-review`, `/security-review`. So the
+step now names both, and says to check which it has. A skill that names one environment serves
+whichever of its two readers it was written for.
+
+The heading above is the same class with a different missing thing — a clone's `node_modules` and
+`origin/HEAD` there, a plugin that was never installed here — so each rule keeps its own story.
+
+## A ticket is built in phases, never split
+
+`implement-issue` used to meet an `Effort: Hard` ticket it could not finish in one run by calling
+`split-ticket`: up to five child tickets, each with a `Blocked by:` line on the one before. Every
+child then cost what a ticket costs — a `revise` session on filing, a human `implement` verb, its
+own PR, critic and `address-review` rounds, and a human review. Two failures came with it.
+
+**The children went stale.** A child is written against the unbuilt design of its siblings, and
+the first sibling to merge rewrites that design. In the week to 2026-09-27, three of the five
+children of SahajCloud#664 met this: #838's implement run found *"three acceptance criteria are
+obsolete"* after #847 shipped a different design, SahajAtlasWeb#223 went *"stale a second time"*,
+and WeMeditateWeb#135's revise could not ground its central claim at all.
+
+**The reviewer reviewed half a feature.** Each child PR was judged against a whole that did not
+exist yet, so the reviewer flagged gaps that later children had been planned to fill, and the
+answer to each was "that is ticket N+2".
+
+The split existed to keep each review surface small. It bought that at the human's expense, when
+the reader who needs the small surface is the critic. So one ticket is now one branch and one PR,
+built in phases. The PR body's `## Phases` checklist is the plan, and the dispatcher reads it: while
+a box is unticked, a green draft starts the next `implement` session on the ticket's lock instead
+of the critic. Inside a session each phase closes with the gate and a scoped `/code-review` and
+`/simplify` pass in fresh contexts. The critic reads the whole PR once, at the end, and the human
+reviews once.
+
+Stacked sub-PRs merging into a feature branch were considered and rejected. Each sub-PR costs its
+own critic, `address-review` and CI sessions. Nothing in the dispatcher or the rulesets knows a
+base other than `main`. And the human still reviews the whole diff at the end.
+
+**The bound is progress, not a count.** A continuation runs only if the last `implement` that
+ended ticked at least one box, and a phase too large for one session is split into smaller boxes.
+A session that ends with nothing ticked — or runs out of attempts — stalls the PR. It gets
+`awaiting` and one comment, and any comment from the reviewer re-arms it. No ceiling was needed,
+because the plan itself says how many sessions it should take.
+
+## A contract sync is a PR, not a ticket
+
+A consumer's copy of a producer's file — SahajCloud's generated types in WeMeditateWeb and
+SahajAtlasWeb, the atlas URL contract in the WordPress plugin — has exactly one correct content:
+the producer's, on `main`. Bringing it up to date is not a decision. Yet Thursday's survey filed a
+`Task` for a stale copy, and `cross-repo-issue` filed a child in every consumer. Each then waited
+for a proposal review, a human `implement` verb and a session, to run one command whose output
+nobody could have chosen differently.
+
+So a sync goes straight to a PR. `contractSync` in `loop-config.json` names each copy: the
+producer's sources, and each consumer's command and paths. When a merged producer PR touches a
+source, the dispatcher runs the consumer's command on its `main` and opens one bot PR, which the
+loop carries like any other. If the new shape breaks the consumer, CI goes red and `fix-ci` adapts
+the code. The survey opens any sync the dispatcher missed. `cross-repo-issue` files a child only
+for consumer work that needs a decision.
+
+The same holds for the rest of survey-contracts' findings where the source is plainly right: a
+document that misdescribes the code, a missing changelog entry, a command that no longer exists.
+A ticket is kept for the case where the code may be the wrong side.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
 stay so a future reader meets the lesson instead of re-learning it. The line under each
 heading says what took its place.
+
+### A Hard ticket that will not fit one run is split
+
+**Replaced by:** one ticket, one PR, built in phases.
+
+`split-ticket` filed up to `ceilings.maxChildrenPerSplit` ordered children, and each needed its own
+verb, PR and review. *A ticket is built in phases, never split*, above, says what that cost.
 
 ### Rung 2 competes for the same budget
 

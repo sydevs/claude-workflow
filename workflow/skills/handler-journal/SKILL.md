@@ -44,7 +44,7 @@ Your session URL is `https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse
 - **Evidence for failures and friction: name the call.** None for pushes, CI, or review counts —
   GitHub records those. (why: docs/why.md#every-claim-names-the-call-that-produced-it)
 - Glyphs: 🔀 merged · 📦 built · 💬 replied · 🧐 reviewed · 🔬 investigated · 🔍 surveyed ·
-  🩹 fixed CI · 🧶 resolved conflicts · ✂️ split · ✍️ revised · ⏭️ stopped · 🛑 not started.
+  🩹 fixed CI · 🧶 resolved conflicts · ✍️ revised · ⏭️ stopped · 🛑 not started.
 - Full `org/repo#N` everywhere. Say `attempt <n>` on the first line when resuming.
 
 Fit it with the script. Never trim by hand:

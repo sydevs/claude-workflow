@@ -75,13 +75,15 @@ changes on its own PR, and this review should not want to: approval is the revie
 (why: docs/why.md#reviews-are-comment-only)
 
 ```
-mcp__github__create_pending_pull_request_review        owner:$ORG repo:$REPO pullNumber:<n>
-mcp__github__add_comment_to_pending_pull_request_review  … path:<file> line:<n> body:<finding>   # one per finding
-mcp__github__submit_pending_pull_request_review        … event:"COMMENT" body:<the body below>
+mcp__github__pull_request_review_write   method:"create" owner:$ORG repo:$REPO pullNumber:<n>
+mcp__github__add_comment_to_pending_review  … path:<file> line:<n> body:<finding>   # one per finding
+mcp__github__pull_request_review_write   method:"submit_pending" … event:"COMMENT" body:<the body below>
 ```
 
-End every inline comment with `identity.commentMarker`. Anchor every finding to the diff line it
-is about. A finding with no line belongs in the holistic assessment.
+End every inline comment with `identity.commentMarker`. Anchor every finding to a line **inside a
+diff hunk**, the unchanged context lines of a hunk included. The call refuses any line outside
+one. Never move a finding onto an unrelated line to satisfy it. That one belongs in the holistic
+assessment, which is where it reads better anyway.
 
 **The body, in this order, starting with `review.bodyHeader` as its first line:**
 

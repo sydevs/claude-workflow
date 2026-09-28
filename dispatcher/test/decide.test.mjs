@@ -449,3 +449,93 @@ test('a bot-filed proposal is revised before a human reads it; yours is left alo
   const off = { ...config, dispatch: { ...config.dispatch, reviewProposals: false } }
   assert.ok(!decide({ reason: 'issues.opened' }, bot, off).some((a) => a.type === 'fire'))
 })
+
+// ---- a ticket built in phases (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
+
+const phased = (done, total, over = {}) => {
+  const lines = Array.from({ length: total }, (_, i) => `- [${i < done ? 'x' : ' '}] phase ${i + 1}`)
+  return prSnap({ item: { number: 5, labels: [], body: `## Summary\n- x\n\n## Phases\n${lines.join('\n')}\n\nCloses #9` }, linkedIssues: [9], ...over })
+}
+
+test('a draft with an unticked phase continues its ticket instead of firing the critic', () => {
+  const p = evaluatePr(phased(1, 3), config)
+  assert.deepEqual(types(p), ['targets'])
+  const [t] = p[0].list
+  assert.equal(t.kind, 'issue')
+  assert.equal(t.number, 9)
+  assert.equal(t.reason, 'phase-continue')
+  assert.deepEqual({ pr: t.facts.pr, done: t.facts.done, total: t.facts.total }, { pr: 5, done: 1, total: 3 })
+})
+
+test('the continuation waits for green CI, like the critic would', () => {
+  assert.deepEqual(types(evaluatePr(phased(1, 3, { ci: running }), config)), ['note'])
+})
+
+test('every phase ticked hands the whole PR to the critic, once', () => {
+  assert.deepEqual(types(evaluatePr(phased(3, 3), config)), ['fire:adversarial-review'])
+})
+
+test('a phased draft with no linked ticket falls through to the critic', () => {
+  assert.deepEqual(types(evaluatePr(phased(1, 3, { linkedIssues: [] }), config)), ['fire:adversarial-review'])
+})
+
+test('a stalled phased draft that carries awaiting stays your turn', () => {
+  const s = phased(1, 3)
+  s.item.labels = ['awaiting']
+  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+})
+
+test('the continuation carries the newest human word on the PR', () => {
+  const s = phased(1, 3, {
+    comments: [{ author: 'Ardnived', createdAt: '2026-09-28T09:00:00Z', body: 'carry on' }, { author: 'sydevs-bot', createdAt: '2026-09-28T09:05:00Z', body: 'ok' }],
+    reviews: [{ user: { login: 'Ardnived' }, state: 'COMMENTED', body: '', submitted_at: '2026-09-28T08:00:00Z' }],
+  })
+  assert.equal(evaluatePr(s, config)[0].list[0].facts.humanAt, '2026-09-28T09:00:00Z')
+})
+
+test('a sweep does not call a phased draft moving to its next session an orphan', () => {
+  assert.deepEqual(types(decide({ reason: 'sweep-orphan', facts: {} }, phased(1, 3), config)), ['note'])
+})
+
+const cont = (facts = {}) => ({ reason: 'phase-continue', facts: { pr: 5, done: 1, total: 3, humanAt: null, ...facts } })
+const ended = (over) => ({ dispatches: [{ id: 'a', handler: 'implement', attempt: 1, firedAt: '2026-09-28T10:00:00.000Z' }, { id: 'a', handler: 'implement', attempt: 1, firedAt: '2026-09-28T10:00:00.000Z', flags: {}, outcome: 'done', ...over }] })
+
+test('the first continuation fires implement on the ticket, recording where it starts', () => {
+  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended() }), config)
+  assert.deepEqual(types(p), ['fire:implement'])
+  assert.deepEqual(p[0].flags, { phasesDone: 1 })
+})
+
+test('a session that ticked a phase earns the next one', () => {
+  const p = decide(cont({ done: 2 }), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
+  assert.deepEqual(types(p), ['fire:implement'])
+})
+
+test('a session that ticked nothing stalls the PR instead of looping', () => {
+  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
+  assert.deepEqual(types(p), ['targets'])
+  assert.equal(p[0].list[0].reason, 'phases-stalled')
+  assert.equal(p[0].list[0].number, 5)
+})
+
+test('a session out of attempts stalls the PR too', () => {
+  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ outcome: 'timed out', attempt: 3 }) }), config)
+  assert.equal(p[0].list[0].reason, 'phases-stalled')
+})
+
+test('a human word after a stalled session re-arms the continuation', () => {
+  const p = decide(cont({ humanAt: '2026-09-28T11:00:00Z' }), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
+  assert.deepEqual(types(p), ['fire:implement'])
+})
+
+test('a locked or closed ticket is never continued', () => {
+  assert.deepEqual(types(decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, locked: true }), config)), ['note'])
+  assert.deepEqual(types(decide(cont(), issueSnap({ item: { number: 9, state: 'closed', labels: [] } }), config)), ['note'])
+})
+
+test('a stalled phased PR becomes your turn, said once', () => {
+  const p = decide({ reason: 'phases-stalled', facts: { done: 1, total: 3 } }, phased(1, 3), config)
+  assert.deepEqual(types(p), ['label', 'comment', 'anomaly'])
+  assert.deepEqual(p[0].add, ['awaiting'])
+  assert.match(p[1].body, /Phase 2 of 3/)
+})

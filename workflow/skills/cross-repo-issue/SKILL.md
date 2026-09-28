@@ -51,8 +51,15 @@ upstream fails the plugin's build until its copy is updated.
    The dispatcher sets Status Proposed and `awaiting` on `issues.opened`, whoever files. Set no
    label and no Status. Assign nobody.
 
-4. **Create one child issue per consumer** with the same call as step 3, `repo:<consumer>`, then
-   record the dependency natively so GitHub enforces and displays it — not just prose in the body.
+4. **Create one child issue per consumer that has work to decide**, with the same call as step 3,
+   `repo:<consumer>`. **A consumer whose only work is a re-sync gets no child.** A copied contract
+   in `contractSync` — the generated types, the atlas URL contract — is re-synced by the
+   dispatcher in a bot PR once the producer merges, and Thursday's survey opens any it missed. Name
+   that consumer in `## Downstream impact` with "re-synced automatically".
+   (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
+
+   Then record each child's dependency natively so GitHub enforces and displays it — not just
+   prose in the body.
 
    File the child like anything else. The `Blocked by:` line carries the ordering: the
    dispatcher converts it into the native relationship, applies `blocked`, and when the tracker
@@ -102,6 +109,7 @@ upstream fails the plugin's build until its copy is updated.
 
 - **Never** file a cross-repo change as independent issues with no parent. The ordering constraint
   is the most important thing this records.
+- **Never** file a child for a re-sync. The contract sync opens that PR.
 - **Never** file the children before the tracker exists.
 - **Always** restate the blocking condition as a `Blocked by: <url>` line in each child's body —
   the line is what the dispatcher converts and what a session reads.

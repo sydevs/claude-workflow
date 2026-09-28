@@ -57,7 +57,6 @@ so each person runs `claude plugin install` once.
 | `/workflow:resolve-conflicts` | Merge `main` into a conflicting bot PR, resolve from both sides' intent, push. |
 | `/workflow:adversarial-review` | An advisory, critic-side COMMENT review of one bot PR, once per PR. The human approves. |
 | `/workflow:revise-ticket` | A deep pass: expand a ticket from the codebase, per the human's instruction. |
-| `/workflow:split-ticket` | Split a ticket into ordered children with `Blocked by:` lines. |
 | `/workflow:answer-ticket` | Answer a question on a ticket from source. Never pushes. |
 | `/workflow:survey-routine` | The nightly survey. Via `sydevs-survey-nightly`. |
 | `/workflow:survey-deps` | Monday: vulnerabilities become PRs. Routines update monthly. |
@@ -80,7 +79,7 @@ resolve, unblocking — is mechanical and free.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 **You start work with a verb.** On an issue, a comment from a `respondTo` human:
-`@sydevs-bot implement`, `revise`, `split`, or `answer` (case-insensitive, unknown → `answer`).
+`@sydevs-bot implement`, `revise`, or `answer` (case-insensitive, unknown → `answer`).
 Nothing happens on an issue without a mention. On a bot PR, any review, comment, or thread reply
 from you dispatches `address-review` with no mention needed. `@sydevs-bot review` asks for a
 second adversarial review.
@@ -89,7 +88,8 @@ second adversarial review.
 removes it as its last write. A comment that lands while the lock is held is not lost — the
 dispatcher re-derives on unlock. (why: docs/why.md#the-lock-label-is-the-lease)
 
-**A bot PR's life is a chain of events**: draft → CI green → adversarial review (one COMMENT
+**A bot PR's life is a chain of events**: draft → CI green → the next implement session while
+the PR's `## Phases` has an unticked box → adversarial review (one COMMENT
 review, skipped under `review.skipWhen`) → `address-review` adopts or rebuts each thread → CI
 green → **ready + reviewer requested** → your approval → squash merge. Red CI fires `fix-ci`, at
 most `ciFixIterations` times. An approved PR with conflicts gets `resolve-conflicts`, then merges
@@ -140,7 +140,7 @@ Everything repo-specific comes from `<repo>/.claude/workflow.json`:
 | `securityReview.contentPattern` / `.contentPaths` | Newly introduced sinks, regardless of path. |
 | `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
 | `prAllowlistGlobs` | Where a **ticketless** PR may open (dep bumps, doc fixes, type re-syncs). `**` here, since the PR body is the proposal. Elsewhere, ticket work needs a human's `@sydevs-bot implement`. |
-| `worktreeSetup` | Commands run after `EnterWorktree`. |
+| `worktreeSetup` | Commands run to set a checkout up, worktree or not. |
 | `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
 
 ## Deliberately not here

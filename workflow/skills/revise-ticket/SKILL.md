@@ -42,8 +42,10 @@ correcting what the code disproves:
 - **One summary comment**, inside `writing.budgets.comment`, saying what changed and why, with
   `identity.commentMarker`.
 
-When the revision reveals two tickets, say so in the comment and name `@sydevs-bot split`. Do not
-split here.
+When the revision finds two deliverables in one ticket, keep them in one ticket: order them as
+phases in `## Approach`, and raise **Effort** if the whole will not fit one run. Never propose a
+split — `implement-issue` builds a big ticket in phases on one PR.
+(why: docs/why.md#a-ticket-is-built-in-phases-never-split)
 
 ## Hard rules
 

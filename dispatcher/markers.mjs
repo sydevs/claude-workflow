@@ -2,10 +2,11 @@
  * The body lines the loop writes and Actions reads.
  *
  * A cloud session cannot write a native issue relationship, so the survey
- * and `split-ticket` write `Blocked by: <url>` into `## Notes`, and the
+ * and `cross-repo-issue` write `Blocked by: <url>` into `## Notes`, and the
  * dispatcher turns the line into a relationship. `Re-check: <date>` parks a
  * ticket until a date. `Sentry: <url> (id: <n>)` names the Sentry issue a
- * merge resolves. All three formats come from `triage-issue/SKILL.md`.
+ * merge resolves. All three formats come from `triage-issue/SKILL.md`. A PR
+ * body's `## Phases` checklist, from `implement-issue`, is read here too.
  */
 
 const STRUCK = /^~~/
@@ -71,6 +72,36 @@ export function parseSentry(body) {
     if (m) return { url: m[1], id: m[2] }
   }
   return null
+}
+
+/**
+ * `{ total, done }` from a PR body's `## Phases` checklist, or null when it
+ * has none. `implement-issue` writes the section when it builds one ticket
+ * across sessions, and ticks a phase once it is pushed with its review done.
+ * Only `- [ ]` and `- [x]` lines count, up to the next heading. A fenced
+ * block is skipped, so a body quoting the template is not read as a plan.
+ * (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
+ */
+export function parsePhases(body) {
+  let inside = false
+  let fenced = false
+  let total = 0
+  let done = 0
+  for (const l of lines(body)) {
+    if (l.startsWith('```')) { fenced = !fenced; continue }
+    if (fenced) continue
+    if (/^#{1,6}\s/.test(l)) {
+      if (inside) break
+      inside = /^##\s+phases\s*$/i.test(l)
+      continue
+    }
+    if (!inside) continue
+    const m = /^[-*+]\s+\[([ xX])\]/.exec(l)
+    if (!m) continue
+    total += 1
+    if (m[1] !== ' ') done += 1
+  }
+  return total ? { total, done } : null
 }
 
 /** True when the date has passed, compared as ISO date strings in UTC. */

@@ -38,6 +38,10 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 5. **Resume.** `attempt > 1` means a prior session died. Look for what it left — your branch,
    your PR, your replies, your child issues — and continue from there. Never start over.
    (why: docs/why.md#push-and-end)
+6. **Set the checkout up before your first command in it.** Run its `.claude/workflow.json`
+   `worktreeSetup`, then `git remote set-head origin <default-branch>`. A routine clone ships
+   neither, whether or not the run takes a worktree.
+   (why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
 
 ## Rules that hold in every handler
 
