@@ -10,11 +10,10 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR; the proposal ceilings bound the survey; maxChildrenPerSplit bounds a split. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
+    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR; the proposal ceilings bound the survey. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
-    "ciFixIterations": 3,
-    "maxChildrenPerSplit": 5
+    "ciFixIterations": 3
   },
   "labels": {
     "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Re-check date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in handler-preflight/SKILL.md.",
