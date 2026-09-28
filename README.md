@@ -122,6 +122,12 @@ reports usage back as feedback. (why: docs/why.md#there-is-no-wip-cap)
   `stuck`. A 30-minute Actions sweeper retries up to `dispatch.maxAttempts`, then hands it to you
   as `awaiting`. Pausing the routines in the UI is the only kill switch, and it is global.
 
+**A copied contract re-syncs itself.** When a SahajCloud PR that changes a file a consumer
+copies — the generated types, the atlas URL contract — merges, the dispatcher runs that
+consumer's own sync command on its `main` and opens one bot draft PR. No ticket and no verb: CI,
+`fix-ci` and your approval carry it. `contractSync` in `loop-config.json` names each copy.
+(why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
+
 State lives entirely in GitHub. A daily `ops-journal` issue is the memory: one comment per
 session, one line per dispatcher anomaly, the counts in the title. `loop-config.json` holds the
 knobs. The Sunday reflection proposes changes to them as a PR, so the loop tunes itself through

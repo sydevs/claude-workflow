@@ -3,6 +3,7 @@
  *
  *   resolveTargets({ github, context, core, config })          — the `resolve` job
  *   act({ github, context, core, config, target, env, dryRun }) — one `act` matrix leg
+ *   planContractSync({ github, context, core, config })        — the `contracts-plan` job
  *
  * `act` gathers a snapshot, decides a plan, applies it, and then handles any
  * targets the plan emitted (dependents, a conflict scan) in the same job —
@@ -15,6 +16,8 @@ import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
 import { ensureJournalDay, refreshTally, closeDuplicateDays } from './journal.mjs'
+
+export { planContractSync } from './contracts.mjs'
 
 export function loadConfig(path) {
   return JSON.parse(readFileSync(path, 'utf-8'))

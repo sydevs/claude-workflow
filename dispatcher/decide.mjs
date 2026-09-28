@@ -137,7 +137,7 @@ function pendingReviewVerb(snapshot, config) {
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
-  return (pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines
+  return Boolean(pr.contractSyncOnly) || ((pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines)
 }
 
 /** Repos where a merge is a deploy, so nothing is ever armed. */
@@ -204,7 +204,8 @@ export function evaluatePr(s, config) {
     const plan = [markReady(), requestReviewer(), label([awaiting], [])]
     if (!loopMayNotMerge(s, config)) plan.push(armAutoMerge())
     if (small && !ownReview(s, config)) {
-      plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\`. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
+      const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
+      plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
     }
     return plan
   }
