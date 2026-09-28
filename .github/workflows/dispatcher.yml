@@ -13,7 +13,9 @@
 # parts are covered by `node --test dispatcher/test/*.test.mjs`.
 #
 # Two jobs: `resolve` maps the event to one or more items; `act` handles one
-# item per matrix leg, serialized per item by a concurrency group.
+# item per matrix leg, serialized per item by a concurrency group. Beside
+# them, `journal` keeps the day issue, and `contracts-plan` and
+# `contracts-sync` re-sync a consumer's copy of a producer's contract.
 #
 # why: sydevs/claude-workflow/docs/why.md#actions-observes-classifies-locks-and-fires
 name: Dispatcher
@@ -151,3 +153,116 @@ jobs:
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { journalTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
             await journalTick({ github, core, config: loadConfig(`${cw}/loop-config.json`), dryRun: ${{ inputs.dry-run }} })
+
+  # A consumer's committed copy of a producer's file — the generated Payload
+  # types, the atlas URL contract — re-synced as soon as the producer's PR
+  # merges. One bot PR per consumer, which the loop then carries like any
+  # other: CI, `fix-ci` if the new shape breaks the consumer, your approval.
+  # No ticket: a sync is the fix, not a proposal. The values, and the
+  # commands, are `contractSync` in loop-config.json on main.
+  # why: sydevs/claude-workflow/docs/why.md#a-contract-sync-is-a-pr-not-a-ticket
+  contracts-plan:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      consumers: ${{ steps.plan.outputs.consumers }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - id: plan
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { planContractSync, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            const consumers = await planContractSync({ github, context, core, config: loadConfig(`${cw}/loop-config.json`) })
+            core.setOutput('consumers', JSON.stringify(consumers))
+
+  contracts-sync:
+    needs: contracts-plan
+    if: needs.contracts-plan.outputs.consumers != '[]' && !inputs.dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJSON(needs.contracts-plan.outputs.consumers) }}
+    # Two producer merges in a row queue, so the second builds on the first's PR.
+    concurrency:
+      group: contract-sync-${{ matrix.consumer.name }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.SYDEVS_BOT_PAT }}
+      REPO: ${{ matrix.consumer.repo }}
+      BRANCH: ${{ matrix.consumer.branch }}
+      SYNC_COMMAND: ${{ matrix.consumer.command }}
+      SYNC_PATHS: ${{ join(matrix.consumer.paths, ' ') }}
+      SOURCE_PR: ${{ matrix.consumer.sourcePr }}
+    steps:
+      # The consumer's own main, never a PR head, and its own sync script.
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.consumer.repo }}
+          ref: main
+          token: ${{ secrets.SYDEVS_BOT_PAT }}
+          path: consumer
+          fetch-depth: 0
+      # No `version:` input: pnpm's version comes from the consumer's
+      # `packageManager`, and naming it twice makes action-setup fail.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: consumer/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Re-sync, then open or update the PR
+        working-directory: consumer
+        run: |
+          set -euo pipefail
+          git config user.name sydevs-bot
+          git config user.email 322523691+sydevs-bot@users.noreply.github.com
+          open=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            # Build on the open PR, so a fix-ci commit already on it survives.
+            git fetch -q origin "$BRANCH"
+            git checkout -q -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -q -B "$BRANCH" origin/main
+          fi
+          bash -c "$SYNC_COMMAND"
+          # SYNC_PATHS is a space-separated list, split on purpose.
+          # shellcheck disable=SC2086
+          if [ -z "$(git status --porcelain -- $SYNC_PATHS)" ]; then
+            echo "Already current. Nothing to open."
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          git add -- $SYNC_PATHS
+          git commit -q -m "chore(contracts): re-sync from $SOURCE_PR"
+          if [ -n "$open" ]; then
+            git push -q origin "HEAD:$BRANCH"
+            echo "Updated #$open."
+            exit 0
+          fi
+          # A branch left by a PR closed unmerged is replaced, not built on.
+          git push -q --force origin "HEAD:$BRANCH"
+          body=$(printf '%s\n' \
+            '## Summary' '' \
+            "- Re-syncs this repo's copy of a SahajCloud contract, after $SOURCE_PR merged." \
+            "- Produced by \`$SYNC_COMMAND\` on \`main\`, with no hand edits." '' \
+            '## Test results' '' \
+            '- CI runs on this PR. If the new shape breaks this repo, `fix-ci` adapts the code here, and the adversarial review then reads it.' '' \
+            '## Notes for reviewer' '' \
+            'Opened by the dispatcher contract sync (`contractSync` in sydevs/claude-workflow `loop-config.json`), not from a ticket. A later producer merge adds its commit here while this PR is open.')
+          gh pr create --repo "$REPO" --base main --head "$BRANCH" --draft \
+            --title "chore(contracts): re-sync copied contracts from SahajCloud" --body "$body"

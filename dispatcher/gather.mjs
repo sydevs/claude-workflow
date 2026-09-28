@@ -9,6 +9,7 @@ import { ciVerdict, normalizeMcp, setRepoWorkflows } from '../workflow/lib/merge
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, parseRecheck, parseSentry, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
+import { isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
@@ -148,6 +149,8 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     reviewAuthority: [config.assignment.reviewer],
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha }, base: { ref: pr.base?.ref }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
+  // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
+  s.pr.contractSyncOnly = isBot(pr.user?.login, config) && isContractSyncOnly(config, repo, pr)
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads
