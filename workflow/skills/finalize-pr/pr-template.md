@@ -16,6 +16,17 @@ not implementation detail.]
 - [bullet]
 - [bullet]
 
+## Phases
+
+[ONLY when implement-issue builds the ticket across sessions. One box per
+phase, in build order, ticked once the phase is pushed with its review done.
+The dispatcher reads this list: while a box is unticked it starts the next
+implement session instead of the critic. Carry it forward on every refresh,
+ticks included. Otherwise delete this section.]
+
+- [x] [phase 1 — what it leaves working]
+- [ ] [phase 2]
+
 ## Changes
 
 [Optional. Only when the file list does not make it obvious — multi-file

@@ -121,7 +121,7 @@ From the seven titles and `<!-- tally -->` blocks, with no comment reads:
 - `address-review` sessions per PR, where a review arrived one comment at a time.
 
 Then **one or two concrete suggestions to the humans**, each tied to a number: batch review
-comments into one review, one verb at a time, split a ticket that took six sessions, a
+comments into one review, one verb at a time, a
 `Re-check:` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
 The report is a `## 📊 Usage` section of the reflection PR body. With no PR this week, it goes

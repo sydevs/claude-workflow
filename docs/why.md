@@ -1310,11 +1310,53 @@ whichever of its two readers it was written for.
 The heading above is the same class with a different missing thing — a clone's `node_modules` and
 `origin/HEAD` there, a plugin that was never installed here — so each rule keeps its own story.
 
+## A ticket is built in phases, never split
+
+`implement-issue` used to meet an `Effort: Hard` ticket it could not finish in one run by calling
+`split-ticket`: up to five child tickets, each with a `Blocked by:` line on the one before. Every
+child then cost what a ticket costs — a `revise` session on filing, a human `implement` verb, its
+own PR, critic and `address-review` rounds, and a human review. Two failures came with it.
+
+**The children went stale.** A child is written against the unbuilt design of its siblings, and
+the first sibling to merge rewrites that design. In the week to 2026-09-27, three of the five
+children of SahajCloud#664 met this: #838's implement run found *"three acceptance criteria are
+obsolete"* after #847 shipped a different design, SahajAtlasWeb#223 went *"stale a second time"*,
+and WeMeditateWeb#135's revise could not ground its central claim at all.
+
+**The reviewer reviewed half a feature.** Each child PR was judged against a whole that did not
+exist yet, so the reviewer flagged gaps that later children had been planned to fill, and the
+answer to each was "that is ticket N+2".
+
+The split existed to keep each review surface small. It bought that at the human's expense, when
+the reader who needs the small surface is the critic. So one ticket is now one branch and one PR,
+built in phases. The PR body's `## Phases` checklist is the plan, and the dispatcher reads it: while
+a box is unticked, a green draft starts the next `implement` session on the ticket's lock instead
+of the critic. Inside a session each phase closes with the gate and a scoped `/code-review` and
+`/simplify` pass in fresh contexts. The critic reads the whole PR once, at the end, and the human
+reviews once.
+
+Stacked sub-PRs merging into a feature branch were considered and rejected. Each sub-PR costs its
+own critic, `address-review` and CI sessions. Nothing in the dispatcher or the rulesets knows a
+base other than `main`. And the human still reviews the whole diff at the end.
+
+**The bound is progress, not a count.** A continuation runs only if the last `implement` that
+ended ticked at least one box, and a phase too large for one session is split into smaller boxes.
+A session that ends with nothing ticked — or runs out of attempts — stalls the PR. It gets
+`awaiting` and one comment, and any comment from the reviewer re-arms it. No ceiling was needed,
+because the plan itself says how many sessions it should take.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
 stay so a future reader meets the lesson instead of re-learning it. The line under each
 heading says what took its place.
+
+### A Hard ticket that will not fit one run is split
+
+**Replaced by:** one ticket, one PR, built in phases.
+
+`split-ticket` filed up to `ceilings.maxChildrenPerSplit` ordered children, and each needed its own
+verb, PR and review. *A ticket is built in phases, never split*, above, says what that cost.
 
 ### Rung 2 competes for the same budget
 

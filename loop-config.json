@@ -60,10 +60,6 @@
       "model": "opus",
       "skill": "revise-ticket"
     },
-    "split": {
-      "model": "opus",
-      "skill": "split-ticket"
-    },
     "answer": {
       "model": "opus",
       "skill": "answer-ticket"
@@ -86,7 +82,6 @@
       "resolve-conflicts",
       "adversarial-review",
       "revise",
-      "split",
       "answer"
     ],
     "routines": {
@@ -102,7 +97,6 @@
       "issue": [
         "implement",
         "revise",
-        "split",
         "answer"
       ],
       "pr": [
@@ -119,7 +113,6 @@
       "resolve-conflicts": 45,
       "adversarial-review": 45,
       "revise": 60,
-      "split": 45,
       "answer": 30
     },
     "maxAttempts": 3,

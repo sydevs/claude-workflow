@@ -288,7 +288,8 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
 **This skill never watches CI, never marks a PR ready, and never merges.** Nothing in the loop
 merges: the dispatcher arms auto-merge at mark-ready and GitHub's ruleset and queue do the rest.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
-"green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
+"green": red → `fix-ci`, green on a draft → the next phase while `## Phases` has an unticked
+box, else the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
 - **A conflicted PR schedules zero CI runs.** Merge `origin/main` in and resolve before you push,

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, parseRecheck, parseSentry, datePassed } from '../markers.mjs'
+import { parseBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -58,4 +58,19 @@ test('loose matching stays closed to everything it should ignore', () => {
   assert.deepEqual(parseBlockedBy('This is blocked by sydevs/SahajCloud#5', 'sydevs'), [], 'mid-sentence prose')
   assert.deepEqual(parseBlockedBy('Blocked by: https://github.com/other/Repo/issues/3', 'sydevs'), [], 'another org')
   assert.deepEqual(parseBlockedBy('Blocked by #12', 'sydevs'), [], 'a bare number names no repository')
+})
+
+test('phases are counted from the PR body checklist, up to the next heading', () => {
+  const b = '## Summary\n- [x] not a phase\n\n## Phases\n- [x] schema\n- [X] endpoint\n- [ ] admin UI\n* [ ] docs\n\n## Test results\n- [ ] not a phase either'
+  assert.deepEqual(parsePhases(b), { total: 4, done: 2 })
+})
+
+test('a body without a phases checklist has no phases', () => {
+  assert.equal(parsePhases('## Summary\n- [ ] x'), null)
+  assert.equal(parsePhases('## Phases\n\nNone yet.'), null)
+  assert.equal(parsePhases(''), null)
+})
+
+test('a phases heading inside a code fence is not a plan', () => {
+  assert.equal(parsePhases('## Notes\n```markdown\n## Phases\n- [ ] one\n```\n'), null)
 })

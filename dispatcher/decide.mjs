@@ -12,6 +12,7 @@
  */
 
 import { parseVerb } from './verbs.mjs'
+import { parsePhases } from './markers.mjs'
 
 // ---- action constructors ----------------------------------------------
 export const fire = (handler, flags = {}) => ({ type: 'fire', handler, flags })
@@ -134,6 +135,21 @@ function pendingReviewVerb(snapshot, config) {
   return false
 }
 
+/** The newest comment, review or thread reply a respondTo human left on this item. */
+function lastHumanWordAt(snapshot, config) {
+  const human = (login) => respondTo(login, config) && !isBot(login, config)
+  const at = []
+  for (const c of snapshot.comments || []) if (human(c.author) && !isDispatcherComment(c.body)) at.push(c.createdAt)
+  for (const r of snapshot.reviews || []) if (human(r.user?.login)) at.push(r.submitted_at)
+  for (const t of snapshot.threads || []) for (const c of t.comments || []) if (human(c.author)) at.push(c.createdAt)
+  return at.filter(Boolean).sort().pop() || null
+}
+
+/** The newest implement dispatch that ended, finished or timed out, from an issue's record. */
+function lastEndedImplement(record) {
+  return (record?.dispatches || []).filter((d) => d.handler === 'implement' && d.outcome).pop() || null
+}
+
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
@@ -147,7 +163,7 @@ function loopMayNotMerge(snapshot, config) {
 
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is.
-const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets'])
 
 /**
  * A sweep pass over an item that already carries `awaiting` says nothing
@@ -196,6 +212,15 @@ export function evaluatePr(s, config) {
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
 
   if (pr.draft) {
+    // One ticket, one PR, built across as many implement sessions as it
+    // takes. While a phase is unticked the next session continues it, on the
+    // ticket's lock, and the critic reads the whole PR once, at the end.
+    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
+    const phases = parsePhases(s.item?.body)
+    if (phases && phases.done < phases.total && s.linkedIssues?.length) {
+      if ((s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you`)]
+      return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
+    }
     const small = underThreshold(pr, config)
     if (!ownReview(s, config) && !small) return [fire('adversarial-review')]
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
@@ -369,6 +394,27 @@ export function decide(target, s, config) {
       }
       return plan
     }
+    // A phased PR asked for its next session. It runs as implement, on the
+    // ticket's lock, as the first one did, so the branch keeps one owner. The
+    // bound is progress: a session that ended — done or out of attempts —
+    // without ticking a phase, and with no human word since it started, has
+    // stalled, and the PR becomes your turn instead of a loop.
+    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
+    case 'phase-continue': {
+      if (s.item.state !== 'open') return [note('ticket closed — no phase to continue')]
+      if (s.locked) return [note('a session holds the ticket — it owns the branch')]
+      const last = lastEndedImplement(s.record)
+      const heardSince = facts.humanAt && last && facts.humanAt > last.firedAt
+      const stalled = last && !heardSince && (last.outcome !== 'done' || last.flags?.phasesDone === facts.done)
+      if (stalled) return [targets([{ repo: s.repo, kind: 'pr', number: facts.pr, reason: 'phases-stalled', facts: { done: facts.done, total: facts.total } }])]
+      return [fire('implement', { phasesDone: facts.done })]
+    }
+    case 'phases-stalled':
+      return [
+        label([L.awaiting], []),
+        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. Comment here and I will pick it up again.`),
+        anomaly('phases-stalled', `${s.repo.full}#${s.pr?.number} phase ${facts.done + 1}/${facts.total} stalled`),
+      ]
     case 'linked-abandoned':
       return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
     case 'conflict-scan':
@@ -414,7 +460,7 @@ export function decide(target, s, config) {
       // `sweep-pr` already ran the derivation this pass. If it found work, say
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
-      if (p.some((a) => ['fire', 'armAutoMerge', 'markReady'].includes(a.type))) return [note('still moving — not an orphan')]
+      if (p.some((a) => ['fire', 'armAutoMerge', 'markReady', 'targets'].includes(a.type))) return [note('still moving — not an orphan')]
       return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {
@@ -431,4 +477,4 @@ export function decide(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, LOCK_FREE_STATUS_ONLY }

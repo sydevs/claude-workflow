@@ -33,6 +33,10 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    continued. An existing PR is refreshed. Never open a second one.
    (why: docs/why.md#push-and-end)
 
+   **A draft PR whose `## Phases` has an unticked box is your plan.** The dispatcher fired you to
+   continue it. Read the branch diff first, then work from the first unticked phase. Never
+   re-plan a ticked phase.
+
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
    ticket and for the `blocked` label. You still read the body: a `Blocked by:` line naming an
    open issue, or a `Re-check:` date in the future → comment which, and stop.
@@ -42,13 +46,16 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    "investigate" — ends in a **comment carrying the finding** plus a body update. No branch, no
    PR. (why: docs/why.md#an-investigation-must-not-be-forced-into-a-pr)
 
-   **Not implementable as written** — criteria contradict the code, a decision was never made,
-   scope hides a second ticket → do not guess. Put the questions in the body's
-   `## Open questions`, comment what is unresolved, and stop. The dispatcher sets `awaiting`
-   when you unlock. (why: docs/why.md#awaiting-has-one-writer)
+   **Not implementable as written** — criteria contradict the code, or a decision was never made
+   → do not guess. Put the questions in the body's `## Open questions`, comment what is
+   unresolved, and stop. The dispatcher sets `awaiting` when you unlock. (why: docs/why.md#awaiting-has-one-writer)
 
-   **`Effort: Hard` that will not fit one run** → invoke `/workflow:split-ticket` under the lock
-   you hold, and stop. The children carry the work forward.
+   **A ticket that will not fit one run is built in phases, on this one branch and one PR.**
+   Never split it into child tickets or several PRs: each costs a human verb and a human review,
+   and a half-built feature is reviewed against the half that is missing. Order the phases so
+   each leaves the branch green and the next builds on it — schema before endpoint before UI.
+   Write them as the `## Phases` checklist in the PR body (`pr-template.md`).
+   (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
 
    **File what you trip over.** A real defect found on the way is filed through
    `/workflow:triage-issue`, every time, with no ceiling. Fix it here only when it is part of
@@ -69,6 +76,18 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
    `Co-Authored-By` trailer.
+
+   **In phases, close each one before the next:** the lean gate, then `/code-review high` and
+   `/simplify` over that phase's commits, triaged as `/workflow:finalize-pr` step 2 says. Then
+   tick its box. Skip this for the phase that ends the session, because step 11 reviews the
+   whole branch.
+
+   **Before you open a phase, check the record's `deadline`.** If the phase and step 11 will not
+   both fit, ship what is ticked and end. The dispatcher starts the next session once CI is
+   green. **Every session ends with at least one more box ticked.** A phase too big for one
+   session is split into smaller boxes, and you tick the part you finished. A session that ticks
+   nothing stalls the PR, and it becomes the reviewer's turn — so when a question stops you,
+   comment it on the PR and end.
 
 8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs
    it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
@@ -96,8 +115,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     (why: docs/why.md#push-and-end)
 
 13. **Touch no state.** Opening the PR is the event. The dispatcher moves the ticket to Done and
-    the PR to Revising, reads CI, fires the critic, marks the PR ready, and requests the
-    reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
+    the PR to Revising, reads CI, starts the next phase or fires the critic, marks the PR ready,
+    and requests the reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
     (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on
@@ -116,6 +135,7 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never remove a worktree before its branch is pushed.**
 - **Never write a test fixture without verifying its shape against the real configuration.**
 - **Never open a second branch or PR for a ticket that has one.**
+- **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
 
 ## References
 

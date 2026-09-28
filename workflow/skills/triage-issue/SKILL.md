@@ -49,7 +49,7 @@ GitHub's org-level issue fields, available on every `sydevs` repo with no per-re
 | | `High` | User-visible breakage, or it blocks other work. |
 | | `Medium` | Planned work. **The default** — most tickets are this. |
 | | `Low` | Do when nothing above it waits. Deferred or speculative. |
-| **Effort** | `Easy` / `Moderate` / `Hard` | Rough size, set honestly — `implement-issue` splits a `Hard` ticket it cannot finish in one run. |
+| **Effort** | `Easy` / `Moderate` / `Hard` | Rough size, set honestly — `implement-issue` builds a `Hard` ticket it cannot finish in one run in phases, on one PR. |
 
 Priority measures the **consequence of not doing it**, never effort or appetite. A one-line fix to
 a broken signup path is `High`. A month of pleasant refactoring is `Low`.
@@ -107,8 +107,7 @@ events, within seconds:
 **Never write any of them.** Set the fields and the body markers below. The dispatcher does the
 rest. (why: docs/why.md#awaiting-has-one-writer)
 
-**To hand a ticket to the loop, comment a verb**: `@sydevs-bot implement`, `revise`, `split`, or
-`answer`. Only a `respondTo` human's verb counts, and only the verb authorises code — never a
+**To hand a ticket to the loop, comment a verb**: `@sydevs-bot implement`, `revise`, or `answer`. Only a `respondTo` human's verb counts, and only the verb authorises code — never a
 field, a drag on the board, or a request in prose.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
