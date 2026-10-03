@@ -204,6 +204,9 @@ mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:ope
 **Read `pr-template.md` and follow its headings** as structure, not inspiration. Omit a section
 the template says to omit. **Never rename one or add your own.**
 
+**Build the Change outline per `change-outline.md`, from the full branch diff.** It and Preview
+lead the body, and no length rule shortens them. (why: docs/why.md#show-the-shape-not-the-file-list)
+
 **The Preview section is mandatory wherever the repo deploys previews** — it lets the reviewer see
 the change with no checkout.
 
@@ -320,6 +323,7 @@ to memory.
 ## References
 
 - PR body template: `pr-template.md`
+- Change outline views: `change-outline.md`
 - Per-repo settings: `<worktree>/.claude/workflow.json`
 - Why each rule exists: `docs/why.md` in `sydevs/claude-workflow`
 - Lean gate implementation: `<repo>/.claude/skills/pr-prep/check.sh`
