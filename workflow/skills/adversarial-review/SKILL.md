@@ -61,7 +61,9 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
 
 1. **The linked ticket** (`issue_read`) — the problem statement the diff must be no bigger than.
    Judge a ticketless PR against its own body.
-2. **The PR body** — what the author claims the change is.
+2. **The PR body** — what the author claims the change is. Check its `## Change outline` against
+   the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
+   first.
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...FETCH_HEAD`. With no checkout, use `pull_request_read method:get_files` /
    `get_diff`.
