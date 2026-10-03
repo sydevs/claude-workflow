@@ -4,17 +4,34 @@
 only when the notes say to. Never rename one, and never add your own. A reviewer reading their
 fifth PR of the week should find what they need without reading the whole thing.
 
-Keep the visible body short. Put depth in `<details>` — reasoning, rejected alternatives,
-measurements, file-by-file notes — and let the reviewer decide what to open.
+The order is the priority. The reviewer's first screen is a brief summary, the change's shape,
+and where to see it running. Everything else follows.
+
+**Never shorten the Change outline or the Preview to meet a length goal.** Keep every other
+section short. Put its depth in `<details>` — reasoning, rejected alternatives, measurements —
+and let the reviewer decide what to open.
 
 ```markdown
 ## Summary
 
-[2–3 bullets on what changed and why. User-facing or behaviour-level outcomes,
-not implementation detail.]
+[1–2 short bullets: what changed and why, at the level of outcomes. Leave
+the detail to the outline.]
 
 - [bullet]
-- [bullet]
+
+## Change outline
+
+[The reviewer's map of the diff. Build it per `change-outline.md`: one `###`
+view per shape that changed, never a file list. No length limit applies.
+Optional at or under `review.skipWhen`, where the diff is its own outline.]
+
+## Preview
+
+[Preview URL(s) deep-linked to the changed routes: the PR-number host
+where `previewUrl.pattern` names one, else the BRANCH alias. See
+`finalize-pr/SKILL.md` step 7.]
+
+- [what changed] — <url>
 
 ## Phases
 
@@ -26,20 +43,6 @@ ticks included. Otherwise delete this section.]
 
 - [x] [phase 1 — what it leaves working]
 - [ ] [phase 2]
-
-## Changes
-
-[Optional. Only when the file list does not make it obvious — multi-file
-refactors where the structural change is not apparent from individual diffs.]
-
-- `path/to/file.ts` — [what changed]
-
-## Preview
-
-[BRANCH-alias preview URL(s), deep-linked to the changed routes. See
-`finalize-pr/SKILL.md` step 7 for the branch-vs-commit-alias rule.]
-
-- [what changed] — <url>
 
 ## Email previews
 
@@ -103,10 +106,12 @@ implementation, use your discretion, and say so in the notes.
 
 Keep summary bullets to ≤ 100 characters. State test results as facts, with no editorializing. A
 short, focused description with clear test results beats a long one that is vague about them.
+**None of this applies to the Change outline or the Preview.** Those take the room they need.
 
 ## Avoid
 
 - Restating what each commit did — the commit list is right there.
+- A file-by-file changelog dressed as an outline — show shapes, not edits.
 - "This should fix the bug" — say what it does, not what you hope.
 - "Made some refactors" — name the refactor, or omit the line.
 - Repeating the acceptance criteria verbatim — `Closes #N` already links them.

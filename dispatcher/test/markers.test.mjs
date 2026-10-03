@@ -71,6 +71,17 @@ test('a body without a phases checklist has no phases', () => {
   assert.equal(parsePhases(''), null)
 })
 
+test('phases below a change outline count only the real checklist', () => {
+  const b = [
+    '## Summary', '- x', '',
+    '## Change outline', '### Flow', '```diff', '## Phases', '- [ ] not a phase', '+- [x] nor this', '```', '',
+    '## Preview', '- y', '',
+    '## Phases', '- [x] schema', '- [ ] admin UI', '',
+    'Closes #9',
+  ].join('\n')
+  assert.deepEqual(parsePhases(b), { total: 2, done: 1 })
+})
+
 test('a phases heading inside a code fence is not a plan', () => {
   assert.equal(parsePhases('## Notes\n```markdown\n## Phases\n- [ ] one\n```\n'), null)
 })

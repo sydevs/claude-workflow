@@ -163,6 +163,9 @@ them:
 - **Session reflection** → the official `claude-md-management` plugin.
 - **The `pr-prep` skill** → `workflow.json.leanGate`, pointing at each repo's own `check.sh`. The
   skill only wrapped that call.
+- **humanlayer's `visual-pr`** → adapted into `finalize-pr/change-outline.md` (MIT), not
+  installed. Routines load no plugins, and `visual-pr` replaces the whole PR body, which the
+  dispatcher reads.
 
 `prettier-format` and `eslint-fix` survive because they *rewrite* files. No language server does
 that.

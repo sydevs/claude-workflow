@@ -343,6 +343,30 @@ a bad review.
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the exact commands now. This entry
 keeps only the failure that forced them.
 
+## Show the shape, not the file list
+
+The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
+reviewer had to rebuild the change's shape from the file diffs before judging it: which contract
+moved, which call now runs where, which component owns the new state. A file list does not
+answer that, and prose summaries answered it badly. The outline answers it directly, as small
+`diff` views of the shapes that changed, and the Preview shows it running. So both lead the body.
+
+They are also exempt from every length rule. The template's "keep the visible body short" rule
+was written against essays. Applied to the outline, it cuts the one part the body exists for.
+
+The views come from `visual-pr` in humanlayer/skills, ported rather than installed. Installed,
+it fails the loop in four ways:
+
+- **A routine loads no plugins.** It reads skill files from a clone. See
+  [A skill can name a plugin no routine has](#a-skill-can-name-a-plugin-no-routine-has).
+- **It replaces the whole body.** That drops `## Phases` and `Closes #N`, and the dispatcher
+  reads both.
+- **It writes with `gh`,** which a routine does not have.
+- **It opens its own PR when none exists,** a second path beside `finalize-pr`.
+
+The `adversarial-review` check exists because the reviewer reads the outline first. A view that
+disagrees with the diff points the review at the wrong thing.
+
 ## A routine cannot reach the GitHub API
 
 Not "should not." **Cannot**, by any client. Measured in a routine on 2026-09-02:
