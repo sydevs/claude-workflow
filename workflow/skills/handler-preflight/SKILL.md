@@ -42,7 +42,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
    <default-branch>`, then `git remote set-head origin <default-branch>`, then its
    `.claude/workflow.json` `worktreeSetup`. A routine clone ships none of the three, and its
    `origin/<default-branch>` ref is stale, so a diff or a `worktree add` against that ref reports
-   another branch's work as yours.
+   another branch's work as yours. A handler that runs no node command may leave `worktreeSetup`
+   until one needs it — and until then may assert nothing only `node_modules` could settle.
    (why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
 
 ## Rules that hold in every handler
