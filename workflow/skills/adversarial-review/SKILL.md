@@ -65,8 +65,9 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
    first.
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
-   origin/main...FETCH_HEAD`. With no checkout, use `pull_request_read method:get_files` /
-   `get_diff`.
+   origin/main...origin/<branch>`. Never `FETCH_HEAD`: step 6's fetch of the default branch
+   overwrites it, so the diff comes back empty. With no checkout, use
+   `pull_request_read method:get_files` / `get_diff`.
 4. **The surrounding code** — Read/Grep the touched files whole, and the consumer side of any
    contract surface. The diff alone cannot answer either heavy lens.
 
