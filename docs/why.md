@@ -1322,6 +1322,24 @@ Both belong to the checkout, not to the worktree, so the rule moved to the one f
 reads. The `worktreeSetup` key keeps its name because it lives in each repo's
 `.claude/workflow.json`, a protected path an unattended run cannot rewrite.
 
+**There was a third missing thing, and naming only two of them hid it.** The clone's
+`origin/<default-branch>` ref is whatever the image shipped, and nothing in the run refreshes it,
+so every `git diff origin/main...` and every `git worktree add … origin/main` answered against a
+ref days behind. **11 sessions across four days** in the week to 2026-10-03: SahajCloud#859's
+critic read 83 files and 32,953 insertions for a 3-file diff, SahajAtlasWordpress#47's read a
+version bump that was not in the PR and came close to filing a release-cutting blocker that did
+not exist, SahajAtlasWordpress#50's clone sat 9 commits behind. A stale ref is worse than a
+missing one: it answers, and the answer looks like a diff. So step 6 fetches first, and
+`FETCH_HEAD` is no longer a recipe anywhere — a later fetch overwrites it, which is how
+`adversarial-review`'s own diff step came back empty three times.
+
+**The install is now deferred rather than owed.** A read-only handler runs no lane, so
+`CI=true pnpm install` buys it nothing, and 11 sessions across four days in that same week
+skipped it and spent a friction line justifying the skip. Blessing the skip alone would have kept
+the half that costs something: three of them then could not settle a framework claim their finding
+rested on, and one curled `unpkg` for a Payload tarball instead. So the rule defers the install to
+the first node command and refuses the assertion in the meantime.
+
 ## A skill can name a plugin no routine has
 
 `finalize-pr` step 2 named `/pr-review-toolkit:review-pr all` as the whole of its review pass, for
