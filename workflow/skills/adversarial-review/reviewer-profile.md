@@ -124,6 +124,30 @@ shape-level problems.**
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 
+- **2026-10-04 — value 1 is asked of the layer. They also ask it of the total.** Two PRs, six
+  threads, and this review passed clean on every one.
+  [SahajAtlasWeb#243](https://github.com/sydevs/SahajAtlasWeb/pull/243) moved the widget into a
+  shadow root and [#247](https://github.com/sydevs/SahajAtlasWeb/pull/247) took Tailwind to v4.
+  Each piece of machinery either diff added was individually forced by a measured platform
+  constraint — retargeted `activeElement` reads, a sheet a document stylesheet cannot reach, two
+  CSS files because v4 orders by import position — so file by file the bimodal question above
+  returns "yes, it must exist", and the review asked nothing. The reviewer asked about the
+  aggregate: *"It seems like we are having to add a lot of helpers and things to deal with the
+  shadow DOM. Is there any lightweight library or package that we could rely on… for all kinds of
+  operations?"*, *"This system seems a bit overcomplicated. Why do we need JavaScript to insert
+  our CSS?"*, *"Is this definitely necessary? Is there no more elegant or streamlined way to
+  handle this without waking / looping?"* (#243); *"Is this file still necessary? Is this a
+  migration artifact… or change our approach to avoid needing this file?"*, twice, and *"This
+  re-explanation is very unnecessary and is adding extra load to our documentation"* (#247).
+  So **count the bespoke pieces a diff adds against one boundary, and when there are several, the
+  finding is the approach rather than any piece of it.** A per-piece justification does not
+  answer it: every piece can be necessary under an approach that is not. Ask what a different
+  approach, an upstream fix or an established library would make unnecessary, and name the number
+  — three helpers, two stylesheets, a polling loop. This is the aggregate reading of value 1, so
+  it does not reach a diff that adds one piece, and it is not the 2026-09-27 bullet: that one asks
+  what belongs inside a shared owner the diff creates, this one asks whether so much needed
+  creating.
+
 - **2026-09-27 — value 1 asks whether a layer should exist. They also ask what belongs *inside*
   a shared owner the diff creates.** The bimodal rule above triggers on a layer with one consumer,
   and this review applies it file by file. Every file on
