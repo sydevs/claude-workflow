@@ -56,6 +56,11 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   never fetch. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
+- **File every incidental finding.** Nobody is here to ask, so a product repo's ask-first guidance
+  does not bind this run. In scope for the PR you hold → fix it there. At or under
+  `findings.directFixMaxFiles` files, and inside the repo's `prAllowlistGlobs` → a ticketless PR.
+  Anything else → a ticket, through `/workflow:triage-issue`. No handler caps this.
+  (why: docs/why.md#a-run-with-nobody-to-ask-files-the-finding)
 - **Every unit of work is idempotent.** Check for an existing branch, PR, reply, or child issue
   before you create one.
 - **Work only on `claude/*` branches.** A cloud session cannot push anywhere else.
