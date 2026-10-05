@@ -1,8 +1,18 @@
 // node --test workflow/lib/budget.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { check, fit } from './budget.mjs'
+import { check, fit, DEFAULT_BUDGETS } from './budget.mjs'
+import { loadLoopConfig } from './config.mjs'
+import { fileURLToPath } from 'node:url'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
+const root = fileURLToPath(new URL('../..', import.meta.url))
+const config = join(root, 'loop-config.json')
+
+// Frozen fixtures, not a copy of the config. The `fit()` tests below size
+// their input against these exact numbers to reproduce a real incident, so a
+// retune must not slide them. `reviewBody` is absent on purpose.
 const budgets = { comment: 1200, reviewReply: 600, journalEntry: 1500 }
 
 /**
@@ -75,4 +85,32 @@ test('an unbudgeted kind is reported, not cut', () => {
   const f = fit(entry(), 'review', budgets)
   assert.equal(f.verdict, 'UNBUDGETED')
   assert.equal(f.dropped, 0)
+})
+
+// `budget.mjs`'s own doc comment requires the fallback to equal the config,
+// and the CLI reports which path it took — so a drift makes two runs of the
+// same command disagree about the limit. Checked here instead of by hand.
+//
+// The path is explicit because `loadLoopConfig()` resolves from the cwd first.
+// Run from an ancestor checkout, it read that checkout's config and failed on
+// a drift that was not in the branch under test.
+test('the fallback budgets equal loop-config.json', () => {
+  assert.deepEqual(DEFAULT_BUDGETS, loadLoopConfig(config).writing.budgets)
+})
+
+// `check()` returns UNBUDGETED for a kind no config names, and the CLI exits
+// 0 on it, so a typo'd or unnamed `--kind` reads as a pass. A review body went
+// three weeks measured against the wrong budget behind that silence. Every
+// kind a skill actually names has to be a key.
+test('every --kind a skill names is budgeted', () => {
+  const skills = join(root, 'workflow', 'skills')
+  const named = new Set()
+  for (const file of readdirSync(skills, { recursive: true })) {
+    if (!String(file).endsWith('SKILL.md')) continue
+    const text = readFileSync(join(skills, String(file)), 'utf8')
+    for (const m of text.matchAll(/--kind\s+([A-Za-z][\w-]*)/g)) named.add(m[1])
+  }
+  const budgets = loadLoopConfig(config).writing.budgets
+  assert.ok(named.size > 0, 'no skill names a --kind, so this test checks nothing')
+  assert.deepEqual([...named].filter((kind) => !(kind in budgets)), [])
 })
