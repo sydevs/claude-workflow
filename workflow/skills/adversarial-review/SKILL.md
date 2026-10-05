@@ -98,6 +98,10 @@ assessment, which is where it reads better anyway.
    enough evidence that a clean verdict is checkable. A clean report with no evidence of reading
    is not a review. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
+**Measure the body with `--kind reviewBody`, and end it with `identity.commentMarker`.** The
+budget counts the marker, so no run buys room by dropping it.
+(why: docs/why.md#a-review-body-has-its-own-budget)
+
 ## Verdicts
 
 - **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
