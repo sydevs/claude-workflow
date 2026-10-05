@@ -49,8 +49,7 @@ everywhere: a finding names a file and a line, or it is not a finding.
 
 **A real defect that is not this PR's is still filed.** Preflight routes every incidental
 finding, and a critic never touches the branch, so here it is always a ticket. Name it in the
-holistic assessment as well.
-Never park it on an unrelated line as an inline comment.
+holistic assessment as well. Never park it on an unrelated line as an inline comment.
 
 ## Read the reviewer's profile
 
