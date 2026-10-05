@@ -1,15 +1,16 @@
 # PR body template
 
 **This is the structure, not a suggestion.** Use these headings, in this order. Delete a section
-only when the notes say to. Never rename one, and never add your own. A reviewer reading their
-fifth PR of the week should find what they need without reading the whole thing.
+only when the notes say to. Never rename one, and never add your own. A skill that owns a section
+names its heading here and never states the order itself. A reviewer reading their fifth PR of the
+week should find what they need without reading the whole thing.
 
 The order is the priority. The reviewer's first screen is a brief summary, the change's shape,
 and where to see it running. Everything else follows.
 
-**Never shorten the Change outline or the Preview to meet a length goal.** Keep every other
-section short. Put its depth in `<details>` — reasoning, rejected alternatives, measurements —
-and let the reviewer decide what to open.
+**Never shorten the Change outline, the Preview, or the two `reflect` sections to meet a length
+goal.** Keep every other section short. Put its depth in `<details>` — reasoning, rejected
+alternatives, measurements — and let the reviewer decide what to open.
 
 ```markdown
 ## Summary
@@ -32,6 +33,14 @@ where `previewUrl.pattern` names one, else the BRANCH alias. See
 `finalize-pr/SKILL.md` step 7.]
 
 - [what changed] — <url>
+
+## Grading last week
+
+[The `reflect` PR only. Write it per `reflect/SKILL.md`. Otherwise delete.]
+
+## 📊 Usage
+
+[The `reflect` PR only. Write it per `reflect/SKILL.md`. Otherwise delete.]
 
 ## Phases
 
@@ -106,7 +115,8 @@ implementation, use your discretion, and say so in the notes.
 
 Keep summary bullets to ≤ 100 characters. State test results as facts, with no editorializing. A
 short, focused description with clear test results beats a long one that is vague about them.
-**None of this applies to the Change outline or the Preview.** Those take the room they need.
+**None of this applies to the Change outline, the Preview, or the two `reflect` sections.** Those
+take the room they need.
 
 ## Avoid
 
