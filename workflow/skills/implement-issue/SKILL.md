@@ -58,8 +58,7 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
 
    **File what you trip over**, as preflight's incidental-finding rule routes it. Fold the fix
-   into this PR only when the defect is this ticket's. Never widen the PR to carry one that is
-   not.
+   into this PR only when the defect is this ticket's.
 
 5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
    destructive work. In a routine nobody can answer: comment the question and stop.

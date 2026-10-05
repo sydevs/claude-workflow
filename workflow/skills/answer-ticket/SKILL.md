@@ -43,4 +43,4 @@ One comment gets one substantive reply. **Start with `/workflow:handler-prefligh
   Actions owns the labels. Answering is not triage — `@sydevs-bot revise` sets the fields.
   (why: docs/why.md#awaiting-has-one-writer)
 - **Never cap or drop an incidental finding.** Preflight routes it. This handler writes prose, so
-  every one of them is a ticket.
+  every one of them is a ticket. Name each ticket you filed in the reply.
