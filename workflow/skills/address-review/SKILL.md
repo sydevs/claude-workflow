@@ -54,7 +54,12 @@ Skip it. That rule is what makes a resumed run safe.
 1. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
 2. Docs sync (`/workflow:finalize-pr` step 5).
 3. `git push`. Never force-push. Never rebase.
-4. Refresh the PR title and body from `origin/main...HEAD` (`/workflow:finalize-pr` step 7).
+4. Refresh the PR title and body from `origin/main...HEAD` **where this push made either one
+   false** — a `## Change outline` view the new commits contradict is false, and
+   `adversarial-review` step 2 reads it first (`/workflow:finalize-pr` step 7). Re-send the body
+   preflight step 4 already read, with the delta applied; `update_pull_request` replaces the
+   whole body, so never retype one from nothing. A body merely incomplete stays, and step 5's
+   comment carries that delta.
 5. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
    linking its thread — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
