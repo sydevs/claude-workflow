@@ -192,6 +192,39 @@ The middle row of the rung-4 table fails quietly. A comment asking for work read
 do it. It is not. `Stage: Implement` is the gate. A request in prose asks to *scope* the work, not
 to start it.
 
+## A run with nobody to ask files the finding
+
+Nine sessions in the week to 2026-10-03 found real defects in SahajCloud while implementing
+something else. Each read `AGENTS.md:21` — *"Ask before you edit or close a GitHub PR or issue, and
+before you create or edit an issue"* — as forbidding an unattended ticket, and wrote its finding
+into a PR body instead. Four of the nine were access-control gaps, among them a field `read` lock
+that gated output but not `where`, so `managers?where[email][equals]=` still answered whether an
+address was held. A PR body is read once, at review, and none of those PRs was the finding's owner.
+The merges took the findings with them. The nine are listed on `sydevs/claude-workflow#146`.
+
+Nobody was misreading the guide. Its own second sentence — *"A new PR needs no prior approval"* —
+already separated new work product from mutating an existing item, and the other three product
+repos carry no such line at all. What was missing was **precedence**: nothing said whether a
+product repo's guide or these skills won, so nine sessions each resolved it conservatively, alone.
+
+The loop's own rule was inconsistent too, so settling the repo-guide question alone would have left
+the loss in place. `implement-issue` capped nothing, `answer-ticket` and `revise-ticket` capped at
+one, and `adversarial-review` was silent — a critic's finding that was not its PR's had nowhere to
+go at all. The proposal ceiling was never in play: `survey-routine` exempts a finding you tripped
+over, so nine incidental tickets would have breached no number. The review-capacity cost was real.
+The ceiling breach was not.
+
+Two alternatives were rejected. **PR body only** is honest for `implement-issue` and impossible for
+the two prose handlers and the critic, which open no PR — and it loses every finding whose PR
+merges, which is all of them. **One standing ticket per repo** needs a new label and a new
+`-label:` exclusion in every worklist query the loop ever adds, the exact hazard `ops-journal`
+already makes every author re-check, and the standing ticket itself would sit `awaiting` forever.
+
+So the finding is routed, never dropped: into the PR that owns it, into a ticketless PR when the
+fix is small enough to review on its own, and into a ticket otherwise. An ask-first instruction
+cannot bind a run with nobody to ask. It still binds an attended session, which is why
+`SahajCloud/AGENTS.md:21` was extended rather than deleted.
+
 ## Every claim names the call that produced it
 
 Building the old `📋 Awaiting you` table from a live query, instead of from memory, once fixed a
