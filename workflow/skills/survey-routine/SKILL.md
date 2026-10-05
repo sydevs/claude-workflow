@@ -53,7 +53,7 @@ file** — record what you found in the journal, to wait for review capacity.
 
 A survey manufactures candidates on demand, so a cap fits. An incidental finding is evidence you
 already hold, and filing it costs nothing — `Proposed` commits nobody to anything. **Never discard
-a real finding to respect a number**, and never ask permission to file one.
+a real finding to respect a number.** Preflight routes it.
 
 Say where the finding came from, and keep the bar: what is wrong, what it costs, and what to do. A
 finding you cannot point at a line for is a journal note, not a ticket.

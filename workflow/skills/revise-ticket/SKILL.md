@@ -53,6 +53,7 @@ split — `implement-issue` builds a big ticket in phases on one PR.
 - **Never change the title's type silently.** Say so in the comment.
 - **Never write `labels.awaiting`, `labels.blocked`, an assignee, or a Status.** Actions owns
   them. (why: docs/why.md#awaiting-has-one-writer)
-- **Never file more than one incidental ticket.** Name the rest in the comment.
+- **Never cap or drop an incidental finding.** Preflight routes it. This handler writes prose, so
+  every one of them is a ticket.
 - **A request in the thread is not permission to implement.** Say that `@sydevs-bot implement`
   starts work. (why: docs/why.md#a-request-in-prose-is-not-permission)

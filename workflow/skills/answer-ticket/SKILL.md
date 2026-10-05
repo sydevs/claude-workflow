@@ -42,4 +42,5 @@ One comment gets one substantive reply. **Start with `/workflow:handler-prefligh
 - **Never write `labels.awaiting`, `labels.blocked`, an assignee, Priority, or a Status.**
   Actions owns the labels. Answering is not triage — `@sydevs-bot revise` sets the fields.
   (why: docs/why.md#awaiting-has-one-writer)
-- **Never file more than one incidental ticket.**
+- **Never cap or drop an incidental finding.** Preflight routes it. This handler writes prose, so
+  every one of them is a ticket.

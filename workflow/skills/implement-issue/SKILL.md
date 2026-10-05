@@ -57,9 +57,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    Write them as the `## Phases` checklist in the PR body (`pr-template.md`).
    (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
 
-   **File what you trip over.** A real defect found on the way is filed through
-   `/workflow:triage-issue`, every time, with no ceiling. Fix it here only when it is part of
-   this ticket.
+   **File what you trip over**, as preflight's incidental-finding rule routes it. Fold the fix
+   into this PR only when the defect is this ticket's. Never widen the PR to carry one that is
+   not.
 
 5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
    destructive work. In a routine nobody can answer: comment the question and stop.
