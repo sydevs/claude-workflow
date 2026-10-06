@@ -53,8 +53,8 @@ Fit it with the script. Never trim by hand:
 node <claude-workflow>/workflow/lib/budget.mjs --fit --kind journalEntry < entry.md > fitted.md
 ```
 
-`OVER` → cut prose from Friction, and never a failure. `UNBUDGETED` → `writing.budgets` lost
-`journalEntry`, so report that under `⚠️ Failed` and post the entry unfitted. Post with
+The verdict prints to stderr. `OVER` → cut prose from Friction, and never a failure. Any other
+verdict → report it under `⚠️ Failed` and post unfitted. Post with
 `mcp__github__add_issue_comment`. Trust the 200. The MCP read path strips `<details>`.
 (why: docs/why.md#details-survives-the-write-path)
 

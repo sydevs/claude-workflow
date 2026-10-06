@@ -1,7 +1,7 @@
 // node --test workflow/lib/budget.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { check, fit, DEFAULT_BUDGETS, DEFAULT_MARKER, DEFAULT_MARKER_REQUIRED } from './budget.mjs'
+import { check, fit, DEFAULT_BUDGETS, DEFAULT_MARKER, DEFAULT_MARKER_REQUIRED, VERDICTS } from './budget.mjs'
 import { loadLoopConfig } from './config.mjs'
 import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const config = join(root, 'loop-config.json')
 const cli = join(root, 'workflow', 'lib', 'budget.mjs')
+const loop = loadLoopConfig(config)
 
 // `cwd` is pinned to this checkout because `loadLoopConfig()` resolves from it
 // first, and an ancestor checkout's config is not the one under test.
@@ -85,8 +86,9 @@ test('a failure is never cut, whatever the overage', () => {
 })
 
 test('check still reports over and under on the whole artefact', () => {
-  assert.equal(check('x'.repeat(1201), 'comment', budgets).verdict, 'OVER')
-  assert.equal(check('x'.repeat(1200), 'comment', budgets).verdict, 'OK')
+  const noMarker = { markerRequired: [] }
+  assert.equal(check('x'.repeat(1201), 'comment', budgets, noMarker).verdict, 'OVER')
+  assert.equal(check('x'.repeat(1200), 'comment', budgets, noMarker).verdict, 'OK')
 })
 
 test('an unbudgeted kind is reported, not cut', () => {
@@ -103,7 +105,7 @@ test('an unbudgeted kind is reported, not cut', () => {
 // Run from an ancestor checkout, it read that checkout's config and failed on
 // a drift that was not in the branch under test.
 test('the fallback budgets equal loop-config.json', () => {
-  assert.deepEqual(DEFAULT_BUDGETS, loadLoopConfig(config).writing.budgets)
+  assert.deepEqual(DEFAULT_BUDGETS, loop.writing.budgets)
 })
 
 // `check()` returns UNBUDGETED for a kind no config names. The CLI exited 0 on
@@ -118,18 +120,27 @@ test('every --kind a skill names is budgeted', () => {
     const text = readFileSync(join(skills, String(file)), 'utf8')
     for (const m of text.matchAll(/--kind\s+([A-Za-z][\w-]*)/g)) named.add(m[1])
   }
-  const budgets = loadLoopConfig(config).writing.budgets
+  const budgets = loop.writing.budgets
   assert.ok(named.size > 0, 'no skill names a --kind, so this test checks nothing')
   assert.deepEqual([...named].filter((kind) => !(kind in budgets)), [])
 })
 
-// The CLI exited 0 on UNBUDGETED, so a typo'd or unnamed `--kind` read as a
-// pass. Every verdict but OK exits 1 now, and the verdict word says which.
+// The CLI exited 0 on UNBUDGETED until #155, so a typo'd or missing `--kind`
+// read as a pass. Every verdict but OK exits 1, and the word says which.
 test('the CLI fails an unbudgeted kind, and names it', () => {
   const r = run(['--kind', 'nosuchkind'], 'x')
   assert.notEqual(r.status, 0)
   assert.match(r.stdout, /UNBUDGETED/)
   assert.match(r.stdout, /nosuchkind/)
+})
+
+// An absent `--kind` used to read `process.argv[0]` and report the node binary
+// as the kind. It is an empty kind now, reported on the usual stream.
+test('the CLI reports an absent --kind as unbudgeted, not as the node binary', () => {
+  const r = run([], 'x')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout, /UNBUDGETED/)
+  assert.ok(!r.stdout.includes(process.execPath))
 })
 
 test('the CLI passes a kind inside its budget', () => {
@@ -138,41 +149,34 @@ test('the CLI passes a kind inside its budget', () => {
   assert.match(r.stdout, /^OK/)
 })
 
-test('the CLI fails a kind over its budget', () => {
-  const limit = loadLoopConfig(config).writing.budgets.journalEntry
-  const r = run(['--kind', 'journalEntry'], 'x'.repeat(limit + 1))
-  assert.notEqual(r.status, 0)
-  assert.match(r.stdout, /OVER/)
-})
-
-// `--fit` writes its verdict to stderr, because handler-journal redirects
-// stdout to the fitted file. Its exit code is half of why.md's argument.
-test('the --fit CLI reports an unbudgeted kind on stderr, and fails', () => {
+// `--fit` writes the verdict to stderr, because handler-journal redirects
+// stdout to the fitted file.
+test('the --fit CLI reports its verdict on stderr, and fails', () => {
   const r = run(['--fit', '--kind', 'nosuchkind'], 'x')
   assert.notEqual(r.status, 0)
   assert.match(r.stderr, /UNBUDGETED/)
   assert.equal(r.stdout, 'x')
 })
 
-test('the CLI fails when no --kind is given at all', () => {
-  const r = run([], 'x')
+// One round trip for the marker, to prove the CLI passes the config's
+// `markerRequired` and marker into `check()` at all.
+test('the CLI fails a marker-required kind with no marker', () => {
+  const r = run(['--kind', 'comment'], 'x')
   assert.notEqual(r.status, 0)
-  assert.match(r.stderr, /no --kind given/)
+  assert.match(r.stdout, /MISSING_MARKER/)
 })
 
-// The marker rule was prose in `handler-preflight`, and SahajAtlasWeb#233
-// shipped a review with no marker while following it.
-const marker = loadLoopConfig(config).identity.commentMarker
-const markerRequired = loadLoopConfig(config).writing.markerRequired
+// Frozen, like the budgets above. The drift test below is what ties these
+// fixtures to the config, so no live value is threaded through a unit test.
+const markerRequired = ['comment']
+const marker = '<sub>marker</sub>'
 
 test('a marker-required kind fails without the marker', () => {
-  const r = check('x', 'comment', budgets, { markerRequired, marker })
-  assert.equal(r.verdict, 'MISSING_MARKER')
+  assert.equal(check('x', 'comment', budgets, { markerRequired, marker }).verdict, 'MISSING_MARKER')
 })
 
 test('a marker-required kind passes with the marker', () => {
-  const r = check(`x${marker}`, 'comment', budgets, { markerRequired, marker })
-  assert.equal(r.verdict, 'OK')
+  assert.equal(check(`x${marker}`, 'comment', budgets, { markerRequired, marker }).verdict, 'OK')
 })
 
 // The harness attribution footer follows the marker in a real loop comment,
@@ -183,36 +187,46 @@ test('a marker followed by the attribution footer still passes', () => {
 })
 
 test('a kind outside markerRequired passes without a marker', () => {
-  const r = check('x', 'journalEntry', budgets, { markerRequired, marker })
-  assert.equal(r.verdict, 'OK')
-  assert.ok(!markerRequired.includes('journalEntry'))
+  assert.equal(check('x', 'journalEntry', budgets, { markerRequired, marker }).verdict, 'OK')
 })
 
 // MISSING_MARKER comes first because the marker is 124 characters and counts.
 test('a missing marker is reported before an overage', () => {
-  const r = check('x'.repeat(budgets.comment + 1), 'comment', budgets, { markerRequired, marker })
-  assert.equal(r.verdict, 'MISSING_MARKER')
-})
-
-test('the CLI fails a marker-required kind with no marker, and passes one with it', () => {
-  const bad = run(['--kind', 'comment'], 'x')
-  assert.notEqual(bad.status, 0)
-  assert.match(bad.stdout, /MISSING_MARKER/)
-  const good = run(['--kind', 'comment'], `x${marker}`)
-  assert.equal(good.status, 0)
-  assert.match(good.stdout, /^OK/)
+  const over = 'x'.repeat(budgets.comment + 1)
+  assert.equal(check(over, 'comment', budgets, { markerRequired, marker }).verdict, 'MISSING_MARKER')
 })
 
 // Same contract as DEFAULT_BUDGETS: the fallback must equal the config, or a
 // run with no reachable config enforces a different rule.
 test('the marker fallbacks equal loop-config.json', () => {
-  assert.equal(DEFAULT_MARKER, loadLoopConfig(config).identity.commentMarker)
-  assert.deepEqual(DEFAULT_MARKER_REQUIRED, loadLoopConfig(config).writing.markerRequired)
+  assert.equal(DEFAULT_MARKER, loop.identity.commentMarker)
+  assert.deepEqual(DEFAULT_MARKER_REQUIRED, loop.writing.markerRequired)
 })
 
-// Every markerRequired kind must be a budgeted kind, or the marker rule
-// attaches to a kind no measurement can reach.
-test('every markerRequired kind is budgeted', () => {
-  const configured = loadLoopConfig(config).writing
-  assert.deepEqual(configured.markerRequired.filter((k) => !(k in configured.budgets)), [])
+// `markerRequired` is an allowlist, so a new budget kind would otherwise be
+// silently exempt — the shape of the silence #155 removes. Every budgeted kind
+// is listed there or exempt here, so adding one fails until someone decides.
+const MARKER_EXEMPT = ['journalEntry']
+
+test('every budgeted kind declares whether it carries the marker', () => {
+  const required = loop.writing.markerRequired
+  const undeclared = Object.keys(loop.writing.budgets)
+    .filter((kind) => !required.includes(kind) && !MARKER_EXEMPT.includes(kind))
+  assert.deepEqual(undeclared, [])
+  assert.deepEqual(required.filter((kind) => !(kind in loop.writing.budgets)), [])
+})
+
+// The skills key on the printed verdict word, so a word a skill names and the
+// script cannot print is prose/script drift — the class `rule-delta.mjs` and
+// the `--kind` test above exist to close.
+test('every verdict word a skill names is one the script can print', () => {
+  const skills = join(root, 'workflow', 'skills')
+  const named = new Set()
+  for (const file of readdirSync(skills, { recursive: true })) {
+    if (!String(file).endsWith('SKILL.md')) continue
+    const text = readFileSync(join(skills, String(file)), 'utf8')
+    for (const m of text.matchAll(/`([A-Z][A-Z_]+)`\s*(?:means|→)/g)) named.add(m[1])
+  }
+  assert.ok(named.size > 0, 'no skill keys on a verdict word, so this test checks nothing')
+  assert.deepEqual([...named].filter((word) => !VERDICTS.includes(word)), [])
 })

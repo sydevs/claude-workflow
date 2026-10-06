@@ -283,7 +283,7 @@
     }
   },
   "writing": {
-    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this, and fails a markerRequired kind whose text carries no identity.commentMarker. Rules are in preflight/SKILL.md.",
+    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in preflight/SKILL.md.",
     "budgets": {
       "comment": 1200,
       "reviewReply": 600,

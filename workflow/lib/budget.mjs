@@ -22,13 +22,8 @@
  *
  * ## The exit code says "not OK". The verdict word says why
  *
- * The CLI used to exit 0 on `UNBUDGETED`, so a typo'd or unnamed `--kind`
- * read as a pass, and a review body spent three weeks measured against the
- * wrong budget behind that silence (#145). Every verdict but `OK` exits 1.
- *
- * So no caller may act on the exit code alone. `OVER` means cut prose.
- * `UNBUDGETED` means the kind is wrong, and cutting fixes nothing. The skills
- * key on the printed verdict word for that reason.
+ * Every verdict but `OK` exits 1. Two of them need opposite responses, so a
+ * caller reads the printed verdict word and never the exit code alone.
  * (why: docs/why.md#a-verdict-word-not-an-exit-code)
  *
  * This script reads text from stdin. It never fetches data. So a routine
@@ -36,7 +31,7 @@
  * (why: docs/why.md#budgets-not-adjectives)
  */
 
-import { loadLoopConfig } from './config.mjs'
+import { loadLoopConfig, flag } from './config.mjs'
 
 /**
  * Fallback budgets. `loop-config.json` → `writing.budgets` is authoritative.
@@ -60,13 +55,14 @@ export const DEFAULT_BUDGETS = {
  * are authoritative, and `budget.test.mjs` fails on a drift from either.
  * A journal entry is absent on purpose: `handler-journal` posts no marker.
  *
- * The check is **presence, not position.** A loop comment ends with the
- * harness attribution footer AFTER the marker — this repo's own issue
- * comments do — so an ends-with test would fail a correct artefact. What
- * SahajAtlasWeb#233 shipped was a review with no marker at all.
- * (why: docs/why.md#the-marker-check-belongs-in-the-script)
+ * Test presence, never position: the harness attribution footer follows the
+ * marker in a real comment. (why: docs/why.md#the-marker-check-belongs-in-the-script)
  */
 export const DEFAULT_MARKER_REQUIRED = ['comment', 'reviewReply', 'reviewBody']
+
+/** Every verdict this script can print. The skills key on these words. */
+export const VERDICTS = ['OK', 'OVER', 'UNBUDGETED', 'MISSING_MARKER']
+
 export const DEFAULT_MARKER = '<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>'
 
 /**
@@ -75,11 +71,12 @@ export const DEFAULT_MARKER = '<sub>🤖 Written by the sydevs autonomous loop �
  * `chars` counts the whole string. Markdown, HTML tags and `<details>`
  * contents all count, because a later run pays for every one of them.
  *
- * `options.markerRequired` and `options.marker` are opt-in, so a caller that
- * passes neither measures the budget alone. The CLI always passes both.
+ * The marker options default ON, like `budgets`, so a caller gets the rule
+ * without asking. Measuring a budget alone takes an explicit
+ * `{ markerRequired: [] }`.
  */
 export function check(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
-  const { markerRequired = [], marker = '' } = options
+  const { markerRequired = DEFAULT_MARKER_REQUIRED, marker = DEFAULT_MARKER } = options
   const limit = budgets?.[kind]
   const chars = typeof text === 'string' ? text.length : 0
   if (typeof limit !== 'number') {
@@ -139,9 +136,6 @@ const DROPPABLE = /^-\s/
  * The run table survives too — it is not a list item. When the section empties,
  * the heading goes with it, which is what the skill already requires of an
  * empty section.
- *
- * **It does not check the marker.** `fit()` runs on `journalEntry` alone, which
- * `writing.markerRequired` deliberately omits, so there is nothing to check.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
   const limit = budgets?.[kind]
@@ -202,17 +196,12 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
 if (isMain) {
-  const argv = process.argv
-  const flag = argv.indexOf('--kind')
+  // `process.argv` unsliced read the node binary as the kind when `--kind` was
+  // missing. Sliced, an absent flag is an empty kind, which is UNBUDGETED.
+  const argv = process.argv.slice(2)
   const kind = (argv.find((a) => a.startsWith('--kind=')) || '').split('=')[1]
-    || (flag === -1 ? '' : argv[flag + 1])
+    || flag(argv, 'kind', '')
   const wantsFit = argv.includes('--fit')
-  // Without this, a missing `--kind` read `argv[0]` and reported the node
-  // binary as the kind — and the skills now answer UNBUDGETED by fixing it.
-  if (!kind) {
-    console.error('UNBUDGETED \u2014 no --kind given, so pass one from writing.budgets')
-    process.exit(1)
-  }
   let text = ''
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {

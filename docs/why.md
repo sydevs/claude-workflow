@@ -638,9 +638,17 @@ the marker — this repo's own issue comments do — so an ends-with test would 
 artefact to catch a failure nobody has made. What #233 shipped was no marker at all.
 
 **And it is unconditional, not behind a flag.** A flag would have to be named in run-loaded prose,
-and a run that forgot it would get the silence this ticket exists to remove. A maintainer measuring
-a draft before appending the marker is measuring something that is not the artefact: 124 of its
-characters are missing, so the number was wrong anyway.
+and a run that forgot it would get the silence this rule exists to remove. So `check()` defaults
+the marker on, exactly as it defaults the budgets on, and measuring a budget alone takes an
+explicit opt-out. A maintainer measuring a draft before appending the marker is measuring
+something that is not the artefact: 124 of its characters are missing, so the number was wrong
+anyway.
+
+**`markerRequired` lists the kinds that need it, so a new kind must declare itself.** Listing the
+one exemption instead would default a new kind to checked, which is the safer polarity and is
+worth revisiting. What closes the gap either way is a test: every budgeted kind is either in
+`markerRequired` or named in the test's exemption set, so adding a budget kind fails the suite
+until someone decides.
 
 ## Ground from the body, never the thread
 
