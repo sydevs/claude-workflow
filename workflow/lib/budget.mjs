@@ -199,8 +199,7 @@ if (isMain) {
   // `process.argv` unsliced read the node binary as the kind when `--kind` was
   // missing. Sliced, an absent flag is an empty kind, which is UNBUDGETED.
   const argv = process.argv.slice(2)
-  const kind = (argv.find((a) => a.startsWith('--kind=')) || '').split('=')[1]
-    || flag(argv, 'kind', '')
+  const kind = flag(argv, 'kind', '')
   const wantsFit = argv.includes('--fit')
   let text = ''
   process.stdin.on('data', (d) => { text += d })
