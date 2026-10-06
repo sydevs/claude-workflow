@@ -136,6 +136,14 @@ Six, and the dispatcher writes five of them. Nothing else may.
 | `proposal` | Bot-filed, no human verdict yet. The survey counts these against `maxOpenProposals`. | the dispatcher |
 | `ops-journal` | The daily diary. Every worklist query excludes it. | you, once |
 
+> **The label is what a session reads. `refs/sydevs-lease/<number>` is what decides between two
+> dispatcher passes.** The dispatcher creates that ref before the label and deletes it wherever it
+> releases the lock, because `POST /git/refs` is GitHub's only compare-and-swap. It lives outside
+> `refs/heads` and `refs/tags`, so it is not a branch or a tag and `git branch -a` never shows it.
+> `git ls-remote origin 'refs/sydevs-lease/*'` lists the leases a repo holds; a ref there with no
+> `bot:working` on the item is residue the next sweep reclaims.
+> (why: docs/why.md#the-lease-is-a-ref-not-a-label)
+
 ```bash
 for r in SahajCloud SahajAtlasWeb WeMeditateWeb SahajAtlasWordpress claude-workflow; do
   gh label create "awaiting"    --repo sydevs/$r --color D93F0B --force \
@@ -172,7 +180,15 @@ issue found by creation date alone is stamped with that marker, and **the oldest
 always wins** — two jobs can look at the same instant and both create.
 (why: docs/why.md#one-journal-a-day-and-the-oldest-one-wins)
 
-The weekly reflection closes the week's journals.
+**Every journal tick re-counts yesterday as well as today**, so a day closes with a true count
+rather than with whatever its last successful tick saw. The schedule is the only writer and GitHub
+drops most of its `*/30` cron — about eight ticks a day land, at gaps of two to five hours — so
+nothing may land near midnight. A tick that cannot finish posts a `journal-tally` anomaly to the
+day's own issue, because `dispatch / journal` is in `ci.ignoreCheckNames` and a red journal job is
+never CI the loop acts on. (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
+
+The weekly reflection closes the week's journals, which is also what ends the re-counting: a
+closed day is not found again.
 
 ### The board and the dispatcher
 
@@ -229,7 +245,7 @@ private repo:
 
 | Name | What |
 | --- | --- |
-| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge` needs. |
+| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge` and the lease ref need. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for the Sentry survey and the resolve-on-merge step. |

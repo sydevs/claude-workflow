@@ -28,6 +28,7 @@ export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
+export const releaseLease = (why) => ({ type: 'releaseLease', why })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
 
@@ -150,6 +151,26 @@ function lastEndedImplement(record) {
   return (record?.dispatches || []).filter((d) => d.handler === 'implement' && d.outcome).pop() || null
 }
 
+/**
+ * A `fix-ci` session that already ran against this exact head and ended.
+ *
+ * A red run produces several `workflow_run`, `check_suite` and `status`
+ * events per push, each its own `act` run, and the first session's unlock
+ * re-derives the same plan on the same red head. Those re-fires were serial
+ * and lock-respecting — not concurrency at all — so only the ceiling stopped
+ * them, which is why it was exhausted (SahajCloud#861, SahajAtlasWeb#245).
+ *
+ * The head sha is what a `fix-ci` fire is about, so it is what the refusal
+ * keys on. A push to a new sha has no ended session against it and fires
+ * again. `rec.dispatches` keeps the last 20 entries, so a very long-lived PR
+ * can age an entry out; the ceiling is still the backstop.
+ * (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
+ */
+function endedFixCiFor(record, sha) {
+  if (!sha) return null
+  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome) || null
+}
+
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
@@ -202,6 +223,8 @@ export function evaluatePr(s, config) {
   if (!pr.draft && s.mergeable === 'CONFLICTING') return [fire('resolve-conflicts')]
 
   if (s.ci.failing.length) {
+    const ended = endedFixCiFor(s.record, pr.head?.sha)
+    if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
     if ((s.record?.fixCi || 0) < (config.ceilings?.ciFixIterations ?? 3)) return [bumpFixCi(), fire('fix-ci')]
     return [
       label([awaiting], [config.labels.stuck]),
@@ -449,6 +472,20 @@ export function decide(target, s, config) {
     }
     case 'ci':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
+    // Residue from a pass that won the lease and died before the label. Both
+    // the label and `rec.current` must be absent: the winner writes them in
+    // that order, so either one present means a live session.
+    //
+    // ⚠ That is not a proof, only a narrowing. The per-item concurrency group
+    // is scoped to one repository, so a cross-repo fire that wins the CAS is
+    // unguarded until it writes the lock — one API call later. A sweep leg
+    // needs a checkout and a gather to reach here, so the window is far
+    // narrower than the cost of leaving a lease unreclaimed.
+    case 'sweep-lease': {
+      if (s.locked) return [note('the lock is on the item — the lease is live')]
+      if (s.record?.current) return [note(`${s.record.current.handler} is still recorded — the lease is live`)]
+      return [releaseLease('no lock and no session on the item')]
+    }
     case 'sweep-retry':
       return [{ type: 'retry' }]
     case 'sweep-timeout':
@@ -478,4 +515,4 @@ export function decide(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, endedFixCiFor, LOCK_FREE_STATUS_ONLY }

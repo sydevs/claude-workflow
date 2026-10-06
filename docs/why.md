@@ -980,9 +980,8 @@ a review or a check, and they carry no author filter.
 
 ## The lock label is the lease
 
-Two sessions on one item write over each other, and neither can tell. GitHub offers no
-compare-and-swap. What it offers is a label the dispatcher applies before it fires and the
-session removes as its last write. While the label is on, the dispatcher fires nothing else at
+Two sessions on one item write over each other, and neither can tell. The label a dispatcher
+applies before it fires, and the session removes as its last write, is what says which. While the label is on, the dispatcher fires nothing else at
 that item and records any new event as a recheck. When the label comes off, that event is the
 handoff: the dispatcher re-derives from live state and dispatches whatever is pending.
 
@@ -990,6 +989,9 @@ One label, `bot:working`, serves issues and PRs alike. A field cannot: a PR has 
 name, the attempt and the session link live in a status comment the dispatcher edits. The session
 reads the label before its first write and before every push. Gone means stop. The sweeper
 removes a label whose session passed its deadline, so a dead session holds nothing forever.
+
+The label is the lease a session **reads**. It is not what decides a contest between two
+dispatcher passes — see *The lease is a ref, not a label* below.
 
 ## Push and end
 
@@ -1524,6 +1526,121 @@ for consumer work that needs a decision.
 The same holds for the rest of survey-contracts' findings where the source is plainly right: a
 document that misdescribes the code, a missing changelog entry, a command that no longer exists.
 A ticket is kept for the case where the code may be the wrong side.
+
+## The lease is a ref, not a label
+
+The label was taken too late to be a mutex. `gather` read `locked` once, `decide` ran on that
+snapshot, and `apply` wrote the label after the plan was decided — with `ensureJournalDay` and up
+to twenty issue reads in between. Every call in that window was open: a second pass gathering
+inside it also saw `locked: false`, and both fired.
+
+Serializing the legs does not close it. The concurrency group is keyed on the item number, but
+`decide` emits `conflict-scan` and cross-repo `unblock-check` targets that drain inside the
+already-running job, where no group covers them. And a group is scoped to the repository whose
+run it is: `dispatcher.yml` is a reusable workflow each repo calls from its own
+`workflow-state.yml`, so SahajCloud's `dispatch-WeMeditateWeb-144` and WeMeditateWeb's own never
+serialize. **No concurrency group can serialize cross-repo work.** Only state held in the target
+repo spans those scopes.
+
+A read-back of the status comment is not that state. `PATCH /issues/comments/:id` is
+last-writer-wins, GitHub documents conditional requests on GET for caching rather than as a write
+precondition, and the interleaving W1-write, W1-read, W2-write, W2-read has each pass reading its
+own id back. Both fire. The delay that would fix it cannot be sized, because the bound is
+GitHub's write visibility plus runner skew.
+
+`POST /repos/:owner/:repo/git/refs` is the one GitHub write that *is* a compare-and-swap: it
+answers 422 when the ref exists, so exactly one of two concurrent creates wins, with no read at
+all. `refs/sydevs-lease/<number>` is taken before the label and deleted wherever the lock is
+released. The ref's existence is the lease; where it points is never read. It sits outside
+`refs/heads` and `refs/tags`, so it is not a branch or a tag, and the bot PAT's contents write
+already covers it.
+
+A ref that outlives its session is a permanent lock on that item — a worse failure than the
+duplicate dispatch it replaces. So every release path deletes it, a throw between the create and
+the fire releases it on the way out, `sweep-timeout` deletes unconditionally when it reclaims a
+dead session, and `sweep-lease` reclaims a ref on an item carrying neither the lock nor a
+recorded session.
+
+## A failed release says so
+
+Every release path called `releaseLease` and dropped its boolean. A ref that will not delete —
+a 403, a protected-ref rule, an outage mid-write — left the lease standing, and the next
+`takeLease` answers 422 `already exists`. That reads as contention, and contention is the one
+`takeLease` path that posts no anomaly, because contention is normal. So the item stopped for
+good with nothing journalled: the same invisibility the journal half of this change removes from
+the tally.
+
+The release now posts a `lease-release-failed` anomaly when the delete fails, and the posting is
+itself guarded — an anomaly we cannot write must not break an exit path that is already failing.
+
+## One target per item
+
+A concurrency group does not queue three legs. One runs, one pends, and a newer pending cancels
+the older — `dispatcher.yml` records that rule. The sweeper does produce three for one number: a
+blocked, stale, open draft bot PR gets `unblock-check`, `sweep-pr` and `sweep-orphan`. So the
+middle one was silently dropped.
+
+Measuring which leg survives would only document the loss. `resolve` emits one target per
+`repo#number` instead, carrying every reason it found, and `act` drains them in order inside the
+one leg — which it already did for emitted targets. Nothing is lost, because the decision is
+re-derived per reason anyway, and no two legs can share a group any more.
+
+## A dispatch id is unique per fire
+
+The stamp dropped the sub-second digits, so two fires in the same second produced the same id.
+SahajCloud#867 is that case: one `adversarial-review` id, two journal entries one second apart,
+indistinguishable in `rec.dispatches`, in the journal tally and in the status comment. An id that
+two fires can share cannot carry a count, and cannot be the key for anything.
+
+Milliseconds alone still collide inside one millisecond, which is exactly the window two passes
+of one event land in. A four-hex-digit random suffix carries the uniqueness; the millisecond
+stamp stays so the ids still sort by time.
+
+## A fix-ci fire is keyed to its head
+
+The three `fix-ci` dispatches on SahajCloud#861 and on SahajAtlasWeb#245 were not a concurrency
+bug. They were serial, lock-respecting, and each one re-derived a decision the first session had
+already made and stood down from.
+
+A red run produces several `workflow_run`, `check_suite` and `status` events per push, each its
+own `act` run. `evaluatePr` fired `fix-ci` on any failing check under the ceiling, keyed on
+nothing, and the first session's own unlock re-derived the same plan on the same red head. So the
+only thing that stopped the loop was `ceilings.ciFixIterations` — which is exactly why it was
+exhausted, and why it then refused the real fix.
+
+The head sha is what a `fix-ci` fire is about, so it is what the refusal keys on: a session that
+already ran against this sha and ended, whatever its outcome, means no second fire. A push to a
+new sha has no ended session against it, and asks again. `rec.dispatches` keeps 20 entries, so a
+very long-lived PR can age one out; the ceiling remains the backstop.
+
+## The journal tally needs a writer that cannot stop
+
+Monday 2026-09-28 reported 22 dispatches and 1 anomaly against 37 and 4. Thursday 2026-10-01
+reported 84 and 6 against 97 and 7. Monday's counted set was precisely its first 22 session
+comments in chronological order, and its per-handler tally matched those 22 exactly, so the
+counter did not miscount — it stopped.
+
+`refreshTally` had one caller, `journalTick`, reachable only from the `journal` job on the
+schedule. Three properties made one bad tick permanent. The tick was unguarded, so a throw in
+`closeDuplicateDays` skipped the tally for that tick entirely. Nothing revisited a day once
+`localDate` moved on, so yesterday's title stayed frozen at the last tick that succeeded.
+And the failure was invisible by design: `dispatch / journal` is in `ci.ignoreCheckNames`, so a
+red journal job is never CI the loop acts on, and nothing posted an anomaly.
+
+**The schedule is also not the schedule.** 212 schedule runs span 2026-09-09 to 2026-10-06 —
+about eight a day against a declared fifty, at gaps of two to five hours, every one of them
+concluding `success`. So the loss is a cron GitHub mostly drops, not a throw, and a day can roll
+with its last true count hours old. #134 froze at 00:31Z with 6.5 hours of its journal day left.
+
+That is why the repair cannot be keyed on *which* cron fired: no tick is guaranteed to land near
+midnight. Each step of the tick is guarded on its own, a failure posts a `journal-tally` anomaly
+to the day's own issue, and **every** tick re-counts yesterday as well as today, under
+yesterday's own weekday. The refresh writes nothing when the counts already agree, so running it
+every tick costs one read and buys a day that closes with a true count.
+
+It matters beyond tidiness because the weekly reflection builds its usage report from the seven
+titles and tally blocks, with no comment reads. The journals are the one input a crashed week
+cannot reconstruct.
 
 ## Retired
 

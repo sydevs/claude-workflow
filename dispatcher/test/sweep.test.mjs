@@ -7,13 +7,14 @@ const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const now = new Date('2026-09-08T12:00:00Z')
 
-function fake({ issuesByLabel = {}, prs = [], recent = [], graphIssues = null }) {
+function fake({ issuesByLabel = {}, prs = [], recent = [], graphIssues = null, leases = [] }) {
   const rest = {
     issues: {
       listForRepo: (args) => ({ data: args.labels ? issuesByLabel[args.labels] || [] : recent }),
       listComments: () => ({ data: [] }),
     },
     pulls: { list: () => ({ data: prs }) },
+    git: { listMatchingRefs: async () => ({ data: leases.map((n) => ({ ref: `refs/sydevs-lease/${n}` })) }) },
   }
   const graphql = async () => ({ repository: { issues: { pageInfo: { hasNextPage: false }, nodes: graphIssues || [] } } })
   return { rest, graphql, paginate: async (fn, args) => (await fn(args)).data }
@@ -76,4 +77,16 @@ test('a GraphQL that cannot answer leaves the label sweep as the guarantee', asy
   github.graphql = async () => { throw new Error('Field blockedBy does not exist') }
   const t = await listSweepTargets({ github, config, repo, now })
   assert.deepEqual(t.filter((x) => x.reason === 'unblock-check').map((x) => x.number), [9])
+})
+
+test('sweep-lease takes a PR\'s kind from the open PRs, and reclaims before anything fires', async () => {
+  // `coalesceTargets` keys on `repo#number` and keeps the first target's kind,
+  // so `kind: 'issue'` here sent a routine record with a non-null head and a
+  // kind that contradicted it.
+  const prs = [{ number: 5, draft: false, user: bot, labels: [], updated_at: '2026-09-08T11:00:00Z' }]
+  const t = await listSweepTargets({ github: fake({ prs, leases: [5, 42] }), config, repo, now })
+  const forFive = t.filter((x) => x.number === 5)
+  assert.deepEqual(forFive.map((x) => x.reason), ['sweep-lease', 'sweep-pr'], 'the reclaim comes first')
+  assert.equal(forFive[0].kind, 'pr', 'an open PR number is a PR')
+  assert.equal(t.find((x) => x.number === 42).kind, 'issue', 'anything else stays an issue')
 })

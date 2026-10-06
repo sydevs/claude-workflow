@@ -2,6 +2,13 @@
  * Event → targets. Each target is one issue or PR the `act` job will
  * re-derive a decision for, in its own concurrency group. Direct events
  * need no API call here; CI events and the schedule do.
+ *
+ * **One target per `repo#number`**, carrying every reason found for it. A
+ * concurrency group serializes two matrix legs and silently drops the middle
+ * of three (`dispatcher.yml` L90-91), and the sweeper does produce three for
+ * one PR — `unblock-check`, `sweep-pr` and `sweep-orphan`. Coalescing makes
+ * that moot: no two legs ever share a group, and `act` drains the reasons in
+ * order inside the one leg. (why: docs/why.md#one-target-per-item)
  */
 
 import { isBot } from './decide.mjs'
@@ -9,6 +16,27 @@ import { listSweepTargets } from './sweep.mjs'
 
 function repoOf(context) {
   return { owner: context.repo.owner, name: context.repo.repo, full: `${context.repo.owner}/${context.repo.repo}` }
+}
+
+/**
+ * Collapse targets to one per `repo#number`, keeping the order each reason was
+ * found in. The survivor carries `reasons: [{ reason, facts }, ...]`; its own
+ * `reason`/`facts` stay the first one, so a target read without this field
+ * still behaves as it always did.
+ */
+export function coalesceTargets(targets) {
+  const byItem = new Map()
+  for (const t of targets) {
+    const key = `${t.repo.full}#${t.number}`
+    const held = byItem.get(key)
+    if (!held) {
+      byItem.set(key, { ...t, reasons: [{ reason: t.reason, facts: t.facts || {} }] })
+      continue
+    }
+    if (held.reasons.some((r) => r.reason === t.reason)) continue
+    held.reasons.push({ reason: t.reason, facts: t.facts || {} })
+  }
+  return [...byItem.values()]
 }
 
 export async function resolve({ github, context, config, now = new Date() }) {
