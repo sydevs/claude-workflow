@@ -48,6 +48,24 @@ test('two concurrent creates of one lease give one 201 and one 422', async () =>
   assert.equal(gh.refs.get('refs/sydevs-lease/858'), 'headsha')
 })
 
+test('listLeases asks for the namespace with no trailing slash, and reads only it', async () => {
+  const gh = refWorld()
+  let asked = null
+  const real = gh.rest.git.listMatchingRefs
+  gh.rest.git.listMatchingRefs = async (a) => { asked = a.ref; return real(a) }
+  gh.refs.set('refs/sydevs-lease/858', 'x')
+  gh.refs.set('refs/sydevs-lease-not-a-lease', 'x')
+  gh.refs.set('refs/heads/main', 'x')
+  assert.deepEqual(await listLeases(gh, 'sydevs', 'SahajCloud'), [858])
+  assert.equal(asked, 'sydevs-lease', 'a trailing slash would land in the URL path')
+})
+
+test('a sweep that cannot read the refs reclaims nothing', async () => {
+  const gh = refWorld()
+  gh.rest.git.listMatchingRefs = async () => { throw Object.assign(new Error('502'), { status: 502 }) }
+  assert.deepEqual(await listLeases(gh, 'sydevs', 'SahajCloud'), [])
+})
+
 test('a lease is taken under a ref outside heads and tags, so it is not a branch', async () => {
   const gh = refWorld()
   await takeLease(gh, item, 'headsha')

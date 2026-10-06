@@ -28,16 +28,27 @@ function shortRef(number) {
   return leaseRef(number).slice('refs/'.length)
 }
 
-/** The lease numbers this repo currently holds. Empty on any read failure. */
+/**
+ * The lease numbers this repo currently holds. Empty on any read failure —
+ * a sweep that cannot read the refs reclaims nothing, which is the safe way
+ * round.
+ *
+ * `matching-refs` takes the ref with no `refs/` and **no trailing slash**: the
+ * slash would land in the URL path. So it matches a prefix, and the filter
+ * below is what makes it the lease namespace and not a name beginning with it.
+ */
 export async function listLeases(gh, owner, repo) {
+  let data
   try {
-    const { data } = await gh.rest.git.listMatchingRefs({ owner, repo, ref: shortRef('') })
-    return (data || [])
-      .map((r) => Number(String(r.ref).slice(LEASE_PREFIX.length)))
-      .filter((n) => Number.isInteger(n) && n > 0)
+    ({ data } = await gh.rest.git.listMatchingRefs({ owner, repo, ref: shortRef('').replace(/\/$/, '') }))
   } catch {
     return []
   }
+  return (data || [])
+    .map((r) => String(r.ref))
+    .filter((r) => r.startsWith(LEASE_PREFIX))
+    .map((r) => Number(r.slice(LEASE_PREFIX.length)))
+    .filter((n) => Number.isInteger(n) && n > 0)
 }
 
 /** Any object sha in the repo, preferring one the snapshot already read. */
