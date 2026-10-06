@@ -402,6 +402,39 @@ it fails the loop in four ways:
 The `adversarial-review` check exists because the reviewer reads the outline first. A view that
 disagrees with the diff points the review at the wrong thing.
 
+## The template owns the reflect PR's sections
+
+#148 counted seven rule statements across three files that together told Sunday's `reflect` PR what
+its body's first sections are. Three sat in `reflect`, four in `finalize-pr` and its template. They
+disagreed: `reflect` put the grading at the top, `finalize-pr` put the outline and Preview there. A
+fourth `reflect` statement turned up while fixing it, at the one place a run reads first. #147 hit
+the collision first and chose, in a preamble. Its critic asked for a ticket rather than a comment,
+so one PR a week re-made the judgement. #147 also shipped with no `## Summary`, which no file
+allowed deleting.
+
+`reflect` needs two headings the template never named, so any fix meant two new slots or one
+exception covering both. Two of the three ways out were more expensive than they looked. Naming
+`reflect` as the template's exception leaves
+[Show the shape, not the file list](#show-the-shape-not-the-file-list) arguing against the
+exception it now permits. Moving the grading out of the body needs a new `writing.budgets` kind.
+#147's grading section measures 3527 characters — 2327 over `comment`, 2027 over `journalEntry`,
+and [only bodies are unbudgeted](#budgets-not-adjectives). `AGENTS.md` forbids that config edit
+riding the skill edit, so that way costs two PRs across two weeks.
+
+So the template gained both headings as conditional sections, in the terse idiom `## Migration`
+already uses. A new `##` costs the dispatcher nothing. The only body heading it reads is
+`## Phases` (`dispatcher/markers.mjs`), and that scan breaks at the next heading of any level. Both
+new slots sit below `## Preview`, so the outline still leads. The order now lives in the template,
+and `reflect` makes no judgement about it.
+
+Two things the ordering fix would have left behind, had the template taken only the headings. The
+length rule exempted the outline and Preview alone, so the grading section — the loop's own review
+content — was still told to keep short or hide in `<details>`, and next Sunday would have weighed
+that instead. And the rule the fix relies on, that a skill names its slot and never states the
+order, was false of `finalize-pr`, which stated the outline's position in its own step 7. That
+line now cites the template instead. Both rules sit in `pr-template.md`, so the next skill wanting
+a body section cannot rebuild the collision.
+
 ## A routine cannot reach the GitHub API
 
 Not "should not." **Cannot**, by any client. Measured in a routine on 2026-09-02:
@@ -564,8 +597,44 @@ Two lessons follow, and the second one generalizes:
   counted as roughly compliant. The script returns over or under, and nothing else. No clause
   permits an explained overage, since that clause is what killed the old rule.
 
-Bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them instead of the
-thread.
+Ticket and PR bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them
+instead of the thread.
+
+## A review body has its own budget
+
+`writing.budgets` had three kinds, and a submitted review body was none of them. So
+`adversarial-review` measured its body as `comment` — 1200 — while asking that body for a holistic
+assessment, ranked findings, and a What-was-checked section carrying enough evidence that a clean
+verdict is checkable.
+
+Six reviews show what the wrong limit bought. SahajAtlasWeb#237 landed at 1200/1200 only after
+cutting evidence out of What-was-checked. SahajCloud#874 dropped a PR-size note that was not wrong,
+only last. SahajAtlasWeb#233 shipped with **no `identity.commentMarker`** — the body measured 1197
+and the marker is 124 characters. SahajCloud#861 took nine trim passes to fit three required
+sections and five findings.
+
+Trimming prose is what a budget is for. Dropping a finding is not, and neither is dropping the
+attribution.
+
+**2000 is measured, not guessed.** The marker is 124 characters, the harness attribution footer 58,
+`review.bodyHeader` 24 — 206 before a word of review. Observed prose ran 1318 to 1913, so 2000
+clears the 1318–1659 band with room and still binds at the outlier. A budget that never binds is not
+one. Raising `comment` to buy that room was refused: it would loosen every ticket and PR comment the
+loop writes to fix one artifact.
+
+**The marker belongs on a review body.** `handler-preflight` asks for it on every comment,
+`adversarial-review` on every inline comment, and a submitted body is read more than either. Its 124
+characters are inside the number for that reason, so no run has to buy them by cutting a finding.
+
+**What may never be cut is a general rule, so it lives in `handler-preflight`.** Nothing about
+SahajAtlasWeb#233 dropping its marker was specific to a review body — `answer-ticket`,
+`address-review` and `revise-ticket` all require the marker inside the 1200 of `comment`. The budget
+paragraph every dispatch reads now says what "over means cut" may not cut, beside "shorten by
+leaving things out, never by compressing", which until now named no exception.
+
+**A kind no skill names is inert.** `check()` returns `UNBUDGETED` and the CLI exits 0 on it, which
+is how this gap stayed invisible for three weeks. `workflow/lib/budget.test.mjs` now fails for any
+`--kind` a skill names that `writing.budgets` does not.
 
 ## Ground from the body, never the thread
 
