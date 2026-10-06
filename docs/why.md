@@ -398,8 +398,9 @@ Two things the ordering fix would have left behind, had the template taken only 
 length rule exempted the outline and Preview alone, so the grading section — the loop's own review
 content — was still told to keep short or hide in `<details>`, and next Sunday would have weighed
 that instead. And the rule the fix relies on, that a skill names its slot and never states the
-order, held only here. Both now sit in `pr-template.md`, so the next skill wanting a body section
-cannot rebuild the collision.
+order, was false of `finalize-pr`, which stated the outline's position in its own step 7. That
+line now cites the template instead. Both rules sit in `pr-template.md`, so the next skill wanting
+a body section cannot rebuild the collision.
 
 ## A routine cannot reach the GitHub API
 
