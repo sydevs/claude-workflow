@@ -8,8 +8,8 @@ week should find what they need without reading the whole thing.
 The order is the priority. The reviewer's first screen is a brief summary, the change's shape,
 and where to see it running. Everything else follows.
 
-**Never shorten the Change outline, the Preview, or the two `reflect` sections to meet a length
-goal.** Keep every other section short. Put its depth in `<details>` — reasoning, rejected
+**Never shorten the Change outline, the Preview, `## Grading last week` or `## 📊 Usage` to meet
+a length goal.** Keep every other section short. Put its depth in `<details>` — reasoning, rejected
 alternatives, measurements — and let the reviewer decide what to open.
 
 ```markdown
@@ -115,8 +115,8 @@ implementation, use your discretion, and say so in the notes.
 
 Keep summary bullets to ≤ 100 characters. State test results as facts, with no editorializing. A
 short, focused description with clear test results beats a long one that is vague about them.
-**None of this applies to the Change outline, the Preview, or the two `reflect` sections.** Those
-take the room they need.
+**None of this applies to the Change outline, the Preview, `## Grading last week` or
+`## 📊 Usage`.** Those take the room they need.
 
 ## Avoid
 
