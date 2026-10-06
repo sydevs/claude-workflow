@@ -279,3 +279,19 @@ test('sweep-timeout releases the dead session\'s lease along with its label', as
   assert.equal(world.refs.size, 0, 'so the item is leasable again')
   assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'))
 })
+
+test('a lease that will not delete posts an anomaly instead of going quiet', async () => {
+  // The silent failure: the next `takeLease` answers 422 `already exists`,
+  // which reads as contention and posts nothing, so the item stops for good.
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  const github = fakeGithub(world)
+  world.refs.set('refs/sydevs-lease/9', 'stale')
+  github.rest.git.deleteRef = async () => { const e = new Error('Resource not accessible'); e.status = 403; throw e }
+  world.comments[9] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, current: { id: 'x', handler: 'implement', attempt: 3, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'implement', attempt: 3 } }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('attempts are exhausted — must not fire') } })
+  const bodies = github.calls.filter((c) => c.name === 'createComment').map((c) => String(c.args.body))
+  assert.ok(bodies.some((b) => b.includes('lease-release-failed')), 'the failed release is journalled')
+  assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'), 'and the label still comes off')
+})

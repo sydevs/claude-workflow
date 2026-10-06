@@ -25,6 +25,23 @@ async function commentOnce(gh, t, key, body, dryRun, log) {
   await gh.rest.issues.createComment({ owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, body: `${mark}\n${body}\n\n<sub>🤖 sydevs dispatcher</sub>` })
 }
 
+/**
+ * Release the lease, and say so when it will not go. This is the one failure
+ * in the lease that nothing used to report: the next `takeLease` answers 422
+ * `already exists`, which reads as contention and posts no anomaly, so the
+ * item stops for good in silence. (why: docs/why.md#a-failed-release-says-so)
+ */
+async function release(gh, config, t, { now, dryRun, log }) {
+  if (dryRun) return true
+  if (await releaseLease(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number })) return true
+  log(`release failed: ${leaseRef(t.number)} is still there`)
+  try {
+    const j = await ensureJournalDay(gh, config, now)
+    await postAnomaly(gh, config, j.number, { kind: 'lease-release-failed', text: `${t.repo.full}#${t.number}: ${leaseRef(t.number)} would not delete — every later fire reads its 422 as contention` })
+  } catch { /* an anomaly we cannot post must not break an exit path */ }
+  return false
+}
+
 async function labels(gh, t, snapshot, add, remove, dryRun, log) {
   const current = new Set(snapshot.item.labels)
   const toAdd = add.filter((l) => l && !current.has(l))
@@ -109,7 +126,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'unlocked': {
         // The session is finished, so its lease goes with its label. A ref
         // left behind is a permanent lock on the item.
-        if (!dryRun) await releaseLease(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number })
+        await release(gh, config, t, { now, dryRun, log })
         if (rec.recheck) { rec.recheck = false; recordDirty = true }
         if (rec.current) {
           rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done' }]
@@ -181,7 +198,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       }
       case 'releaseLease':
         log(`reclaim ${leaseRef(t.number)} — ${a.why}`)
-        if (!dryRun) await releaseLease(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number })
+        await release(gh, config, t, { now, dryRun, log })
         break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
@@ -210,7 +227,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // Unconditionally, whatever the record said: reclaiming the lease is
         // the whole point of a timeout, and a ref the dead session left is
         // what would refuse every later fire.
-        if (!dryRun) await releaseLease(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number })
+        await release(gh, config, t, { now, dryRun, log })
         if (!cur || attempt > max) {
           await labels(gh, t, snapshot, [config.labels.awaiting], [config.labels.stuck], dryRun, log)
           await commentOnce(gh, t, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. A comment, a verb, or a push from you starts me again.`, dryRun, log)
@@ -293,7 +310,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
     rec.pending = null
     snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   } catch (e) {
-    await releaseLease(gh, item)
+    await release(gh, config, t, { now, dryRun, log })
     throw e
   }
 
@@ -323,7 +340,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   rec.current = null
   rec.pending = { handler, flags, attempt, reason, retryAfter, id: record.id, bumpFixCi }
   await labels(gh, t, snapshot, [L.stuck], [L.lock], dryRun, log)
-  await releaseLease(gh, item)
+  await release(gh, config, t, { now, dryRun, log })
   await commentOnce(gh, t, `fire-failed ${record.id}`, res.status === 400
     ? '⏸ The routines are paused, so nothing started. I will retry when they resume.'
     : `⏳ ${reason}. I will retry ${retryAfter ? `after ${retryAfter.slice(11, 16)}Z` : 'shortly'}.`, dryRun, log)

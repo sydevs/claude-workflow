@@ -1512,6 +1512,18 @@ the fire releases it on the way out, `sweep-timeout` deletes unconditionally whe
 dead session, and `sweep-lease` reclaims a ref on an item carrying neither the lock nor a
 recorded session.
 
+## A failed release says so
+
+Every release path called `releaseLease` and dropped its boolean. A ref that will not delete —
+a 403, a protected-ref rule, an outage mid-write — left the lease standing, and the next
+`takeLease` answers 422 `already exists`. That reads as contention, and contention is the one
+`takeLease` path that posts no anomaly, because contention is normal. So the item stopped for
+good with nothing journalled: the same invisibility the journal half of this change removes from
+the tally.
+
+The release now posts a `lease-release-failed` anomaly when the delete fails, and the posting is
+itself guarded — an anomaly we cannot write must not break an exit path that is already failing.
+
 ## One target per item
 
 A concurrency group does not queue three legs. One runs, one pends, and a newer pending cancels
