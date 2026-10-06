@@ -44,11 +44,16 @@ export async function listLeases(gh, owner, repo) {
   } catch {
     return []
   }
+  // Canonical digits only. `Number()` accepts `858.0`, `+858`, ` 858` and
+  // `1e3`, and `leaseRef` would rebuild a *different* name from each — so the
+  // reclaim would delete item 858's live lease while leaving the odd ref to
+  // re-target every sweep, forever.
   return (data || [])
     .map((r) => String(r.ref))
     .filter((r) => r.startsWith(LEASE_PREFIX))
-    .map((r) => Number(r.slice(LEASE_PREFIX.length)))
-    .filter((n) => Number.isInteger(n) && n > 0)
+    .map((r) => r.slice(LEASE_PREFIX.length))
+    .filter((tail) => /^[1-9][0-9]*$/.test(tail))
+    .map(Number)
 }
 
 /** Any object sha in the repo, preferring one the snapshot already read. */
@@ -79,7 +84,11 @@ export async function takeLease(gh, { owner, repo, number }, hintSha) {
     await gh.rest.git.createRef({ owner, repo, ref: leaseRef(number), sha })
     return { won: true }
   } catch (e) {
-    if (e?.status === 422) return { won: false, contended: true }
+    // 422 is not only "already exists": a stale anchor sha and a malformed ref
+    // name answer 422 too. Reading either as contention would suppress the
+    // anomaly below and leave the item silent — the same invisibility the
+    // journal half of this change exists to remove.
+    if (e?.status === 422 && /already exists/i.test(String(e?.message || ''))) return { won: false, contended: true }
     return { won: false, error: `cannot create ${leaseRef(number)}: ${e?.status || '?'} ${e?.message || e}` }
   }
 }

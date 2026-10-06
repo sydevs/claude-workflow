@@ -133,3 +133,33 @@ test('sweep-lease leaves a live lease alone — the label or the record is enoug
   assert.deepEqual(recorded.map((a) => a.type), ['note'])
   assert.match(recorded[0].text, /fix-ci is still recorded/)
 })
+
+test('a 422 that is not "already exists" is an error, not contention', async () => {
+  // GitHub answers 422 for a stale anchor sha and a malformed ref name too.
+  // Reading either as contention suppresses the anomaly and leaves the item
+  // silent, which is the failure mode this whole change exists to remove.
+  const gh = refWorld()
+  gh.rest.git.createRef = async () => { const e = new Error('Object does not exist'); e.status = 422; throw e }
+  const r = await takeLease(gh, item, 'deadbee')
+  assert.equal(r.won, false)
+  assert.equal(r.contended, undefined, 'so the caller journals it')
+  assert.match(r.error, /422 Object does not exist/)
+})
+
+test('contention is still read from the message GitHub actually sends', async () => {
+  const gh = refWorld()
+  await takeLease(gh, item, 'headsha')
+  const r = await takeLease(gh, item, 'headsha')
+  assert.deepEqual(r, { won: false, contended: true })
+})
+
+test('a lease ref whose tail is not canonical digits is never read as a number', async () => {
+  // `Number()` accepts all of these, and `leaseRef` would rebuild a different
+  // name from each — so the reclaim would delete item 858's live lease.
+  const gh = refWorld()
+  gh.refs.set('refs/sydevs-lease/858', 'live')
+  for (const tail of ['858.0', '+858', ' 858', '1e3', '0858', '0', '-5', '', 'abc']) {
+    gh.refs.set(`refs/sydevs-lease/${tail}`, 'planted')
+  }
+  assert.deepEqual(await listLeases(gh, 'sydevs', 'SahajCloud'), [858], 'only the canonical ref is a lease')
+})

@@ -475,6 +475,12 @@ export function decide(target, s, config) {
     // Residue from a pass that won the lease and died before the label. Both
     // the label and `rec.current` must be absent: the winner writes them in
     // that order, so either one present means a live session.
+    //
+    // ⚠ That is not a proof, only a narrowing. The per-item concurrency group
+    // is scoped to one repository, so a cross-repo fire that wins the CAS is
+    // unguarded until it writes the lock — one API call later. A sweep leg
+    // needs a checkout and a gather to reach here, so the window is far
+    // narrower than the cost of leaving a lease unreclaimed.
     case 'sweep-lease': {
       if (s.locked) return [note('the lock is on the item — the lease is live')]
       if (s.record?.current) return [note(`${s.record.current.handler} is still recorded — the lease is live`)]
