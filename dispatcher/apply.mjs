@@ -287,7 +287,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // points at, which only `sweep-lease` could reclaim.
   try {
     await labels(gh, t, snapshot, [L.lock], [L.stuck, L.awaiting], dryRun, log)
-    rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null }
+    // `sha` rides on `current`, so the entry `unlocked` and `timeout` append
+    // carries the head this session was fired against. (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
+    rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null, sha: record.head?.sha || null }
     rec.pending = null
     snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   } catch (e) {

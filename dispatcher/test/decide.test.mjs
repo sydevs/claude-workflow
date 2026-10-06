@@ -72,6 +72,46 @@ test('after the critic is answered and CI is green, the draft is marked ready', 
   assert.deepEqual(types(evaluatePr(s, config)).slice(0, 2), ['markReady', 'requestReviewer'])
 })
 
+const endedFixCi = (sha, outcome = 'done') => ({ id: `SahajCloud-5-fix-ci-20261001T022800000Z-aaaa`, handler: 'fix-ci', attempt: 1, firedAt: '2026-10-01T02:28:00.000Z', sha, outcome })
+
+test('a fix-ci session that ended on this head is not fired again, whatever fixCi reads', () => {
+  // sydevs/SahajAtlasWeb#245: three fix-ci on unchanged head 19a284d, at
+  // 02:28/02:32/02:34, after the first had commented and stood down. Serial,
+  // lock-respecting re-fires of a decision already made.
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [endedFixCi('19a284d')] } })
+  const plan = evaluatePr(s, config)
+  assert.deepEqual(types(plan), ['note'], 'no fire, and no bumpFixCi')
+  assert.match(plan[0].text, /19a284d/)
+})
+
+test('a fix-ci session that timed out on this head is just as ended', () => {
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [endedFixCi('19a284d', 'timed out')] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+})
+
+test('a push to a new head clears the refusal', () => {
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: 'c0ffee1' } }, record: { fixCi: 1, dispatches: [endedFixCi('19a284d')] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['bumpFixCi', 'fire:fix-ci'], 'a new sha has no ended session against it')
+})
+
+test('a fix-ci still running on this head is not an ended one — the lock answers that', () => {
+  const live = { id: 'x', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-01T02:28:00.000Z', sha: '19a284d' }
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [live] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['bumpFixCi', 'fire:fix-ci'], 'no outcome yet, so nothing stood down')
+})
+
+test('another handler ending on this head says nothing about fix-ci', () => {
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [{ ...endedFixCi('19a284d'), handler: 'address-review' }] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['bumpFixCi', 'fire:fix-ci'])
+})
+
+test('the unlock after a stood-down fix-ci makes the PR the human\'s turn, not a loop', () => {
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, draft: false, head: { sha: '19a284d' } }, record: { fixCi: 1, current: null, dispatches: [endedFixCi('19a284d')] } })
+  const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, config)
+  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'note', 'label'])
+  assert.deepEqual(plan[2].add, ['awaiting'])
+})
+
 test('red CI fires fix-ci until the cap, then hands over to awaiting', () => {
   assert.deepEqual(types(evaluatePr(prSnap({ ci: red }), config)), ['bumpFixCi', 'fire:fix-ci'])
   const capped = evaluatePr(prSnap({ ci: red, record: { fixCi: 3 } }), config)

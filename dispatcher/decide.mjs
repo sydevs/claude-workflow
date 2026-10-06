@@ -151,6 +151,26 @@ function lastEndedImplement(record) {
   return (record?.dispatches || []).filter((d) => d.handler === 'implement' && d.outcome).pop() || null
 }
 
+/**
+ * A `fix-ci` session that already ran against this exact head and ended.
+ *
+ * A red run produces several `workflow_run`, `check_suite` and `status`
+ * events per push, each its own `act` run, and the first session's unlock
+ * re-derives the same plan on the same red head. Those re-fires were serial
+ * and lock-respecting — not concurrency at all — so only the ceiling stopped
+ * them, which is why it was exhausted (SahajCloud#861, SahajAtlasWeb#245).
+ *
+ * The head sha is what a `fix-ci` fire is about, so it is what the refusal
+ * keys on. A push to a new sha has no ended session against it and fires
+ * again. `rec.dispatches` keeps the last 20 entries, so a very long-lived PR
+ * can age an entry out; the ceiling is still the backstop.
+ * (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
+ */
+function endedFixCiFor(record, sha) {
+  if (!sha) return null
+  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome) || null
+}
+
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
@@ -203,6 +223,8 @@ export function evaluatePr(s, config) {
   if (!pr.draft && s.mergeable === 'CONFLICTING') return [fire('resolve-conflicts')]
 
   if (s.ci.failing.length) {
+    const ended = endedFixCiFor(s.record, pr.head?.sha)
+    if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
     if ((s.record?.fixCi || 0) < (config.ceilings?.ciFixIterations ?? 3)) return [bumpFixCi(), fire('fix-ci')]
     return [
       label([awaiting], [config.labels.stuck]),
@@ -487,4 +509,4 @@ export function decide(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, endedFixCiFor, LOCK_FREE_STATUS_ONLY }

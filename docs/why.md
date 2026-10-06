@@ -1535,6 +1535,23 @@ Milliseconds alone still collide inside one millisecond, which is exactly the wi
 of one event land in. A four-hex-digit random suffix carries the uniqueness; the millisecond
 stamp stays so the ids still sort by time.
 
+## A fix-ci fire is keyed to its head
+
+The three `fix-ci` dispatches on SahajCloud#861 and on SahajAtlasWeb#245 were not a concurrency
+bug. They were serial, lock-respecting, and each one re-derived a decision the first session had
+already made and stood down from.
+
+A red run produces several `workflow_run`, `check_suite` and `status` events per push, each its
+own `act` run. `evaluatePr` fired `fix-ci` on any failing check under the ceiling, keyed on
+nothing, and the first session's own unlock re-derived the same plan on the same red head. So the
+only thing that stopped the loop was `ceilings.ciFixIterations` — which is exactly why it was
+exhausted, and why it then refused the real fix.
+
+The head sha is what a `fix-ci` fire is about, so it is what the refusal keys on: a session that
+already ran against this sha and ended, whatever its outcome, means no second fire. A push to a
+new sha has no ended session against it, and asks again. `rec.dispatches` keeps 20 entries, so a
+very long-lived PR can age one out; the ceiling remains the backstop.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
