@@ -564,12 +564,9 @@ SahajAtlasWeb#233 dropping its marker was specific to a review body — `answer-
 paragraph every dispatch reads now says what "over means cut" may not cut, beside "shorten by
 leaving things out, never by compressing", which until now named no exception.
 
-**The number landed before the rule that spends it.** A kind no skill names is inert — `check()`
-returns `UNBUDGETED` and the CLI exits 0 on it, which is how this gap stayed invisible for three
-weeks. The value alone moved no run's output, and the rule alone would have left the body
-unmeasured. That is why the two shipped as two commits on one PR instead of two PRs a week apart:
-the hard split exists so a changed output has one candidate cause, and here only the pair changes
-anything.
+**A kind no skill names is inert.** `check()` returns `UNBUDGETED` and the CLI exits 0 on it, which
+is how this gap stayed invisible for three weeks. `workflow/lib/budget.test.mjs` now fails for any
+`--kind` a skill names that `writing.budgets` does not.
 
 ## Ground from the body, never the thread
 
