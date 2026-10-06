@@ -343,6 +343,30 @@ a bad review.
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the exact commands now. This entry
 keeps only the failure that forced them.
 
+## A preview link must open on data
+
+SahajCloud#874 ran for eighteen phases. Its Preview section linked three admin pages: the
+country list, the state list, and the import batches. Every phase refreshed that section, and the
+critic read the body once. None of them opened a link. The preview database held one row: the
+admin account that the deploy provisions. The country list was empty, so no one could reach the
+Import tab that the PR was about. The manual-verification steps also named
+`tests/fixtures/event-import-sample.csv`, a file that was never committed.
+
+The links passed every check the skill had. The host was right and the paths existed. The rule
+asked for a link to the changed route. It never asked whether that route showed the change.
+Seeding the preview by hand after the fact turned up three defects in the import. Nine of
+thirteen German addresses geocoded to the wrong town. Any reviewer with data would have seen
+that in a minute.
+
+A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR, not
+one per push. A preview is reachable by anyone who has its URL and the admin address, so the seed
+uses synthetic or anonymised people. The 874 seed replaced 495 coordinator identities with
+`atlas-manager-<id>@preview.invalid`.
+
+A Railway host builds only after its PR opens, so the run that opens the PR is the one that has to
+wait. Leaving it to the next run did not work: a single-phase PR with a clean critic has no next run
+before a human reads it.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
@@ -953,6 +977,13 @@ CI completion is an event. Actions receives it, settles the head SHA with `merge
 dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge gate on a green
 approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
 session ever holds a lock while doing nothing.
+
+**The one exception is the preview deploy, in `finalize-pr` step 7b.** A preview build is not an
+event the dispatcher routes anywhere, and no other run fills the preview with data. A PR that opens
+before its preview exists would reach the reviewer with links that show nothing (see
+[A preview link must open on data](#a-preview-link-must-open-on-data)). The wait is bounded by
+`preview.deployWaitMinutes`. It allows one waiter at a time and reads the deploy status only, never
+CI. So it cannot turn back into the polling that this rule replaced.
 
 ## The bot-actor exception
 

@@ -102,8 +102,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 
 10. **Collect the review aids** the PR body needs. **A preview host keyed on the pull request number is
     constructed; one keyed on a branch slug is discovered** — `/workflow:finalize-pr` step 7
-    is the canonical rule. Either way, link the pages a reviewer should open, not the root. **Email previews** when the diff touches `src/plugins/email/` or
-    `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
+    is the canonical rule. Either way, link the pages a reviewer should open, not the root, and
+    make sure each one opens on data (*Every link opens on data*). **Email previews** when the
+    diff touches `src/plugins/email/` or `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
     `/view/<id>` links.
 
 11. **Ship.** Hand to `/workflow:finalize-pr`. It opens the PR **as a draft** and pushes. Never
