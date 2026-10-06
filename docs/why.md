@@ -363,6 +363,10 @@ one per push. A preview is reachable by anyone who has its URL and the admin add
 uses synthetic or anonymised people. The 874 seed replaced 495 coordinator identities with
 `atlas-manager-<id>@preview.invalid`.
 
+A Railway host builds only after its PR opens, so the run that opens the PR is the one that has to
+wait. Leaving it to the next run did not work: a single-phase PR with a clean critic has no next run
+before a human reads it.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
@@ -973,6 +977,13 @@ CI completion is an event. Actions receives it, settles the head SHA with `merge
 dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge gate on a green
 approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
 session ever holds a lock while doing nothing.
+
+**The one exception is the preview deploy, in `finalize-pr` step 7b.** A preview build is not an
+event the dispatcher routes anywhere, and no other run fills the preview with data. A PR that opens
+before its preview exists would reach the reviewer with links that show nothing (see
+[A preview link must open on data](#a-preview-link-must-open-on-data)). The wait is bounded by
+`preview.deployWaitMinutes`. It allows one waiter at a time and reads the deploy status only, never
+CI. So it cannot turn back into the polling that this rule replaced.
 
 ## The bot-actor exception
 

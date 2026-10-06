@@ -282,9 +282,9 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
   name a fixture you have not checked.**
 - **Say what each link does on that data.** If it does something the change does not claim, say
   so on that link's line.
-- **No preview yet** means the PR is new, and the host builds only after the PR opens. Write the
-  links anyway, plus one line: `Data: not seeded yet`. The next run that refreshes this body
-  seeds the preview.
+- **No preview yet** means the PR is new, or this push has not deployed. Wait for it in step 7b,
+  then seed and verify. If step 7b times out, write the links anyway, plus one line:
+  `Data: not seeded yet`. The next run that refreshes this body seeds the preview.
 - **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
   Write one line naming what is missing. Never leave a link that lands on nothing without saying
   so.
@@ -310,9 +310,26 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   draft** — `draft:false` means "has been ready at least once", and the once-ever review depends
   on that staying true.
 
+### 7b. Wait for the preview, only when step 7 needs it
+
+**This is the one wait the pipeline allows.** Wait only when the preview cannot show the change
+until this push deploys. Either it has no data yet, or this push changes what a linked page
+shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
+
+1. Read the deploy's status on the head SHA with MCP. `pull_request_read method:get_status`
+   returns Railway's commit status. Cloudflare reports a check run instead.
+2. Read it again every `preview.pollSeconds`, for at most `preview.deployWaitMinutes`, both from
+   `loop-config.json`. **Run one waiter at a time.** Between reads, wait with a single background
+   `sleep`, because the hook refuses a foreground one. Never read CI while you wait.
+3. **Success** → seed and verify per *Every link opens on data*. Then refresh the body in one
+   `pull_request_write method:update`.
+4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
+   in the report, and end. A failed deploy goes to `fix-ci` through CI, not to this step.
+
 ### 8. Push and end
 
-**This skill never watches CI, never marks a PR ready, and never merges.** Nothing in the loop
+**This skill never watches CI, never marks a PR ready, and never merges.** Its one wait is the
+preview deploy in step 7b. Nothing in the loop
 merges: the dispatcher arms auto-merge at mark-ready and GitHub's ruleset and queue do the rest.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
 "green": red → `fix-ci`, green on a draft → the next phase while `## Phases` has an unticked
@@ -338,7 +355,8 @@ to memory.
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
   the critic agree.
-- **Never** wait for CI, and **never** merge. Push and end.
+- **Never** wait for CI, and **never** merge. Push and end. The only wait is step 7b's preview
+  deploy, and only when step 7 needs that deploy.
 - **Never** set an assignee, and **never** request a reviewer — the dispatcher requests
   `assignment.reviewer` at ready.
 - **Never** write `awaiting` or a board Status here. Opening the PR is an event. The dispatcher

@@ -186,6 +186,11 @@
     "url": "https://mailpit-production-db88.up.railway.app",
     "retentionDays": 7
   },
+  "preview": {
+    "$comment": "finalize-pr step 7b: the one bounded wait, for a preview deploy that step 7's links need (why: docs/why.md#push-and-end).",
+    "deployWaitMinutes": 20,
+    "pollSeconds": 60
+  },
   "contractSync": {
     "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command on its main, in one bot PR on branch. Rules in survey-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
     "producer": "SahajCloud",
