@@ -931,9 +931,8 @@ a review or a check, and they carry no author filter.
 
 ## The lock label is the lease
 
-Two sessions on one item write over each other, and neither can tell. GitHub offers no
-compare-and-swap. What it offers is a label the dispatcher applies before it fires and the
-session removes as its last write. While the label is on, the dispatcher fires nothing else at
+Two sessions on one item write over each other, and neither can tell. The label a dispatcher
+applies before it fires, and the session removes as its last write, is what says which. While the label is on, the dispatcher fires nothing else at
 that item and records any new event as a recheck. When the label comes off, that event is the
 handoff: the dispatcher re-derives from live state and dispatches whatever is pending.
 
@@ -941,6 +940,9 @@ One label, `bot:working`, serves issues and PRs alike. A field cannot: a PR has 
 name, the attempt and the session link live in a status comment the dispatcher edits. The session
 reads the label before its first write and before every push. Gone means stop. The sweeper
 removes a label whose session passed its deadline, so a dead session holds nothing forever.
+
+The label is the lease a session **reads**. It is not what decides a contest between two
+dispatcher passes — see *The lease is a ref, not a label* below.
 
 ## Push and end
 
@@ -1475,6 +1477,63 @@ for consumer work that needs a decision.
 The same holds for the rest of survey-contracts' findings where the source is plainly right: a
 document that misdescribes the code, a missing changelog entry, a command that no longer exists.
 A ticket is kept for the case where the code may be the wrong side.
+
+## The lease is a ref, not a label
+
+The label was taken too late to be a mutex. `gather` read `locked` once, `decide` ran on that
+snapshot, and `apply` wrote the label after the plan was decided — with `ensureJournalDay` and up
+to twenty issue reads in between. Every call in that window was open: a second pass gathering
+inside it also saw `locked: false`, and both fired.
+
+Serializing the legs does not close it. The concurrency group is keyed on the item number, but
+`decide` emits `conflict-scan` and cross-repo `unblock-check` targets that drain inside the
+already-running job, where no group covers them. And a group is scoped to the repository whose
+run it is: `dispatcher.yml` is a reusable workflow each repo calls from its own
+`workflow-state.yml`, so SahajCloud's `dispatch-WeMeditateWeb-144` and WeMeditateWeb's own never
+serialize. **No concurrency group can serialize cross-repo work.** Only state held in the target
+repo spans those scopes.
+
+A read-back of the status comment is not that state. `PATCH /issues/comments/:id` is
+last-writer-wins, GitHub documents conditional requests on GET for caching rather than as a write
+precondition, and the interleaving W1-write, W1-read, W2-write, W2-read has each pass reading its
+own id back. Both fire. The delay that would fix it cannot be sized, because the bound is
+GitHub's write visibility plus runner skew.
+
+`POST /repos/:owner/:repo/git/refs` is the one GitHub write that *is* a compare-and-swap: it
+answers 422 when the ref exists, so exactly one of two concurrent creates wins, with no read at
+all. `refs/sydevs-lease/<number>` is taken before the label and deleted wherever the lock is
+released. The ref's existence is the lease; where it points is never read. It sits outside
+`refs/heads` and `refs/tags`, so it is not a branch or a tag, and the bot PAT's contents write
+already covers it.
+
+A ref that outlives its session is a permanent lock on that item — a worse failure than the
+duplicate dispatch it replaces. So every release path deletes it, a throw between the create and
+the fire releases it on the way out, `sweep-timeout` deletes unconditionally when it reclaims a
+dead session, and `sweep-lease` reclaims a ref on an item carrying neither the lock nor a
+recorded session.
+
+## One target per item
+
+A concurrency group does not queue three legs. One runs, one pends, and a newer pending cancels
+the older — `dispatcher.yml` records that rule. The sweeper does produce three for one number: a
+blocked, stale, open draft bot PR gets `unblock-check`, `sweep-pr` and `sweep-orphan`. So the
+middle one was silently dropped.
+
+Measuring which leg survives would only document the loss. `resolve` emits one target per
+`repo#number` instead, carrying every reason it found, and `act` drains them in order inside the
+one leg — which it already did for emitted targets. Nothing is lost, because the decision is
+re-derived per reason anyway, and no two legs can share a group any more.
+
+## A dispatch id is unique per fire
+
+The stamp dropped the sub-second digits, so two fires in the same second produced the same id.
+SahajCloud#867 is that case: one `adversarial-review` id, two journal entries one second apart,
+indistinguishable in `rec.dispatches`, in the journal tally and in the status comment. An id that
+two fires can share cannot carry a count, and cannot be the key for anything.
+
+Milliseconds alone still collide inside one millisecond, which is exactly the window two passes
+of one event land in. A four-hex-digit random suffix carries the uniqueness; the millisecond
+stamp stays so the ids still sort by time.
 
 ## Retired
 

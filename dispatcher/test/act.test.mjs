@@ -9,6 +9,10 @@ config.dispatch.routines.SahajCloud = 'trig_sc'
 
 function fakeGithub(world) {
   const calls = []
+  // `refs` is real CAS: create 422s on a ref that exists, which is the whole
+  // mechanism the lease rests on. Share one `world` between two fake clients
+  // and they contend exactly as two `act` passes do.
+  world.refs ||= new Map()
   const rec = (name, args) => { calls.push({ name, args }); return args }
   const issue = (n) => world.issues[n]
   const gh = {
@@ -34,8 +38,24 @@ function fakeGithub(world) {
       },
       checks: { listForRef: async () => ({ data: { check_runs: world.checks || [] } }) },
       repos: {
+        get: async () => ({ data: { default_branch: 'main' } }),
         getCombinedStatusForRef: async () => ({ data: { statuses: [] } }),
         listPullRequestsAssociatedWithCommit: async () => ({ data: Object.values(world.prs) }),
+      },
+      git: {
+        createRef: async (a) => {
+          rec('createRef', a)
+          if (world.refs.has(a.ref)) { const e = new Error('Reference already exists'); e.status = 422; throw e }
+          world.refs.set(a.ref, a.sha)
+          return { data: {} }
+        },
+        deleteRef: async (a) => {
+          rec('deleteRef', a)
+          if (!world.refs.delete(`refs/${a.ref}`)) { const e = new Error('Reference does not exist'); e.status = 422; throw e }
+          return { data: {} }
+        },
+        getRef: async (a) => ({ data: { ref: `refs/${a.ref}`, object: { sha: 'defaultbranchsha' } } }),
+        listMatchingRefs: async (a) => ({ data: [...world.refs.keys()].filter((r) => r.startsWith(`refs/${a.ref}`)).map((r) => ({ ref: r })) }),
       },
       reactions: { createForIssueComment: async (a) => rec('react', a) },
     },
@@ -46,6 +66,9 @@ function fakeGithub(world) {
     },
     graphql: async (q, v) => {
       rec('graphql', { q: q.slice(0, 160), v })
+      // `world.gate` lets a test hold every pass here — the last read `gather`
+      // makes — so two passes both finish gathering before either applies.
+      if (world.gate && /closingIssuesReferences|closedByPullRequestsReferences/.test(q)) await world.gate()
       if (q.includes('reviewThreads')) return { repository: { pullRequest: { reviewThreads: { nodes: world.threads || [] } } } }
       if (q.includes('closingIssuesReferences')) return { repository: { pullRequest: { closingIssuesReferences: { nodes: [] } } } }
       if (q.includes('closedByPullRequestsReferences')) return { repository: { issue: { closedByPullRequestsReferences: { nodes: [] } } } }
@@ -184,4 +207,75 @@ test('a write the token is refused hands the step to a human, and the plan finis
   assert.match(comment, /mark ready/)
   assert.match(comment, /GitHub said/, 'quoting the refusal, not naming a cause')
   assert.match(comment, /Resource not accessible/, "in GitHub's own words")
+})
+
+/** Hold every caller until `n` of them have arrived, then release all of them. */
+function barrier(n) {
+  let arrived = 0
+  let release
+  const open = new Promise((r) => { release = r })
+  return async () => { arrived += 1; if (arrived >= n) release(); await open }
+}
+
+test('two act passes that both gathered an unlocked item fire once, and the loser gets a 422', async () => {
+  // sydevs/SahajCloud#858 on 2026-10-01: two resolve-conflicts dispatches one
+  // second apart, both of which had read `locked: false` before either wrote
+  // the label. The lease ref is the only thing that can decide between them.
+  const world = issueWorld()
+  world.gate = barrier(2)
+  const first = fakeGithub(world)
+  const second = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot implement it', association: 'MEMBER', commentId: 77 } }
+  const fires = []
+  const fetchImpl = async (url) => { fires.push(url); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_1', claude_code_session_url: 'u' }), headers: new Map() } }
+  const run = (github) => act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
+  await Promise.all([run(first), run(second)])
+
+  const creates = [...first.calls, ...second.calls].filter((c) => c.name === 'createRef')
+  assert.equal(creates.length, 2, 'both passes tried for the lease')
+  assert.equal(world.refs.size, 1, 'and exactly one ref exists')
+  assert.equal(fires.length, 1, 'so exactly one session started')
+
+  const locked = [first, second].filter((g) => g.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('bot:working')))
+  assert.equal(locked.length, 1, 'only the winner writes the lock')
+  const loser = [first, second].find((g) => !locked.includes(g))
+  const status = loser.calls.filter((c) => ['createComment', 'updateComment'].includes(c.name)).map((c) => c.args.body).filter((b) => b.startsWith('<!-- sydevs-status')).pop()
+  assert.match(status, /"recheck":true/, 'the loser records a recheck and writes nothing else')
+})
+
+test('a fire refused for the lease does not spend a ciFixIterations attempt', async () => {
+  // sydevs/SahajAtlasWeb#245: the duplicates consumed the ceiling, which is
+  // what later refuses a real fix.
+  const pr = { number: 5, node_id: 'PR1', state: 'open', draft: false, merged: false, user: { login: 'sydevs-bot' }, head: { ref: 'claude/x', sha: '19a284d' }, base: { ref: 'main' }, mergeable: true, mergeable_state: 'clean', changed_files: 3, additions: 10, deletions: 1, requested_reviewers: [] }
+  const world = {
+    issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [], user: { login: 'sydevs-bot' }, pull_request: {}, html_url: 'u', comments: 0, updated_at: '2026-09-08T11:00:00Z' } },
+    comments: {}, prs: { 5: pr }, checks: [{ name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'failure' }],
+    gate: barrier(2),
+  }
+  const first = fakeGithub(world)
+  const second = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'ci', event: 'workflow_run.completed', facts: { sha: '19a284d' } }
+  const fires = []
+  const fetchImpl = async (url) => { fires.push(url); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_2', claude_code_session_url: 'u' }), headers: new Map() } }
+  const run = (github) => act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
+  await Promise.all([run(first), run(second)])
+
+  assert.equal(fires.length, 1, 'one fix-ci session')
+  const bodies = [...first.calls, ...second.calls].filter((c) => ['createComment', 'updateComment'].includes(c.name)).map((c) => c.args.body).filter((b) => b.startsWith('<!-- sydevs-status'))
+  assert.ok(bodies.length, 'both passes wrote the record')
+  for (const b of bodies) assert.doesNotMatch(b, /"fixCi":2/, 'a refused fire never counts against the ceiling')
+  assert.ok(bodies.some((b) => /"fixCi":1/.test(b)), 'the one that started does')
+})
+
+test('sweep-timeout releases the dead session\'s lease along with its label', async () => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  const github = fakeGithub(world)
+  world.refs.set('refs/sydevs-lease/9', 'stale')
+  world.comments[9] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, current: { id: 'x', handler: 'implement', attempt: 3, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'implement', attempt: 3 } }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('attempts are exhausted — must not fire') } })
+  assert.ok(github.calls.some((c) => c.name === 'deleteRef' && c.args.ref === 'sydevs-lease/9'), 'the lease is reclaimed')
+  assert.equal(world.refs.size, 0, 'so the item is leasable again')
+  assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'))
 })

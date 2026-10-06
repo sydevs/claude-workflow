@@ -3,14 +3,15 @@
  * ever move again — a lock past its deadline, a retry whose window has
  * passed, a recheck nobody drained, an orphaned draft, a park whose
  * Re-check date passed, an issue GitHub calls blocked that carries no label,
- * a resolved review thread, an `awaiting` that drifted — and turn each into
- * a target. Runs on GitHub Actions, so it keeps
+ * a resolved review thread, an `awaiting` that drifted, a lease ref no
+ * session is behind — and turn each into a target. Runs on GitHub Actions, so it keeps
  * working through an outage of the routines.
  * (why: docs/why.md#awaiting-has-one-writer)
  */
 
 import { loadRecord } from './record.mjs'
 import { isBot } from './decide.mjs'
+import { listLeases } from './lease.mjs'
 
 /**
  * Open issues with at least one OPEN blocker and no `blocked` label.
@@ -83,6 +84,15 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   // Rechecks recorded while a lock was held but never drained (a missed unlabel event).
   const lockedNumbers = new Set()
   for (const i of await byLabel(L.lock)) lockedNumbers.add(i.number)
+
+  // A lease ref on an item carrying no lock is residue: a pass won the CAS and
+  // then died before it could write the label. Nothing else reclaims it, and
+  // until something does, every later fire for that item is refused — a
+  // permanent lock, which is worse than the duplicate the lease prevents.
+  // `decide` re-checks the record before it deletes. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
+  for (const n of await listLeases(github, owner, name)) {
+    if (!lockedNumbers.has(n)) push('issue', n, 'sweep-lease', {})
+  }
   const orphanHours = config.dispatch.orphanDraftHours ?? 6
   const bot = config.identity.expectedLogin
   const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })

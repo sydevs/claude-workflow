@@ -28,6 +28,7 @@ export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
+export const releaseLease = (why) => ({ type: 'releaseLease', why })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
 
@@ -449,6 +450,14 @@ export function decide(target, s, config) {
     }
     case 'ci':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
+    // Residue from a pass that won the lease and died before the label. Both
+    // the label and `rec.current` must be absent: the winner writes them in
+    // that order, so either one present means a live session.
+    case 'sweep-lease': {
+      if (s.locked) return [note('the lock is on the item — the lease is live')]
+      if (s.record?.current) return [note(`${s.record.current.handler} is still recorded — the lease is live`)]
+      return [releaseLease('no lock and no session on the item')]
+    }
     case 'sweep-retry':
       return [{ type: 'retry' }]
     case 'sweep-timeout':

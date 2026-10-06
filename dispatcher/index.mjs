@@ -8,10 +8,12 @@
  * `act` gathers a snapshot, decides a plan, applies it, and then handles any
  * targets the plan emitted (dependents, a conflict scan) in the same job —
  * those run after the originating item, which is the ordering the plan wants.
+ * It starts from the target's own `reasons`, so one matrix leg carries every
+ * reason resolve found for that item. (why: docs/why.md#one-target-per-item)
  */
 
 import { readFileSync } from 'node:fs'
-import { resolve as resolveEvent } from './resolve.mjs'
+import { resolve as resolveEvent, coalesceTargets } from './resolve.mjs'
 import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
@@ -24,13 +26,16 @@ export function loadConfig(path) {
 }
 
 export async function resolveTargets({ github, context, core, config }) {
-  const targets = await resolveEvent({ github, context, config })
-  core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reason}`).join(', ') || 'none'}`)
+  const targets = coalesceTargets(await resolveEvent({ github, context, config }))
+  core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
   return targets
 }
 
 export async function act({ github, context, core, config, target, env = process.env, dryRun = false, now = new Date(), fetchImpl }) {
-  const queue = [target]
+  // One leg, every reason resolve found for this item, in the order it found
+  // them — then whatever the plans emit. (why: docs/why.md#one-target-per-item)
+  const queue = (target.reasons || [{ reason: target.reason, facts: target.facts }])
+    .map(({ reason, facts }) => ({ ...target, reason, facts: facts || {}, reasons: undefined }))
   const seen = new Set()
   while (queue.length) {
     const t = queue.shift()
