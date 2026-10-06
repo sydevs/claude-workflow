@@ -25,14 +25,27 @@ export function tokenFor(repoName, config, env = process.env) {
   return env[`${config.dispatch.routineTokenSecretPrefix || 'ROUTINE_TOKEN_'}${secretKey(repoName)}`] || null
 }
 
-export function buildRecord({ handler, target, snapshot, flags, attempt, journalNumber, config, now }) {
-  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '')
+/**
+ * A dispatch id is unique per fire, not per second. The old stamp dropped the
+ * milliseconds, so two fires in one second produced one id — indistinguishable
+ * in `rec.dispatches`, in the journal tally, and in the status comment
+ * (sydevs/SahajCloud#867). Milliseconds alone still collide inside one
+ * millisecond, so a short random suffix carries the uniqueness.
+ * (why: docs/why.md#a-dispatch-id-is-unique-per-fire)
+ */
+export function dispatchId({ repoName, number, handler, now, rand = Math.random }) {
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace('.', '')
+  const suffix = Math.floor(rand() * 0x10000).toString(16).padStart(4, '0')
+  return `${repoName}-${number}-${handler}-${stamp}-${suffix}`
+}
+
+export function buildRecord({ handler, target, snapshot, flags, attempt, journalNumber, config, now, rand }) {
   const minutes = config.dispatch.timeoutsMinutes?.[handler] ?? 60
   const deadline = new Date(now.getTime() + minutes * 60_000).toISOString()
   const pr = snapshot.pr
   return {
     v: 1,
-    id: `${target.repo.name}-${target.number}-${handler}-${stamp}`,
+    id: dispatchId({ repoName: target.repo.name, number: target.number, handler, now, rand }),
     handler,
     repo: target.repo.full,
     kind: target.kind,

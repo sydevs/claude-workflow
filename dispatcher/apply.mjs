@@ -8,6 +8,7 @@ import { saveRecord } from './record.mjs'
 import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
+import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -22,6 +23,23 @@ async function commentOnce(gh, t, key, body, dryRun, log) {
   log(`comment: ${key}`)
   if (dryRun) return
   await gh.rest.issues.createComment({ owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, body: `${mark}\n${body}\n\n<sub>🤖 sydevs dispatcher</sub>` })
+}
+
+/**
+ * Release the lease, and say so when it will not go. This is the one failure
+ * in the lease that nothing used to report: the next `takeLease` answers 422
+ * `already exists`, which reads as contention and posts no anomaly, so the
+ * item stops for good in silence. (why: docs/why.md#a-failed-release-says-so)
+ */
+async function release(gh, config, t, { now, dryRun, log }) {
+  if (dryRun) return true
+  if (await releaseLease(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number })) return true
+  log(`release failed: ${leaseRef(t.number)} is still there`)
+  try {
+    const j = await ensureJournalDay(gh, config, now)
+    await postAnomaly(gh, config, j.number, { kind: 'lease-release-failed', text: `${t.repo.full}#${t.number}: ${leaseRef(t.number)} would not delete — every later fire reads its 422 as contention` })
+  } catch { /* an anomaly we cannot post must not break an exit path */ }
+  return false
 }
 
 async function labels(gh, t, snapshot, add, remove, dryRun, log) {
@@ -48,6 +66,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   const nodeId = snapshot.pr?.nodeId || snapshot.item?.nodeId
   const emitted = []
   let recordDirty = false
+  let bumpFixCi = false
   const rec = snapshot.record
 
   // The board is a lens. A token that cannot reach it must not stop the
@@ -105,6 +124,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (!rec.recheck) { rec.recheck = true; recordDirty = true }
         break
       case 'unlocked': {
+        // The session is finished, so its lease goes with its label. A ref
+        // left behind is a permanent lock on the item.
+        await release(gh, config, t, { now, dryRun, log })
         if (rec.recheck) { rec.recheck = false; recordDirty = true }
         if (rec.current) {
           rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done' }]
@@ -113,8 +135,11 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         }
         break
       }
+      // Counted when a session actually starts, never when the fire was
+      // refused. Three refusals used to exhaust `ceilings.ciFixIterations`,
+      // which is what then refuses a real fix (sydevs/SahajAtlasWeb#245).
       case 'bumpFixCi':
-        rec.fixCi = (rec.fixCi || 0) + 1; recordDirty = true
+        bumpFixCi = true
         break
       case 'markReady': {
         log('mark ready')
@@ -171,18 +196,22 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         await postAnomaly(gh, config, j.number, { kind: a.kind, text: a.text, id: rec.current?.id || null })
         break
       }
+      case 'releaseLease':
+        log(`reclaim ${leaseRef(t.number)} — ${a.why}`)
+        await release(gh, config, t, { now, dryRun, log })
+        break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
         const enabled = config.dispatch.enabledHandlers
         if (Array.isArray(enabled) && !enabled.includes(a.handler)) { log(`handler ${a.handler} not enabled yet — skipped`); break }
-        await doFire({ gh, t, snapshot, handler: a.handler, flags: a.flags, attempt: a.attempt || 1, config, env, dryRun, log, now, fetchImpl, rec })
+        await doFire({ gh, t, snapshot, handler: a.handler, flags: a.flags, attempt: a.attempt || 1, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi })
         recordDirty = true
         break
       }
       case 'retry': {
         const p = rec.pending
         if (!p) break
-        await doFire({ gh, t, snapshot, handler: p.handler, flags: p.flags, attempt: p.attempt, config, env, dryRun, log, now, fetchImpl, rec })
+        await doFire({ gh, t, snapshot, handler: p.handler, flags: p.flags, attempt: p.attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi: p.bumpFixCi === true })
         recordDirty = true
         break
       }
@@ -195,6 +224,10 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         rec.current = null
         recordDirty = true
         await labels(gh, t, snapshot, [], [config.labels.lock], dryRun, log)
+        // Unconditionally, whatever the record said: reclaiming the lease is
+        // the whole point of a timeout, and a ref the dead session left is
+        // what would refuse every later fire.
+        await release(gh, config, t, { now, dryRun, log })
         if (!cur || attempt > max) {
           await labels(gh, t, snapshot, [config.labels.awaiting], [config.labels.stuck], dryRun, log)
           await commentOnce(gh, t, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. A comment, a verb, or a push from you starts me again.`, dryRun, log)
@@ -229,13 +262,13 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   return emitted
 }
 
-async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec }) {
+async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi = false }) {
   const routineId = routineIdFor(t.repo.name, config, env)
   const token = tokenFor(t.repo.name, config, env)
   const L = config.labels
   if (!routineId || !token) {
     log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)
-    rec.pending = { handler, flags, attempt, reason: 'no routine configured', retryAfter: null }
+    rec.pending = { handler, flags, attempt, reason: 'no routine configured', retryAfter: null, bumpFixCi }
     await labels(gh, t, snapshot, [L.stuck], [], dryRun, log)
     if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'unconfigured', text: `${t.repo.full}#${t.number} ${handler}: no routine id or token` }) }
     return
@@ -248,11 +281,38 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   log(`fire ${handler} attempt ${attempt} → routine ${routineId}${dryRun ? ' (dry run — not fired)' : ''}`)
   if (dryRun) { log(`record: ${JSON.stringify(record)}`); return }
 
-  // Lock before fire. The lock is the lease; the session removes it last.
-  await labels(gh, t, snapshot, [L.lock], [L.stuck, L.awaiting], dryRun, log)
-  rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null }
-  rec.pending = null
-  snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
+  // The lease, before the label. `gather` read `locked` once and `decide` ran
+  // on that snapshot, so every API call since has been open window — and no
+  // concurrency group can serialize a `conflict-scan` or a cross-repo target
+  // anyway. This ref create is the compare-and-swap that settles it: one 201,
+  // one 422. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
+  const item = { owner: t.repo.owner, repo: t.repo.name, number: t.number }
+  const lease = await takeLease(gh, item, snapshot.pr?.head?.sha)
+  if (!lease.won) {
+    const why = lease.contended ? 'another pass holds the lease' : lease.error
+    log(`refused ${handler} — ${why}`)
+    if (!rec.recheck) rec.recheck = true
+    if (!lease.contended) {
+      const j = await ensureJournalDay(gh, config, now)
+      await postAnomaly(gh, config, j.number, { kind: 'lease-unavailable', text: `${t.repo.full}#${t.number} ${handler}: ${why}` })
+    }
+    return
+  }
+
+  // From here the lease is ours, so every exit releases it. A throw between
+  // the CAS and the fire would otherwise leave a ref no label and no record
+  // points at, which only `sweep-lease` could reclaim.
+  try {
+    await labels(gh, t, snapshot, [L.lock], [L.stuck, L.awaiting], dryRun, log)
+    // `sha` rides on `current`, so the entry `unlocked` and `timeout` append
+    // carries the head this session was fired against. (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
+    rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null, sha: record.head?.sha || null }
+    rec.pending = null
+    snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
+  } catch (e) {
+    await release(gh, config, t, { now, dryRun, log })
+    throw e
+  }
 
   let res = await fireRoutine({ token, routineId, record, fetchImpl, now, config })
   const fr = config.dispatch.fireRetry || {}
@@ -266,9 +326,10 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   }
 
   if (res.ok) {
+    if (bumpFixCi) rec.fixCi = (rec.fixCi || 0) + 1
     rec.current.session = res.session
     rec.current.url = res.url
-    rec.dispatches = [...(rec.dispatches || []), { id: record.id, handler, attempt, firedAt: record.firedAt, url: res.url }]
+    rec.dispatches = [...(rec.dispatches || []), { id: record.id, handler, attempt, firedAt: record.firedAt, url: res.url, sha: record.head?.sha || null }]
     log(`session ${res.session}`)
     return
   }
@@ -277,8 +338,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   const reason = res.status === 429 ? '429 rate limited' : res.status === 400 ? 'routines paused' : `fire failed (${res.status})`
   const retryAfter = res.status === 429 ? res.retryAfter : res.status === 400 ? null : new Date(now.getTime() + 10 * 60_000).toISOString()
   rec.current = null
-  rec.pending = { handler, flags, attempt, reason, retryAfter, id: record.id }
+  rec.pending = { handler, flags, attempt, reason, retryAfter, id: record.id, bumpFixCi }
   await labels(gh, t, snapshot, [L.stuck], [L.lock], dryRun, log)
+  await release(gh, config, t, { now, dryRun, log })
   await commentOnce(gh, t, `fire-failed ${record.id}`, res.status === 400
     ? '⏸ The routines are paused, so nothing started. I will retry when they resume.'
     : `⏳ ${reason}. I will retry ${retryAfter ? `after ${retryAfter.slice(11, 16)}Z` : 'shortly'}.`, dryRun, log)
