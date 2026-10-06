@@ -6,9 +6,17 @@ import { loadLoopConfig } from './config.mjs'
 import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const config = join(root, 'loop-config.json')
+const cli = join(root, 'workflow', 'lib', 'budget.mjs')
+
+// `cwd` is pinned to this checkout because `loadLoopConfig()` resolves from it
+// first, and an ancestor checkout's config is not the one under test.
+function run(args, text) {
+  return spawnSync(process.execPath, [cli, ...args], { input: text, encoding: 'utf8', cwd: root })
+}
 
 // Frozen fixtures, not a copy of the config. The `fit()` tests below size
 // their input against these exact numbers to reproduce a real incident, so a
@@ -98,10 +106,10 @@ test('the fallback budgets equal loop-config.json', () => {
   assert.deepEqual(DEFAULT_BUDGETS, loadLoopConfig(config).writing.budgets)
 })
 
-// `check()` returns UNBUDGETED for a kind no config names, and the CLI exits
-// 0 on it, so a typo'd or unnamed `--kind` reads as a pass. A review body went
-// three weeks measured against the wrong budget behind that silence. Every
-// kind a skill actually names has to be a key.
+// `check()` returns UNBUDGETED for a kind no config names. The CLI exited 0 on
+// it until #155, so a typo'd or unnamed `--kind` read as a pass, and a review
+// body went three weeks measured against the wrong budget behind that silence.
+// Every kind a skill actually names still has to be a key.
 test('every --kind a skill names is budgeted', () => {
   const skills = join(root, 'workflow', 'skills')
   const named = new Set()
@@ -113,4 +121,41 @@ test('every --kind a skill names is budgeted', () => {
   const budgets = loadLoopConfig(config).writing.budgets
   assert.ok(named.size > 0, 'no skill names a --kind, so this test checks nothing')
   assert.deepEqual([...named].filter((kind) => !(kind in budgets)), [])
+})
+
+// The CLI exited 0 on UNBUDGETED, so a typo'd or unnamed `--kind` read as a
+// pass. Every verdict but OK exits 1 now, and the verdict word says which.
+test('the CLI fails an unbudgeted kind, and names it', () => {
+  const r = run(['--kind', 'nosuchkind'], 'x')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout, /UNBUDGETED/)
+  assert.match(r.stdout, /nosuchkind/)
+})
+
+test('the CLI passes a kind inside its budget', () => {
+  const r = run(['--kind', 'journalEntry'], 'x')
+  assert.equal(r.status, 0)
+  assert.match(r.stdout, /^OK/)
+})
+
+test('the CLI fails a kind over its budget', () => {
+  const limit = loadLoopConfig(config).writing.budgets.journalEntry
+  const r = run(['--kind', 'journalEntry'], 'x'.repeat(limit + 1))
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout, /OVER/)
+})
+
+// `--fit` writes its verdict to stderr, because handler-journal redirects
+// stdout to the fitted file. Its exit code is half of why.md's argument.
+test('the --fit CLI reports an unbudgeted kind on stderr, and fails', () => {
+  const r = run(['--fit', '--kind', 'nosuchkind'], 'x')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /UNBUDGETED/)
+  assert.equal(r.stdout, 'x')
+})
+
+test('the CLI fails when no --kind is given at all', () => {
+  const r = run([], 'x')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stderr, /no --kind given/)
 })

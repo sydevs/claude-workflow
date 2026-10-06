@@ -20,6 +20,17 @@
  * clause on purpose. The fifteen-line rule had one. That clause is what
  * killed the rule.
  *
+ * ## The exit code says "not OK". The verdict word says why
+ *
+ * The CLI used to exit 0 on `UNBUDGETED`, so a typo'd or unnamed `--kind`
+ * read as a pass, and a review body spent three weeks measured against the
+ * wrong budget behind that silence (#145). Every verdict but `OK` exits 1.
+ *
+ * So no caller may act on the exit code alone. `OVER` means cut prose.
+ * `UNBUDGETED` means the kind is wrong, and cutting fixes nothing. The skills
+ * key on the printed verdict word for that reason.
+ * (why: docs/why.md#a-verdict-word-not-an-exit-code)
+ *
  * This script reads text from stdin. It never fetches data. So a routine
  * and a laptop always agree.
  * (why: docs/why.md#budgets-not-adjectives)
@@ -163,9 +174,16 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
 if (isMain) {
   const argv = process.argv
+  const flag = argv.indexOf('--kind')
   const kind = (argv.find((a) => a.startsWith('--kind=')) || '').split('=')[1]
-    || argv[argv.indexOf('--kind') + 1]
+    || (flag === -1 ? '' : argv[flag + 1])
   const wantsFit = argv.includes('--fit')
+  // Without this, a missing `--kind` read `argv[0]` and reported the node
+  // binary as the kind — and the skills now answer UNBUDGETED by fixing it.
+  if (!kind) {
+    console.error('UNBUDGETED \u2014 no --kind given, so pass one from writing.budgets')
+    process.exit(1)
+  }
   let text = ''
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {
@@ -192,6 +210,6 @@ if (isMain) {
     const r = check(text, kind, budgets)
     const d = detailsShare(text)
     console.log(`${r.verdict} — ${r.reason} (${source})${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
-    process.exit(r.verdict === 'OVER' ? 1 : 0)
+    process.exit(r.verdict === 'OK' ? 0 : 1)
   })
 }

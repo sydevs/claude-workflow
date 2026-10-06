@@ -565,6 +565,22 @@ Two lessons follow, and the second one generalizes:
 Ticket and PR bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them
 instead of the thread.
 
+## A verdict word, not an exit code
+
+`check()` has always returned `UNBUDGETED` for a kind `writing.budgets` does not name, and the CLI
+exited **0** on it. So a typo'd or unnamed `--kind` read as a pass. That silence is how a review
+body spent three weeks measured against `comment`'s 1200 (#145): the kind was inert, and nothing
+said so.
+
+**Keying the response on the exit code was the second half of the same bug.** `--fit` already
+exited 1 on `UNBUDGETED`, and `handler-journal` read that as *"cut prose from Friction"* — so a run
+that mistyped the kind was told, forever, to cut text that was never over budget. The exit code
+cannot carry the difference, because both answers are "not OK".
+
+So two things changed together. Every verdict but `OK` exits 1, and the skills act on the printed
+verdict word instead: `OVER` means cut, `UNBUDGETED` means fix the kind and cut nothing. A fix to
+only one of the two would have left the loop acting on the wrong signal.
+
 ## A review body has its own budget
 
 `writing.budgets` had three kinds, and a submitted review body was none of them. So
