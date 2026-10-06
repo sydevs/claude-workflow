@@ -20,12 +20,18 @@
  * clause on purpose. The fifteen-line rule had one. That clause is what
  * killed the rule.
  *
+ * ## The exit code says "not OK". The verdict word says why
+ *
+ * Every verdict but `OK` exits 1. Two of them need opposite responses, so a
+ * caller reads the printed verdict word and never the exit code alone.
+ * (why: docs/why.md#a-verdict-word-not-an-exit-code)
+ *
  * This script reads text from stdin. It never fetches data. So a routine
  * and a laptop always agree.
  * (why: docs/why.md#budgets-not-adjectives)
  */
 
-import { loadLoopConfig } from './config.mjs'
+import { loadLoopConfig, flag } from './config.mjs'
 
 /**
  * Fallback budgets. `loop-config.json` → `writing.budgets` is authoritative.
@@ -43,16 +49,44 @@ export const DEFAULT_BUDGETS = {
 }
 
 /**
- * Measure one artefact against its budget.
+ * Which kinds must carry `identity.commentMarker`, and the marker itself.
+ *
+ * `loop-config.json` → `writing.markerRequired` and `identity.commentMarker`
+ * are authoritative, and `budget.test.mjs` fails on a drift from either.
+ * A journal entry is absent on purpose: `handler-journal` posts no marker.
+ *
+ * Test presence, never position: the harness attribution footer follows the
+ * marker in a real comment. (why: docs/why.md#the-marker-check-belongs-in-the-script)
+ */
+export const DEFAULT_MARKER_REQUIRED = ['comment', 'reviewReply', 'reviewBody']
+
+/** Every verdict this script can print. The skills key on these words. */
+export const VERDICTS = ['OK', 'OVER', 'UNBUDGETED', 'MISSING_MARKER']
+
+export const DEFAULT_MARKER = '<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>'
+
+/**
+ * Measure one artefact against its budget, and against the marker rule.
  *
  * `chars` counts the whole string. Markdown, HTML tags and `<details>`
  * contents all count, because a later run pays for every one of them.
+ *
+ * The marker options default ON, like `budgets`, so a caller gets the rule
+ * without asking. Measuring a budget alone takes an explicit
+ * `{ markerRequired: [] }`.
  */
-export function check(text, kind, budgets = DEFAULT_BUDGETS) {
+export function check(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
+  const { markerRequired = DEFAULT_MARKER_REQUIRED, marker = DEFAULT_MARKER } = options
   const limit = budgets?.[kind]
   const chars = typeof text === 'string' ? text.length : 0
   if (typeof limit !== 'number') {
     return { kind, chars, limit: null, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
+  }
+  // Answered before the overage, because the marker is 124 characters and they
+  // count. A draft measured without it is measured against the wrong length.
+  if (marker && markerRequired.includes(kind) && !String(text).includes(marker)) {
+    return { kind, chars, limit, verdict: 'MISSING_MARKER',
+      reason: `${kind} carries no identity.commentMarker — append it and re-check` }
   }
   const over = chars - limit
   return over > 0
@@ -162,18 +196,24 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
 if (isMain) {
-  const argv = process.argv
-  const kind = (argv.find((a) => a.startsWith('--kind=')) || '').split('=')[1]
-    || argv[argv.indexOf('--kind') + 1]
+  // `process.argv` unsliced read the node binary as the kind when `--kind` was
+  // missing. Sliced, an absent flag is an empty kind, which is UNBUDGETED.
+  const argv = process.argv.slice(2)
+  const kind = flag(argv, 'kind', '')
   const wantsFit = argv.includes('--fit')
   let text = ''
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {
     let budgets = DEFAULT_BUDGETS
+    let markerRequired = DEFAULT_MARKER_REQUIRED
+    let marker = DEFAULT_MARKER
     let source = 'fallback'
     try {
-      const configured = loadLoopConfig()?.writing?.budgets
+      const config = loadLoopConfig()
+      const configured = config?.writing?.budgets
       if (configured) { budgets = configured; source = 'config' }
+      if (config?.writing?.markerRequired) markerRequired = config.writing.markerRequired
+      if (config?.identity?.commentMarker) marker = config.identity.commentMarker
     } catch (err) {
       // Two failures land here, and only one is routine. A missing file is
       // the fallback's whole purpose. A file that EXISTS and will not parse
@@ -189,9 +229,9 @@ if (isMain) {
       process.exit(f.verdict === 'OK' ? 0 : 1)
     }
 
-    const r = check(text, kind, budgets)
+    const r = check(text, kind, budgets, { markerRequired, marker })
     const d = detailsShare(text)
     console.log(`${r.verdict} — ${r.reason} (${source})${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
-    process.exit(r.verdict === 'OVER' ? 1 : 0)
+    process.exit(r.verdict === 'OK' ? 0 : 1)
   })
 }

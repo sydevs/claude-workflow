@@ -65,7 +65,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 - **Never improvise around a missing credential or tool.** Journal it, and stop that part.
 - **Report anomalies. Do not explain them.** A refused tool, a readback that disagrees, a time
   jump — record it and move on. (why: docs/why.md#report-anomalies-do-not-explain-them)
-- **Append `identity.commentMarker`** to every comment.
+- **Append `identity.commentMarker`** to every comment. `budget.mjs` answers `MISSING_MARKER`
+  until you do.
 
 ## Protected paths — check before you plan
 
@@ -95,9 +96,11 @@ the file are all answering a safety prompt with nobody present. Hand the ticket 
 `writing.budgets`: `comment` for a ticket or PR comment, `reviewReply` for a thread reply,
 `reviewBody` for a submitted review body, `journalEntry` for the run's journal entry. Ticket and PR
 bodies are unbudgeted. Measure with `node <claude-workflow>/workflow/lib/budget.mjs --kind <kind>`,
-`<details>` included. Over means cut prose, never `identity.commentMarker`, a finding, or a section
-the skill requires. Register: active voice, one instruction per sentence, at most 20 words, no
-semicolons, lead with the outcome. (why: docs/why.md#budgets-not-adjectives)
+`<details>` included. Act on the verdict word, never the exit code. `OVER` means cut prose, never
+`identity.commentMarker`, a finding, or a section the skill requires. `budget.mjs` decides the
+marker. `UNBUDGETED` means the kind is wrong, so fix it and cut nothing. Register: active voice,
+one instruction per sentence, at most 20 words, no semicolons, lead with the outcome.
+(why: docs/why.md#budgets-not-adjectives)
 
 **Shorten by leaving things out, never by compressing.** The `concise` output style each repo
 sets in `.claude/settings.json` says the same thing, and the budget is what makes it checkable.

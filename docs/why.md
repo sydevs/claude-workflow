@@ -565,6 +565,22 @@ Two lessons follow, and the second one generalizes:
 Ticket and PR bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them
 instead of the thread.
 
+## A verdict word, not an exit code
+
+`check()` has always returned `UNBUDGETED` for a kind `writing.budgets` does not name, and the CLI
+exited **0** on it. So a typo'd or unnamed `--kind` read as a pass. That silence is how a review
+body spent three weeks measured against `comment`'s 1200 (#145): the kind was inert, and nothing
+said so.
+
+**Keying the response on the exit code was the second half of the same bug.** `--fit` already
+exited 1 on `UNBUDGETED`, and `handler-journal` read that as *"cut prose from Friction"* — so a
+run that mistyped the kind was told, forever, to cut text that was never over budget. The exit code
+cannot carry the difference, because both answers are "not OK".
+
+So two things changed together. Every verdict but `OK` exits 1, and the skills act on the printed
+verdict word instead: `OVER` means cut, `UNBUDGETED` means fix the kind and cut nothing. A fix to
+only one of the two would have left the loop acting on the wrong signal.
+
 ## A review body has its own budget
 
 `writing.budgets` had three kinds, and a submitted review body was none of them. So
@@ -600,6 +616,39 @@ leaving things out, never by compressing", which until now named no exception.
 **A kind no skill names is inert.** `check()` returns `UNBUDGETED` and the CLI exits 0 on it, which
 is how this gap stayed invisible for three weeks. `workflow/lib/budget.test.mjs` now fails for any
 `--kind` a skill names that `writing.budgets` does not.
+
+## The marker check belongs in the script
+
+`handler-preflight` says to append `identity.commentMarker` to every comment, and says the budget
+may never cut it. Both are prose, and prose is what SahajAtlasWeb#233 was following when it shipped
+a review with no attribution at all. `CLAUDE.md` gives a mechanical rule to a script, and whether a
+string ends with another string is as mechanical as a rule gets.
+
+`budget.mjs` already held the artefact on stdin and `loadLoopConfig()` on the marker, so it is the
+one place that can answer without a second tool.
+
+**The list is a sibling of `writing.budgets`, not a shape change to it.** `budget.mjs` is the only
+reader of that key, and both of its lookups require a number. Turning each budget into
+`{chars, marker}` would break them, break the fallback's `deepEqual`, and break every `--kind` call
+the skills make. `writing.markerRequired` beside the budgets costs none of that. `journalEntry` is
+absent from it because `handler-journal` posts no marker, which is also why `--fit` never checks.
+
+**It tests presence, not position.** A loop comment carries the harness attribution footer after
+the marker — this repo's own issue comments do — so an ends-with test would fail a correct
+artefact to catch a failure nobody has made. What #233 shipped was no marker at all.
+
+**And it is unconditional, not behind a flag.** A flag would have to be named in run-loaded prose,
+and a run that forgot it would get the silence this rule exists to remove. So `check()` defaults
+the marker on, exactly as it defaults the budgets on, and measuring a budget alone takes an
+explicit opt-out. A maintainer measuring a draft before appending the marker is measuring
+something that is not the artefact: 124 of its characters are missing, so the number was wrong
+anyway.
+
+**`markerRequired` lists the kinds that need it, so a new kind must declare itself.** Listing the
+one exemption instead would default a new kind to checked, which is the safer polarity and is
+worth revisiting. What closes the gap either way is a test: every budgeted kind is either in
+`markerRequired` or named in the test's exemption set, so adding a budget kind fails the suite
+until someone decides.
 
 ## Ground from the body, never the thread
 
