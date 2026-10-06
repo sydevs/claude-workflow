@@ -218,15 +218,32 @@ test('every budgeted kind declares whether it carries the marker', () => {
 
 // The skills key on the printed verdict word, so a word a skill names and the
 // script cannot print is prose/script drift — the class `rule-delta.mjs` and
-// the `--kind` test above exist to close.
+// the `--kind` test above exist to close. Requiring `means` or `→` after the
+// word missed `MISSING_MARKER`, the one verdict this change adds to prose, so
+// every backticked ALL-CAPS token counts and the non-verdicts are named here.
+// A new token fails this test until someone says which list it belongs in.
+const NOT_VERDICTS = [
+  'APPROVE',
+  'CLAUDE_PLUGIN_ROOT',
+  'COMMENT',
+  'CONFLICTING',
+  'FETCH_HEAD',
+  'PATCH',
+  'REQUEST_CHANGES',
+  'SAHAJ_ATLAS_VERSION',
+  'SENTRY_CLAUDE_WORKFLOW_TOKEN',
+]
+
 test('every verdict word a skill names is one the script can print', () => {
   const skills = join(root, 'workflow', 'skills')
   const named = new Set()
   for (const file of readdirSync(skills, { recursive: true })) {
     if (!String(file).endsWith('SKILL.md')) continue
     const text = readFileSync(join(skills, String(file)), 'utf8')
-    for (const m of text.matchAll(/`([A-Z][A-Z_]+)`\s*(?:means|→)/g)) named.add(m[1])
+    for (const m of text.matchAll(/`([A-Z][A-Z_]+)`/g)) {
+      if (!NOT_VERDICTS.includes(m[1])) named.add(m[1])
+    }
   }
-  assert.ok(named.size > 0, 'no skill keys on a verdict word, so this test checks nothing')
+  assert.ok(named.has('MISSING_MARKER'), 'the scan misses the verdict it was widened for')
   assert.deepEqual([...named].filter((word) => !VERDICTS.includes(word)), [])
 })
