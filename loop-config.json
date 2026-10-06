@@ -15,6 +15,10 @@
     "maxOpenProposals": 10,
     "ciFixIterations": 3
   },
+  "findings": {
+    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in handler-preflight/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR.",
+    "directFixMaxFiles": 2
+  },
   "labels": {
     "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Re-check date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in handler-preflight/SKILL.md.",
     "journal": "ops-journal",
