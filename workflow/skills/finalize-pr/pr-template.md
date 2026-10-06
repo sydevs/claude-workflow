@@ -29,8 +29,9 @@ Optional at or under `review.skipWhen`, where the diff is its own outline.]
 ## Preview
 
 [Preview URL(s) deep-linked to the changed routes: the PR-number host
-where `previewUrl.pattern` names one, else the BRANCH alias. See
-`finalize-pr/SKILL.md` step 7.]
+where `previewUrl.pattern` names one, else the BRANCH alias. Each link
+opens on seeded data. Any file the reviewer must supply goes here in
+`<details>`. See `finalize-pr/SKILL.md` step 7.]
 
 - [what changed] — <url>
 

@@ -343,6 +343,26 @@ a bad review.
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the exact commands now. This entry
 keeps only the failure that forced them.
 
+## A preview link must open on data
+
+SahajCloud#874 ran for eighteen phases. Its Preview section linked three admin pages: the
+country list, the state list, and the import batches. Every phase refreshed that section, and the
+critic read the body once. None of them opened a link. The preview database held one row: the
+admin account that the deploy provisions. The country list was empty, so no one could reach the
+Import tab that the PR was about. The manual-verification steps also named
+`tests/fixtures/event-import-sample.csv`, a file that was never committed.
+
+The links passed every check the skill had. The host was right and the paths existed. The rule
+asked for a link to the changed route. It never asked whether that route showed the change.
+Seeding the preview by hand after the fact turned up three defects in the import. Nine of
+thirteen German addresses geocoded to the wrong town. Any reviewer with data would have seen
+that in a minute.
+
+A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR, not
+one per push. A preview is reachable by anyone who has its URL and the admin address, so the seed
+uses synthetic or anonymised people. The 874 seed replaced 495 coordinator identities with
+`atlas-manager-<id>@preview.invalid`.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A

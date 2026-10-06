@@ -63,7 +63,9 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    Judge a ticketless PR against its own body.
 2. **The PR body** — what the author claims the change is. Check its `## Change outline` against
    the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
-   first.
+   first. Then open each `## Preview` link, signed in as the repo guide says. The preview has
+   built by the time you run. A link that shows no data, or an input the body names that does not
+   exist, is a `should-fix` (`/workflow:finalize-pr` step 7).
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use

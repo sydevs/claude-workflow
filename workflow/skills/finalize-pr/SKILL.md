@@ -34,6 +34,7 @@ repo:
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
 | `packageManager` | Any command you construct |
+| `previewUrl.pattern` / `.seed` | Step 7 — the PR-number host, and how to fill it with data |
 
 Never hard-code a repo's gate command, trigger paths, or package manager into this skill.
 
@@ -266,6 +267,28 @@ characters.
   the host current, never the path, so deleting a component deletes its story.
 - SahajAtlasWordpress has no preview — omit the section.
 
+### Every link opens on data
+
+A link to an empty list is not a preview. A deploy provisions a sign-in and nothing more, so a
+new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-data)
+
+- **Check what each link needs, signed in.** The repo guide says how to sign in. Link a document
+  by id, not a list, and only a document the preview's API returned.
+- **Seed whatever is missing.** Run `previewUrl.seed` against the host. Seed the smallest set
+  that shows the change. **Never seed real people's contact details.** Seeded data survives later
+  pushes, so check it before you seed again.
+- **Put the reviewer's inputs in the body.** If the change takes a file, such as an upload, put it
+  inline in a `<details>` block. Or name a path that `git ls-files` lists on the branch. **Never
+  name a fixture you have not checked.**
+- **Say what each link does on that data.** If it does something the change does not claim, say
+  so on that link's line.
+- **No preview yet** means the PR is new, and the host builds only after the PR opens. Write the
+  links anyway, plus one line: `Data: not seeded yet`. The next run that refreshes this body
+  seeds the preview.
+- **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
+  Write one line naming what is missing. Never leave a link that lands on nothing without saying
+  so.
+
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
 
@@ -311,6 +334,7 @@ to memory.
 - **Always** operate on the full branch diff, not the last commit.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
+- **Never** link a preview page that shows no data, unless a line in the body says why.
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
   the critic agree.
