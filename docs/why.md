@@ -367,6 +367,39 @@ it fails the loop in four ways:
 The `adversarial-review` check exists because the reviewer reads the outline first. A view that
 disagrees with the diff points the review at the wrong thing.
 
+## The template owns the reflect PR's sections
+
+#148 counted seven rule statements across three files that together told Sunday's `reflect` PR what
+its body's first sections are. Three sat in `reflect`, four in `finalize-pr` and its template. They
+disagreed: `reflect` put the grading at the top, `finalize-pr` put the outline and Preview there. A
+fourth `reflect` statement turned up while fixing it, at the one place a run reads first. #147 hit
+the collision first and chose, in a preamble. Its critic asked for a ticket rather than a comment,
+so one PR a week re-made the judgement. #147 also shipped with no `## Summary`, which no file
+allowed deleting.
+
+`reflect` needs two headings the template never named, so any fix meant two new slots or one
+exception covering both. Two of the three ways out were more expensive than they looked. Naming
+`reflect` as the template's exception leaves
+[Show the shape, not the file list](#show-the-shape-not-the-file-list) arguing against the
+exception it now permits. Moving the grading out of the body needs a new `writing.budgets` kind.
+#147's grading section measures 3527 characters — 2327 over `comment`, 2027 over `journalEntry`,
+and [only bodies are unbudgeted](#budgets-not-adjectives). `AGENTS.md` forbids that config edit
+riding the skill edit, so that way costs two PRs across two weeks.
+
+So the template gained both headings as conditional sections, in the terse idiom `## Migration`
+already uses. A new `##` costs the dispatcher nothing. The only body heading it reads is
+`## Phases` (`dispatcher/markers.mjs`), and that scan breaks at the next heading of any level. Both
+new slots sit below `## Preview`, so the outline still leads. The order now lives in the template,
+and `reflect` makes no judgement about it.
+
+Two things the ordering fix would have left behind, had the template taken only the headings. The
+length rule exempted the outline and Preview alone, so the grading section — the loop's own review
+content — was still told to keep short or hide in `<details>`, and next Sunday would have weighed
+that instead. And the rule the fix relies on, that a skill names its slot and never states the
+order, was false of `finalize-pr`, which stated the outline's position in its own step 7. That
+line now cites the template instead. Both rules sit in `pr-template.md`, so the next skill wanting
+a body section cannot rebuild the collision.
+
 ## A routine cannot reach the GitHub API
 
 Not "should not." **Cannot**, by any client. Measured in a routine on 2026-09-02:
