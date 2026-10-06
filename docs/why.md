@@ -372,21 +372,19 @@ disagrees with the diff points the review at the wrong thing.
 #148 counted seven rule statements across three files that together told Sunday's `reflect` PR what
 its body's first sections are. Three sat in `reflect`, four in `finalize-pr` and its template. They
 disagreed: `reflect` put the grading at the top, `finalize-pr` put the outline and Preview there. A
-fourth `reflect` statement turned up while fixing it, at the one place a run reads first.
+fourth `reflect` statement turned up while fixing it, at the one place a run reads first. #147 hit
+the collision first and chose, in a preamble. Its critic asked for a ticket rather than a comment,
+so one PR a week re-made the judgement. #147 also shipped with no `## Summary`, which no file
+allowed deleting.
 
-#147 was the first PR to hit the collision. It chose, and spent a preamble justifying the choice.
-Its critic asked for a ticket instead. So one PR a week re-made the same judgement. #147 also
-shipped with no `## Summary`, which no file allowed deleting.
-
-The collision was never one line. `reflect` needs two headings the template never named, so any fix
-meant two new slots or one exception covering both.
-
-Two of the three ways out were more expensive than they looked. Naming `reflect` as the template's
-exception leaves [Show the shape, not the file list](#show-the-shape-not-the-file-list) arguing
-against the exception it now permits. Moving the grading out of the body needs a new
-`writing.budgets` kind. #147's grading section measures 3527 characters — 2327 over `comment`, 2027
-over `journalEntry`, and [only bodies are unbudgeted](#budgets-not-adjectives). `AGENTS.md` forbids
-that config edit riding the skill edit, so that way costs two PRs across two weeks.
+`reflect` needs two headings the template never named, so any fix meant two new slots or one
+exception covering both. Two of the three ways out were more expensive than they looked. Naming
+`reflect` as the template's exception leaves
+[Show the shape, not the file list](#show-the-shape-not-the-file-list) arguing against the
+exception it now permits. Moving the grading out of the body needs a new `writing.budgets` kind.
+#147's grading section measures 3527 characters — 2327 over `comment`, 2027 over `journalEntry`,
+and [only bodies are unbudgeted](#budgets-not-adjectives). `AGENTS.md` forbids that config edit
+riding the skill edit, so that way costs two PRs across two weeks.
 
 So the template gained both headings as conditional sections, in the terse idiom `## Migration`
 already uses. A new `##` costs the dispatcher nothing. The only body heading it reads is
