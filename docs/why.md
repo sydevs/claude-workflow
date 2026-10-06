@@ -1552,6 +1552,35 @@ already ran against this sha and ended, whatever its outcome, means no second fi
 new sha has no ended session against it, and asks again. `rec.dispatches` keeps 20 entries, so a
 very long-lived PR can age one out; the ceiling remains the backstop.
 
+## The journal tally needs a writer that cannot stop
+
+Monday 2026-09-28 reported 22 dispatches and 1 anomaly against 37 and 4. Thursday 2026-10-01
+reported 84 and 6 against 97 and 7. Monday's counted set was precisely its first 22 session
+comments in chronological order, and its per-handler tally matched those 22 exactly, so the
+counter did not miscount — it stopped.
+
+`refreshTally` had one caller, `journalTick`, reachable only from the `journal` job on the
+schedule. Three properties made one bad tick permanent. The tick was unguarded, so a throw in
+`closeDuplicateDays` skipped the tally for that tick entirely. Nothing revisited a day once
+`localDate` moved on, so yesterday's title stayed frozen at the last tick that succeeded.
+And the failure was invisible by design: `dispatch / journal` is in `ci.ignoreCheckNames`, so a
+red journal job is never CI the loop acts on, and nothing posted an anomaly.
+
+**The schedule is also not the schedule.** 212 schedule runs span 2026-09-09 to 2026-10-06 —
+about eight a day against a declared fifty, at gaps of two to five hours, every one of them
+concluding `success`. So the loss is a cron GitHub mostly drops, not a throw, and a day can roll
+with its last true count hours old. #134 froze at 00:31Z with 6.5 hours of its journal day left.
+
+That is why the repair cannot be keyed on *which* cron fired: no tick is guaranteed to land near
+midnight. Each step of the tick is guarded on its own, a failure posts a `journal-tally` anomaly
+to the day's own issue, and **every** tick re-counts yesterday as well as today, under
+yesterday's own weekday. The refresh writes nothing when the counts already agree, so running it
+every tick costs one read and buys a day that closes with a true count.
+
+It matters beyond tidiness because the weekly reflection builds its usage report from the seven
+titles and tally blocks, with no comment reads. The journals are the one input a crashed week
+cannot reconstruct.
+
 ## Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They

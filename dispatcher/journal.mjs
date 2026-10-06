@@ -19,6 +19,18 @@ function weekday(now, timeZone) {
   return new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now)
 }
 
+/** The journal day before `day`, both as `YYYY-MM-DD`. Noon UTC, so no DST shift moves the date. */
+export function previousDay(day) {
+  const d = new Date(`${day}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/** The weekday a journal day's title carries. Reads the day, never the clock. */
+export function dayLabel(day) {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${day}T12:00:00Z`))
+}
+
 export function titleFor(day, counts) {
   return `${day} — ${counts.dispatches} dispatch${counts.dispatches === 1 ? '' : 'es'} · ${counts.failed} failed · ${counts.anomalies} anomal${counts.anomalies === 1 ? 'y' : 'ies'}`
 }
@@ -201,13 +213,20 @@ function withTally(body, block) {
   return `${b.trimEnd()}\n\n${block}`
 }
 
-/** Recount the day from its comment markers; patch the title and the body's tally block. */
-export async function refreshTally(gh, config, journalNumber, now = new Date()) {
+/**
+ * Recount the day from its comment markers; patch the title and the body's
+ * tally block.
+ *
+ * `label` names the weekday the title carries. Without it the clock does, which
+ * is only right for today — recounting a day that has rolled must not relabel
+ * it with today's weekday.
+ */
+export async function refreshTally(gh, config, journalNumber, now = new Date(), label = null) {
   if (!journalNumber) return null
   const owner = config.org
   const repo = config.journalRepo
   const counts = tallyFrom((await allComments(gh, owner, repo, journalNumber)).map((c) => c.body))
-  const title = titleFor(weekday(now, config.journal.timezone), counts)
+  const title = titleFor(label || weekday(now, config.journal.timezone), counts)
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: journalNumber })
   const body = withTally(issue.body, renderTally(counts))
   const patch = {}
@@ -215,4 +234,15 @@ export async function refreshTally(gh, config, journalNumber, now = new Date()) 
   if (String(issue.body || '') !== body) patch.body = body
   if (Object.keys(patch).length) await gh.rest.issues.update({ owner, repo, issue_number: journalNumber, ...patch })
   return counts
+}
+
+/**
+ * The open journal issue for the day before today, with the weekday its title
+ * should carry. Null when the day has none.
+ */
+export async function previousJournalDay(gh, config, now = new Date()) {
+  const tz = config.journal.timezone
+  const day = previousDay(localDate(now, tz))
+  const found = await daysIssues(gh, config, day, tz)
+  return found.length ? { number: found[0].number, day, label: dayLabel(day) } : null
 }
