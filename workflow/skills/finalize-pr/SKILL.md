@@ -204,8 +204,9 @@ mcp__github__list_pull_requests  owner:$ORG repo:$REPO  head:<branch>  state:ope
 **Read `pr-template.md` and follow its headings** as structure, not inspiration. Omit a section
 the template says to omit. **Never rename one or add your own.**
 
-**Build the Change outline per `change-outline.md`, from the full branch diff.** It and Preview
-lead the body, and no length rule shortens them. (why: docs/why.md#show-the-shape-not-the-file-list)
+**Build the Change outline per `change-outline.md`, from the full branch diff.** The template
+places it and Preview, and exempts both from every length rule.
+(why: docs/why.md#show-the-shape-not-the-file-list)
 
 **The Preview section is mandatory wherever the repo deploys previews** — it lets the reviewer see
 the change with no checkout.

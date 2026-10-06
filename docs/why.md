@@ -367,6 +367,39 @@ it fails the loop in four ways:
 The `adversarial-review` check exists because the reviewer reads the outline first. A view that
 disagrees with the diff points the review at the wrong thing.
 
+## The template owns the reflect PR's sections
+
+#148 counted seven rule statements across three files that together told Sunday's `reflect` PR what
+its body's first sections are. Three sat in `reflect`, four in `finalize-pr` and its template. They
+disagreed: `reflect` put the grading at the top, `finalize-pr` put the outline and Preview there. A
+fourth `reflect` statement turned up while fixing it, at the one place a run reads first. #147 hit
+the collision first and chose, in a preamble. Its critic asked for a ticket rather than a comment,
+so one PR a week re-made the judgement. #147 also shipped with no `## Summary`, which no file
+allowed deleting.
+
+`reflect` needs two headings the template never named, so any fix meant two new slots or one
+exception covering both. Two of the three ways out were more expensive than they looked. Naming
+`reflect` as the template's exception leaves
+[Show the shape, not the file list](#show-the-shape-not-the-file-list) arguing against the
+exception it now permits. Moving the grading out of the body needs a new `writing.budgets` kind.
+#147's grading section measures 3527 characters — 2327 over `comment`, 2027 over `journalEntry`,
+and [only bodies are unbudgeted](#budgets-not-adjectives). `AGENTS.md` forbids that config edit
+riding the skill edit, so that way costs two PRs across two weeks.
+
+So the template gained both headings as conditional sections, in the terse idiom `## Migration`
+already uses. A new `##` costs the dispatcher nothing. The only body heading it reads is
+`## Phases` (`dispatcher/markers.mjs`), and that scan breaks at the next heading of any level. Both
+new slots sit below `## Preview`, so the outline still leads. The order now lives in the template,
+and `reflect` makes no judgement about it.
+
+Two things the ordering fix would have left behind, had the template taken only the headings. The
+length rule exempted the outline and Preview alone, so the grading section — the loop's own review
+content — was still told to keep short or hide in `<details>`, and next Sunday would have weighed
+that instead. And the rule the fix relies on, that a skill names its slot and never states the
+order, was false of `finalize-pr`, which stated the outline's position in its own step 7. That
+line now cites the template instead. Both rules sit in `pr-template.md`, so the next skill wanting
+a body section cannot rebuild the collision.
+
 ## A routine cannot reach the GitHub API
 
 Not "should not." **Cannot**, by any client. Measured in a routine on 2026-09-02:
@@ -1357,6 +1390,24 @@ before it reads a line — **11 sessions across four days**, each one fixing it 
 Both belong to the checkout, not to the worktree, so the rule moved to the one file every handler
 reads. The `worktreeSetup` key keeps its name because it lives in each repo's
 `.claude/workflow.json`, a protected path an unattended run cannot rewrite.
+
+**There was a third missing thing, and naming only two of them hid it.** The clone's
+`origin/<default-branch>` ref is whatever the image shipped, and nothing in the run refreshes it,
+so every `git diff origin/main...` and every `git worktree add … origin/main` answered against a
+ref days behind. **11 sessions across four days** in the week to 2026-10-03: SahajCloud#859's
+critic read 83 files and 32,953 insertions for a 3-file diff, SahajAtlasWordpress#47's read a
+version bump that was not in the PR and came close to filing a release-cutting blocker that did
+not exist, SahajAtlasWordpress#50's clone sat 9 commits behind. A stale ref is worse than a
+missing one: it answers, and the answer looks like a diff. So step 6 fetches first, and
+`FETCH_HEAD` is no longer a recipe anywhere — a later fetch overwrites it, which is how
+`adversarial-review`'s own diff step came back empty three times.
+
+**The install is now deferred rather than owed.** A read-only handler runs no lane, so
+`CI=true pnpm install` buys it nothing, and 11 sessions across four days in that same week
+skipped it and spent a friction line justifying the skip. Blessing the skip alone would have kept
+the half that costs something: three of them then could not settle a framework claim their finding
+rested on, and one curled `unpkg` for a Payload tarball instead. So the rule defers the install to
+the first node command and refuses the assertion in the meantime.
 
 ## A skill can name a plugin no routine has
 

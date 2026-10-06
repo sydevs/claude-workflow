@@ -19,7 +19,7 @@ worked.** Find it in this repo's merged PRs. For each change it made, state in o
 the failure it addressed recurred in the week just gone, with the count from the journals below.
 
 A reflection that never checks its own past changes is not learning — it is opinion with a PR
-attached. This section leads the new PR's body, and has three possible verdicts per change:
+attached. This section has three verdicts per change:
 
 | Verdict | Then |
 | --- | --- |
@@ -124,7 +124,7 @@ Then **one or two concrete suggestions to the humans**, each tied to a number: b
 comments into one review, one verb at a time, a
 `Re-check:` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
-The report is a `## 📊 Usage` section of the reflection PR body. With no PR this week, it goes
+The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
 into tonight's journal entry under `📄 Did`, fitted like any entry. The report is written every
 week, even when nothing else is.
 
@@ -156,8 +156,8 @@ anomaly markers rather than characterise them: "raise `timeoutsMinutes.implement
 implement sessions timed out at 150, and each resumed session finished." A proposal with no count
 is a guess the reviewer cannot check.
 
-**Lead the body with the grading section** from the top of this skill — what last week's changes
-meant to fix, and whether they did. **Then the usage report.**
+**Put the grading section in `pr-template.md`'s `## Grading last week`.**
+(why: docs/why.md#the-template-owns-the-reflect-prs-sections)
 
 **Lessons that belong to a product repo, not the loop**, follow the evidence to that repo. A
 recurring reviewer comment is often a convention nobody wrote down, and the fix belongs where the
@@ -192,7 +192,7 @@ goes on it.
 - **Never** raise a timeout or a threshold without evidence it was the binding constraint.
 - **Never** open a reflection PR while a previous one is unreviewed — stack findings into next week.
 - **Never** propose a change on a single occurrence. Name it as observed and wait for a second.
-- **Never** open the PR body without last week's grading at the top.
+- **Never** open the reflection PR without `## Grading last week` filled.
 - **Never** ship a skill change and a ceiling change in one PR — split across weeks if both apply.
 - **Never** turn the usage report into a rule or a cap. It is feedback to people.
 - **Never** read a journal's comments with `perPage` above 20.
