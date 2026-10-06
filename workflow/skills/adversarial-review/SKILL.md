@@ -118,7 +118,8 @@ own-rooted thread with no reply blocks mark-ready, and an unresolved one blocks 
 ## If the pending-review tools do not resolve
 
 Fall back to **one PR issue comment** carrying the identical body, findings referenced as
-`file:line` in prose. First scan the PR's issue comments for `review.bodyHeader`, to check for an
+`file:line` in prose. **Measure it as `reviewBody` still** — the budget follows the artifact, not
+the path that posts it. First scan the PR's issue comments for `review.bodyHeader`, to check for an
 existing fallback review — an issue comment is invisible to `get_reviews` and `reviewed-by:`, so
 the header is the idempotency key on this path only. Journal that you used the fallback.
 
