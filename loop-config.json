@@ -284,6 +284,11 @@
     "$comment": "The one Storybook version every library pins, so their component manifests stay comparable.",
     "version": "10.6.1"
   },
+  "preview": {
+    "$comment": "finalize-pr step 7b: the one bounded wait, for a preview deploy that step 7's links need (why: docs/why.md#push-and-end).",
+    "deployWaitMinutes": 20,
+    "pollSeconds": 60
+  },
   "contractSync": {
     "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command on its main, in one bot PR on branch. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
     "producer": "SahajCloud",
