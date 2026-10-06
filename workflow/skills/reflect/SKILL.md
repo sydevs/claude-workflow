@@ -65,7 +65,8 @@ previous reflection, use seven days.
 
 Each session comment starts with a `<!-- sydevs-dispatch-done v1 {…} -->` marker naming the
 handler, the item, the session, and its failure count. Each dispatcher line starts with
-`<!-- sydevs-dispatcher-anomaly v1 {…} -->`. Count from the markers, not from prose.
+`<!-- sydevs-dispatcher-anomaly v1 {…} -->`. **The title and the tally block are the count.**
+Read a day's markers only on a day you opened anyway, and then count markers, never prose.
 
 ## What to look for
 
