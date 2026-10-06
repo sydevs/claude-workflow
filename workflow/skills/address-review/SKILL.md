@@ -64,9 +64,10 @@ Skip it. That rule is what makes a resumed run safe.
    linking its thread — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 
-**Push and stop.** Actions reads CI when it completes. **Do not merge `main` in to bring the
-branch up to date** — the merge queue rebases before it lands, so being behind costs nothing.
-(why: docs/why.md#push-and-end, docs/why.md#the-queue-owns-staleness-you-own-conflicts)
+**Push and stop.** Actions reads CI when it completes. **Never merge `main` in to bring the branch
+up to date, even when a reviewer asks.** A base merge belongs only to a PR GitHub reports
+`CONFLICTING`. Reply on the thread instead.
+(why: docs/why.md#push-and-end, docs/why.md#staleness-is-not-yours-conflicts-are)
 
 ## A human's PR
 

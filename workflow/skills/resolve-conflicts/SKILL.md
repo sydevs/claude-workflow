@@ -12,10 +12,9 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 One PR that GitHub reports as `CONFLICTING`. **Start with `/workflow:handler-preflight` and end
 with `/workflow:handler-journal`.**
 
-**Never merge the base branch in to keep a PR fresh.** The merge queue rebases every PR against
-`main` before it lands, so a PR that is merely behind needs nothing. Acting anyway is what
-produced three separate conflict essays on one PR in twenty-five minutes.
-(why: docs/why.md#the-queue-owns-staleness-you-own-conflicts)
+**Merge the base branch in only when GitHub reports the PR `CONFLICTING`.** Never to freshen a PR
+that is merely behind. The base ref belongs to that trigger, not to a session's judgement.
+(why: docs/why.md#staleness-is-not-yours-conflicts-are)
 
 ## Reads
 
@@ -38,7 +37,7 @@ produced three separate conflict essays on one PR in twenty-five minutes.
 
 One comment, and keep it to what the diff cannot show: which side each hunk took, and why, where
 the choice was not obvious. A conflict resolved the only way it could be resolved needs a
-sentence, not a section. (why: docs/why.md#the-queue-owns-staleness-you-own-conflicts)
+sentence, not a section.
 
 **A semantic conflict** — `main` removed what this PR extends, or changed a contract it relies on
 — is not yours to guess. Comment the question with `identity.commentMarker`, push nothing, and
@@ -50,8 +49,7 @@ Comment the resolution as a patch or a description, and stop.
 
 ## Hard rules
 
-- **Never merge `main` in unless GitHub reports the PR conflicting.** Being behind is the
-  queue's problem, not yours.
+- **Never merge `main` in unless GitHub reports the PR conflicting.**
 - **Never `rebase`, `--force`, or `--force-with-lease`.** A merge commit only.
 - **Never squash or rewrite history.**
 - **Never mark the PR ready, or wait for CI.** (why: docs/why.md#push-and-end)

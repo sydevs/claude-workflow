@@ -378,6 +378,21 @@ a bad review.
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the exact commands now. This entry
 keeps only the failure that forced them.
 
+## Construct a number, discover a slug
+
+*"Preview URLs are discovered, never constructed"* was written from Cloudflare and applied to
+Railway, where it is wrong. The two hosts differ in their **key**, not their platform, and the two
+keys fail in opposite directions.
+
+A **pull request number** cannot collide, so constructing one risks nothing — while *discovering*
+it costs a read that may not have landed, and the *"preview pending"* a run writes instead is never
+revisited, because the run ends at the push ([Push and end](#push-and-end)). A **branch slug** is
+truncated, so constructing one risks a link that works and lies
+([Link the branch alias, never a commit alias](#link-the-branch-alias-never-a-commit-alias)).
+
+That asymmetry is why one rule could never cover both. `workflow/skills/finalize-pr/SKILL.md` owns
+the mechanism and the config key that says which kind of host a repo has.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
@@ -852,6 +867,34 @@ stuck scheduler. Waiting is futile.
 
 A run that predates the base moving is stale, and it makes a conflicted PR look tested when it is
 not.
+
+## Staleness is not yours, conflicts are
+
+Three conflict essays landed on SahajCloud#769 inside twenty-five minutes. Each session merged
+`main` in to keep the branch fresh, met the same hunks, and wrote the same comment. The branch was
+never conflicting, so nothing had asked any of them to touch the base ref.
+
+**The base ref belongs to a trigger, not to a session's judgement.** `dispatcher/decide.mjs` fires
+`resolve-conflicts` only on a non-draft PR GitHub reports `CONFLICTING`, and that is the one state
+in which merging a base is anyone's job. `address-review` also reaches a behind-but-mergeable PR,
+and it was merging anyway — a handler acting outside its trigger. Three of them could do it at once
+precisely because none of them owned the decision.
+
+That reason needs no per-repo knowledge, which is why it replaced the first one written down. The
+queue was that first reason, and it is narrower than it looks: `claude-workflow` has no queue and no
+CI at all (`ci.noCi`). *"Being behind costs nothing"* was also too strong, since a preview and a CI
+run both build the branch head
+([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
+
+So a reviewer can want the base merged in and be right, and they can merge it themselves. **Whether
+a request through the `@sydevs-bot` channel authorises a session to do it is undecided** — both
+skills forbid it today, and sydevs/claude-workflow#160 left the question open. Read this entry as
+why the default is no, never as a reason to make an exception.
+
+One cost this rule used to claim is retired. Merging `main` in once re-flagged an approved PR,
+because the `synchronize` handler re-added `awaiting` from a stale review page
+([A review list arrives one page at a time](#a-review-list-arrives-one-page-at-a-time)). That
+handler makes a bot push a `note` now. Do not write the old cost down again.
 
 ## A test fixture defines the world the test lives in
 
