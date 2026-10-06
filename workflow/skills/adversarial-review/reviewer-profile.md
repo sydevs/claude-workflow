@@ -24,6 +24,62 @@
    "rewrite this into a generic helper in the `lib` folder"
    ([SahajAtlasWeb#181](https://github.com/sydevs/SahajAtlasWeb/pull/181)). A single-purpose
    middle layer is the thing they never accept.
+
+   That is the question asked of one layer. They ask it of three wider things too, and a diff can
+   answer every narrow reading and still fail a wide one, so **read the widest first.**
+
+   **The total.** Count the bespoke pieces a diff adds against one boundary. Where there are
+   several, the finding is the approach rather than any piece of it: a per-piece justification
+   does not answer it, because every piece can be necessary under an approach that is not. Ask
+   what a different approach, an upstream fix or an established library would make unnecessary,
+   and name the number — three helpers, two stylesheets, a polling loop. On
+   [SahajAtlasWeb#243](https://github.com/sydevs/SahajAtlasWeb/pull/243), which moved the widget
+   into a shadow root, and [#247](https://github.com/sydevs/SahajAtlasWeb/pull/247), which took
+   Tailwind to v4, every piece was individually forced by a measured platform constraint, this
+   review passed clean on all six threads, and the reviewer asked about the aggregate anyway:
+   *"It seems like we are having to add a lot of helpers and things to deal with the shadow DOM.
+   Is there any lightweight library or package that we could rely on… for all kinds of
+   operations?"*, *"This system seems a bit overcomplicated. Why do we need JavaScript to insert
+   our CSS?"*, *"Is this definitely necessary? Is there no more elegant or streamlined way to
+   handle this without waking / looping?"* (#243); *"Is this file still necessary? Is this a
+   migration artifact… or change our approach to avoid needing this file?"*, twice, and *"This
+   re-explanation is very unnecessary and is adding extra load to our documentation"* (#247).
+   This needs several pieces — a diff that adds one is the layer reading above.
+
+   **Membership, where the diff itself creates the shared owner.** Read the diff whole before
+   reading it file by file. When it introduces a plugin, a layout or a helper module, every
+   sibling it leaves outside is a finding until you can say why it stayed out: *"Shouldn't this
+   endpoint and also the `requestLink` endpoint be part of the `login` plugin and then attached
+   to any auth collection that the plugin manages?"*, *"Couldn't this be done generically within
+   the plugin for any consumer?"*, *"It seems like we are off-loading too much to each
+   collection"* ([SahajCloud#847](https://github.com/sydevs/SahajCloud/pull/847)), *"Change
+   CardShell to something a bit more generic… Make it a layout which can be used by all public
+   frontend pages"* ([#849](https://github.com/sydevs/SahajCloud/pull/849)), a generic
+   `createSession(slug, id)` ([#846](https://github.com/sydevs/SahajCloud/pull/846)), and the
+   strip hook they moved out of `Clients` into `accessPlugin`
+   ([#826](https://github.com/sydevs/SahajCloud/pull/826)). This reading proposes no new layer and
+   asks only who belongs in the one the diff built. Their prior is strong — #826 and #846 were
+   both rebutted first and adopted after the reviewer repeated themselves — so a rebuttal needs a
+   reason the shared owner *cannot* hold the thing, not a reason the caller may. **Not evidence
+   for it:** the same PRs' *"what is the difference between X and Y"* questions and the renames
+   that followed them. The reviewer says those were them learning new code, not a design both
+   things shared. Do not turn such a question into a duplication finding.
+
+   **Guards, where the piece is a protection.** **Weigh whether a protection should exist before
+   weighing its shape.** A defence against a harm nobody has measured is permanent code, and they
+   would rather carry the risk. This review asked for an in-process dedupe window on
+   [SahajCloud#761](https://github.com/sydevs/SahajCloud/pull/761) to bound Sentry volume; the
+   author built it and the reviewer deleted it — *"Drop the dedupe window… no other fancy features
+   like deduping."* On [#765](https://github.com/sydevs/SahajCloud/pull/765) this review argued
+   about *how* to build a cross-locale read redaction, blunt shape versus reusing the field walk,
+   and never asked whether it should exist; the reviewer removed it whole — *"not sensitive… an
+   unnecessary complication which could create more issues for us going forward."* On
+   [#774](https://github.com/sydevs/SahajCloud/pull/774) it passed a defaulting wrapper clean —
+   *"This whole function is a completely useless and unnecessary indirection."* And **never
+   propose machinery against a harm you have not counted**: that is the machinery this review
+   would flag in the author's own diff. Report the exposure, name what bounds it outside the repo,
+   and leave the build to them. Rate limits, caches, dedupe windows, retries and redactions are
+   the shapes this keeps arriving in.
 2. **Work with the platform, never against it.** Custom code for a problem the framework already
    solves is a defect, not a preference: use Payload's `jsonSchema` over a custom validator,
    `minLength`/`maxLength` over hand-rolling, override `Input` not `Field`
@@ -124,32 +180,6 @@ shape-level problems.**
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 
-- **2026-09-27 — value 1 asks whether a layer should exist. They also ask what belongs *inside*
-  a shared owner the diff creates.** The bimodal rule above triggers on a layer with one consumer,
-  and this review applies it file by file. Every file on
-  [SahajCloud#847](https://github.com/sydevs/SahajCloud/pull/847) and
-  [#849](https://github.com/sydevs/SahajCloud/pull/849) passed that question, because each one did
-  need to exist. The reviewer asked a different one across four PRs, and this review had passed
-  clean on all of it: **a mechanism sitting outside the shared owner the same diff creates**.
-  *"Shouldn't this endpoint and also the `requestLink` endpoint be part of the `login` plugin and
-  then attached to any auth collection that the plugin manages?"*, *"Couldn't this be done
-  generically within the plugin for any consumer?"*, *"It seems like we are off-loading too much
-  to each collection"* (#847), *"Change CardShell to something a bit more generic… Make it a
-  layout which can be used by all public frontend pages"* (#849), a generic `createSession(slug,
-  id)` ([#846](https://github.com/sydevs/SahajCloud/pull/846)), and the strip hook they moved out
-  of `Clients` into `accessPlugin` ([#826](https://github.com/sydevs/SahajCloud/pull/826)).
-  So read the diff as a whole before reading it file by file. When a diff introduces a plugin, a
-  layout or a helper module, every sibling it leaves outside is a finding until you can say why it
-  stayed out. That scope is the tie-breaker against the 2026-09-12 bullet below, which governs
-  whether a layer should exist at all. This one applies only where the diff already creates the
-  shared owner, so it proposes no new layer and asks only about membership. Both #826 and #846
-  were rebutted first and adopted after the reviewer repeated themselves, which is the tell: on
-  this question their prior is strong, so a rebuttal needs a reason the shared owner *cannot*
-  hold the thing, not a reason the caller may.
-  **Not evidence for this bullet:** the same PRs' *"what is the difference between X and Y"*
-  questions and the renames that followed them. The reviewer says those were them learning new
-  code, not a design both things shared. Do not turn such a question into a duplication finding.
-
 - **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
   was near-absent and told the review not to manufacture findings there. Three PRs in one week
   say otherwise, and this review passed every one of them clean on naming.
@@ -172,23 +202,3 @@ shape-level problems.**
   shadows an existing helper, or invents a second word for something the CMS or a sibling repo
   has already named — and supply the replacement, as they do. Leave spelling, casing and
   house-style alone; those are still the hooks' job.
-
-- **2026-09-12 — protective machinery is a liability unless someone owns it, and the review's own
-  suggestions pay that rent too.** Three PRs in one week, one answer. On
-  [SahajCloud#761](https://github.com/sydevs/SahajCloud/pull/761) **this review asked for an
-  in-process dedupe window** to bound Sentry volume; the author built it, and the reviewer deleted
-  it — *"Drop the dedupe window… no other fancy features like deduping."* On
-  [#765](https://github.com/sydevs/SahajCloud/pull/765) the review argued about *how* to build a
-  cross-locale read redaction, blunt shape versus reusing the field walk, and never asked whether
-  it should exist; the reviewer removed it whole — *"not sensitive… an unnecessary complication
-  which could create more issues for us going forward."* On
-  [#774](https://github.com/sydevs/SahajCloud/pull/774) the review passed a defaulting wrapper
-  clean; the reviewer: *"This whole function is a completely useless and unnecessary
-  indirection."*
-  The value under all three is value 1, applied to guards rather than layers: a defence against a
-  harm nobody has measured is permanent code, and they would rather carry the risk. Two rules
-  follow. **Weigh whether a protection should exist before weighing its shape** — the question the
-  #765 thread never asked. And **never propose machinery against a harm you have not counted** —
-  the machinery this review would flag in the author's own diff; report the exposure, name what
-  bounds it outside the repo, and leave the build to them. Rate limits, caches, dedupe windows,
-  retries and redactions are the shapes this keeps arriving in.

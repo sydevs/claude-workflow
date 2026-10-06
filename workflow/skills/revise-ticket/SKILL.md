@@ -16,7 +16,8 @@ the answer comes from the code. **Start with `/workflow:handler-preflight` and e
 ## Reads
 
 - `mcp__github__issue_read method:get` — the body is state. The instruction is in the comment
-  the record points at (`trigger.id`).
+  the record points at (`trigger.id`). A `reviewProposals` fire has no `trigger.id` and no
+  instruction: the ticket is bot-filed and unread, so the code is the only grounding.
 - **The comments newer than the body's last edit.** This is the one handler that reads the
   thread on purpose: when the body lacks what the thread settled, the body is the bug.
   (why: docs/why.md#ground-from-the-body-never-the-thread)

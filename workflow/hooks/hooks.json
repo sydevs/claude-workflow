@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/block-generated-files.mjs"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-generated-files.mjs"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/block-wrong-bash.mjs"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-wrong-bash.mjs"
           }
         ]
       }
@@ -26,11 +26,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/prettier-format.mjs"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/prettier-format.mjs"
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/eslint-fix.mjs"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/eslint-fix.mjs"
           }
         ]
       }
