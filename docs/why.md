@@ -562,8 +562,44 @@ Two lessons follow, and the second one generalizes:
   counted as roughly compliant. The script returns over or under, and nothing else. No clause
   permits an explained overage, since that clause is what killed the old rule.
 
-Bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them instead of the
-thread.
+Ticket and PR bodies stay unbudgeted on purpose. They are state, and the grounding rule reads them
+instead of the thread.
+
+## A review body has its own budget
+
+`writing.budgets` had three kinds, and a submitted review body was none of them. So
+`adversarial-review` measured its body as `comment` — 1200 — while asking that body for a holistic
+assessment, ranked findings, and a What-was-checked section carrying enough evidence that a clean
+verdict is checkable.
+
+Six reviews show what the wrong limit bought. SahajAtlasWeb#237 landed at 1200/1200 only after
+cutting evidence out of What-was-checked. SahajCloud#874 dropped a PR-size note that was not wrong,
+only last. SahajAtlasWeb#233 shipped with **no `identity.commentMarker`** — the body measured 1197
+and the marker is 124 characters. SahajCloud#861 took nine trim passes to fit three required
+sections and five findings.
+
+Trimming prose is what a budget is for. Dropping a finding is not, and neither is dropping the
+attribution.
+
+**2000 is measured, not guessed.** The marker is 124 characters, the harness attribution footer 58,
+`review.bodyHeader` 24 — 206 before a word of review. Observed prose ran 1318 to 1913, so 2000
+clears the 1318–1659 band with room and still binds at the outlier. A budget that never binds is not
+one. Raising `comment` to buy that room was refused: it would loosen every ticket and PR comment the
+loop writes to fix one artifact.
+
+**The marker belongs on a review body.** `handler-preflight` asks for it on every comment,
+`adversarial-review` on every inline comment, and a submitted body is read more than either. Its 124
+characters are inside the number for that reason, so no run has to buy them by cutting a finding.
+
+**What may never be cut is a general rule, so it lives in `handler-preflight`.** Nothing about
+SahajAtlasWeb#233 dropping its marker was specific to a review body — `answer-ticket`,
+`address-review` and `revise-ticket` all require the marker inside the 1200 of `comment`. The budget
+paragraph every dispatch reads now says what "over means cut" may not cut, beside "shorten by
+leaving things out, never by compressing", which until now named no exception.
+
+**A kind no skill names is inert.** `check()` returns `UNBUDGETED` and the CLI exits 0 on it, which
+is how this gap stayed invisible for three weeks. `workflow/lib/budget.test.mjs` now fails for any
+`--kind` a skill names that `writing.budgets` does not.
 
 ## Ground from the body, never the thread
 

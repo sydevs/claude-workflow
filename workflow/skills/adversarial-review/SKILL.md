@@ -99,6 +99,10 @@ assessment, which is where it reads better anyway.
    enough evidence that a clean verdict is checkable. A clean report with no evidence of reading
    is not a review. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
+**Measure the body with `--kind reviewBody`, and end it with `identity.commentMarker`.** The
+budget counts the marker, so no run buys room by dropping it.
+(why: docs/why.md#a-review-body-has-its-own-budget)
+
 ## Verdicts
 
 - **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
@@ -115,7 +119,8 @@ own-rooted thread with no reply blocks mark-ready, and an unresolved one blocks 
 ## If the pending-review tools do not resolve
 
 Fall back to **one PR issue comment** carrying the identical body, findings referenced as
-`file:line` in prose. First scan the PR's issue comments for `review.bodyHeader`, to check for an
+`file:line` in prose. **Measure it as `reviewBody` still** — the budget follows the artifact, not
+the path that posts it. First scan the PR's issue comments for `review.bodyHeader`, to check for an
 existing fallback review — an issue comment is invisible to `get_reviews` and `reviewed-by:`, so
 the header is the idempotency key on this path only. Journal that you used the fallback.
 
