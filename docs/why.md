@@ -882,9 +882,8 @@ precisely because none of them owned the decision.
 
 That reason needs no per-repo knowledge, which is why it replaced the first one written down. The
 queue was that first reason, and it is narrower than it looks: `claude-workflow` has no queue and no
-CI at all (`ci.noCi`). *"Being behind costs nothing"* was also too strong, since a preview and a CI
-run both build the branch head
-([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
+CI at all (`ci.noCi`). *"Being behind costs nothing"* was also too strong, since a preview builds the
+branch head ([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
 
 So a reviewer can want the base merged in and be right, and they can merge it themselves. **Whether
 a request through the `@sydevs-bot` channel authorises a session to do it is undecided** — both
