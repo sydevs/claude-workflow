@@ -114,10 +114,9 @@ Before you add prose to a run-loaded skill, check the rule is not stated elsewhe
 the story in `docs/why.md`, behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
 
 Everything the loop writes carries a character budget from `writing.budgets`, checked by
-`workflow/lib/budget.mjs`, `<details>` included. The same script decides whether a comment carries
-`identity.commentMarker`, from `writing.markerRequired`. It prints a verdict word — `OK`, `OVER`,
-`UNBUDGETED`, `MISSING_MARKER` — and exits non-zero on every one but `OK`, so a caller reads the
-word, never the code alone.
+`workflow/lib/budget.mjs`, `<details>` included. That script also decides whether a comment
+carries `identity.commentMarker`, from `writing.markerRequired`. Read the verdict word it prints,
+never its exit code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
 
 **Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
 
