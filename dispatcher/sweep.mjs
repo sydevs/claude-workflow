@@ -85,17 +85,25 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   const lockedNumbers = new Set()
   for (const i of await byLabel(L.lock)) lockedNumbers.add(i.number)
 
+  const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })
+  const openPrNumbers = new Set(openPrs.map((pr) => pr.number))
+
   // A lease ref on an item carrying no lock is residue: a pass won the CAS and
   // then died before it could write the label. Nothing else reclaims it, and
   // until something does, every later fire for that item is refused — a
   // permanent lock, which is worse than the duplicate the lease prevents.
   // `decide` re-checks the record before it deletes. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
+  //
+  // The kind comes from the open PRs, not from a guess. `coalesceTargets` keys
+  // on `repo#number` and keeps the first target's kind, and this reason is
+  // pushed before `sweep-pr` on purpose — it must reclaim the ref before any
+  // fire asks for the lease. So a wrong kind here is the one the record
+  // carries. (why: docs/why.md#one-target-per-item)
   for (const n of await listLeases(github, owner, name)) {
-    if (!lockedNumbers.has(n)) push('issue', n, 'sweep-lease', {})
+    if (!lockedNumbers.has(n)) push(openPrNumbers.has(n) ? 'pr' : 'issue', n, 'sweep-lease', {})
   }
   const orphanHours = config.dispatch.orphanDraftHours ?? 6
   const bot = config.identity.expectedLogin
-  const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })
   for (const pr of openPrs) {
     if (!isBot(pr.user?.login, config) || lockedNumbers.has(pr.number)) continue
     const labels = (pr.labels || []).map((l) => l.name)
