@@ -131,6 +131,10 @@ Six, and the dispatcher writes five of them. Nothing else may.
 | --- | --- | --- |
 | `awaiting` | Your turn. The bot finished, or gave up. | the dispatcher |
 | `bot:working` | A session holds this item. Its status comment names the handler and links the session. | the dispatcher applies it, the session removes it as its last write |
+| `stuck` | The machinery owes a retry — a usage limit, paused routines, a dead session. Nothing needed from you yet. | the dispatcher |
+| `blocked` | An open blocker, or a `Hold Until` date still ahead. | the dispatcher |
+| `proposal` | Bot-filed, no human verdict yet. The survey counts these against `maxOpenProposals`. | the dispatcher |
+| `ops-journal` | The daily diary. Every worklist query excludes it. | you, once |
 
 > **The label is what a session reads. `refs/sydevs-lease/<number>` is what decides between two
 > dispatcher passes.** The dispatcher creates that ref before the label and deletes it wherever it
@@ -139,10 +143,6 @@ Six, and the dispatcher writes five of them. Nothing else may.
 > `git ls-remote origin 'refs/sydevs-lease/*'` lists the leases a repo holds; a ref there with no
 > `bot:working` on the item is residue the next sweep reclaims.
 > (why: docs/why.md#the-lease-is-a-ref-not-a-label)
-| `stuck` | The machinery owes a retry — a usage limit, paused routines, a dead session. Nothing needed from you yet. | the dispatcher |
-| `blocked` | An open blocker, or a `Hold Until` date still ahead. | the dispatcher |
-| `proposal` | Bot-filed, no human verdict yet. The survey counts these against `maxOpenProposals`. | the dispatcher |
-| `ops-journal` | The daily diary. Every worklist query excludes it. | you, once |
 
 ```bash
 for r in SahajCloud SahajAtlasWeb WeMeditateWeb SahajAtlasWordpress claude-workflow; do
