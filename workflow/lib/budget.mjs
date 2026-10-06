@@ -54,16 +54,42 @@ export const DEFAULT_BUDGETS = {
 }
 
 /**
- * Measure one artefact against its budget.
+ * Which kinds must carry `identity.commentMarker`, and the marker itself.
+ *
+ * `loop-config.json` → `writing.markerRequired` and `identity.commentMarker`
+ * are authoritative, and `budget.test.mjs` fails on a drift from either.
+ * A journal entry is absent on purpose: `handler-journal` posts no marker.
+ *
+ * The check is **presence, not position.** A loop comment ends with the
+ * harness attribution footer AFTER the marker — this repo's own issue
+ * comments do — so an ends-with test would fail a correct artefact. What
+ * SahajAtlasWeb#233 shipped was a review with no marker at all.
+ * (why: docs/why.md#the-marker-check-belongs-in-the-script)
+ */
+export const DEFAULT_MARKER_REQUIRED = ['comment', 'reviewReply', 'reviewBody']
+export const DEFAULT_MARKER = '<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>'
+
+/**
+ * Measure one artefact against its budget, and against the marker rule.
  *
  * `chars` counts the whole string. Markdown, HTML tags and `<details>`
  * contents all count, because a later run pays for every one of them.
+ *
+ * `options.markerRequired` and `options.marker` are opt-in, so a caller that
+ * passes neither measures the budget alone. The CLI always passes both.
  */
-export function check(text, kind, budgets = DEFAULT_BUDGETS) {
+export function check(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
+  const { markerRequired = [], marker = '' } = options
   const limit = budgets?.[kind]
   const chars = typeof text === 'string' ? text.length : 0
   if (typeof limit !== 'number') {
     return { kind, chars, limit: null, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
+  }
+  // Answered before the overage, because the marker is 124 characters and they
+  // count. A draft measured without it is measured against the wrong length.
+  if (marker && markerRequired.includes(kind) && !String(text).includes(marker)) {
+    return { kind, chars, limit, verdict: 'MISSING_MARKER',
+      reason: `${kind} carries no identity.commentMarker — append it and re-check` }
   }
   const over = chars - limit
   return over > 0
@@ -113,6 +139,9 @@ const DROPPABLE = /^-\s/
  * The run table survives too — it is not a list item. When the section empties,
  * the heading goes with it, which is what the skill already requires of an
  * empty section.
+ *
+ * **It does not check the marker.** `fit()` runs on `journalEntry` alone, which
+ * `writing.markerRequired` deliberately omits, so there is nothing to check.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
   const limit = budgets?.[kind]
@@ -188,10 +217,15 @@ if (isMain) {
   process.stdin.on('data', (d) => { text += d })
   process.stdin.on('end', () => {
     let budgets = DEFAULT_BUDGETS
+    let markerRequired = DEFAULT_MARKER_REQUIRED
+    let marker = DEFAULT_MARKER
     let source = 'fallback'
     try {
-      const configured = loadLoopConfig()?.writing?.budgets
+      const config = loadLoopConfig()
+      const configured = config?.writing?.budgets
       if (configured) { budgets = configured; source = 'config' }
+      if (config?.writing?.markerRequired) markerRequired = config.writing.markerRequired
+      if (config?.identity?.commentMarker) marker = config.identity.commentMarker
     } catch (err) {
       // Two failures land here, and only one is routine. A missing file is
       // the fallback's whole purpose. A file that EXISTS and will not parse
@@ -207,7 +241,7 @@ if (isMain) {
       process.exit(f.verdict === 'OK' ? 0 : 1)
     }
 
-    const r = check(text, kind, budgets)
+    const r = check(text, kind, budgets, { markerRequired, marker })
     const d = detailsShare(text)
     console.log(`${r.verdict} — ${r.reason} (${source})${d.pct ? ` (${d.pct}% inside <details>, counted)` : ''}`)
     process.exit(r.verdict === 'OK' ? 0 : 1)
