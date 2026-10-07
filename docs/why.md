@@ -378,6 +378,21 @@ a bad review.
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the exact commands now. This entry
 keeps only the failure that forced them.
 
+## Construct a number, discover a slug
+
+*"Preview URLs are discovered, never constructed"* was written from Cloudflare and applied to
+Railway, where it is wrong. The two hosts differ in their **key**, not their platform, and the two
+keys fail in opposite directions.
+
+A **pull request number** cannot collide, so constructing one risks nothing — while *discovering*
+it costs a read that may not have landed, and the *"preview pending"* a run writes instead is never
+revisited, because the run ends at the push ([Push and end](#push-and-end)). A **branch slug** is
+truncated, so constructing one risks a link that works and lies
+([Link the branch alias, never a commit alias](#link-the-branch-alias-never-a-commit-alias)).
+
+That asymmetry is why one rule could never cover both. `workflow/skills/finalize-pr/SKILL.md` owns
+the mechanism and the config key that says which kind of host a repo has.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
@@ -853,6 +868,33 @@ stuck scheduler. Waiting is futile.
 A run that predates the base moving is stale, and it makes a conflicted PR look tested when it is
 not.
 
+## Staleness is not yours, conflicts are
+
+Three conflict essays landed on SahajCloud#769 inside twenty-five minutes. Each session merged
+`main` in to keep the branch fresh, met the same hunks, and wrote the same comment. The branch was
+never conflicting, so nothing had asked any of them to touch the base ref.
+
+**The base ref belongs to a trigger, not to a session's judgement.** `dispatcher/decide.mjs` fires
+`resolve-conflicts` only on a non-draft PR GitHub reports `CONFLICTING`, and that is the one state
+in which merging a base is anyone's job. `address-review` also reaches a behind-but-mergeable PR,
+and it was merging anyway — a handler acting outside its trigger. Three of them could do it at once
+precisely because none of them owned the decision.
+
+That reason needs no per-repo knowledge, which is why it replaced the first one written down. The
+queue was that first reason, and it is narrower than it looks: `claude-workflow` has no queue and no
+CI at all (`ci.noCi`). *"Being behind costs nothing"* was also too strong, since a preview builds the
+branch head ([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
+
+So a reviewer can want the base merged in and be right, and they can merge it themselves. **Whether
+a request through the `@sydevs-bot` channel authorises a session to do it is undecided** — both
+skills forbid it today, and sydevs/claude-workflow#160 left the question open. Read this entry as
+why the default is no, never as a reason to make an exception.
+
+One cost this rule used to claim is retired. Merging `main` in once re-flagged an approved PR,
+because the `synchronize` handler re-added `awaiting` from a stale review page
+([A review list arrives one page at a time](#a-review-list-arrives-one-page-at-a-time)). That
+handler makes a bot push a `note` now. Do not write the old cost down again.
+
 ## A test fixture defines the world the test lives in
 
 A run's unit fixture declared `Managers.roles` at the top level, "because that was easier to write
@@ -1013,6 +1055,33 @@ applies the lock, and fires one routine per handler with a pointer. Routine GitH
 not do this alone: they see `pull_request`, `issues` and `release` events only, never a comment,
 a review or a check, and they carry no author filter.
 
+## GitHub owns the merge
+
+The dispatcher used to merge. It derived its own verdict — one approval, every review thread
+resolved, CI green — and three of that derivation's failures have headings of their own. A
+drive-by `APPROVED` from any stranger would have satisfied it, in four public repos where a merge
+is the deploy ([Only the reviewer's approval counts](#only-the-reviewers-approval-counts)). It read
+30 of 60 reviews and declined an approved PR three runs running
+([A review list arrives one page at a time](#a-review-list-arrives-one-page-at-a-time)). And its
+reading of *"green"* lived in two places at once
+([A script here never fetches](#a-script-here-never-fetches)).
+
+None of those was a bug in merging. Each was a bug in **re-deriving a verdict GitHub already
+computes**, and the repository ruleset computes it from the same three conditions with no second
+implementation to drift. So `mergeVerdict` is gone from `gather`, and the ruleset decides: one
+approval, resolved threads, green CI, then — in the four repos that have one — the merge queue
+rebases and tests before it lands.
+
+What is left in code is one write. The dispatcher **arms** auto-merge at mark-ready, which is the
+first moment GitHub permits it — auto-merge is refused on a draft, and every bot PR opens as one.
+A refused arming is handed over rather than thrown
+([A write we cannot make is handed over, not thrown](#a-write-we-cannot-make-is-handed-over-not-thrown)),
+because a PR needing one click is a better outcome than a plan that stopped.
+
+One condition could not become a rule. `mergePolicy.loopMayNotMerge` names the repos that are never
+armed, because merging `claude-workflow` is the deploy and a ruleset cannot express *"a person
+decides this one."* A rule the machinery cannot hold is held by the absence of the write.
+
 ## The lock label is the lease
 
 Two sessions on one item write over each other, and neither can tell. The label a dispatcher
@@ -1088,12 +1157,60 @@ journals any correction it makes, because a correction is evidence of a missed e
 a paused routine, a session that died — and no human is needed yet. The sweeper retries up to
 `dispatch.maxAttempts`, then hands over to `awaiting`. The two never coexist.
 
+## blocked and awaiting are exclusive
+
+sydevs/SahajCloud#780 got `awaiting` at 08:23:07 and `blocked` at 08:23:09, two seconds apart, from
+one `issues.opened` plan. The plan added `awaiting` unconditionally, then the blocked branch added
+`blocked` and never removed the first.
+
+Both labels answer one question — whose turn is it — and they answer it differently. A parked ticket
+waits on its blocker, not on you. An item carrying both makes the worklist unreadable in the
+direction that matters, because `awaiting` is the label a human scans and `blocked` is the reason
+they should not have seen it.
+
+So `issues.opened` decides `bornBlocked` before it writes anything, and the blocked write removes
+`awaiting` in the same plan rather than in a later pass. The same exclusivity holds for `stuck`,
+which [awaiting has one writer](#awaiting-has-one-writer) records.
+
+## A closed item is nobody's turn
+
+sydevs/SahajCloud#747 merged while a session still held the lock. The session unlocked two minutes
+later, the unlock path re-derived the PR, got back nothing but a Status write, called the item idle,
+and gave a merged PR `awaiting`.
+
+The idle test is the right test and it inverts on a closed PR. It asks whether the plan contains a
+fire, an arming or a mark-ready, and on a merged or closed PR the answer is no **by definition** —
+there is nothing left to do because it is finished, not because a human is owed something. An idle
+test can only distinguish "waiting on you" from "working" if the item is still open.
+
+So the unlock path checks the PR's state before it reads the plan, and a closed PR clears `awaiting`
+and `stuck` instead of gaining them. A merge is the one outcome that needs nobody told.
+
 ## The critic skips small PRs
 
 An adversarial review costs an Opus session, a CI cycle, and a round of the reviewer's attention
 on the rebuttals. A two-file, twenty-line PR rarely has the shape problem the critic exists to
 find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip on it.
 `@sydevs-bot review` forces a review at any size.
+
+## A proposal is reviewed before you read it
+
+A ticket the loop files arrives with nobody to defend it. Its weakest part is reliably the part
+written from memory rather than from the tree, and a reviewer cannot tell those apart by reading.
+So `issues.opened` fires `revise` on a bot-filed ticket: the open questions answered from the code,
+the plan argued with, the body rewritten. A ticket **you** file is yours, and is left alone.
+
+sydevs/claude-workflow#160 is what this buys. It was filed naming two dangling `docs/why.md`
+anchors. The revision found seven, five of them outside `workflow/skills/`, and reported that the
+filing's own verification command searched `workflow/skills` only — so the ticket would have been
+closed green with five citations still dangling. One session turned a half-scoped ticket into a
+correctly scoped one before a human spent a verb on it.
+
+This is the critic's bargain at the other end of the pipeline
+([The critic skips small PRs](#the-critic-skips-small-prs)): a session now, to spare the reviewer's
+attention later. The ticket is the cheaper place to spend it, because a wrong plan costs an
+implement session and a review round, not a comment. `dispatch.reviewProposals` turns it off, and
+the `proposal` label is what says no human verdict has landed yet.
 
 ## There is no WIP cap
 
@@ -1334,6 +1451,24 @@ names the step and says the token could not take it, and the day's journal recor
 This is the third time the same shape has come up, after the board and the day's journal, and the
 rule generalises: **the dispatcher's job is to get the work to a person or a session.** Anything
 that fails on the way should be visible and should not take the rest of the run with it.
+
+## Quote the refusal, do not name a cause
+
+The hand-over comment used to blame the dispatch token for every refusal it caught. Three merges
+failed that way with no usable explanation, because the token was fine and the branch ruleset was
+the thing saying no.
+
+A refusal arrives as a status and a sentence. The status is nearly uninformative — a missing scope
+and a branch rule both answer 403, and the rule can also answer 405 or 422, which the old test did
+not catch at all. The sentence is the only part that distinguishes them, and it is GitHub's to
+write. Naming a cause replaces the one piece of evidence with a guess, and a guessed cause sends
+the reader to the wrong fix: rotating a credential that was never the problem.
+
+So the comment carries 220 characters of what GitHub actually said, and names the step that could
+not be taken. Nothing else. This is the same rule the runs follow about anomalies
+([Report anomalies, do not explain them](#report-anomalies-do-not-explain-them)), applied to the
+dispatcher, and for the same reason — an explanation written at the moment of failure is written
+with the least information anyone will ever have about it.
 
 ## A draft that is ready is not an orphan
 
