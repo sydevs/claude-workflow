@@ -2,7 +2,7 @@
 # Worktree-scoped dev server.
 #
 # Identity is the git worktree, not the project directory. That is the whole
-# point: /implement-issue works in a worktree by default. A server keyed on
+# point: /implement-ticket works in a worktree by default. A server keyed on
 # the project root would either refuse to start there (the old behavior), or
 # worse, serve another branch's code to a test that believes it tests this
 # one.

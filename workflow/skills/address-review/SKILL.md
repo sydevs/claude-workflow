@@ -10,14 +10,14 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 # Address review
 
 One PR. Every thread that waits on us gets a reply, a commit or both. Then the branch is pushed
-and the run ends. **Start with `/workflow:handler-preflight` and end with
-`/workflow:handler-journal`.**
+and the run ends. **Start with `/workflow:start-run` and end with
+`/workflow:finish-run`.**
 
 ## Reads
 
 - `mcp__github__pull_request_read method:get` — open, head branch, base, author, `mergeable`.
 - `method:get_review_comments` — every thread, its root author, `is_resolved`.
-- `method:get_reviews` — the latest state per login. Derive the decision with
+- `method:get_reviews` — every review's **body** as well as its state. Derive the decision with
   `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT}/lib/merge-verdict.mjs`, never from memory.
 - `method:get_comments` — **the newest page only**, `perPage` small, the page computed from the
   `comments` count on `get`.
@@ -29,6 +29,10 @@ Any one of these, and nothing else:
 
 - an unresolved thread whose last comment comes from a login in `assignment.respondTo`,
 - an unresolved thread the own login rooted, with no reply — the adversarial review,
+- **a review body** from a login in `assignment.respondTo`, non-empty, submitted after the own
+  login's last comment. Each distinct point in it is one item. General feedback lives here as
+  often as in file threads — a review whose body you skip is a review you ignored.
+  (why: docs/why.md#a-review-body-is-feedback)
 - the newest conversation comment comes from a login in `assignment.respondTo`, and is newer
   than the own login's last comment.
 
@@ -47,7 +51,13 @@ they are work. Comment type and thread root together are the key.
 | **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question. Leave it open. |
 
 A thread with a reply from the own login newer than its last human comment is already handled.
-Skip it. That rule is what makes a resumed run safe.
+Skip it. A review body is handled once a summary comment from the own login is newer than its
+`submitted_at`. Those two rules are what make a resumed run safe.
+
+**A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
+commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
+the SHA or the evidence. A point that generalises beyond this PR becomes a follow-up ticket,
+filed through `/workflow:write-ticket`.
 
 ## Then
 
@@ -56,12 +66,12 @@ Skip it. That rule is what makes a resumed run safe.
 3. `git push`. Never force-push. Never rebase.
 4. Refresh the PR title and body from `origin/main...HEAD` **where this push made either one
    false** — a `## Change outline` view the new commits contradict is false, and
-   `adversarial-review` step 2 reads it first (`/workflow:finalize-pr` step 7). Re-send the body
+   `review-pr` step 2 reads it first (`/workflow:finalize-pr` step 7). Re-send the body
    preflight step 4 already read, with the delta applied; `update_pull_request` replaces the
    whole body, so never retype one from nothing. A body merely incomplete stays, and step 5's
    comment carries that delta.
 5. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
-   linking its thread — with `identity.commentMarker`. **A revision that pushes and says nothing
+   linking its thread, or quoting its review-body point — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 
 **Push and stop.** Actions reads CI when it completes. **Never merge `main` in to bring the branch
@@ -85,7 +95,7 @@ session pushes only to `claude/*`. In order:
 
 ## Hard rules
 
-- **Never start a new review thread.** That channel belongs to `adversarial-review` alone. Reply
+- **Never start a new review thread.** That channel belongs to `review-pr` alone. Reply
   inside existing threads only. (why: docs/why.md#the-author-filters-one-exception)
 - **Never `APPROVE` or `REQUEST_CHANGES`.** (why: docs/why.md#reviews-are-comment-only)
 - **Never force-push, rebase, or squash history.**

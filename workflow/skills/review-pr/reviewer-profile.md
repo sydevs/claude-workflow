@@ -1,7 +1,7 @@
 # Reviewer profile — how Ardnived reviews
 
-> This is a living document. `/workflow:adversarial-review` reads it at review time. Only the
-> Sunday `reflect` survey refines it, and only on recurring evidence. It was seeded on 2026-09-02
+> This is a living document. `/workflow:review-pr` reads it at review time. Only the
+> Sunday `improve-loop` survey refines it, and only on recurring evidence. It was seeded on 2026-09-02
 > from the reviewer's full review history across the five sydevs repos: 55 inline review comments,
 > 32 reviews, 33 PR-conversation comments. Two caveats apply permanently. `claude-workflow` PRs
 > merge **without formal reviews** — feedback arrives as ticket comments instead. And some
@@ -176,7 +176,7 @@ shape-level problems.**
 
 ## Recent refinements
 
-<!-- Appended by /workflow:reflect, newest first, one dated bullet per refinement, each citing
+<!-- Appended by /workflow:improve-loop, newest first, one dated bullet per refinement, each citing
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 

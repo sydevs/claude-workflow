@@ -10,8 +10,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 # Fix CI
 
 One PR, one red run, one pass. Actions counts the passes and stops dispatching at
-`ceilings.ciFixIterations`. **Start with `/workflow:handler-preflight` and end with
-`/workflow:handler-journal`.**
+`ceilings.ciFixIterations`. **Start with `/workflow:start-run` and end with
+`/workflow:finish-run`.**
 
 ## Reads
 
@@ -26,7 +26,7 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 ## Do
 
 1. `git fetch origin <branch>` and check it out in a worktree
-   (`/workflow:implement-issue` step 6).
+   (`/workflow:implement-ticket` step 6).
 2. Reproduce locally when the log is not enough: `leanGate.full` from `.claude/workflow.json`.
 3. Fix in one commit, `fix(ci): <what, in five words>`.
 4. Lean gate. A failure that also exists on `main` is still yours to fix here — say so in the

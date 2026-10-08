@@ -1,13 +1,13 @@
 ---
 name: cut-release
-description: Cut a release where merged work has accumulated unreleased — the changelog and version-bump PR, whose merge publishes the GitHub Release. Friday's survey. SahajAtlasWordpress ships a versioned artifact. claude-workflow ships a version-keyed plugin cache.
+description: Cut a release where merged work has accumulated unreleased — the changelog and version-bump PR, whose merge publishes the GitHub Release. Friday's audit. SahajAtlasWordpress ships a versioned artifact. claude-workflow ships a version-keyed plugin cache.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
 
 # Cut Release
 
-Friday's survey. Most of this workspace deploys continuously and has nothing to release. The
+Friday's audit. Most of this workspace deploys continuously and has nothing to release. The
 exception is the repo that matters most to end users.
 
 ## Who actually releases
@@ -17,7 +17,7 @@ exception is the repo that matters most to end users.
 | **SahajAtlasWordpress** | **Yes** — a GitHub Releases zip is the only way 13 volunteer-run sites get the plugin. The Plugin Update Checker reads Releases. **Merging a version bump is the release:** its `release.yml` tags, builds and publishes. |
 | SahajCloud | No — Railway deploys on merge. |
 | WeMeditateWeb | No — Cloudflare Workers deploys on merge. |
-| SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract: see `survey-contracts`. |
+| SahajAtlasWeb | No — Cloudflare Pages deploys on merge. But `CHANGELOG.md` is a published contract: see `audit-contracts`. |
 | **claude-workflow** | **No tag, but yes a version** — see below. |
 
 ### claude-workflow — bump the manifest, never tag
@@ -60,7 +60,7 @@ newer than the last semver tag, or `mcp__github__get_release_by_tag` for `v<head
 progress is not a failure yet.
 
 - **Never** bump again over it. A second bump stacks another unreleased version on the first.
-- File one Bug ticket in SahajAtlasWordpress through `/workflow:triage-issue`. Name the version,
+- File one Bug ticket in SahajAtlasWordpress through `/workflow:write-ticket` in `create` mode. Name the version,
   the failed `Release` run where the Actions tools show it, and the fix: make that run pass, then
   re-run it. It is a defect you tripped over, so no proposal ceiling applies.
 - **Search first**, open and closed, for a ticket naming `v<header>`. Open: comment only when the

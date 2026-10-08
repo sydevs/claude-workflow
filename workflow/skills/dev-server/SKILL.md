@@ -6,7 +6,7 @@ allowed-tools: Bash, Read
 
 # Dev Server
 
-One server runs per git worktree, not per repo. `/implement-issue` uses a worktree by default.
+One server runs per git worktree, not per repo. `/implement-ticket` uses a worktree by default.
 A server keyed to the repo either refuses to start there, or — worse — serves another branch's
 code to a test that expects this one.
 
@@ -44,7 +44,7 @@ first start and dropped by `teardown`.
   that the next `start` misreads as another user's process.
 - State lives in `${XDG_STATE_HOME:-~/.local/state}/sydevs-dev-server/<slug>.json`, outside the
   repo, so removing a worktree strands no state.
-- `/implement-issue` runs `teardown` before `ExitWorktree`, so a finished ticket leaves no
+- `/implement-ticket` runs `teardown` before `ExitWorktree`, so a finished ticket leaves no
   server and no database behind.
 - The script never kills a port held outside this worktree. It reports this and tells you to
   rerun with `PORT=`.

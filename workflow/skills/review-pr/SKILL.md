@@ -1,5 +1,5 @@
 ---
-name: adversarial-review
+name: review-pr
 description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a draft bot PR goes green, or on `@sydevs-bot review`. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
@@ -18,7 +18,7 @@ obvious questions are already asked and answered by the time they read the PR. I
 ever, per PR**: make this one count. (why: docs/why.md#one-review-per-pr-ever) The one second
 look is `flags.onDemand` in the record — a human wrote `@sydevs-bot review`.
 
-**Start with `/workflow:handler-preflight` and end with `/workflow:handler-journal`.** On
+**Start with `/workflow:start-run` and end with `/workflow:finish-run`.** On
 arrival, `pull_request_read method:get` (still open) and `method:get_reviews`: an own-login
 review already exists and `flags.onDemand` is false → post nothing, journal that, and end.
 
@@ -39,7 +39,7 @@ Two lenses carry the most weight, in this order:
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
    strongest finding this review can produce is "half of this PR should not exist."
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
-   `/workflow:cross-repo-issue`: generated Payload types flow producer→consumer via `types:cms`,
+   `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access
    is per-client roles. When the diff touches a contract surface, **read the consumer side** — a
    contract change reviewed only from the producer's side is not reviewed.

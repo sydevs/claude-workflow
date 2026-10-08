@@ -53,7 +53,7 @@ export const DEFAULT_BUDGETS = {
  *
  * `loop-config.json` → `writing.markerRequired` and `identity.commentMarker`
  * are authoritative, and `budget.test.mjs` fails on a drift from either.
- * A journal entry is absent on purpose: `handler-journal` posts no marker.
+ * A journal entry is absent on purpose: `finish-run` posts no marker.
  *
  * Test presence, never position: the harness attribution footer follows the
  * marker in a real comment. (why: docs/why.md#the-marker-check-belongs-in-the-script)
@@ -124,7 +124,7 @@ const DROPPABLE = /^-\s/
  * `\u{1F4C4} Did` section and was told it had "532 to spare", and a 1,599-character one
  * dropped a second line after the first left it at 1,433.
  *
- * **It cuts from the END of `\u{1F4C4} Did`.** `handler-journal`'s template leads that
+ * **It cuts from the END of `\u{1F4C4} Did`.** `finish-run`'s template leads that
  * section with the PR the run pushed, and the register rule leads with the
  * outcome, so the first line is the most important one. Cutting top-down took
  * the PR link from three entries in the week to 2026-09-20, and taught a

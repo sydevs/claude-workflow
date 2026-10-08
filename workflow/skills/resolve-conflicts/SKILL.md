@@ -9,8 +9,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 # Resolve conflicts
 
-One PR that GitHub reports as `CONFLICTING`. **Start with `/workflow:handler-preflight` and end
-with `/workflow:handler-journal`.**
+One PR that GitHub reports as `CONFLICTING`. **Start with `/workflow:start-run` and end
+with `/workflow:finish-run`.**
 
 **Merge the base branch in only when GitHub reports the PR `CONFLICTING`.** Never to freshen a PR
 that is merely behind. The base ref belongs to that trigger, not to a session's judgement.
@@ -25,7 +25,7 @@ that is merely behind. The base ref belongs to that trigger, not to a session's 
 
 ## Do
 
-1. Worktree on the PR branch (`/workflow:implement-issue` step 6):
+1. Worktree on the PR branch (`/workflow:implement-ticket` step 6):
    `git fetch origin <base> <branch>`, then `git merge origin/<base>`.
 2. Resolve every hunk from both sides' intent. **Keep both behaviours where both are wanted.**
    Never take one side wholesale to make the merge go away.

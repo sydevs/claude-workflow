@@ -3,7 +3,7 @@
  *
  * Every hook here is repo-agnostic. The per-repo data lives in
  * `<worktree>/.claude/workflow.json`. This resolves against the worktree
- * root, not `CLAUDE_PROJECT_DIR`. That matters because `/implement-issue`
+ * root, not `CLAUDE_PROJECT_DIR`. That matters because `/implement-ticket`
  * works in a worktree by default. A hook keyed on the main checkout would
  * read the wrong repo's rules, or none at all.
  */

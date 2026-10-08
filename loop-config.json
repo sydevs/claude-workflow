@@ -10,17 +10,17 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR; the proposal ceilings bound the survey. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
+    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR; the proposal ceilings bound the audits. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3
   },
   "findings": {
-    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in handler-preflight/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR.",
+    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in start-run/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR.",
     "directFixMaxFiles": 2
   },
   "labels": {
-    "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Re-check date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in handler-preflight/SKILL.md.",
+    "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Hold Until date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in start-run/SKILL.md.",
     "journal": "ops-journal",
     "awaiting": "awaiting",
     "stuck": "stuck",
@@ -29,7 +29,7 @@
     "proposal": "proposal"
   },
   "assignment": {
-    "$comment": "assignee:<bot> is the worklist. Only the user writes it. The loop may only remove itself. respondTo lists the logins whose comments count as feedback. Rules in triage-issue/SKILL.md.",
+    "$comment": "assignee:<bot> is the worklist. Only the user writes it. The loop may only remove itself. respondTo lists the logins whose comments count as feedback. Rules in format-ticket/SKILL.md.",
     "reviewer": "Ardnived",
     "respondTo": [
       "Ardnived",
@@ -38,10 +38,22 @@
     ]
   },
   "handlers": {
-    "$comment": "One skill per handler; the dispatch record's handler field selects it. model is documentary — every handler runs on the repo's routine (dispatch.routines). Rules in handler-preflight/SKILL.md.",
+    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines). Rules in start-run/SKILL.md.",
     "implement": {
       "model": "opus",
-      "skill": "implement-issue"
+      "skill": "implement-ticket"
+    },
+    "implement-roadmap": {
+      "model": "opus",
+      "skill": "implement-roadmap"
+    },
+    "revise": {
+      "model": "opus",
+      "skill": "write-ticket"
+    },
+    "revise-roadmap": {
+      "model": "opus",
+      "skill": "revise-roadmap"
     },
     "address-review": {
       "model": "opus",
@@ -55,37 +67,30 @@
       "model": "opus",
       "skill": "resolve-conflicts"
     },
-    "adversarial-review": {
+    "review-pr": {
       "model": "opus",
-      "skill": "adversarial-review"
+      "skill": "review-pr"
     },
-    "revise": {
+    "audit-nightly": {
       "model": "opus",
-      "skill": "revise-ticket"
-    },
-    "answer": {
-      "model": "opus",
-      "skill": "answer-ticket"
-    },
-    "survey-nightly": {
-      "model": "opus",
-      "skill": "survey-routine",
+      "skill": "run-audit",
       "cron": "0 8 * * *",
       "routine": "trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6"
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. reviewProposals: a bot-filed ticket is revised before a human reads it (why: docs/why.md#a-proposal-is-reviewed-before-you-read-it). routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
       "implement",
+      "implement-roadmap",
+      "revise",
+      "revise-roadmap",
       "address-review",
       "fix-ci",
       "resolve-conflicts",
-      "adversarial-review",
-      "revise",
-      "answer"
+      "review-pr"
     ],
     "routines": {
       "SahajCloud": "trig_01CiCX4hDrAiP32S2FAM2phy",
@@ -95,28 +100,38 @@
       "claude-workflow": "trig_013eDcX1APf1f5NfUzodGE75"
     },
     "enabledHandlers": null,
-    "reviewProposals": true,
     "verbs": {
       "issue": [
         "implement",
         "revise",
-        "answer"
+        "review",
+        "block"
       ],
       "pr": [
         "address",
-        "review"
+        "review",
+        "revise"
       ],
-      "unknownIssue": "answer",
+      "aliases": {
+        "issue": {
+          "review": "revise"
+        },
+        "pr": {
+          "revise": "review"
+        }
+      },
+      "unknownIssue": "revise",
       "unknownPr": "address"
     },
     "timeoutsMinutes": {
       "implement": 150,
+      "implement-roadmap": 150,
+      "revise": 60,
+      "revise-roadmap": 120,
       "address-review": 60,
       "fix-ci": 60,
       "resolve-conflicts": 45,
-      "adversarial-review": 45,
-      "revise": 60,
-      "answer": 30
+      "review-pr": 45
     },
     "maxAttempts": 3,
     "orphanDraftHours": 6,
@@ -132,6 +147,12 @@
     "tokenSecret": "SYDEVS_BOT_PAT",
     "routineTokenSecretPrefix": "ROUTINE_TOKEN_",
     "routineIdVarPrefix": "ROUTINE_ID_"
+  },
+  "roadmap": {
+    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "type": "Roadmap",
+    "spikeBranchPrefix": "claude/spike-",
+    "notesMarker": "<!-- sydevs-roadmap-notes v1 -->"
   },
   "ci": {
     "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci).",
@@ -152,28 +173,55 @@
       "claude-workflow"
     ]
   },
-  "surveyCalendar": {
-    "$comment": "Weekday -> survey skill. Only survey-routine dispatches these. Saturday runs no survey. Keys are lowercase UTC weekday names, from `date -u +%A | tr A-Z a-z`.",
-    "monday": "survey-deps",
-    "tuesday": "survey-sentry",
-    "wednesday": "survey-analysis",
-    "thursday": "survey-contracts",
+  "auditCalendar": {
+    "$comment": "Weekday -> audit skill. Only run-audit dispatches these. monthly.<weekday>.<n> overrides the nth such weekday of the month. Keys are lowercase UTC weekday names, from `date -u +%A | tr A-Z a-z`.",
+    "monday": "audit-deps",
+    "tuesday": "audit-code",
+    "wednesday": "audit-sentry",
+    "thursday": "audit-code",
     "friday": "cut-release",
-    "saturday": null,
-    "sunday": "reflect"
+    "saturday": "audit-code",
+    "sunday": "improve-loop",
+    "monthly": {
+      "saturday": {
+        "1": "audit-contracts"
+      }
+    },
+    "rotationEpoch": "2026-10-05"
   },
-  "analysisAngles": [
-    "correctness and edge cases",
-    "simplicity and abstraction reduction",
-    "performance",
-    "security",
-    "test quality and coverage gaps",
-    "accessibility",
-    "i18n completeness",
-    "error handling and observability",
-    "UX consistency",
-    "feature research against current best practice"
-  ],
+  "auditAngles": {
+    "$comment": "audit-code's three rotations, one per weekday it runs. Each advances one angle per run of its own day, counted from auditCalendar.rotationEpoch; an overridden day does not count. workflow/skills/run-audit/calendar.mjs is the one reader.",
+    "tuesday": {
+      "family": "risk",
+      "angles": [
+        "correctness and edge cases",
+        "security",
+        "error handling and observability",
+        "test quality and coverage gaps"
+      ]
+    },
+    "thursday": {
+      "family": "experience",
+      "angles": [
+        "performance",
+        "accessibility",
+        "i18n completeness",
+        "UX consistency",
+        "SEO and discoverability"
+      ]
+    },
+    "saturday": {
+      "family": "hygiene",
+      "angles": [
+        "simplicity and abstraction reduction",
+        "code comments",
+        "dead code and unused dependencies",
+        "docs vs reality",
+        "build vs buy",
+        "best practice research"
+      ]
+    }
+  },
   "sentry": {
     "$comment": "DE region: the global sentry.io host 404s here. The token lacks org:read, so /organizations/ also 403s. SahajAtlasWordpress ships no Sentry.",
     "apiBase": "https://de.sentry.io/api/0",
@@ -191,7 +239,7 @@
     "retentionDays": 7
   },
   "contractSync": {
-    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command on its main, in one bot PR on branch. Rules in survey-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
+    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command on its main, in one bot PR on branch. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
     "producer": "SahajCloud",
     "branch": "claude/chore-sync-contracts",
     "consumers": {
@@ -227,7 +275,7 @@
     }
   },
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields, not Projects v2, not labels. You can read and write them, but not search them. See triage-issue/SKILL.md for read/write rules and the PUT-replaces-everything trap.",
+    "$comment": "GitHub's native org-level issue fields, not Projects v2, not labels. You can read and write them, but not search them. See format-ticket/SKILL.md for read/write rules and the PUT-replaces-everything trap.",
     "priority": {
       "fieldId": 14337938,
       "options": [
@@ -237,19 +285,12 @@
         "Low"
       ]
     },
-    "effort": {
-      "fieldId": 14337941,
-      "options": [
-        "Easy",
-        "Moderate",
-        "Hard"
-      ]
-    },
     "holdUntil": {
-      "$comment": "Where a park lives: the date a ticket comes back. The dispatcher reads it, applies `blocked` while it is ahead, and unparks when it passes. Load-bearing — do not delete with Stage.",
+      "$comment": "Where a park lives: the date a ticket comes back. The dispatcher reads it, applies `blocked` while it is ahead, and fires a recheck when it passes. maxRehold quiet re-holds in a row hand it to you (why: docs/why.md#recheck-before-awaiting).",
       "name": "Hold Until",
       "fieldId": 46423871,
-      "maxHorizonDays": 30
+      "maxHorizonDays": 30,
+      "maxRehold": 3
     }
   },
   "relationships": {
@@ -258,14 +299,14 @@
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>"
   },
   "identity": {
-    "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in implement-issue/SKILL.md.",
+    "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in implement-ticket/SKILL.md.",
     "expectedLogin": "sydevs-bot",
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
   "review": {
-    "$comment": "adversarial-review. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both. Rules in adversarial-review/SKILL.md.",
+    "$comment": "review-pr. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both. Rules in review-pr/SKILL.md.",
     "bodyHeader": "## 🧐 Adversarial review",
-    "profilePath": "workflow/skills/adversarial-review/reviewer-profile.md",
+    "profilePath": "workflow/skills/review-pr/reviewer-profile.md",
     "skipWhen": {
       "maxFiles": 2,
       "maxLines": 40
@@ -276,7 +317,7 @@
     "timezone": "America/Vancouver"
   },
   "projects": {
-    "$comment": "The org workflow board is a lens over Stage, awaiting, and PR review state. The loop never reads or writes it. Story in docs/why.md#the-board-is-a-lens.",
+    "$comment": "The org board, public as the roadmap. The dispatcher writes Status on every item except a Roadmap ticket, which carries none (why: docs/why.md#a-roadmap-ticket-has-no-status). The loop never reads it (why: docs/why.md#the-board-is-a-lens-so-it-may-fail-alone).",
     "url": "https://github.com/orgs/sydevs/projects/2",
     "number": 2,
     "status": {
@@ -287,7 +328,7 @@
     }
   },
   "writing": {
-    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in preflight/SKILL.md.",
+    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
     "budgets": {
       "comment": 1200,
       "reviewReply": 600,

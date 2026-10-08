@@ -61,7 +61,7 @@ function gitTopLevel(dir) {
  * The two git rules exist for one reason: inside a repo, the cwd is already
  * its root. So `git -C` and `cd … && git` are redundant, and both trigger a
  * permission prompt. That reason does not apply to a sibling checkout, and
- * cross-repo work is routine here (`/cross-repo-issue`, the shared workspace).
+ * cross-repo work is routine here (`/implement-roadmap`, the shared workspace).
  *
  * This function compares REPOSITORIES, not directory containment. Containment
  * gets the multi-root case backwards. `worktreeRoot()` falls back to the

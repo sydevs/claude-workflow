@@ -1,6 +1,6 @@
 ---
-name: handler-journal
-description: Write the run's journal comment, then release the lock — the closing step for every handler skill and for survey-routine, not standalone.
+name: finish-run
+description: Write the run's journal comment, then release the lock — the closing step for every handler skill and for run-audit, not standalone.
 allowed-tools: Read, Grep, Glob, Bash(node:*)
 ---
 
@@ -18,7 +18,7 @@ The record names it: `journal.repo` and `journal.issue`. Never search for it. **
 mode, and say so under `🧭 Friction`.
 (why: docs/why.md#the-journal-pointer-is-an-optimisation)
 
-Cron mode (the survey) has no record. Search open `labels.journal` issues in `journalRepo`, take
+Cron mode (the nightly audit) has no record. Search open `labels.journal` issues in `journalRepo`, take
 the one created today in `journal.timezone`, and create it with a one-line body if absent.
 
 ## The entry
@@ -43,7 +43,7 @@ Your session URL is `https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse
 - Omit `🧭 Friction` and `📄 Did` when empty.
 - **Evidence for failures and friction: name the call.** None for pushes, CI, or review counts —
   GitHub records those. (why: docs/why.md#every-claim-names-the-call-that-produced-it)
-- Glyphs: 🔀 merged · 📦 built · 💬 replied · 🧐 reviewed · 🔬 investigated · 🔍 surveyed ·
+- Glyphs: 🔀 merged · 📦 built · 💬 replied · 🧐 reviewed · 🔬 investigated · 🔍 audited ·
   🩹 fixed CI · 🧶 resolved conflicts · ✍️ revised · ⏭️ stopped · 🛑 not started.
 - Full `org/repo#N` everywhere. Say `attempt <n>` on the first line when resuming.
 
