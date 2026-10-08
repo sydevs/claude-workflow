@@ -1,28 +1,181 @@
 # claude-workflow
 
 The shared [Claude Code](https://claude.com/claude-code) workflow for the
-[sydevs](https://github.com/sydevs) projects — one issue-to-PR pipeline for
-**SahajCloud**, **SahajAtlasWeb**, **WeMeditateWeb**, and **SahajAtlasWordpress**.
-
-## Why this exists
-
-The four product repos once kept separate copies of the same workflow skills, held to a spec
-requiring byte-for-byte matches. They did not match. By the time this plugin was written, the
-copies had drifted 90–250 lines apart, and steps had different names in each repo. Even the audit
-meant to catch the drift compared against a directory that no longer existed.
-
-The cause was not discipline — prose copied three times cannot stay in sync. So per-repo
-differences now live as data: one `.claude/workflow.json` per repo, and one copy of each skill.
-
-## Install
+[sydevs](https://github.com/sydevs) projects. It turns GitHub issues into reviewed pull requests
+across **SahajCloud**, **SahajAtlasWeb**, **WeMeditateWeb**, **SahajAtlasWordpress** and this repo.
+Why each rule exists, and why the plugin does, is in [docs/why.md](docs/why.md).
 
 ```bash
 /plugin marketplace add sydevs/claude-workflow
 /plugin install workflow@sydevs
 ```
 
-Each repo also declares the marketplace in `.claude/settings.json`, so a fresh clone can install it
-once the folder is trusted:
+## The loop
+
+A comment signed *Written by the sydevs autonomous loop* comes from `sydevs-bot`: a Claude Code
+cloud session that GitHub Actions started because a member asked for something. Apart from the
+nightly audit, work starts only on an event. Each session does one job, pushes, and ends.
+
+```
+ ROADMAP — needs a decision, or more than one PR      DIRECT — a bug or a small ticket
+
+ a goal is filed: file-ticket, the public             file-ticket
+ "Suggest a goal" form, or an improve-loop proposal        │
+      │                                                    ▼
+      ▼                                               write-ticket writes the spec
+ revise-roadmap ⇄ you answer: @sydevs-bot revise 1A        │
+      │                                                    │
+      ▼                                                    │
+ you: @sydevs-bot implement                                │
+      │                                                    │
+      ▼                                                    │
+ implement-roadmap files the implementation tickets        │
+      │                                                    │
+      ▼                                                    ▼
+ you: @sydevs-bot implement  (approves every child)   you: @sydevs-bot implement
+      │                                                    │
+      └────────────────► implement-ticket ◄────────────────┘
+                               │
+                               ▼
+     draft PR ─► CI ─► review-pr ─► address-review ─► ready ─► you approve ─► GitHub merges
+                               │
+                               ▼
+     a goal's last child closes ─► revise-roadmap verifies it ─► goal closed, or awaiting
+```
+
+- **Who can start the bot.** Only the members in `assignment.respondTo`, with write access. Their
+  `@sydevs-bot` verbs count. Anyone else's comment starts nothing.
+- **The public gate.** Anyone can suggest a goal. It lands as a Roadmap ticket with `awaiting`, and
+  nothing runs until a member says `@sydevs-bot revise`. The author's replies set `awaiting` and
+  are read on the next member-started run. They never start a session.
+- **Holds and rechecks.** When a hold's date passes or its blocker closes, a short recheck reads why
+  it was held. Still blocked: it is quietly re-held, with no ping. You get `awaiting` only when the
+  ticket is ready, needs a decision, or has been re-held 3 times in a row.
+- **Bulk approval.** `implement` on a goal approves every open child. Free children start at once.
+  Blocked ones record `pending: implement` and start when a recheck confirms they are free, with
+  no second verb.
+- **The completion check.** When a goal's last child closes, `revise-roadmap` compares what shipped
+  with *What success looks like*. It closes the goal, or names the gap and sets `awaiting`.
+- **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
+  green. `claude-workflow` is never auto-merged, because merging it is the deploy.
+
+| Label | Means |
+| --- | --- |
+| `awaiting` | Your turn: ready, a decision is needed, or the bot gave up. |
+| `blocked` | Waits on an open blocker or a Hold Until date. A recheck decides when it is free. |
+| `bot:working` | A session holds this item. Its status comment links the session. |
+| `stuck` | The machinery owes a retry (usage limit, paused routine, dead session). Nothing needed yet. |
+| `proposal` | The bot filed it, and no human has given a verdict. |
+
+The board's Status (Proposed, Revising, Approved, Done) tracks implementation tickets and PRs. A
+Roadmap ticket has none: its milestone, its sub-issue progress, and whether it is closed say where
+it is. Only the dispatcher writes labels and Status; a session only removes its own `bot:working`.
+
+**Nightly audits**, 08:00 UTC, one per day:
+
+| Mon | Tue | Wed | Thu | Fri | Sat | Sun |
+| --- | --- | --- | --- | --- | --- | --- |
+| `audit-deps` | `audit-code` risk | `audit-sentry` | `audit-code` experience | `cut-release` | `audit-code` hygiene (1st Saturday: `audit-contracts`) | `improve-loop` |
+
+## Skills you run
+
+| Skill | Use it to | Example |
+| --- | --- | --- |
+| `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, then files in the right tier. | `/workflow:file-ticket the map flickers when zooming on Safari` |
+| `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh a draft PR. It never merges. | `/workflow:finalize-pr` |
+| `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
+
+`write-ticket`, `implement-ticket`, `revise-roadmap`, `implement-roadmap` and `review-pr` also run
+locally against an issue or PR number, for example `/workflow:implement-ticket 41` or
+`/workflow:review-pr sydevs/SahajCloud#880`.
+
+## Talking to the bot on GitHub
+
+Start the comment with `@sydevs-bot`. Case does not matter.
+
+| On | Say | What happens |
+| --- | --- | --- |
+| Roadmap ticket | `@sydevs-bot revise` (or `review`, or a bare mention) | `revise-roadmap` reviews the goal or reads your answers. On a non-member's suggestion, this accepts it. |
+| Roadmap ticket | `@sydevs-bot implement` | No children yet: `implement-roadmap` plans them. With children: every open child is approved. |
+| Implementation ticket | `@sydevs-bot revise <what to change>` | `write-ticket` updates the ticket, or answers your question from the code. |
+| Implementation ticket | `@sydevs-bot implement` | `implement-ticket` builds it into a draft PR. On a blocked ticket the approval waits. |
+| Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
+| Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link and `blocked`. Rechecked when that issue closes. |
+| Any issue | `@sydevs-bot block waiting on legal sign-off` | A short session picks what to watch and a recheck date. |
+| Bot PR | any comment, review or thread reply — no mention needed | `address-review` adopts or rebuts each point. |
+| Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
+| Your own PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into your branch. |
+
+`implement` is refused while the ticket's **Open questions** has an unticked item.
+
+**Answering a decision.** The bot asks every decision as numbered options with a recommendation:
+
+```markdown
+- [ ] **1. Should old atlas links redirect permanently?**
+  - **A — Permanent redirect (recommended):** links in old emails keep working.
+  - **B — Temporary until 2027:** the old paths can be reused later.
+```
+
+Reply `@sydevs-bot revise 1A` (or `1A 2B` for several), or answer in your own words after the
+mention. The bot ticks the item and moves it to **Decisions**, with who answered and when.
+
+**Declining a suggestion.** Close it as *not planned*.
+
+**A plain reply with no mention does nothing on an issue**, except that a roadmap ticket's own author marks it `awaiting`. On a bot PR, every comment counts.
+
+## Automated skills
+
+Fired by the dispatcher (GitHub Actions) on events:
+
+| Skill | Fired by | Produces |
+| --- | --- | --- |
+| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, a notes comment; or the completion verdict |
+| `implement-roadmap` | `implement` on a goal with no children; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
+| `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
+| `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |
+| `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
+| `address-review` | a review, comment or thread reply on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
+| `fix-ci` | red CI on a bot PR, up to 3 times | one fix commit |
+| `resolve-conflicts` | an approved bot PR that conflicts | `main` merged in, conflicts resolved |
+
+Run by the nightly routine through `run-audit`:
+
+| Skill | Produces |
+| --- | --- |
+| `audit-deps` | PRs that fix vulnerable dependencies; monthly, routine updates |
+| `audit-code` | one angle a night from that day's family. Risk and experience file tickets. Hygiene opens ticketless PRs it can prove safe (comment sweep, dead code, doc fixes). |
+| `audit-sentry` | Bug tickets for production errors worth fixing |
+| `cut-release` | the changelog and version-bump PR; merging it publishes the release |
+| `audit-contracts` | checks the cross-repo contracts, and opens PRs where the source is plainly right |
+| `improve-loop` | grades the week, reports usage, and proposes loop changes as a PR, and goals as Roadmap proposals |
+
+Every run begins with `start-run` and ends with `finish-run`, which writes one comment on the day's
+`ops-journal` issue in this repo. Every ticket follows `format-ticket`. A merged SahajCloud PR that
+changes a file a consumer copies opens a sync PR in that consumer, with no ticket.
+
+## Setup and safety
+
+**Bootstrap** the loop on a new account with [docs/routine-setup.md](docs/routine-setup.md): GitHub
+metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
+
+**Kill switches**, narrowest first:
+
+- **Remove `bot:working`** from an item. Its session checks the label before each write and push,
+  and stops. The dispatcher then re-derives the item, so a verb still pending can start it again.
+- **`dispatch.enabledHandlers`** in `loop-config.json`: a list of the handlers allowed to fire
+  (`null` = all).
+- **`BOT_DISPATCH`** org variable: `dry` logs every plan and writes nothing. `off` runs nothing.
+- **Pause the routines** at claude.ai/code/routines. That stops every session. Fires fail as
+  `stuck` and retry later.
+
+**Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
+`leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,
+`prAllowlistGlobs` (where a ticketless PR may open), `worktreeSetup` and `devServer`. Loop-wide
+values live in [`loop-config.json`](loop-config.json).
+
+**Installing in a repo.** Each repo declares the marketplace in `.claude/settings.json`.
+`enabledPlugins` must be an object map — the array form installs the plugin disabled, with no
+error. Each person still runs `/plugin install` once.
 
 ```json
 {
@@ -33,161 +186,19 @@ once the folder is trusted:
 }
 ```
 
-`enabledPlugins` must be an **object map**, not an array. The array form installs the plugin, then
-reports it `disabled`, with no error. This looks like a working install until you run
-`claude plugin list`.
+The plugin also ships four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`
+and `eslint-fix`. Code review, security review and type-checking on edit come from official
+plugins instead (`pr-review-toolkit`, `/security-review` with `security-guidance`,
+`typescript-lsp` and `php-lsp`).
 
-Project settings register the marketplace but do not auto-install a plugin from an external source,
-so each person runs `claude plugin install` once.
-
-## What it provides
-
-| Skill | Purpose |
-| --- | --- |
-| `/workflow:draft-ticket` | Draft a GitHub issue: clarify ambiguity, then write acceptance criteria and a checklist. |
-| `/workflow:triage-issue` | The metadata rules — type, Priority, Effort, `Blocked by:` and `Re-check:` markers, body format. |
-| `/workflow:implement-issue` | Implement an authorised ticket in a worktree, open a draft PR through `finalize-pr`, push, end. |
-| `/workflow:finalize-pr` | Simplify, review, security-review, lean-gate, sync docs, push, open the PR as a draft. Never waits, never merges. |
-| `/workflow:cross-repo-issue` | File a cross-repo change as one tracking issue plus linked children, in dependency order. |
-| `/workflow:dev-server` | One dev server per **git worktree**, with its own port and database. |
-| `/workflow:handler-preflight` | Ground rules and run start for every dispatched handler: identity, the record, the lock. |
-| `/workflow:handler-journal` | The run's journal comment, then the unlock — the closing step of every handler. |
-| `/workflow:address-review` | Answer every open thread on one PR: adopt with a commit, or rebut with evidence. |
-| `/workflow:fix-ci` | One fix commit for a red CI run on a bot PR, then push. |
-| `/workflow:resolve-conflicts` | Merge `main` into a conflicting bot PR, resolve from both sides' intent, push. |
-| `/workflow:adversarial-review` | An advisory, critic-side COMMENT review of one bot PR, once per PR. The human approves. |
-| `/workflow:revise-ticket` | A deep pass: expand a ticket from the codebase, per the human's instruction. |
-| `/workflow:answer-ticket` | Answer a question on a ticket from source. Never pushes. |
-| `/workflow:survey-routine` | The nightly survey. Via `sydevs-survey-nightly`. |
-| `/workflow:survey-deps` | Monday: vulnerabilities become PRs. Routines update monthly. |
-| `/workflow:survey-sentry` | Tuesday: production errors become tickets. |
-| `/workflow:survey-analysis` | Wednesday: one rotating angle on the codebase, as proposals. |
-| `/workflow:survey-contracts` | Thursday: check published contracts against reality. |
-| `/workflow:cut-release` | Friday: update the changelog and open the version bump. Merging it publishes the Release. |
-| `/workflow:reflect` | Sunday: grade last week, read the journals, report usage, refine the profile, propose loop changes. |
-| `/workflow:comment-cleanup` | Apply the code-comments rule across a file, directory or repo. Comment-only, proved by `comment-fingerprint.mjs`. |
-
-Plus four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`, `eslint-fix`.
-
-## The loop
-
-Nothing runs on a clock. **GitHub Actions observes every event, classifies it, and fires one
-cloud session per unit of work.** A reusable workflow, `dispatcher.yml`, is called by a thin
-`workflow-state.yml` in each of the five repos. Sessions do judgement only. They push and end.
-Everything an event determines — merge, mark ready, board Status, the `awaiting` label, Sentry
-resolve, unblocking — is mechanical and free.
-(why: docs/why.md#actions-observes-classifies-locks-and-fires)
-
-**You start work with a verb.** On an issue, a comment from a `respondTo` human:
-`@sydevs-bot implement`, `revise`, or `answer` (case-insensitive, unknown → `answer`).
-Nothing happens on an issue without a mention. On a bot PR, any review, comment, or thread reply
-from you dispatches `address-review` with no mention needed. `@sydevs-bot review` asks for a
-second adversarial review.
-
-**One label, `bot:working`, is the lease.** Actions applies it before it fires. The session
-removes it as its last write. A comment that lands while the lock is held is not lost — the
-dispatcher re-derives on unlock. (why: docs/why.md#the-lock-label-is-the-lease)
-
-**A bot PR's life is a chain of events**: draft → CI green → the next implement session while
-the PR's `## Phases` has an unticked box → adversarial review (one COMMENT
-review, skipped under `review.skipWhen`) → `address-review` adopts or rebuts each thread → CI
-green → **ready + reviewer requested** → your approval → squash merge. Red CI fires `fix-ci`, at
-most `ciFixIterations` times. An approved PR with conflicts gets `resolve-conflicts`, then merges
-on the next green run. Nobody waits for CI, ever. (why: docs/why.md#push-and-end)
-
-**Labels say whose turn it is. Status says where it sits.**
-
-| Marker | Means | Writer |
-| --- | --- | --- |
-| `awaiting` | Your turn. | Actions only |
-| `bot:working` | A session holds it. Its status comment names the handler and links the session. | Actions applies, the session removes |
-| `stuck` | The machinery owes a retry — usage limit, paused routines, a dead session. Nothing needed from you yet. | Actions only |
-| `blocked` | An open `Blocked by:` target, or a `Re-check:` date still ahead. Cleared with a mention. | Actions only |
-| `proposal` | Bot-filed, no verdict yet. | Actions only |
-| Status `Proposed` / `Revising` / `Approved` / `Done`, none = backlog | The board column. | Actions only |
-
-**There is no WIP cap.** Every session follows a human's verb or a human's event, so the person
-typing is the throttle. Each day's journal issue carries a usage tally, and the Sunday reflection
-reports usage back as feedback. (why: docs/why.md#there-is-no-wip-cap)
-
-**Three properties keep it safe to leave running:**
-
-- **Only a `respondTo` human's `@sydevs-bot implement` authorises code.** Not a field, not a drag
-  on the board, not a request in prose.
-- **GitHub decides every merge.** The dispatcher arms auto-merge when a PR is marked ready, and
-  the repository ruleset does the rest: one approval, every review thread resolved, CI green,
-  then the merge queue rebases and tests before it lands. `loopMayNotMerge` repos are never
-  armed. (why: docs/why.md#github-owns-the-merge)
-- **Nothing is lost in an outage.** A fire that fails, or a session that dies, leaves the item
-  `stuck`. A 30-minute Actions sweeper retries up to `dispatch.maxAttempts`, then hands it to you
-  as `awaiting`. Pausing the routines in the UI is the only kill switch, and it is global.
-
-**A copied contract re-syncs itself.** When a SahajCloud PR that changes a file a consumer
-copies — the generated types, the atlas URL contract — merges, the dispatcher runs that
-consumer's own sync command on its `main` and opens one bot draft PR. No ticket and no verb: CI,
-`fix-ci` and your approval carry it. `contractSync` in `loop-config.json` names each copy.
-(why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
-
-State lives entirely in GitHub. A daily `ops-journal` issue is the memory: one comment per
-session, one line per dispatcher anomaly, the counts in the title. `loop-config.json` holds the
-knobs. The Sunday reflection proposes changes to them as a PR, so the loop tunes itself through
-the same review path as everything else.
-
-## Configuration
-
-Everything repo-specific comes from `<repo>/.claude/workflow.json`:
-
-| Key | Meaning |
-| --- | --- |
-| `packageManager` | Used by the hooks and any constructed command. |
-| `leanGate.command` / `.full` | The pre-PR test gate. |
-| `contractStep` | Migrations, `types:cms`, or the URL-contract diff. |
-| `securityReview.triggerPattern` | Paths that trigger a branch-level security review. |
-| `securityReview.contentPattern` / `.contentPaths` | Newly introduced sinks, regardless of path. |
-| `generatedFiles` | `{ pattern, reason }` rules for `block-generated-files`. |
-| `prAllowlistGlobs` | Where a **ticketless** PR may open (dep bumps, doc fixes, type re-syncs). `**` here, since the PR body is the proposal. Elsewhere, ticket work needs a human's `@sydevs-bot implement`. |
-| `worktreeSetup` | Commands run to set a checkout up, worktree or not. |
-| `devServer` | `command`, `basePort`, `healthPath`, and optional database isolation. |
-
-## Deliberately not here
-
-A few things were dropped rather than ported, because something maintained elsewhere already covers
-them:
-
-- **Code review** → the official `pr-review-toolkit` plugin (six specialist agents), instead of one
-  hand-rolled pass.
-- **Security review** → the built-in `/security-review` plus the official `security-guidance`
-  plugin. Both catch issues at edit time.
-- **Type checking on edit** → the official `typescript-lsp` / `php-lsp` plugins. A language server
-  reports diagnostics in the same turn as the edit. The old `typecheck` hook could not.
-- **Session reflection** → the official `claude-md-management` plugin.
-- **The `pr-prep` skill** → `workflow.json.leanGate`, pointing at each repo's own `check.sh`. The
-  skill only wrapped that call.
-- **humanlayer's `visual-pr`** → adapted into `finalize-pr/change-outline.md` (MIT), not
-  installed. Routines load no plugins, and `visual-pr` replaces the whole PR body, which the
-  dispatcher reads.
-
-`prettier-format` and `eslint-fix` survive because they *rewrite* files. No language server does
-that.
-
-## Bootstrap on a new account
-
-**[docs/routine-setup.md](docs/routine-setup.md)** covers every dashboard, identifier, and gotcha,
-in dependency order: GitHub metadata, Mailpit on Railway, the Sentry integration, the Claude cloud
-environment, then the routines themselves. It is written so you can rebuild the loop from nothing,
-on a different Claude account.
-
-## Development
+**Developing this repo.** Read [`AGENTS.md`](AGENTS.md) first — merging to `main` is the deploy.
 
 ```bash
 claude --plugin-dir ./workflow    # load without installing
 claude plugin validate ./workflow --strict
+node --test dispatcher/test/*.test.mjs
 ```
-
-**[`AGENTS.md`](AGENTS.md) is the contributor guide** (`CLAUDE.md` symlinks to it). It covers what
-is hazardous about editing a repo whose `main` branch runs live, the file layout, and the
-conventions for skills and hooks.
 
 ## Licence
 
-MIT
+MIT. `finalize-pr/change-outline.md` is adapted from humanlayer's `visual-pr` (MIT).

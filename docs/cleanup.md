@@ -36,7 +36,7 @@ Remove from `loop-config.json`:
 ## 2. The skills
 
 `workflow/skills/work-routine/`, `preflight/` and `journal/` — delete all three, with their
-scripts. Nothing reads them: `handler-preflight` and `handler-journal` replaced the bookends, and
+scripts. Nothing reads them: `start-run` and `finish-run` replaced the bookends, and
 the handlers replaced the ladder.
 
 In the same PR:
@@ -81,7 +81,8 @@ gh api orgs/sydevs/issue-fields --jq '.[] | "\(.name) id=\(.id)"'
 gh api -X DELETE orgs/sydevs/issue-fields/46423931   # Stage
 ```
 
-**Only `Stage`.** Priority, Effort and Hold Until all stay.
+**Only `Stage`.** Priority, Effort and Hold Until all stay. (Effort was deleted later, with the
+roadmap tier. why: `docs/why.md#effort-was-removed`)
 
 Deleting it destroys every ticket's `Stage` value, which is the one input `docs/rollback/` cannot
 reconstruct — the snapshot holds them, so keep
