@@ -261,3 +261,10 @@ test('a spike PR is left to the session that pushed it', () => {
   const s = { kind: 'pr', repo: repo(), item: { number: 5, labels: [] }, pr: { number: 5, state: 'open', draft: true, user: { login: 'sydevs-bot' }, head: { ref: 'claude/spike-252-redirects', sha: 'a' } }, comments: [], reviews: [], threads: [], ci: { green: true, running: [], failing: [] } }
   for (const reason of ['pull_request.opened', 'sweep-pr', 'sweep-orphan', 'ci']) assert.deepEqual(types(decide({ reason, facts: {} }, s, config)), ['note'], reason)
 })
+
+test('a goal created with its type is locked by one leg and never marked awaiting by the other', () => {
+  // SahajAtlasWeb#256: `typed` took the lock, then `opened` added awaiting.
+  const p = decide({ reason: 'issues.opened' }, snap({ locked: true }), config)
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.equal(fires(p).length, 0, 'the session that holds the lock is the only one')
+})

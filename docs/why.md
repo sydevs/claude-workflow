@@ -1834,6 +1834,18 @@ the summary comment quotes each point and gives the SHA or the evidence. The sum
 than the review's `submitted_at` is what marks it handled, the same `since` test the dispatcher
 uses, so a resumed run never answers it twice.
 
+## A locked item is never awaiting
+
+A ticket created with its type already set fires two events, `opened` and `typed`. They share a
+concurrency group, so they run one after the other, in either order. On the first twelve roadmap
+goals, `typed` ran first, took the lock and started the review. `opened` then ran its placement
+row, which adds `awaiting` to every new ticket, onto an item a session already held. Seven goals
+sat in the Awaiting view while the bot worked on them.
+
+Every row could check the lock itself, but one more row would forget to. So the rule sits in one
+place, after every row: on a locked item, no plan adds `awaiting`. Nothing is lost. The unlock
+re-derives the item from its finished state, and that is where `awaiting` belongs.
+
 ## Subscribe only to what resolves
 
 The callers subscribed to `assigned`, `field_added` and `field_removed` long after the state
