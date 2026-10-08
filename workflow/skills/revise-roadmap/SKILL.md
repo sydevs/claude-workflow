@@ -56,8 +56,8 @@ it. (why: docs/why.md#experiments-answer-facts)
 - **Allowed**:
   - throwaway scripts in a worktree;
   - installing a candidate package and reading its source;
-  - read-only calls to production SahajCloud and vendor APIs, with the read-only keys the routine
-    environment provides;
+  - read-only calls to production SahajCloud and vendor APIs, with the keys named in
+    `roadmap.readOnlyKeys` and nothing else;
   - a throwaway branch named `roadmap.spikeBranchPrefix` + `<n>-<slug>`, pushed, with a draft PR
     if the platform builds previews only for PRs. The dispatcher never touches it.
 - **Never**: a write to production, a shared database, a vendor account, or a product branch.
@@ -86,14 +86,20 @@ it. (why: docs/why.md#experiments-answer-facts)
    ```
 
    With children, never move it. Name the mismatch in your reply instead.
-5. **A duplicate, an already-shipped goal, or one a decision rules out**: recommend closing it,
+5. **Attach the pieces.** Each open ticket the cross-reference lens finds to be a piece of this
+   goal becomes a sub-issue (`mcp__github__sub_issue_write`), unless it already has a parent —
+   name that overlap instead. Attach closed tickets that delivered part of it too, so the
+   progress bar tells the truth. Do not rewrite them: `implement-roadmap` brings each to the child
+   standard when it plans. Attaching is not approval — the first `implement` still plans. If you
+   ask for a transfer, attach nothing this run.
+6. **A duplicate, an already-shipped goal, or one a decision rules out**: recommend closing it,
    with the evidence. Do not close it yourself.
 
-### When children exist
+### Once the goal is planned
 
-If what changed alters what the children must deliver, end your reply with
-`<!-- sydevs-request {"replan":true} -->`. The dispatcher then runs `implement-roadmap` to adjust
-them.
+If `implement-roadmap` has already planned the children, and what changed alters what they must
+deliver, end your reply with `<!-- sydevs-request {"replan":true} -->`. The dispatcher then runs
+`implement-roadmap` to adjust them. Before a plan, there is nothing to re-plan.
 
 ## Verify (`verify`)
 

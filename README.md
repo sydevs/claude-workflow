@@ -96,7 +96,7 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | On | Say | What happens |
 | --- | --- | --- |
 | Roadmap ticket | `@sydevs-bot revise` (or `review`, or a bare mention) | `revise-roadmap` reviews the goal or reads your answers. On a non-member's suggestion, this accepts it. |
-| Roadmap ticket | `@sydevs-bot implement` | No children yet: `implement-roadmap` plans them. With children: every open child is approved. |
+| Roadmap ticket | `@sydevs-bot implement` | Not planned yet: `implement-roadmap` plans the children, adopting the ones the review attached. Planned: every open child is approved. |
 | Implementation ticket | `@sydevs-bot revise <what to change>` | `write-ticket` updates the ticket, or answers your question from the code. |
 | Implementation ticket | `@sydevs-bot implement` | `implement-ticket` builds it into a draft PR. On a blocked ticket the approval waits. |
 | Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
@@ -130,7 +130,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 | Skill | Fired by | Produces |
 | --- | --- | --- |
 | `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, a notes comment; or the completion verdict |
-| `implement-roadmap` | `implement` on a goal with no children; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
+| `implement-roadmap` | the first `implement` on a goal; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |

@@ -1991,8 +1991,12 @@ one verb at a time costs a human round trip per child. The blocked ones cost mor
 remember to come back when the blocker merges, which is exactly the memory a person does not keep
 for weeks.
 
-The decision is the same for every child: build this plan. So `implement` on a goal with children
-approves every open one, in one comment. A free child starts at once. A blocked child records
+The decision is the same for every child: build this plan. So `implement` on a **planned** goal
+approves every open child, in one comment. Planned means `implement-roadmap` has run, not that
+children exist: a review attaches the existing tickets it finds as sub-issues, so the roadmap's
+progress bar tells the truth from day one, and those were never planned. The first `implement`
+plans them, adopting what is attached; only the next one approves. A re-plan request before any
+plan is ignored for the same reason. A free child starts at once. A blocked child records
 `pendingImplement` and starts when a recheck confirms its blocker cleared, with no second verb. The
 order needs no human either. It lives in the `Blocked by` relationships `implement-roadmap` wrote.
 

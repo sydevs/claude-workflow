@@ -149,10 +149,13 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "roadmap": {
-    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
     "type": "Roadmap",
     "spikeBranchPrefix": "claude/spike-",
-    "notesMarker": "<!-- sydevs-roadmap-notes v1 -->"
+    "notesMarker": "<!-- sydevs-roadmap-notes v1 -->",
+    "readOnlyKeys": [
+      "SAHAJCLOUD_API_KEY"
+    ]
   },
   "ci": {
     "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci).",
