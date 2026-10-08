@@ -466,8 +466,10 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 > goes to Resend. Never put a production admin credential here.
 
 **Read-only keys for experiments.** `revise-roadmap` and `write-ticket` settle facts by
-experiment, including read-only calls to production SahajCloud and vendor APIs. Give the cloud
-environment a read-only key for every API they may need to query, and nothing that can write.
+experiment, including read-only calls to production SahajCloud and vendor APIs. They use only the
+variables named in `roadmap.readOnlyKeys` — today `SAHAJCLOUD_API_KEY`, the read-scoped client
+above. Add a vendor's read-only key to the environment and to that list together, and nothing
+that can write.
 (why: docs/why.md#experiments-answer-facts)
 
 **Spike previews.** A review session may push a throwaway `claude/spike-*` branch, or a draft PR,

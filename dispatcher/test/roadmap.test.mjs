@@ -137,7 +137,7 @@ test('implement on a roadmap ticket with children approves the open ones', () =>
     { repo: repo('SahajAtlasWeb'), number: 11, state: 'closed' },
     { repo: repo('SahajAtlasWeb'), number: 12, state: 'open' },
   ]
-  const p = decide(verb('@sydevs-bot implement'), snap({ children }), config)
+  const p = decide(verb('@sydevs-bot implement'), snap({ children, record: { dispatches: [{ handler: 'implement-roadmap', outcome: 'done' }] } }), config)
   assert.equal(fires(p).length, 0, 'the parent starts nothing itself')
   const t = p.find((a) => a.type === 'targets').list
   assert.deepEqual(t.map((x) => [x.repo.name, x.number, x.reason]), [['SahajCloud', 10, 'approve'], ['SahajAtlasWeb', 12, 'approve']])
@@ -243,7 +243,7 @@ test('a child that escalated a decision hands the turn to its parent, not to you
 
 test('a replan request re-plans the children; an old request is ignored', () => {
   const kids = [{ repo: repo(), number: 1, state: 'open' }]
-  const fresh = snap({ children: kids, request: { at: '2026-10-07T11:00:00Z', body: { replan: true } }, record: { current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' } } })
+  const fresh = snap({ children: kids, request: { at: '2026-10-07T11:00:00Z', body: { replan: true } }, record: { current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' }, dispatches: [{ handler: 'implement-roadmap', outcome: 'done' }] } })
   assert.deepEqual(fires(decide({ reason: 'unlock', facts: {} }, fresh, config)).map((a) => [a.handler, a.flags.mode]), [['implement-roadmap', 'replan']])
   const stale = { ...fresh, request: { at: '2026-10-01T11:00:00Z', body: { replan: true } } }
   assert.equal(fires(decide({ reason: 'unlock', facts: {} }, stale, config)).length, 0)
@@ -267,4 +267,13 @@ test('a goal created with its type is locked by one leg and never marked awaitin
   const p = decide({ reason: 'issues.opened' }, snap({ locked: true }), config)
   assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
   assert.equal(fires(p).length, 0, 'the session that holds the lock is the only one')
+})
+
+test('children a review attached are planned first, never approved unplanned', () => {
+  const kids = [{ repo: repo('SahajCloud'), number: 881, state: 'open' }]
+  const p = decide(verb('@sydevs-bot implement'), snap({ children: kids }), config)
+  assert.deepEqual(fires(p).map((a) => [a.handler, a.flags.mode]), [['implement-roadmap', 'plan']])
+  assert.ok(!p.some((a) => a.type === 'targets'), 'no child is approved')
+  const replan = snap({ children: kids, request: { at: '2026-10-07T11:00:00Z', body: { replan: true } }, record: { current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' } } })
+  assert.equal(fires(decide({ reason: 'unlock', facts: {} }, replan, config)).length, 0, 'nothing to re-plan before a plan')
 })

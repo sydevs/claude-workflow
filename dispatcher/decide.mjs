@@ -90,6 +90,12 @@ function needsIntake(s, config) {
   if (!isRoadmap(s, config) || s.item.state !== 'open' || byOutsider(s, config) || isBot(s.item.author, config)) return false
   return !reviewedBefore(s)
 }
+/**
+ * `implement-roadmap` has run on this goal. Children alone do not mean planned:
+ * a review attaches existing tickets as sub-issues long before anyone plans,
+ * and approving those would skip the plan. (why: docs/why.md#children-are-approved-together)
+ */
+const planned = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'implement-roadmap') || s.record?.current?.handler === 'implement-roadmap'
 const reviewedBefore = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'revise-roadmap') || s.record?.current?.handler === 'revise-roadmap'
 
 /** The `sydevs-request` the session that just ended left, or null. (why: docs/why.md#a-session-asks-actions-acts) */
@@ -347,10 +353,10 @@ function implementTicket(s, config, facts) {
 }
 
 /**
- * `implement` on a roadmap ticket. With no children it plans them; with
- * children it approves every open one. Planning again once every child has
- * closed files only what the goal still lacks.
- * (why: docs/why.md#children-are-approved-together)
+ * `implement` on a roadmap ticket. Not yet planned, it plans — adopting the
+ * children a review already attached. Planned, it approves every open child.
+ * Planning again once every child has closed files only what the goal still
+ * lacks. (why: docs/why.md#children-are-approved-together)
  */
 function implementGoal(s, config, facts) {
   const L = config.labels
@@ -359,7 +365,7 @@ function implementGoal(s, config, facts) {
     return [label([L.blocked], [L.awaiting]), commentOnce('blocked', `Not started: ${whyBlocked(s, config)}. I will recheck it when that clears.`)]
   }
   const open = (s.children || []).filter((c) => c.state === 'open')
-  if (!open.length) return s.locked ? [recheck()] : [fire('implement-roadmap', { mode: 'plan' })]
+  if (!planned(s) || !open.length) return s.locked ? [recheck()] : [fire('implement-roadmap', { mode: 'plan' })]
   const list = open.map((c) => `${c.repo.full}#${c.number}`).join(', ')
   return [
     commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${open.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
@@ -702,7 +708,7 @@ function derive(target, s, config) {
       }
       if (isRoadmap(s, config)) {
         const kids = s.children || []
-        if (req?.replan && kids.length) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
+        if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
         if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' }))
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
