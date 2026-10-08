@@ -36,15 +36,15 @@ where `previewUrl.pattern` names one, else the BRANCH alias. See
 
 ## Grading last week
 
-[The `reflect` PR only. Write it per `reflect/SKILL.md`. Otherwise delete.]
+[The `improve-loop` PR only. Write it per `improve-loop/SKILL.md`. Otherwise delete.]
 
 ## 📊 Usage
 
-[The `reflect` PR only. Write it per `reflect/SKILL.md`. Otherwise delete.]
+[The `improve-loop` PR only. Write it per `improve-loop/SKILL.md`. Otherwise delete.]
 
 ## Phases
 
-[ONLY when implement-issue builds the ticket across sessions. One box per
+[ONLY when implement-ticket builds the ticket across sessions. One box per
 phase, in build order, ticked once the phase is pushed with its review done.
 The dispatcher reads this list: while a box is unticked it starts the next
 implement session instead of the critic. Carry it forward on every refresh,

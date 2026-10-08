@@ -7,7 +7,7 @@
 
 import { ciVerdict, normalizeMcp, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
-import { parseBlockedBy, parseRecheck, parseSentry, datePassed } from './markers.mjs'
+import { parseBlockedBy, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
 import { isContractSyncOnly } from './contracts.mjs'
 
@@ -66,6 +66,48 @@ async function dependencies(gh, { owner, repo, number }, which) {
   }
 }
 
+function repoFromUrl(url, fallbackOwner) {
+  const m = /\/repos\/([^/]+)\/([^/]+)$/.exec(String(url || ''))
+  const owner = m ? m[1] : fallbackOwner
+  const name = m ? m[2] : null
+  return name ? { owner, name, full: `${owner}/${name}` } : null
+}
+
+/** A roadmap ticket's implementation tickets, from GitHub's native sub-issues. */
+async function subIssues(gh, { owner, repo, number }) {
+  try {
+    const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state }))
+  } catch {
+    return []
+  }
+}
+
+/** The issue's native parent, or null. 404 is the common answer. */
+async function parentOf(gh, { owner, repo, number }) {
+  try {
+    const { data } = await gh.request(`GET /repos/{owner}/{repo}/issues/{n}/parent`, { owner, repo, n: number })
+    const r = repoFromUrl(data.repository_url, owner)
+    return r ? { repo: r, number: data.number, state: data.state, type: data.type?.name || null } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The newest `sydevs-request` a bot comment carries, with when it was made.
+ * Only the newest comments are read, which is where a session that just
+ * ended left its own. (why: docs/why.md#a-session-asks-actions-acts)
+ */
+function latestRequest(comments, config) {
+  const own = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  for (const c of own) {
+    const body = parseRequest(c.body, config.repos || [])
+    if (body) return { at: c.createdAt, body }
+  }
+  return null
+}
+
 async function pollMergeable(gh, { owner, repo, number }, pr) {
   let cur = pr
   for (let i = 0; i < 5 && (cur.mergeable === null || cur.mergeable === undefined); i += 1) {
@@ -93,7 +135,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const s = {
     kind: issue.pull_request ? 'pr' : 'issue',
     repo: { owner, name: repo, full: `${owner}/${repo}` },
-    item: { number, nodeId: issue.node_id, state: issue.state, title: issue.title, body: issue.body || '', labels, author: issue.user?.login || '', htmlUrl: issue.html_url, updatedAt: issue.updated_at },
+    item: { number, nodeId: issue.node_id, state: issue.state, title: issue.title, body: issue.body || '', labels, author: issue.user?.login || '', authorAssociation: issue.author_association || null, type: issue.type?.name || null, milestone: issue.milestone?.title || null, htmlUrl: issue.html_url, updatedAt: issue.updated_at },
     locked: labels.includes(config.labels.lock),
     record: record.rec,
     recordId: record.id,
@@ -116,6 +158,11 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
     s.blockedByError = Array.isArray(blockedBy) ? null : blockedBy.error
     s.openPrsClosingIt = await openPrsClosing(gh, base)
+    s.openQuestions = parseOpenQuestions(issue.body)
+    s.request = latestRequest(comments, config)
+    s.parent = await parentOf(gh, base)
+    // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
+    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []
     const blocking = target.reason === 'issues.closed' ? await dependencies(gh, base, 'blocking') : []
     s.dependents = Array.isArray(blocking)
       ? blocking.filter((d) => d.state === 'open').map((d) => ({ repo: { owner: d.owner, name: d.repo, full: `${d.owner}/${d.repo}` }, kind: 'issue', number: d.number, facts: { closedNumber: number } }))

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases } from '../markers.mjs'
+import { parseBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases, parseOpenQuestions, parseRequest } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -84,4 +84,19 @@ test('phases below a change outline count only the real checklist', () => {
 
 test('a phases heading inside a code fence is not a plan', () => {
   assert.equal(parsePhases('## Notes\n```markdown\n## Phases\n- [ ] one\n```\n'), null)
+})
+
+test('open questions count checkboxes under their own heading, not option bullets', () => {
+  const b = ['## Open questions', '- [ ] **1. Permanent redirect?**', '  - **A — Permanent (recommended):** links keep working', '  - **B — Temporary:** revisit in 2027', '- [x] **2. Who owns DNS?** Answered 2026-10-05', '', '## Notes', '- [ ] not a question'].join('\n')
+  assert.deepEqual(parseOpenQuestions(b), { total: 2, open: 1 })
+  assert.deepEqual(parseOpenQuestions('## Summary\nnone'), { total: 0, open: 0 })
+  assert.deepEqual(parseOpenQuestions('```\n## Open questions\n- [ ] quoted\n```'), { total: 0, open: 0 })
+})
+
+test('a session request keeps only the keys the dispatcher acts on', () => {
+  const repos = ['SahajAtlasWeb']
+  assert.deepEqual(parseRequest('done <!-- sydevs-request {"replan":true,"merge":true} -->', repos), { replan: true })
+  assert.deepEqual(parseRequest('<!-- sydevs-request {"transfer":{"repo":"Elsewhere"}} -->', repos), null, 'a repo outside the org list')
+  assert.equal(parseRequest('<!-- sydevs-request {not json} -->', repos), null)
+  assert.equal(parseRequest('no marker', repos), null)
 })

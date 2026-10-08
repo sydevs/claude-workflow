@@ -52,7 +52,13 @@ export async function resolve({ github, context, config, now = new Date() }) {
       if (ev.label?.name !== config.labels.lock) return []
       return one('issue', n, 'unlock', {})
     }
-    if (['opened', 'edited', 'reopened', 'transferred', 'closed'].includes(action)) return one('issue', n, `issues.${action}`, {})
+    // A type set or changed is placement: a ticket typed Roadmap is reviewed
+    // as one, and loses its Status. (why: docs/why.md#a-roadmap-ticket-has-no-status)
+    if (action === 'typed' || action === 'untyped') return one('issue', n, 'issues.typed', {})
+    // The editor, not the author, decides whether a marker is state.
+    // (why: docs/why.md#a-strangers-marker-is-text)
+    if (action === 'edited') return one('issue', n, 'issues.edited', { sender: ev.sender?.login })
+    if (['opened', 'reopened', 'transferred', 'closed'].includes(action)) return one('issue', n, `issues.${action}`, {})
     return []
   }
 

@@ -76,7 +76,7 @@ what failure it prevents. `dispatcher/` beside it is the code, with
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 The real gate is a **supervised dispatch**: `BOT_DISPATCH=dry` logs every plan without writing,
-and a scratch `@sydevs-bot answer …` watched end to end (`docs/routine-setup.md` §6). A green
+and a scratch `@sydevs-bot revise …` watched end to end (`docs/routine-setup.md` §6). A green
 workflow run means only that no infrastructure error occurred — task-level failures appear only
 in the session transcript and its journal comment.
 
@@ -99,7 +99,7 @@ much.
 | `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `surveyCalendar`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
+| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
 | `.github/workflows/dispatcher.yml` + `dispatcher/*.mjs` | The event dispatcher, called by all five repos. **Not CI** — see the warning above. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, same shape as every product repo, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Bootstrapping the loop on a new Claude account, in dependency order. |
@@ -107,7 +107,7 @@ much.
 
 ### ⚠ A skill's length is a running cost
 
-`handler-preflight`, `handler-journal`, the handler's own skill, and `loop-config.json` are read
+`start-run`, `finish-run`, the handler's own skill, and `loop-config.json` are read
 on **every** dispatch — 25 to 40 times a day. A paragraph added to any of them is paid for on
 every one, forever.
 Before you add prose to a run-loaded skill, check the rule is not stated elsewhere already. Put
@@ -149,16 +149,16 @@ wherever a rule can be evaluated. (why: docs/why.md#a-script-here-never-fetches)
 - **Frontmatter is a security surface.** `allowed-tools` on a `SKILL.md` instructs an agent with
   write access to five repositories. An over-broad line here is this repo's equivalent of an RCE.
   `securityReview.triggerPattern` covers every `SKILL.md` and every hook for that reason. Grant the
-  narrowest set that works — compare `cross-repo-issue` (`Bash(gh issue edit:*)`,
+  narrowest set that works — compare `file-ticket` (`Bash(gh issue:*)`,
   `Bash(gh api:*)`, …) against the pipeline skills that genuinely need `Bash(*)`.
 - **`disable-model-invocation: true` unless the skill is a helper.** Every user- or
-  routine-invoked skill carries it, so nothing fires on a stray phrase. Only `dev-server` and
-  `triage-issue` — both invoked *by* other skills — omit it.
+  routine-invoked skill carries it, so nothing fires on a stray phrase. Only the helpers —
+  `dev-server`, `format-ticket`, `start-run` and `finish-run`, all invoked *by* other skills — omit it.
 - **Write for one busy reader.** The loop's own writing rules (lead with the outcome, detail in
-  `<details>`, no throat-clearing) live in `handler-preflight/SKILL.md` and apply to skill bodies
+  `<details>`, no throat-clearing) live in `start-run/SKILL.md` and apply to skill bodies
   as much as to what they emit.
 - **The rule lives in the skill. The story lives in [`docs/why.md`](docs/why.md).**
-  `handler-preflight` is re-read on every dispatch, so length there costs tokens each time and
+  `start-run` is re-read on every dispatch, so length there costs tokens each time and
   dilutes the rules it carries. Move a retrospective justification one hop away: add a heading in
   `docs/why.md` named after the rule, and cite it as `(why: docs/why.md#anchor)`.
   **Never let a story be a rule's only statement.** Check that the instruction survives inline as
@@ -168,7 +168,7 @@ wherever a rule can be evaluated. (why: docs/why.md#a-script-here-never-fetches)
 
 Hooks run in a maintainer's own session with their credentials, on every matching tool call.
 
-- Resolve paths against the **git worktree root**, not `CLAUDE_PROJECT_DIR` — `/implement-issue`
+- Resolve paths against the **git worktree root**, not `CLAUDE_PROJECT_DIR` — `/implement-ticket`
   works in a worktree by default. Use `worktreeRoot()` in `hooks/lib/workflow-config.mjs`, the one
   place that decides this.
 - **Never break a session on bad input.** `loadConfig()` returns `{}` for a missing or malformed
@@ -198,7 +198,7 @@ What bites this org:
 - Shell rc files, `.devcontainer/`, `.vscode/`, `.idea/`, `.cargo/`, `.yarn/`, `.mvn/`
 
 **`.claude/worktrees` is exempt.** `git worktree add .claude/worktrees/<slug>`, and every edit
-inside that worktree, are ordinary writes. `implement-issue` step 6 is correct as written, and
+inside that worktree, are ordinary writes. `implement-ticket` step 6 is correct as written, and
 `--no-worktree` is not a workaround for this guard. Several past runs took it believing otherwise,
 and journalled the belief as fact.
 
@@ -209,7 +209,7 @@ protected. Here the only protected file is `.claude/workflow.json`. Note that `.
 
 When a change genuinely needs a protected path edited, expect the prompt and do the edit attended.
 A handler that finds one in its way hands the ticket back rather than attempting the write — see
-`handler-preflight`.
+`start-run`.
 
 ## Conventions
 

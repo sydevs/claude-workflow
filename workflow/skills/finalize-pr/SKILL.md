@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of implement-issue, address-review, survey-deps, and reflect.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of implement-ticket, address-review, audit-deps, and reflect.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -13,7 +13,7 @@ simplify → review → conditional security review → lean gate → docs sync 
 the PR as a draft → report. CI, the critic, mark-ready, and the merge are events the dispatcher
 acts on after you end. (why: docs/why.md#push-and-end)
 
-Phase 3 of Implement → Adjust → **Finalize**. `/implement-issue` calls this at the end. You also
+Phase 3 of Implement → Adjust → **Finalize**. `/implement-ticket` calls this at the end. You also
 run it directly once you are happy with a batch of local-only Adjust-phase commits — it turns
 un-pushed commits into one pushed PR and one CI run.
 

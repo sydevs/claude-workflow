@@ -11,7 +11,7 @@
  * same answer. (why: docs/why.md#actions-observes-classifies-locks-and-fires)
  */
 
-import { parseVerb } from './verbs.mjs'
+import { parseVerb, parseBlock } from './verbs.mjs'
 import { parsePhases } from './markers.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -31,6 +31,9 @@ export const targets = (list) => ({ type: 'targets', list })
 export const releaseLease = (why) => ({ type: 'releaseLease', why })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
+export const record = (patch) => ({ type: 'record', patch })
+export const hold = (date) => ({ type: 'hold', date })
+export const transfer = (repo, milestone) => ({ type: 'transfer', repo, milestone })
 
 // ---- predicates ------------------------------------------------------
 const lower = (s) => String(s || '').toLowerCase()
@@ -62,6 +65,39 @@ export function isReviewer(login, config) {
  * caller pays for that arm's input with a silent "no PR is open".
  */
 const inFlight = (s) => (s.openPrsClosingIt.length ? s.openPrsClosingIt : null)
+
+/** A roadmap ticket: a plain-language goal whose state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status) */
+export function isRoadmap(s, config) {
+  return s.kind === 'issue' && Boolean(s.item?.type) && s.item.type === (config.roadmap?.type || 'Roadmap')
+}
+/** A throwaway branch a review session pushed for a preview. Nothing here touches it. */
+function isSpike(s, config) {
+  const prefix = config.roadmap?.spikeBranchPrefix
+  return s.kind === 'pr' && Boolean(prefix) && String(s.pr?.head?.ref || '').startsWith(prefix)
+}
+/** The issue was opened by someone outside the org: its text is data, never state. (why: docs/why.md#a-strangers-marker-is-text) */
+function byOutsider(s, config) {
+  return !isBot(s.item?.author, config) && !hasAccess(s.item?.authorAssociation)
+}
+const parked = (s) => Boolean(s.park?.until && !s.park.passed)
+const blockedNow = (s) => s.blockedByOpen.length > 0 || parked(s)
+
+/**
+ * A member's roadmap ticket is reviewed once, unprompted. A stranger's
+ * waits for a member's `revise`, and a bot proposal for a human's verdict.
+ */
+function needsIntake(s, config) {
+  if (!isRoadmap(s, config) || s.item.state !== 'open' || byOutsider(s, config) || isBot(s.item.author, config)) return false
+  return !reviewedBefore(s)
+}
+const reviewedBefore = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'revise-roadmap') || s.record?.current?.handler === 'revise-roadmap'
+
+/** The `sydevs-request` the session that just ended left, or null. (why: docs/why.md#a-session-asks-actions-acts) */
+function freshRequest(s) {
+  const since = s.record?.current?.firedAt
+  if (!s.request) return null
+  return !since || s.request.at >= since ? s.request.body : null
+}
 
 /** The bot's newest comment that is not a dispatcher comment. */
 export function botLastWordAt(comments, config) {
@@ -215,7 +251,7 @@ export function evaluatePr(s, config) {
   // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
   if (s.linkedLocked?.length) return [note(`#${s.linkedLocked[0]} is still locked — its session owns this branch`)]
 
-  if (pendingReviewVerb(s, config)) return [fire('adversarial-review', { onDemand: true })]
+  if (pendingReviewVerb(s, config)) return [fire('review-pr', { onDemand: true })]
 
   const why = needsAddressReview(s, config)
   if (why) return [note(why), fire('address-review')]
@@ -245,7 +281,7 @@ export function evaluatePr(s, config) {
       return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
     }
     const small = underThreshold(pr, config)
-    if (!ownReview(s, config) && !small) return [fire('adversarial-review')]
+    if (!ownReview(s, config) && !small) return [fire('review-pr')]
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
@@ -269,6 +305,102 @@ export function evaluatePr(s, config) {
   return plan
 }
 
+// ---- issue verbs ------------------------------------------------------
+
+/** An unticked open question is a decision still owed, so nothing is built yet. (why: docs/why.md#a-decision-is-settled-before-the-build) */
+function refuseOpenQuestions(s, config, facts) {
+  const p = config.dispatch.commandPrefix
+  return [
+    label([config.labels.awaiting], []),
+    commentOnce(`open-questions ${facts.commentId || ''}`, `Not started: ${s.openQuestions.open} open question(s) in the body still need an answer. Reply \`${p} revise\` with your choices (for example \`1A\`), then say \`${p} implement\` again.`),
+  ]
+}
+
+function whyBlocked(s, config) {
+  if (s.blockedByOpen.length) return `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
+  if (parked(s)) return `it is parked until ${s.park.until}`
+  return 'it carries the blocked label'
+}
+
+function implementTicket(s, config, facts) {
+  const L = config.labels
+  const prs = inFlight(s)
+  if (prs) return [commentOnce(`in-flight ${prs[0]}`, `#${prs[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], [])]
+  if (s.openQuestions?.open) return refuseOpenQuestions(s, config, facts)
+  // A park stops the dispatch here, before any session starts. The label
+  // alone is not the test: a ticket parked on a date it never carried a label
+  // for would otherwise be implemented. The approval stands, though: it starts
+  // once a recheck confirms the unblock.
+  // (why: docs/why.md#a-park-stops-the-dispatch-not-the-session, docs/why.md#children-are-approved-together)
+  if ((s.item.labels || []).includes(L.blocked) || blockedNow(s)) {
+    return [
+      status('approved'),
+      record({ pendingImplement: { by: facts.author || null } }),
+      label([L.blocked], [L.awaiting]),
+      commentOnce('blocked', `Approved, but not started: ${whyBlocked(s, config)}. When that clears and a recheck confirms it, I will start without another word from you.`),
+    ]
+  }
+  const out = [status('approved')]
+  if (s.record?.pendingImplement) out.push(record({ pendingImplement: null }))
+  if (s.locked) return out.concat(recheck())
+  return out.concat(fire('implement'))
+}
+
+/**
+ * `implement` on a roadmap ticket. With no children it plans them; with
+ * children it approves every open one. Planning again once every child has
+ * closed files only what the goal still lacks.
+ * (why: docs/why.md#children-are-approved-together)
+ */
+function implementGoal(s, config, facts) {
+  const L = config.labels
+  if (s.openQuestions?.open) return refuseOpenQuestions(s, config, facts)
+  if ((s.item.labels || []).includes(L.blocked) || blockedNow(s)) {
+    return [label([L.blocked], [L.awaiting]), commentOnce('blocked', `Not started: ${whyBlocked(s, config)}. I will recheck it when that clears.`)]
+  }
+  const open = (s.children || []).filter((c) => c.state === 'open')
+  if (!open.length) return s.locked ? [recheck()] : [fire('implement-roadmap', { mode: 'plan' })]
+  const list = open.map((c) => `${c.repo.full}#${c.number}`).join(', ')
+  return [
+    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${open.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
+    targets(open.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by: facts.author || null, parent: `${s.repo.full}#${s.item.number}` } }))),
+  ]
+}
+
+/**
+ * `block until <date> — <reason>` and `block on <ref>` are mechanical.
+ * `block <reason>` alone asks a session to choose what to watch and when.
+ * (why: docs/why.md#recheck-before-awaiting)
+ */
+function blockVerb(s, config, facts) {
+  const L = config.labels
+  const p = config.dispatch.commandPrefix
+  const b = parseBlock(facts.body, config.dispatch, config.org)
+  const key = facts.commentId || ''
+  if (b.form === 'until') {
+    const now = s.now || new Date()
+    const today = now.toISOString().slice(0, 10)
+    const days = config.issueFields?.holdUntil?.maxHorizonDays ?? 30
+    const limit = new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10)
+    if (b.date <= today || b.date > limit) {
+      return [label([L.awaiting], []), commentOnce(`block-refused ${key}`, `Not held: ${b.date} must be after today and no later than ${limit} (${days} days). A longer wait is a re-hold, which I do myself when the date comes.`)]
+    }
+    return [
+      hold(b.date),
+      record({ rehold: 0 }),
+      label([L.blocked], [L.awaiting]),
+      commentOnce(`hold ${key}`, `Held until ${b.date}. On that date I will recheck ${b.reason ? `whether this still holds: ${b.reason}` : 'why it was held'}, then re-hold it or hand it back.`),
+    ]
+  }
+  if (b.form === 'on') {
+    if (!b.refs.length) return [label([L.awaiting], []), commentOnce(`block-refused ${key}`, `Not blocked: name the blocker as a full issue URL or \`owner/repo#N\`, for example \`${p} block on ${config.org}/SahajCloud#632\`.`)]
+    const refs = b.refs.map((r) => `${r.owner}/${r.repo}#${r.number}`).join(', ')
+    return [relationships(b.refs), record({ rehold: 0 }), label([L.blocked], [L.awaiting]), commentOnce(`block-on ${key}`, `Blocked by ${refs}. When the last one closes I will recheck this before handing it back.`)]
+  }
+  if (s.locked) return [recheck()]
+  return [fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'block' })]
+}
+
 // ---- per-event deciders ------------------------------------------------
 const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'label']
 
@@ -282,39 +414,75 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  * snapshot.
  */
 export function decide(target, s, config) {
+  const plan = derive(target, s, config)
+  if (!isRoadmap(s, config)) return plan
+  // A roadmap ticket carries no Status: its milestone, its children and
+  // whether it is closed say where it is. Every status the rows below would
+  // write becomes one clear. (why: docs/why.md#a-roadmap-ticket-has-no-status)
+  const out = []
+  let cleared = false
+  for (const a of plan) {
+    if (a.type !== 'status') { out.push(a); continue }
+    if (!cleared) { out.push(status(null)); cleared = true }
+  }
+  return out
+}
+
+function derive(target, s, config) {
   const L = config.labels
   const facts = target.facts || {}
   const plan = []
 
   if ((s.item?.labels || []).includes(L.journal)) return [note('journal issue — ignored')]
+  if (isSpike(s, config)) return [note('spike PR — the review session that pushed it owns it')]
 
   switch (target.reason) {
     case 'issues.opened': {
+      // A stranger's `Blocked by:` or `Re-check:` line is text, not state.
+      // (why: docs/why.md#a-strangers-marker-is-text)
+      const outsider = byOutsider(s, config)
+      const blockers = outsider ? [] : s.markers.blockedBy
+      const parkedHere = parked(s) && !(outsider && s.park.source === 'marker')
       // Parked or your turn, never both: a blocked ticket is waiting on the
       // blocker, not on you. (why: docs/why.md#blocked-and-awaiting-are-exclusive)
-      const bornBlocked = s.blockedByOpen.length || s.markers.blockedBy.length || s.markers.recheck
+      const bornBlocked = s.blockedByOpen.length || blockers.length || parkedHere
       plan.push({ type: 'ensure' }, status('proposed'))
       if (!bornBlocked) plan.push(label([L.awaiting], []))
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
-      if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
+      if (blockers.length) plan.push(relationships(blockers))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
-      // A proposal the loop filed is challenged before a human reads it: the
-      // open questions answered from the code, the plan argued with, the body
-      // rewritten. A ticket you file is yours and is left alone.
-      // (why: docs/why.md#a-proposal-is-reviewed-before-you-read-it)
-      if (isBot(s.item.author, config) && config.dispatch?.reviewProposals !== false) plan.push(fire('revise'))
+      // Nothing the loop files is revised on arrival any more: every author
+      // writes through write-ticket, so a proposal arrives fully specified.
+      // (why: docs/why.md#one-author-writes-every-implementation-ticket)
+      if (!bornBlocked && needsIntake(s, config)) plan.push(s.locked ? recheck() : fire('revise-roadmap', { mode: 'intake' }))
+      return plan
+    }
+    case 'issues.typed': {
+      if (!isRoadmap(s, config)) return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising')]
+      plan.push({ type: 'ensure' }, status(null))
+      if (needsIntake(s, config) && !blockedNow(s)) plan.push(s.locked ? recheck() : fire('revise-roadmap', { mode: 'intake' }))
       return plan
     }
     case 'issues.edited': {
+      // An outsider editing their own issue cannot create a relationship or a
+      // park. Only the author of an issue, the bot or a maintainer can edit
+      // its body, so this is the one case to refuse.
+      // (why: docs/why.md#a-strangers-marker-is-text)
+      if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
-      if (s.markers.blockedBy.length || s.markers.recheck) plan.push(label([L.blocked], [L.awaiting]))
+      if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':
     case 'issues.transferred':
       return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising'), label([L.awaiting], [])]
-    case 'issues.closed':
-      return [status('done'), label([], [L.awaiting, L.stuck]), targets(s.dependents.map((d) => ({ ...d, reason: 'unblock-check' })))]
+    case 'issues.closed': {
+      const next = s.dependents.map((d) => ({ ...d, reason: 'unblock-check' }))
+      // The last child of a roadmap ticket closing is the cue to check the
+      // goal was met. (why: docs/why.md#a-goal-is-verified-not-assumed)
+      if (s.parent?.state === 'open') next.push({ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'child-closed', facts: { child: `${s.repo.full}#${s.item.number}` } })
+      return [status('done'), label([], [L.awaiting, L.stuck]), targets(next)]
+    }
     // Both directions. `blocked` follows the native relationship, so an issue
     // blocked before the label existed gets one the first time the sweeper
     // sees it. (why: docs/why.md#blocked-follows-the-relationship)
@@ -322,15 +490,42 @@ export function decide(target, s, config) {
       const labelled = (s.item.labels || []).includes(L.blocked)
       const applyIfMissing = (why) => (labelled ? [note(why)] : [label([L.blocked], []), note(`${why} — label applied`)])
       if (s.blockedByOpen.length) return applyIfMissing(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)
-      if (s.park?.until && !s.park.passed) return applyIfMissing(`parked until ${s.park.until}`)
+      if (parked(s)) return applyIfMissing(`parked until ${s.park.until}`)
       if (!labelled) return [note('not blocked')]
-      return [
-        label([L.awaiting], [L.blocked]),
-        commentOnce(`unblocked ${facts.closedNumber || ''}`, `@${config.assignment.reviewer} unblocked: every blocker is closed. Say \`${config.dispatch.commandPrefix} implement\` to start.`),
-      ]
+      if (s.kind !== 'issue') return [label([L.awaiting], [L.blocked])]
+      if (s.locked) return [recheck()]
+      // The date passing or the blocker closing is a cue to look, not proof
+      // the ticket is free. A recheck session reads why it was held, and
+      // re-holds it quietly or hands it back. After maxRehold quiet re-holds
+      // in a row, it is your call. (why: docs/why.md#recheck-before-awaiting)
+      const reholds = s.record?.rehold || 0
+      const max = config.issueFields?.holdUntil?.maxRehold ?? 3
+      if (reholds >= max) {
+        const p = config.dispatch.commandPrefix
+        return [
+          label([L.awaiting], [L.blocked]),
+          record({ rehold: 0 }),
+          commentOnce(`rehold-cap ${s.park?.until || facts.closedNumber || ''}`, [
+            `This has been re-held ${reholds} times in a row. Which way?`,
+            '',
+            `- **A — keep waiting (recommended if the blocker is still real):** \`${p} block until <date> — <reason>\``,
+            `- **B — rework it around the blocker:** \`${p} revise <how>\``,
+            '- **C — drop it:** close it as not planned.',
+          ].join('\n')),
+        ]
+      }
+      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck' })]
     }
     case 'issue_comment': {
       if (isBot(facts.author, config)) return [note('own comment — ignored')]
+      // The author of a roadmap ticket answers its questions, member or not.
+      // A stranger's words never start a session: they mark the ticket your
+      // turn and are read as data on the next run a member starts.
+      // (why: docs/why.md#an-outsider-feeds-a-member-fires)
+      if (s.kind === 'issue' && isRoadmap(s, config) && !respondTo(facts.author, config) && lower(facts.author) === lower(s.item.author)) {
+        if (s.locked || (s.item.labels || []).includes(L.blocked)) return [note('the author replied — read on the next run')]
+        return [label([L.awaiting], []), note('the author replied — read as data on the next run a member starts')]
+      }
       if (!respondTo(facts.author, config)) return [note(`comment by ${facts.author} — not feedback`)]
       if (isHuman(facts.author, config) && !hasAccess(facts.association)) return [note(`comment by ${facts.author} without write access — not feedback`)]
       if (s.kind === 'pr') {
@@ -338,33 +533,50 @@ export function decide(target, s, config) {
         const v = parseVerb(facts.body, config.dispatch, 'pr')
         if (!v.mentioned) return [note('human PR, no mention — ignored')]
         if (s.locked) return [recheck()]
-        return v.verb === 'review' ? [fire('adversarial-review', { onDemand: true })] : [fire('address-review', { delegated: true })]
+        return v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })]
       }
       if (!isHuman(facts.author, config)) return [note('issue verbs are for humans')]
       const v = parseVerb(facts.body, config.dispatch, 'issue')
       if (!v.mentioned) return [note('no mention — ignored')]
       plan.push(label([], [L.proposal, L.awaiting, L.stuck]), react('eyes'))
-      if (v.verb === 'implement') {
-        const inFlightPrs = inFlight(s)
-        if (inFlightPrs) return plan.concat(commentOnce(`in-flight ${inFlightPrs[0]}`, `#${inFlightPrs[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], []))
-        // A park stops the dispatch here, before any session starts. The
-        // label alone is not the test: a ticket parked on a date it never
-        // carried a label for would otherwise be implemented.
-        // (why: docs/why.md#a-park-stops-the-dispatch-not-the-session)
-        const parked = s.park?.until && !s.park.passed
-        if ((s.item.labels || []).includes(L.blocked) || s.blockedByOpen.length || parked) {
-          const why = s.blockedByOpen.length
-            ? `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
-            : parked ? `it is parked until ${s.park.until}` : 'it carries the blocked label'
-          return plan.concat(label([L.blocked], [L.awaiting]), commentOnce('blocked', `I will not implement this yet: ${why}. I will say so here when that clears.`))
-        }
-        plan.push(status('approved'))
-        if (s.locked) return plan.concat(recheck())
-        return plan.concat(fire('implement'))
-      }
+      if (v.verb === 'block') return plan.concat(blockVerb(s, config, facts))
+      if (v.verb === 'implement') return plan.concat(isRoadmap(s, config) ? implementGoal(s, config, facts) : implementTicket(s, config, facts))
+      // `revise`, `review`, or a bare mention. A human's word ends any run of
+      // quiet re-holds. (why: docs/why.md#recheck-before-awaiting)
       plan.push(status('revising'))
+      if (s.record?.rehold) plan.push(record({ rehold: 0 }))
       if (s.locked) return plan.concat(recheck())
-      return plan.concat(fire(v.verb))
+      // A member's first word on a stranger's goal accepts it: the full review.
+      if (isRoadmap(s, config)) return plan.concat(fire('revise-roadmap', { mode: reviewedBefore(s) ? 'revise' : 'intake' }))
+      return plan.concat(fire('revise', { mode: 'revise' }))
+    }
+    // One child of a roadmap ticket, approved with the rest by `implement` on
+    // the parent. A blocked child is approved now and starts once a recheck
+    // confirms the unblock. (why: docs/why.md#children-are-approved-together)
+    case 'approve': {
+      if (s.item.state !== 'open') return [note('closed — nothing to approve')]
+      if (inFlight(s)) return [note(`#${inFlight(s)[0]} is already open for it`)]
+      if (s.openQuestions?.open) return [label([L.awaiting], []), commentOnce('approve-open-questions', `Not started: ${s.openQuestions.open} open question(s) here still need an answer.`)]
+      const pending = record({ pendingImplement: { by: facts.by || null, parent: facts.parent || null } })
+      plan.push(label([], [L.proposal, L.awaiting, L.stuck]), status('approved'))
+      if (blockedNow(s) || (s.item.labels || []).includes(L.blocked)) return plan.concat(pending, label([L.blocked], [L.awaiting]), note('approved — starts when a recheck confirms the unblock'))
+      if (s.locked) return plan.concat(pending, recheck())
+      return plan.concat(fire('implement'))
+    }
+    case 'child-closed': {
+      if (!isRoadmap(s, config)) return [note('parent is not a roadmap ticket')]
+      if (s.item.state !== 'open') return [note('roadmap ticket already closed')]
+      const kids = s.children || []
+      const left = kids.filter((c) => c.state === 'open').length
+      if (!kids.length || left) return [note(`${kids.length - left} of ${kids.length} children closed`)]
+      if (s.locked) return [record({ verifyDue: true }), recheck()]
+      return [record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' })]
+    }
+    // A child's session raised a decision on this roadmap ticket's Open
+    // questions. That is your turn here. (why: docs/why.md#a-late-decision-goes-to-the-goal)
+    case 'escalated': {
+      if (s.item.state !== 'open') return [note('closed')]
+      return [label([L.awaiting], []), commentOnce(`escalated ${facts.child}`, `A decision came up while working on ${facts.child}. It is in **Open questions** above, with options and a recommendation.`)]
     }
     // A review comment is a review. From a human on a bot PR that means
     // `evaluatePr`, so a cancelled sibling costs nothing — the invariant the
@@ -389,7 +601,7 @@ export function decide(target, s, config) {
       const v = parseVerb(facts.body, config.dispatch, 'pr')
       if (!v.mentioned) return [note('human PR review, no mention')]
       if (s.locked) return [recheck()]
-      return v.verb === 'review' ? [fire('adversarial-review', { onDemand: true })] : [fire('address-review', { delegated: true })]
+      return v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })]
     }
     case 'thread':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('human PR thread')]
@@ -465,9 +677,33 @@ export function decide(target, s, config) {
       // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
       const answered = v?.verb === 'implement' && Boolean(inFlight(s))
       if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
+      if (s.item.state !== 'open') return plan.concat(label([], [L.awaiting, L.stuck]))
+      const req = freshRequest(s)
+      if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
+      // Still held — the recheck re-held it, or the session parked it. Quiet:
+      // blocked is not your turn. (why: docs/why.md#recheck-before-awaiting)
+      if (blockedNow(s)) return plan.concat(label([L.blocked], [L.awaiting]))
+      if ((s.item.labels || []).includes(L.blocked)) plan.push(label([], [L.blocked]))
+      if (s.record?.rehold) plan.push(record({ rehold: 0 }))
+      if (req?.escalated) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
+      // Approved while blocked, and the recheck found it free.
+      // (why: docs/why.md#children-are-approved-together)
+      if (s.record?.pendingImplement && !inFlight(s)) {
+        if (s.openQuestions?.open) return plan.concat(record({ pendingImplement: null }), status('revising'), label([L.awaiting], []))
+        return plan.concat(record({ pendingImplement: null }), status('approved'), fire('implement'))
+      }
+      if (isRoadmap(s, config)) {
+        const kids = s.children || []
+        if (req?.replan && kids.length) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
+        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' }))
+        // write-ticket promoted it, or it was typed while a session ran.
+        if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
+      }
       if (inFlight(s)) plan.push(status('done'), label([], [L.awaiting]))
       else if (s.botSpokeLast) plan.push(status('revising'), label([L.awaiting], []))
       else plan.push(label([L.awaiting], []), anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
+      // Last: the issue's number changes once it moves. (why: docs/why.md#a-session-asks-actions-acts)
+      if (isRoadmap(s, config) && req?.transfer && !(s.children || []).length && req.transfer.repo !== s.repo.name) plan.push(transfer(req.transfer.repo, req.transfer.milestone))
       return plan
     }
     case 'ci':

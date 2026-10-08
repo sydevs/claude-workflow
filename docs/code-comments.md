@@ -1,7 +1,7 @@
 # Code comments
 
 The canonical rule. Each product repo carries a copy at `docs/rules/code-comments.md`, symlinked
-into `.claude/rules/`, plus its own carve-outs. `survey-contracts` checks the copies against this
+into `.claude/rules/`, plus its own carve-outs. `audit-contracts` checks the copies against this
 file every Thursday.
 
 Keep the copies short. A person reads this file. An agent reads each copy on every session in four
@@ -53,7 +53,7 @@ Never delete these. `workflow/lib/comment-protect.json` holds the machine-readab
 
 An agent over-comments by default, and instruction alone does not stop it. The behaviour survives a
 rule, a memory entry and a hook, so this repo runs three layers: this rule to steer the writing,
-`/workflow:comment-cleanup` to reclaim what gets through, and `comment-fingerprint.mjs` to prove a
+`/workflow:audit-code` to reclaim what gets through, and `comment-fingerprint.mjs` to prove a
 cleanup changed nothing but comments.
 
 The reviewer profile already carries the evidence from real review rounds: *"Comments that

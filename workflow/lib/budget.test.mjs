@@ -25,7 +25,7 @@ function run(args, text) {
 const budgets = { comment: 1200, reviewReply: 600, journalEntry: 1500 }
 
 /**
- * A journal comment in `handler-journal`'s shape: Did leads with the PR the
+ * A journal comment in `finish-run`'s shape: Did leads with the PR the
  * run pushed. `didPad` grows each Did line, so one cut can cover the overage.
  */
 function entry(padding = '', didPad = '') {
@@ -149,7 +149,7 @@ test('the CLI passes a kind inside its budget', () => {
   assert.match(r.stdout, /^OK/)
 })
 
-// `--fit` writes the verdict to stderr, because handler-journal redirects
+// `--fit` writes the verdict to stderr, because finish-run redirects
 // stdout to the fitted file.
 test('the --fit CLI reports its verdict on stderr, and fails', () => {
   const r = run(['--fit', '--kind', 'nosuchkind'], 'x')

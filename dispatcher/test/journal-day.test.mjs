@@ -29,7 +29,7 @@ function fake(issues, { failCreate = false } = {}) {
 }
 
 test("the survey's own journal issue is adopted, not duplicated, and gets the day marker", async () => {
-  // What actually happened on 2026-09-09: survey-routine wrote #77 at 08:16 with
+  // What actually happened on 2026-09-09: run-audit wrote #77 at 08:16 with
   // the old title and no day marker, and the dispatcher made a second one.
   const survey = { number: 77, body: '**1 run today.** Last: 2026-09-09T08:21Z', created_at: '2026-09-09T08:16:50Z', state: 'open' }
   const { gh, calls, issues } = fake([survey])

@@ -68,9 +68,10 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (!p.retryAfter || Date.parse(p.retryAfter) <= now.getTime()) push(kind, i.number, 'sweep-retry', { handler: p.handler, attempt: p.attempt })
   }
 
-  // Parked items: a Re-check date that passed, or blockers that closed with no
-  // event seen. `unblock-check` re-reads both and mentions the reviewer. No
-  // session ever writes `blocked` (why: docs/why.md#awaiting-has-one-writer).
+  // Parked items: a Hold Until date that passed, or blockers that closed with
+  // no event seen. `unblock-check` re-reads both and fires a recheck session
+  // rather than pinging anyone. No session ever writes `blocked`.
+  // (why: docs/why.md#awaiting-has-one-writer, docs/why.md#recheck-before-awaiting)
   const parked = new Set()
   for (const i of await byLabel(L.blocked)) { parked.add(i.number); push(i.pull_request ? 'pr' : 'issue', i.number, 'unblock-check', {}) }
 

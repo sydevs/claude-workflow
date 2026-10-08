@@ -67,8 +67,21 @@ export async function ensureItem(gh, config, contentNodeId) {
   return { itemId: d.addProjectV2ItemById.item.id, status: null }
 }
 
-/** Set Status by vocabulary key (`proposed`…). Writes only on change. Returns the name written or null. */
+/**
+ * Set Status by vocabulary key (`proposed`…), or clear it with `null`.
+ * Writes only on change. Returns the name written, `'none'` on a clear, or null.
+ */
 export async function setStatus(gh, config, contentNodeId, key) {
+  if (key === null) {
+    const { itemId, status } = await itemOf(gh, config, contentNodeId)
+    if (!itemId || !status) return null
+    const ids = await projectIds(gh, config)
+    await gh.graphql(
+      `mutation($p:ID!,$i:ID!,$f:ID!){ clearProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f}){ projectV2Item { id } } }`,
+      { p: ids.projectId, i: itemId, f: ids.statusFieldId },
+    )
+    return 'none'
+  }
   const name = config.projects.status?.[key]
   if (!name) throw new Error(`projects.status has no "${key}"`)
   const ids = await projectIds(gh, config)

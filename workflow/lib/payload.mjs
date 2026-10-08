@@ -51,6 +51,9 @@ export function defaultAttachedDir() {
 }
 
 const KINDS = new Set(['issue', 'pr'])
+// Which job a multi-mode handler is on: `intake`, `revise`, `recheck`,
+// `block`, `verify`, `plan`, `replan`. A word, never instructions.
+const MODE = /^[a-z][a-z-]{0,19}$/
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
 
 /**
@@ -120,7 +123,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     errors: [],
     record: {
       ...r,
-      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true },
+      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null },
       owner,
       name,
       lock,
