@@ -414,7 +414,15 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  * snapshot.
  */
 export function decide(target, s, config) {
-  const plan = derive(target, s, config)
+  let plan = derive(target, s, config)
+  // A locked item is the session's turn, never yours. One event can arrive
+  // as two — a ticket created with its type fires `opened` and `typed` — and
+  // the second leg runs after the first took the lock. Unlock re-derives
+  // `awaiting` from the finished state. (why: docs/why.md#a-locked-item-is-never-awaiting)
+  if (s.locked) {
+    const L = config.labels
+    plan = plan.map((a) => (a.type === 'label' && a.add.includes(L.awaiting) ? label(a.add.filter((x) => x !== L.awaiting), a.remove) : a))
+  }
   if (!isRoadmap(s, config)) return plan
   // A roadmap ticket carries no Status: its milestone, its children and
   // whether it is closed say where it is. Every status the rows below would
