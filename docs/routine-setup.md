@@ -248,15 +248,21 @@ through the `/fire` API. (why: docs/why.md#actions-observes-classifies-locks-and
 ```yaml
 jobs:
   dispatch:
-    if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'
+    if: >-
+      (vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry')
+      && !(github.event.action == 'unlabeled' && github.event.label.name != 'bot:working')
+      && !(github.event_name == 'issues' && github.event.action == 'edited' && !github.event.changes.body)
     uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
     with:
       dry-run: ${{ vars.BOT_DISPATCH == 'dry' }}
     secrets: inherit
 ```
 
-> ⚠ **The caller's `on.issues.types` must include `typed` and `untyped`.** Without them, a ticket
-> typed Roadmap after it was filed is never reviewed as a goal and keeps its `Status`.
+> ⚠ **The caller's `on.issues.types` is exactly `[opened, edited, reopened, transferred, closed,
+> unlabeled, typed, untyped]`, and its job `if:` skips an `unlabeled` for any label but
+> `bot:working` and an `edited` with no body change.** Without `typed`, a ticket typed Roadmap
+> after it was filed is never reviewed as a goal and keeps its `Status`. Anything more is an empty
+> run. (why: docs/why.md#subscribe-only-to-what-resolves)
 
 > ⚠ **`pull_request_review_thread` is a webhook event, not an Actions trigger.** Naming it under
 > `on:` makes GitHub reject the whole file, so **no event in that repository is handled at all** —
@@ -687,7 +693,7 @@ its recheck, and the completion check.
 - [ ] The five shared labels carry the same colour and description in all five repos
 - [ ] Logged out: the project is public, the Roadmap view shows only Roadmap tickets sliced by
       milestone, and "Suggest a goal" files a Roadmap ticket for a non-member
-- [ ] Each caller's `issues` types include `typed` and `untyped`
+- [ ] Each caller's `issues` types and job `if:` match this repo's own `workflow-state.yml`
 - [ ] A `claude/spike-*` push gets a preview URL in SahajCloud, WeMeditateWeb and SahajAtlasWeb
 - [ ] The nightly routine's prompt invokes `run-audit`
 

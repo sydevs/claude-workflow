@@ -12,7 +12,10 @@ name: Workflow state
 
 on:
   issues:
-    types: [opened, edited, reopened, transferred, closed, assigned, unlabeled, typed, untyped, field_added, field_removed]
+    # Only the actions resolve.mjs turns into work. assigned and the field
+    # events had no rule since the state machine retired, so each was an
+    # empty run. (why: docs/why.md#subscribe-only-to-what-resolves)
+    types: [opened, edited, reopened, transferred, closed, unlabeled, typed, untyped]
   issue_comment:
     types: [created]
   # pull_request_target, not pull_request: the org secrets must be present,
@@ -43,7 +46,14 @@ permissions: {}
 
 jobs:
   dispatch:
-    if: vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry'
+    # Skipped here, before a runner starts: a label other than the lock
+    # coming off (the dispatcher removes awaiting, stuck and proposal on most
+    # passes), and an edit that left the body alone. `bot:working` is
+    # labels.lock in loop-config.json — change both together.
+    if: >-
+      (vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry')
+      && !(github.event.action == 'unlabeled' && github.event.label.name != 'bot:working')
+      && !(github.event_name == 'issues' && github.event.action == 'edited' && !github.event.changes.body)
     uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
     with:
       dry-run: ${{ vars.BOT_DISPATCH == 'dry' }}

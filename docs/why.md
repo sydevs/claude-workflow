@@ -1834,6 +1834,22 @@ the summary comment quotes each point and gives the SHA or the evidence. The sum
 than the review's `submitted_at` is what marks it handled, the same `since` test the dispatcher
 uses, so a resumed run never answers it twice.
 
+## Subscribe only to what resolves
+
+The callers subscribed to `assigned`, `field_added` and `field_removed` long after the state
+machine that needed them retired. `resolve.mjs` had no rule for any of them, so each started a
+workflow run, checked out this repo, and resolved to zero targets. `unlabeled` was worse: only the
+lock coming off means anything, but the dispatcher itself removes `awaiting`, `stuck` and
+`proposal` on most passes, with a token whose events do trigger workflows. So nearly every dispatch
+paid for a second, empty one.
+
+Two rules now. The `types:` list names only the actions `resolve.mjs` turns into work. What only
+some instances of an action need is filtered in the caller's job-level `if:`, which GitHub
+evaluates before any runner starts: an `unlabeled` for any label but the lock, and an `edited` that
+left the body alone — the body is the only part of an issue the dispatcher reads markers from. The
+lock's name appears there literally, because a caller cannot read `loop-config.json`. Change
+`labels.lock` and the five callers together.
+
 ---
 
 # Roadmap, tickets and audits
