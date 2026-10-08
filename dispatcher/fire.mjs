@@ -55,7 +55,7 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     event: target.event || target.reason,
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
     lock: config.labels.lock,
-    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true },
+    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
     ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason } : null,

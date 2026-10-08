@@ -66,6 +66,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   const nodeId = snapshot.pr?.nodeId || snapshot.item?.nodeId
   const emitted = []
   let recordDirty = false
+  let moved = false
   let bumpFixCi = false
   const rec = snapshot.record
 
@@ -109,11 +110,56 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (!dryRun) await board(() => ensureItem(gh, config, nodeId))
         break
       case 'status': {
-        log(`status → ${a.value}`)
+        log(a.value ? `status → ${a.value}` : 'status → none')
         if (!dryRun) await board(async () => { const w = await setStatus(gh, config, nodeId, a.value); if (w) log(`status written: ${w}`) })
         break
       }
       case 'label': await labels(gh, t, snapshot, a.add, a.remove, dryRun, log); break
+      // The dispatcher's own memory on the item: a pre-approval, the re-hold
+      // count, a completion check owed. (why: docs/why.md#recheck-before-awaiting)
+      case 'record':
+        log(`record ← ${JSON.stringify(a.patch)}`)
+        Object.assign(rec, a.patch)
+        recordDirty = true
+        break
+      // ⚠ This endpoint replaces the issue's whole field-value set, so every
+      // value it already carries is sent back with the new date.
+      // (why: docs/why.md#a-date-belongs-in-a-date-field)
+      case 'hold': {
+        const f = config.issueFields?.holdUntil
+        log(`hold until ${a.date}`)
+        if (dryRun || !f?.fieldId) break
+        const { data: fresh } = await gh.rest.issues.get({ ...args, issue_number: t.number })
+        const values = (fresh.issue_field_values || [])
+          .filter((v) => v.issue_field_id !== f.fieldId)
+          .map((v) => ({ field_id: v.issue_field_id, value: v.single_select_option?.name ?? v.value }))
+        values.push({ field_id: f.fieldId, value: a.date })
+        await handOver('set Hold Until', () => gh.request('PUT /repos/{owner}/{repo}/issues/{n}/issue-field-values', { ...args, n: t.number, data: values }))
+        break
+      }
+      // A roadmap ticket lives in its milestone's repo. A session cannot move
+      // an issue, so it asks, and this runs last: the number changes.
+      // (why: docs/why.md#a-session-asks-actions-acts)
+      case 'transfer': {
+        log(`transfer to ${t.repo.owner}/${a.repo}${a.milestone ? ` (milestone "${a.milestone}")` : ''}`)
+        if (dryRun) break
+        if (recordDirty) { snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec); recordDirty = false }
+        let moved_to = null
+        const ok = await handOver('transfer the issue', async () => {
+          const { data: dest } = await gh.rest.repos.get({ owner: t.repo.owner, repo: a.repo })
+          const d = await gh.graphql(`mutation($i:ID!,$r:ID!){ transferIssue(input:{issueId:$i, repositoryId:$r}){ issue { number } } }`, { i: snapshot.item.nodeId, r: dest.node_id })
+          moved_to = d.transferIssue.issue.number
+        })
+        if (!ok) break
+        moved = true
+        log(`now ${t.repo.owner}/${a.repo}#${moved_to}`)
+        if (!a.milestone) break
+        const ms = await gh.paginate(gh.rest.issues.listMilestones, { owner: t.repo.owner, repo: a.repo, state: 'open', per_page: 100 })
+        const m = ms.find((x) => x.title === a.milestone)
+        if (!m) { log(`no open milestone "${a.milestone}" in ${a.repo}`); break }
+        await gh.rest.issues.update({ owner: t.repo.owner, repo: a.repo, issue_number: moved_to, milestone: m.number })
+        break
+      }
       case 'comment': await commentOnce(gh, t, a.key, a.body, dryRun, log); break
       case 'react':
         if (dryRun || !t.facts?.commentId) break
@@ -241,7 +287,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     }
   }
 
-  if (handedOver.length && !dryRun) {
+  if (handedOver.length && !dryRun && !moved) {
     const steps = handedOver.map((h) => h.what).join(' or ')
     const reasons = handedOver.map((h) => `- **${h.what}** — GitHub said: \`${h.why}\``).join('\n')
     await labels(gh, t, snapshot, [config.labels.awaiting], [], dryRun, log)
@@ -258,7 +304,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       await postAnomaly(gh, config, j.number, { kind: 'board-unreachable', text: `${t.repo.full}#${t.number}: ${boardFailed}` })
     } catch { /* the journal is not the board's keeper */ }
   }
-  if (recordDirty && !dryRun) snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
+  if (recordDirty && !dryRun && !moved) snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   return emitted
 }
 

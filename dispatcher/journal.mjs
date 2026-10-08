@@ -2,7 +2,7 @@
  * The day's journal issue, created by the dispatcher and written to by the
  * sessions (one comment each) and by the dispatcher (anomalies only). The
  * title and the body's tally block are counts the sweeper keeps current;
- * the weekly reflect reads them to report usage (why: docs/why.md#there-is-no-wip-cap).
+ * the weekly improve-loop reads them to report usage (why: docs/why.md#there-is-no-wip-cap).
  * (why: docs/why.md#the-journal-day-is-a-local-date)
  */
 
@@ -198,7 +198,7 @@ export function tallyFrom(bodies) {
   return t
 }
 
-/** The body block reflect reads: per handler, per repo, and the busiest items. */
+/** The body block improve-loop reads: per handler, per repo, and the busiest items. */
 export function renderTally(t) {
   const list = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ') || '—'
   const busy = Object.entries(t.byItem).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => `${k} ×${n}`).join(', ')

@@ -10,7 +10,10 @@ const config = {
   ceilings: { ciFixIterations: 3 },
   mergePolicy: { loopMayNotMerge: ['claude-workflow'] },
   review: { bodyHeader: '## 🧐 Adversarial review', skipWhen: { maxFiles: 2, maxLines: 40 } },
-  dispatch: { commandPrefix: '@sydevs-bot', verbs: { issue: ['implement', 'revise', 'split', 'answer'], pr: ['address', 'review'], unknownIssue: 'answer', unknownPr: 'address' } },
+  dispatch: { commandPrefix: '@sydevs-bot', verbs: { issue: ['implement', 'revise', 'review', 'block'], pr: ['address', 'review', 'revise'], aliases: { issue: { review: 'revise' }, pr: { revise: 'review' } }, unknownIssue: 'revise', unknownPr: 'address' } },
+  issueFields: { holdUntil: { name: 'Hold Until', fieldId: 46423871, maxHorizonDays: 30, maxRehold: 3 } },
+  roadmap: { type: 'Roadmap', spikeBranchPrefix: 'claude/spike-' },
+  repos: ['SahajCloud', 'SahajAtlasWeb', 'WeMeditateWeb', 'SahajAtlasWordpress', 'claude-workflow'],
 }
 
 const green = { green: true, reason: '3 check(s) green', running: [], failing: [] }
@@ -39,7 +42,7 @@ function prSnap(over = {}) {
 const types = (plan) => plan.map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value ? ':' + a.value : ''))
 
 test('green draft with no critic review fires the critic, never marks ready', () => {
-  assert.deepEqual(types(evaluatePr(prSnap(), config)), ['fire:adversarial-review'])
+  assert.deepEqual(types(evaluatePr(prSnap(), config)), ['fire:review-pr'])
 })
 
 test('green draft under the size threshold is marked ready without a critic', () => {
@@ -198,7 +201,7 @@ test('a review comment carrying a verb on a human PR still dispatches that verb'
   const s = prSnap({ pr: { ...prSnap().pr, draft: false, user: { login: 'Ardnived' } } })
   const at = (body) => ({ reason: 'review_comment', facts: { author: 'Ardnived', body, association: 'CONTRIBUTOR' } })
   assert.deepEqual(types(decide(at('@sydevs-bot address this'), s, config)), ['fire:address-review'])
-  assert.deepEqual(types(decide(at('@sydevs-bot review'), s, config)), ['fire:adversarial-review'])
+  assert.deepEqual(types(decide(at('@sydevs-bot review'), s, config)), ['fire:review-pr'])
   assert.deepEqual(types(decide(at('a nit'), s, config)), ['note'])
 })
 
@@ -206,7 +209,7 @@ function issueSnap(over = {}) {
   return {
     kind: 'issue',
     repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' },
-    item: { number: 9, labels: ['proposal', 'awaiting'], author: 'sydevs-bot' },
+    item: { number: 9, state: 'open', labels: ['proposal', 'awaiting'], author: 'sydevs-bot', authorAssociation: 'MEMBER', type: 'Feature' },
     locked: false,
     record: {},
     comments: [],
@@ -214,8 +217,13 @@ function issueSnap(over = {}) {
     park: { until: null, passed: false, source: null },
     blockedByOpen: [],
     openPrsClosingIt: [],
+    openQuestions: { total: 0, open: 0 },
+    children: [],
+    parent: null,
+    request: null,
     dependents: [],
     botSpokeLast: false,
+    now: new Date('2026-10-07T12:00:00Z'),
     ...over,
   }
 }
@@ -234,9 +242,9 @@ test('implement on a blocked or in-flight ticket is refused', () => {
   assert.ok(!inflight.some((a) => a.type === 'fire'))
 })
 
-test('verbs are case-insensitive and unknown ones become answer; Copilot cannot issue them', () => {
+test('verbs are case-insensitive and unknown ones become revise; Copilot cannot issue them', () => {
   const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@SYDEVS-BOT Thoughts?', association: 'OWNER' } }, issueSnap(), config)
-  assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'answer'))
+  assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'revise'))
   const c = decide({ reason: 'issue_comment', facts: { author: 'Copilot', body: '@sydevs-bot implement', association: 'NONE' } }, issueSnap(), config)
   assert.ok(!c.some((a) => a.type === 'fire'))
 })
@@ -280,10 +288,12 @@ test('a closed issue goes Done and re-checks its dependents', () => {
   assert.equal(p.find((a) => a.type === 'targets').list[0].reason, 'unblock-check')
 })
 
-test('the sweeper unparks a blocked ticket whose Re-check date passed, and leaves a future one alone', () => {
-  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
-  assert.ok(passed.some((a) => a.type === 'label' && a.add.includes('awaiting') && a.remove.includes('blocked')))
-  assert.ok(passed.some((a) => a.type === 'comment' && a.body.includes('@Ardnived')))
+test('a passed Hold Until date fires a recheck, not awaiting; a future one is left alone', () => {
+  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
+  assert.deepEqual(types(passed), ['record', 'fire:revise'])
+  assert.equal(passed[1].flags.mode, 'recheck')
+  assert.deepEqual(passed[0].patch, { rehold: 1 })
+  assert.ok(!passed.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'nobody is pinged on the date alone')
   const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } }), config)
   assert.ok(!early.some((a) => a.type === 'label'))
 })
@@ -303,9 +313,9 @@ test('unblock-check is quiet when the label already matches the relationship', (
 test('unblock-check labels a date park that lost its label, and unparks when the date passes', () => {
   const ahead = issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } })
   assert.ok(decide({ reason: 'unblock-check', facts: {} }, ahead, config).some((a) => a.type === 'label' && a.add.includes('blocked')))
-  const past = issueSnap({ item: { number: 9, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-01-01', passed: true, source: 'field' } })
+  const past = issueSnap({ item: { number: 9, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-01-01', passed: true, source: 'field' } })
   const p = decide({ reason: 'unblock-check', facts: {} }, past, config)
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked') && a.add.includes('awaiting')))
+  assert.ok(p.some((a) => a.type === 'fire' && a.flags.mode === 'recheck'))
 })
 
 test('a park stops an implement dispatch before any session starts', () => {
@@ -338,7 +348,7 @@ test('a PR whose linked issue is still locked belongs to that session alone', ()
   const draft = (over) => prSnap({ pr: { ...prSnap().pr, draft: true, changed_files: 8, additions: 120 }, linkedIssues: [729], ...over })
   assert.deepEqual(types(evaluatePr(draft({ linkedLocked: [729] }), config)), ['note'], 'held')
   const freed = evaluatePr(draft({ linkedLocked: [] }), config)
-  assert.ok(freed.some((a) => a.type === 'fire' && a.handler === 'adversarial-review'), 'the same PR, once the issue unlocks')
+  assert.ok(freed.some((a) => a.type === 'fire' && a.handler === 'review-pr'), 'the same PR, once the issue unlocks')
 })
 
 test('an implement verb is answered by the PR, not re-dispatched on unlock', () => {
@@ -479,15 +489,11 @@ test('a draft is armed at mark-ready, the first moment GitHub allows it', () => 
   assert.ok(t.indexOf('markReady') < t.indexOf('armAutoMerge'), 'ready first — GitHub refuses auto-merge on a draft')
 })
 
-test('a bot-filed proposal is revised before a human reads it; yours is left alone', () => {
-  const bot = issueSnap({ item: { number: 800, labels: [], author: 'sydevs-bot' } })
-  assert.ok(decide({ reason: 'issues.opened' }, bot, config).some((a) => a.type === 'fire' && a.handler === 'revise'))
-
-  const mine = issueSnap({ item: { number: 801, labels: [], author: 'Ardnived' } })
+test('no implementation ticket is revised on arrival — write-ticket already wrote it', () => {
+  const bot = issueSnap({ item: { number: 800, state: 'open', labels: [], author: 'sydevs-bot', authorAssociation: 'MEMBER', type: 'Bug' } })
+  assert.ok(!decide({ reason: 'issues.opened' }, bot, config).some((a) => a.type === 'fire'))
+  const mine = issueSnap({ item: { number: 801, state: 'open', labels: [], author: 'Ardnived', authorAssociation: 'MEMBER', type: 'Feature' } })
   assert.ok(!decide({ reason: 'issues.opened' }, mine, config).some((a) => a.type === 'fire'))
-
-  const off = { ...config, dispatch: { ...config.dispatch, reviewProposals: false } }
-  assert.ok(!decide({ reason: 'issues.opened' }, bot, off).some((a) => a.type === 'fire'))
 })
 
 // ---- a ticket built in phases (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
@@ -512,11 +518,11 @@ test('the continuation waits for green CI, like the critic would', () => {
 })
 
 test('every phase ticked hands the whole PR to the critic, once', () => {
-  assert.deepEqual(types(evaluatePr(phased(3, 3), config)), ['fire:adversarial-review'])
+  assert.deepEqual(types(evaluatePr(phased(3, 3), config)), ['fire:review-pr'])
 })
 
 test('a phased draft with no linked ticket falls through to the critic', () => {
-  assert.deepEqual(types(evaluatePr(phased(1, 3, { linkedIssues: [] }), config)), ['fire:adversarial-review'])
+  assert.deepEqual(types(evaluatePr(phased(1, 3, { linkedIssues: [] }), config)), ['fire:review-pr'])
 })
 
 test('a stalled phased draft that carries awaiting stays your turn', () => {

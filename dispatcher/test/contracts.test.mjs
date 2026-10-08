@@ -90,5 +90,5 @@ test('a green sync draft skips the critic and says why', () => {
   assert.ok(!plan.some((a) => a.type === 'fire'), 'no critic')
   assert.ok(plan.some((a) => a.type === 'markReady'))
   assert.match(plan.find((a) => a.type === 'comment').body, /only re-syncs a copied contract/)
-  assert.ok(evaluatePr({ ...s, pr: { ...s.pr, contractSyncOnly: false } }, config).some((a) => a.type === 'fire' && a.handler === 'adversarial-review'))
+  assert.ok(evaluatePr({ ...s, pr: { ...s.pr, contractSyncOnly: false } }, config).some((a) => a.type === 'fire' && a.handler === 'review-pr'))
 })
