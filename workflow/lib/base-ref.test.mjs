@@ -1,41 +1,52 @@
 // node --test workflow/lib/base-ref.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveBaseRef, BaseRefError } from './base-ref.mjs'
-import { execFileSync } from 'node:child_process'
+import { resolveBaseRef, repoRoot, BaseRefError } from './base-ref.mjs'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
 
-const root = fileURLToPath(new URL('../..', import.meta.url))
-const lib = join(root, 'workflow', 'lib')
+const lib = dirname(fileURLToPath(import.meta.url))
+
+/** One directive per line, in the bold form `rule-delta.mjs` recognises. */
+const body = (...rules) => rules.map((r) => `- **${r}**\n`).join('')
 
 /**
- * A throwaway repo in the shape a routine clone actually has: HEAD on a
- * `claude/*` branch, `refs/remotes/origin/main` current, and `refs/heads/main`
- * left wherever the clone was seeded.
+ * A throwaway repo.
  *
  * ## Fixture pre-mortem
  *
  * This fixture assumes nothing about any sydevs repo. It asserts against git's
- * own behaviour, built here commit by commit, which is why the stale ref is
- * written with `update-ref` rather than mocked: `git merge-base main HEAD`
- * returning the stale commit is the exact property that makes merge-base alone
- * insufficient, and a mock would let that property be assumed instead of
- * shown. The one real-world fact it leans on is that `origin` is the remote
- * name, which `start-run` step 6 (`git remote set-head origin …`) fixes too.
+ * own behaviour, built here commit by commit, which is why `stale()` below
+ * writes the stale ref with `update-ref` rather than mocking it: `git
+ * merge-base main HEAD` returning the stale commit is the exact property that
+ * makes merge-base alone insufficient, and a mock would let that property be
+ * assumed instead of shown. The one real-world fact it leans on is that
+ * `origin` is the remote name, which `start-run` step 6 (`git remote set-head
+ * origin …`) settles too.
+ *
+ * `maintenance.auto` is off because git otherwise forks a `git maintenance
+ * run` per commit, in repos deleted a second later.
  */
 function repo() {
   const dir = mkdtempSync(join(tmpdir(), 'base-ref-'))
   const g = (...args) =>
-    execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim()
+    execFileSync('git', args, {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'test',
+        GIT_AUTHOR_EMAIL: 'bot@example.invalid',
+        GIT_COMMITTER_NAME: 'test',
+        GIT_COMMITTER_EMAIL: 'bot@example.invalid',
+      },
+    }).trim()
 
-  g('init', '-q', '-b', 'main')
-  g('config', 'user.email', 'bot@example.invalid')
-  g('config', 'user.name', 'test')
-  g('config', 'commit.gpgsign', 'false')
+  g('init', '-q', '-b', 'main', '--template=')
+  g('config', 'maintenance.auto', 'false')
 
   const skill = (text) => {
     mkdirSync(join(dir, 'skills', 'one'), { recursive: true })
@@ -43,30 +54,45 @@ function repo() {
   }
   const commit = (message) => {
     g('add', '-A')
-    g('commit', '-q', '-m', message)
+    g('commit', '-q', '--no-gpg-sign', '-m', message)
     return g('rev-parse', 'HEAD')
   }
 
   return { dir, g, skill, commit }
 }
 
+/**
+ * The shape a routine clone actually has: HEAD on a `claude/*` branch,
+ * `refs/remotes/origin/main` current at `second`, and `refs/heads/main` left
+ * at `first` where the clone was seeded.
+ */
+function stale() {
+  const r = repo()
+  r.skill(body('Never do the first thing'))
+  const first = r.commit('first')
+  r.skill(body('Never do the first thing', 'Never do the second thing'))
+  const second = r.commit('second')
+
+  r.g('update-ref', 'refs/remotes/origin/main', second)
+  r.g('update-ref', 'refs/heads/main', first)
+  r.g('checkout', '-q', '-b', 'claude/fix-1', second)
+  return { ...r, first, second }
+}
+
+/** One commit, with `refs/heads/main` and `refs/remotes/origin/main` agreeing. */
+function synced() {
+  const r = repo()
+  r.skill(body('Never do the first thing'))
+  const first = r.commit('first')
+  r.g('update-ref', 'refs/remotes/origin/main', first)
+  return { ...r, first }
+}
+
 const cleanup = (dir) => rmSync(dir, { recursive: true, force: true })
 
-/** One directive per line, in the bold form `rule-delta.mjs` recognises. */
-const body = (...rules) => rules.map((r) => `- **${r}**\n`).join('')
-
 test('a bare name prefers origin/<name> and warns when the local ref differs', () => {
-  const { dir, g, skill, commit } = repo()
+  const { dir, g, second } = stale()
   try {
-    skill(body('Never do the first thing'))
-    const first = commit('first')
-    skill(body('Never do the first thing', 'Never do the second thing'))
-    const second = commit('second')
-
-    g('update-ref', 'refs/remotes/origin/main', second)
-    g('update-ref', 'refs/heads/main', first)
-    g('checkout', '-q', '-b', 'claude/fix-1', second)
-
     const warnings = []
     const r = resolveBaseRef('main', { root: dir, onWarn: (m) => warnings.push(m) })
 
@@ -74,43 +100,23 @@ test('a bare name prefers origin/<name> and warns when the local ref differs', (
     assert.equal(r.baseline, second)
     assert.equal(warnings.length, 1)
     assert.match(warnings[0], /local main is \w{7} and origin\/main is \w{7}/)
+
+    // The property that makes resolution, not merge-base, the fix: the stale
+    // ref is an ancestor of HEAD, so merge-base alone returns it unchanged.
+    assert.equal(g('merge-base', 'refs/heads/main', 'HEAD'), g('rev-parse', 'refs/heads/main'))
   } finally {
     cleanup(dir)
   }
 })
 
 test('a local ref that agrees with its remote counterpart warns nothing', () => {
-  const { dir, g, skill, commit } = repo()
+  const { dir, first } = synced()
   try {
-    skill(body('Never do the first thing'))
-    const first = commit('first')
-    g('update-ref', 'refs/remotes/origin/main', first)
-
     const warnings = []
     const r = resolveBaseRef('main', { root: dir, onWarn: (m) => warnings.push(m) })
 
     assert.deepEqual(warnings, [])
     assert.equal(r.baseline, first)
-  } finally {
-    cleanup(dir)
-  }
-})
-
-test('merge-base alone does not rescue a stale ref, so the remote wins first', () => {
-  const { dir, g, skill, commit } = repo()
-  try {
-    skill(body('Never do the first thing'))
-    const first = commit('first')
-    skill(body('Never do the first thing', 'Never do the second thing'))
-    const second = commit('second')
-
-    g('update-ref', 'refs/remotes/origin/main', second)
-    g('update-ref', 'refs/heads/main', first)
-    g('checkout', '-q', '-b', 'claude/fix-1', second)
-
-    // The property that makes resolution, not merge-base, the fix.
-    assert.equal(g('merge-base', 'refs/heads/main', 'HEAD'), first)
-    assert.equal(resolveBaseRef('main', { root: dir, onWarn() {} }).baseline, second)
   } finally {
     cleanup(dir)
   }
@@ -143,12 +149,8 @@ test('the baseline is the branch point, so commits the base gained stay out', ()
 })
 
 test('a ref with a slash, and a sha, are taken as given', () => {
-  const { dir, g, skill, commit } = repo()
+  const { dir, first } = synced()
   try {
-    skill(body('Never do the first thing'))
-    const first = commit('first')
-    g('update-ref', 'refs/remotes/origin/main', first)
-
     const warnings = []
     const slashed = resolveBaseRef('origin/main', { root: dir, onWarn: (m) => warnings.push(m) })
     assert.equal(slashed.named, 'origin/main')
@@ -161,13 +163,47 @@ test('a ref with a slash, and a sha, are taken as given', () => {
   }
 })
 
-test('a base ref that does not resolve throws, rather than reading as empty', () => {
-  const { dir, skill, commit } = repo()
+/**
+ * `start-run` step 6 creates `refs/remotes/origin/HEAD` in every routine
+ * clone, so a pseudoref that fell through the bare-name branch resolved to the
+ * default branch instead of itself — silently, because `refs/heads/HEAD` does
+ * not exist for the divergence warning to compare against.
+ */
+test('HEAD means HEAD, not origin/HEAD', () => {
+  const { dir, g, skill, commit, second } = stale()
   try {
-    skill(body('Never do the first thing'))
-    commit('first')
+    g('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    skill(body('Never do the first thing', 'Never do a third thing'))
+    const head = commit('on the branch')
+    assert.notEqual(head, second, 'the fixture must put HEAD past origin/main')
+
+    const warnings = []
+    const r = resolveBaseRef('HEAD', { root: dir, onWarn: (m) => warnings.push(m) })
+
+    assert.equal(r.named, 'HEAD')
+    assert.equal(r.baseline, head)
+    assert.deepEqual(warnings, [])
+  } finally {
+    cleanup(dir)
+  }
+})
+
+test('a base ref that does not resolve throws, rather than reading as empty', () => {
+  const { dir } = synced()
+  try {
     assert.throws(() => resolveBaseRef('no-such-ref', { root: dir }), BaseRefError)
     assert.throws(() => resolveBaseRef('', { root: dir }), BaseRefError)
+    assert.throws(() => resolveBaseRef('--json', { root: dir }), BaseRefError)
+  } finally {
+    cleanup(dir)
+  }
+})
+
+test('repoRoot answers the worktree root from a subdirectory', () => {
+  const { dir, g } = synced()
+  try {
+    const top = g('rev-parse', '--show-toplevel')
+    assert.equal(repoRoot(join(dir, 'skills', 'one')), top)
   } finally {
     cleanup(dir)
   }
@@ -183,19 +219,14 @@ const cliCases = [
 
 for (const { script, args } of cliCases) {
   test(`${script} fails on an unresolvable base with one message`, () => {
-    const { dir, skill, commit } = repo()
+    const { dir } = synced()
     try {
-      skill(body('Never do the first thing'))
-      commit('first')
       const r = spawnSync(process.execPath, [join(lib, script), ...args], {
         cwd: dir,
         encoding: 'utf8',
       })
 
       assert.notEqual(r.status, 0, `${script} exited 0`)
-      const out = `${r.stdout}${r.stderr}`
-      assert.doesNotMatch(out, /No directive disappeared/)
-      assert.doesNotMatch(out, /at \S+ \(/, 'printed a stack trace')
       assert.equal(r.stderr.trim().split('\n').length, 1)
       assert.match(r.stderr, /does not resolve to a commit/)
     } finally {
@@ -205,17 +236,8 @@ for (const { script, args } of cliCases) {
 }
 
 test('rule-delta reports a clean delta on a clean tree whose local main is stale', () => {
-  const { dir, g, skill, commit } = repo()
+  const { dir } = stale()
   try {
-    skill(body('Never do the first thing'))
-    const first = commit('first')
-    skill(body('Never do the first thing', 'Never do the second thing'))
-    const second = commit('second')
-
-    g('update-ref', 'refs/remotes/origin/main', second)
-    g('update-ref', 'refs/heads/main', first)
-    g('checkout', '-q', '-b', 'claude/fix-1', second)
-
     const r = spawnSync(process.execPath, [join(lib, 'rule-delta.mjs'), '--base', 'main', 'skills'], {
       cwd: dir,
       encoding: 'utf8',
@@ -225,6 +247,43 @@ test('rule-delta reports a clean delta on a clean tree whose local main is stale
     assert.match(r.stdout, /No directive disappeared/)
     assert.doesNotMatch(r.stdout, /ADDED/)
     assert.match(r.stderr, /Comparing against origin\/main/)
+  } finally {
+    cleanup(dir)
+  }
+})
+
+test('rule-delta never reports an unresolvable base as a clean delta', () => {
+  const { dir } = synced()
+  try {
+    const r = spawnSync(
+      process.execPath,
+      [join(lib, 'rule-delta.mjs'), '--base', 'no-such-ref', 'skills'],
+      { cwd: dir, encoding: 'utf8' },
+    )
+    assert.doesNotMatch(`${r.stdout}${r.stderr}`, /No directive disappeared/)
+  } finally {
+    cleanup(dir)
+  }
+})
+
+/**
+ * `git show <rev>:<path>` is root-relative and `mdFiles` is cwd-relative, so
+ * from a subdirectory every read failed and the swallowing `catch` turned the
+ * empty before-set into `No directive disappeared.` at exit 0 — the silent
+ * all-clear this module exists to end, reached by a second route.
+ */
+test('rule-delta reads the base from a subdirectory, not an empty set', () => {
+  const { dir } = stale()
+  try {
+    const r = spawnSync(process.execPath, [join(lib, 'rule-delta.mjs'), '--base', 'main', 'one'], {
+      cwd: join(dir, 'skills'),
+      encoding: 'utf8',
+    })
+
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /directives: 2 → 2/)
+    assert.doesNotMatch(r.stdout, /ADDED/)
+    assert.doesNotMatch(r.stderr, /fatal:/)
   } finally {
     cleanup(dir)
   }
