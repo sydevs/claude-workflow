@@ -2268,6 +2268,11 @@ The check keeps no memory. A session that judged an alert unreachable leaves it 
 shows it to a session again: the old weekly re-check, without the empty weeks. A failed fire is not
 retried, because the alert is due again on Monday.
 
+Reading alerts takes the Dependabot permission on `SYDEVS_BOT_PAT`, and the first run found the
+token without it: four 403s. So alerts it cannot read fall back to the old weekly run — on Monday
+it fires anyway, and the journal says why every day. Losing the read must never lose the audit.
+SahajAtlasWordpress is not checked: it ships no production dependencies.
+
 The fire has no item, so it has no lock. It is a repo-scope record, `kind: "repo"`, which
 `payload.mjs` accepts only for a handler configured with `scope: "repo"`. The daily cron and the
 open-PR check keep it idempotent. Routine minor and patch updates have nothing to detect, so they

@@ -90,3 +90,17 @@ test('a dry tick fires nothing, and an unreadable repo is journalled, not thrown
   await depsTick({ github: gh, core: { ...core, lines: [] }, config, env, now: FRI, fetchImpl, dryRun: false })
   assert.ok(gh.comments.some((b) => b.includes('deps-check')), 'the 403 reached the journal')
 })
+
+test('unreadable alerts fall back to the weekly run: Monday fires anyway, other days only journal', async () => {
+  const fired = []
+  const fetchImpl = async (url, init) => { fired.push(JSON.parse(JSON.parse(init.body).text)); return { status: 200, json: async () => ({ claude_code_session_id: 's', claude_code_session_url: 'u' }) } }
+  const fail = { SahajCloud: true, SahajAtlasWeb: true, WeMeditateWeb: true, SahajAtlasWordpress: true }
+  const fri = fakeGh({ fail })
+  await depsTick({ github: fri, core: { ...core, lines: [] }, config, env, now: FRI, fetchImpl })
+  assert.equal(fired.length, 0)
+  assert.ok(fri.comments.some((b) => b.includes('could not read alerts')))
+  const mon = fakeGh({ fail })
+  await depsTick({ github: mon, core: { ...core, lines: [] }, config, env, now: MON, fetchImpl })
+  assert.deepEqual(fired.map((r) => r.repo).sort(), config.deps.repos.map((r) => `sydevs/${r}`).sort())
+  assert.ok(mon.comments.some((b) => b.includes('firing the weekly run anyway')))
+})

@@ -11,6 +11,10 @@
  * It keeps no memory. An alert is due on the day it opens, and again on
  * `deps.catchUpDay` while a fix for it exists and it is still open, so a
  * session that judged one unreachable sees it again once a week, as before.
+ *
+ * Alerts it cannot read — a token without the Dependabot permission — fall
+ * back to the old weekly run: on the catch-up day it fires anyway, so losing
+ * the read never loses the audit. The anomaly says why, every day.
  */
 
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
@@ -51,13 +55,20 @@ export async function depsTick({ github, core, config, env = process.env, dryRun
     const repo = { owner: config.org, name, full: `${config.org}/${name}` }
     let step = 'read alerts'
     try {
-      const alerts = await github.paginate('GET /repos/{owner}/{repo}/dependabot/alerts', { owner: repo.owner, repo: name, state: 'open', per_page: 100 })
-      const due = dueAlerts(alerts, config, now)
-      if (!due.length) { core.info(`${name}: ${alerts.length} open alert(s), none due`); continue }
+      let due
+      try {
+        const alerts = await github.paginate('GET /repos/{owner}/{repo}/dependabot/alerts', { owner: repo.owner, repo: name, state: 'open', per_page: 100 })
+        due = dueAlerts(alerts, config, now)
+        if (!due.length) { core.info(`${name}: ${alerts.length} open alert(s), none due`); continue }
+      } catch (e) {
+        if (DAYS[now.getUTCDay()] !== lower(d.catchUpDay)) throw e
+        await unreadable({ github, core, config, dryRun, now, repo, handler, e })
+        due = []
+      }
       step = 'list pull requests'
       const pulls = await github.paginate(github.rest.pulls.list, { owner: repo.owner, repo: name, state: 'open', per_page: 100 })
       const inFlight = depsPrInFlight(pulls, config)
-      if (inFlight) { core.info(`${name}: alert(s) ${due.map((n) => '#' + n).join(', ')} due, but #${inFlight.number} already carries a dependency fix`); continue }
+      if (inFlight) { core.info(`${name}: ${due.length ? `alert(s) ${due.map((n) => '#' + n).join(', ')}` : 'the weekly run'} due, but #${inFlight.number} already carries a dependency fix`); continue }
       step = 'fire'
       await fireDeps({ github, core, config, env, dryRun, now, fetchImpl, repo, handler, due })
     } catch (e) {
@@ -68,6 +79,14 @@ export async function depsTick({ github, core, config, env = process.env, dryRun
       }
     }
   }
+}
+
+/** Say the alerts were unreadable, then let the catch-up day fire blind, as the weekly run did. */
+async function unreadable({ github, core, config, dryRun, now, repo, handler, e }) {
+  const why = `${repo.full} ${handler}: could not read alerts — ${e?.status || '?'} ${String(e?.message || e).replace(/\s+/g, ' ').slice(0, 160)}; firing the weekly run anyway`
+  core.warning(why)
+  if (dryRun) return
+  try { const j = await ensureJournalDay(github, config, now); await postAnomaly(github, config, j.number, { kind: 'deps-check', text: why }) } catch { /* the journal is not this check's keeper */ }
 }
 
 async function fireDeps({ github, core, config, env, dryRun, now, fetchImpl, repo, handler, due }) {
@@ -81,7 +100,7 @@ async function fireDeps({ github, core, config, env, dryRun, now, fetchImpl, rep
   }
   const target = { repo, kind: 'repo', number: null, reason: 'deps', facts: { triggerType: 'schedule' } }
   const record = buildRecord({ handler, target, snapshot: {}, flags: { mode: 'vulnerabilities' }, attempt: 1, journalNumber: journal.number, config, now })
-  core.info(`${repo.name}: alert(s) ${due.map((n) => '#' + n).join(', ')} due → fire ${handler}${dryRun ? ' (dry run — not fired)' : ''}`)
+  core.info(`${repo.name}: ${due.length ? `alert(s) ${due.map((n) => '#' + n).join(', ')} due` : 'alerts unreadable on the catch-up day'} → fire ${handler}${dryRun ? ' (dry run — not fired)' : ''}`)
   if (dryRun) return core.info(`record: ${JSON.stringify(record)}`)
   const res = await fireRoutine({ token, routineId, record, fetchImpl, now, config })
   if (res.ok) return core.info(`${repo.name}: session ${res.session}`)
