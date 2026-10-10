@@ -35,6 +35,9 @@
  *
  * Exits 1 on a changed codeHash, a shrunken protected census, a displaced
  * comment, or a WEAK file — each is a case that needs a human.
+ *
+ * `--base` compares against the branch point, and prefers `origin/<name>` for
+ * a bare name — `base-ref.mjs` says why both matter.
  */
 
 import { createHash } from 'node:crypto'
@@ -43,6 +46,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveBaseRefOrExit } from './base-ref.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const UNIT = String.fromCharCode(31)
@@ -502,6 +506,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     console.error('usage: comment-fingerprint.mjs --base <ref> [--repo <dir>] [--json] | --selftest')
     process.exit(2)
   }
-  const r = await run(repoRoot, args[bi + 1], args.includes('--json'))
+  const base = resolveBaseRefOrExit(args[bi + 1], { root: repoRoot }).baseline
+  const r = await run(repoRoot, base, args.includes('--json'))
   process.exit(r.problems.length ? 1 : 0)
 }

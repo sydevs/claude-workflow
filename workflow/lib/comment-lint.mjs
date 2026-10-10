@@ -32,6 +32,9 @@
  *   comment-lint.mjs --base origin/main           # report, exit 0
  *   comment-lint.mjs --base origin/main --strict  # exit 1 on any finding
  *   comment-lint.mjs --selftest
+ *
+ * `--base` compares against the branch point, and prefers `origin/<name>` for
+ * a bare name — `base-ref.mjs` says why both matter.
  */
 
 import { createRequire } from 'node:module'
@@ -39,6 +42,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { commentRanges } from './comment-fingerprint.mjs'
+import { resolveBaseRefOrExit } from './base-ref.mjs'
 
 /**
  * Only phrasings that are wrong whatever they describe.
@@ -163,7 +167,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     console.error('usage: comment-lint.mjs --base <ref> [--repo <dir>] [--strict] | --selftest')
     process.exit(2)
   }
-  const base = args[bi + 1]
+  const base = resolveBaseRefOrExit(args[bi + 1], { root }).baseline
 
   const ts = (() => {
     try {

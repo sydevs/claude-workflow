@@ -30,6 +30,9 @@
  *   rule-delta.mjs --base origin/main          # git ref vs the working tree
  *   rule-delta.mjs before/ after/              # two directories
  *
+ * `--base` compares against the branch point, and prefers `origin/<name>` for
+ * a bare name — `base-ref.mjs` says why both matter.
+ *
  * Exits 1 when a directive disappears with no close match. That is the case
  * that needs a human. (why: docs/why.md#lint-measures-style-not-content)
  */
@@ -37,6 +40,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
+import { resolveBaseRefOrExit } from './base-ref.mjs'
 
 /**
  * A directive is bold text, or a heading. Both carry the same force in
@@ -112,7 +116,15 @@ const collect = (dir) => {
   return all
 }
 
-/** Read the same paths from a git ref. Local only, with no network, so a routine can run it. */
+/**
+ * Read the same paths from a git ref. Local only, with no network, so a
+ * routine can run it.
+ *
+ * `ref` is already a resolved commit, so the `catch` here means one thing: the
+ * file did not exist at the base. While an unresolvable ref reached this far,
+ * that same `catch` swallowed it for every file and the tool reported a clean
+ * delta. `resolveBaseRef` is what keeps the one meaning.
+ */
 const collectRef = (ref, dir) => {
   const all = new Set()
   for (const f of mdFiles(dir)) {
@@ -129,7 +141,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const dir = args.find((a) => !a.startsWith('--') && a !== args[baseIdx + 1]) || 'workflow/skills'
 
   const [before, after] = baseIdx !== -1
-    ? [collectRef(args[baseIdx + 1], dir), collect(dir)]
+    ? [collectRef(resolveBaseRefOrExit(args[baseIdx + 1]).baseline, dir), collect(dir)]
     : [collect(args[0]), collect(args[1])]
 
   const r = compare(before, after)
