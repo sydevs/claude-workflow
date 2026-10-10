@@ -27,7 +27,7 @@
  *
  * ## Usage
  *
- *   rule-delta.mjs --base main                 # git ref vs the working tree
+ *   rule-delta.mjs --base origin/main          # git ref vs the working tree
  *   rule-delta.mjs before/ after/              # two directories
  *
  * Exits 1 when a directive disappears with no close match. That is the case

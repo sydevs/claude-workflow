@@ -29,8 +29,8 @@
  *
  * ## Usage
  *
- *   comment-fingerprint.mjs --base main           # git ref vs the working tree
- *   comment-fingerprint.mjs --base main --json
+ *   comment-fingerprint.mjs --base origin/main    # git ref vs the working tree
+ *   comment-fingerprint.mjs --base origin/main --json
  *   comment-fingerprint.mjs --selftest            # break it on purpose, both ways
  *
  * Exits 1 on a changed codeHash, a shrunken protected census, a displaced

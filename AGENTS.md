@@ -127,12 +127,14 @@ never its exit code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
 **Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
 
 ```bash
-node workflow/lib/rule-delta.mjs --base main workflow/skills
+node workflow/lib/rule-delta.mjs --base origin/main workflow/skills
 ```
 
 `ste-lint.py` measures a skill's **style**. `rule-delta.mjs` measures its **content**. A rewrite
 can pass the first and fail the second, shrinking and reading cleaner while it drops a rule
-outright. Both are development tools, never run steps.
+outright. Neither is part of the automated gate — that is `leanGate.command` alone — and both are
+run steps as well as development tools: the Sunday `improve-loop` run executes `rule-delta.mjs`,
+and `audit-code` runs `ste-lint.py --json` on its three weekdays.
 (why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** Those values come from

@@ -109,7 +109,7 @@ link itself is the *why*), **data-literal semantics** (a literal cannot show its
 Every commit, without exception:
 
 ```bash
-node <claude-workflow>/workflow/lib/comment-fingerprint.mjs --base <branch-point>
+node <claude-workflow>/workflow/lib/comment-fingerprint.mjs --base origin/main
 ```
 
 Run it **after** the format commit, so it proves the whole stack including the formatter. Read all

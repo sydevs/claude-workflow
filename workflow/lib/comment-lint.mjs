@@ -29,8 +29,8 @@
  *
  * ## Usage
  *
- *   comment-lint.mjs --base main              # report, exit 0
- *   comment-lint.mjs --base main --strict     # exit 1 on any finding
+ *   comment-lint.mjs --base origin/main           # report, exit 0
+ *   comment-lint.mjs --base origin/main --strict  # exit 1 on any finding
  *   comment-lint.mjs --selftest
  */
 
