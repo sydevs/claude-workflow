@@ -54,7 +54,8 @@ mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n
 An investigation whose *outcome* is a decision is a `Task`, even when it may lead to a `Feature` —
 type describes the work requested, not what it might become.
 
-**A docs-only fix is rarely a ticket at all.** Preflight routes it straight to a ticketless PR.
+**A docs-only fix is rarely a ticket at all.** Preflight routes it into the docs work already in
+flight, or straight to a ticketless PR.
 When one must be a ticket, it is a `Bug`, and never goes through the roadmap.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 

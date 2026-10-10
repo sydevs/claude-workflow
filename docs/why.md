@@ -291,6 +291,19 @@ your own pull request, and the loop authors the PRs it reviews. And even where t
 it, a human skimming, or a future rule, could read an approving bot review as merge authority. That
 authority belongs to the reviewer's approving review alone.
 
+## A rebutted critic thread is resolved
+
+The ruleset merges only with every review thread resolved. A thread the critic opened and
+`address-review` rebutted stayed open "for the reviewer", so the reviewer had to read a debate
+between two sessions and resolve the bot's thread by hand before anything could merge. The critic
+is advisory, and its point has been answered with evidence. The reviewer loses nothing when it
+closes: the summary comment links every rebuttal.
+
+So a rebuttal on a thread the own login rooted resolves it. It stays open only for a question the
+reviewer must answer, never for visibility. A human's thread is still theirs to resolve. The
+rebuttal must be legitimate: #269's two "on scope" rebuttals were relevant doc fixes that should
+have been adopted ([A docs fix is a PR, not a ticket](#a-docs-fix-is-a-pr-not-a-ticket)).
+
 ## The author filter's one exception
 
 The filter (why: #respondto-is-an-allowlist) exists so the loop never treats its own words as
@@ -2215,6 +2228,22 @@ PR under review. A doc the current ticket made stale is still fixed in that tick
 When one must still be a ticket — the repo is out of the session's reach, or the code may be the
 wrong side — it is a `Bug`. A doc that misdescribes the code is a defect, and a Bug never goes
 through the roadmap.
+
+**Widen before you open.** The day after that rule shipped, two more docs tickets were filed, and
+each followed it. Implementing SahajAtlasWeb#264, a session found five more comments carrying the
+same retired premise. It read "never widen a PR" as "not in the ticket's list", and one of the five
+needed a decision, so all five became SahajAtlasWeb#270. The critic on that PR, #269, flagged the
+twin of a sentence it fixed. `address-review` rebutted it *on scope* and routed it to #270 too.
+Measuring a CSP for #263, another session found a refusal it could document and a question it
+could not settle, so both became SahajAtlasWeb#272.
+
+So docs findings gather where docs work already is. A doc on the subject of the ticket or PR you
+hold, or carrying the stale premise it fixes, is that work's, listed or not. A docs ticket or PR
+takes any docs finding in its repo. Without one in hand, an open docs ticket gets a line, and an
+open bot docs PR gets a commit — but never one that is locked, which another session owns, or
+approved, which auto-merge would land with commits the reviewer never saw. Only then is a new PR
+opened. A point that needs a decision is a question in that PR's body, and an unknown the run can
+measure, it measures. Neither splits a docs fix into a ticket.
 
 ## Only required checks are CI
 

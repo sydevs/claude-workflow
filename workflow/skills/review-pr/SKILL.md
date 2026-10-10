@@ -48,9 +48,9 @@ Flag correctness, tests, and security only when you trip over them, at the bar t
 everywhere: a finding names a file and a line, or it is not a finding.
 
 **A real defect that is not this PR's is still filed.** Preflight routes every incidental
-finding, and a critic never touches the branch under review: a docs-only one is a ticketless PR
-on its own branch, anything else a ticket. A stale doc this PR should have updated is a finding
-on this PR. Name it in the holistic assessment as well. Never park it on an unrelated line as an
+finding, and a critic never touches the branch under review: a docs-only one goes to the docs
+work in flight, anything else a ticket. A stale doc this PR should have updated is a finding on
+this PR — and on a docs PR, so is every docs finding in its repo. Name it in the holistic assessment as well. Never park it on an unrelated line as an
 inline comment.
 
 ## Read the reviewer's profile

@@ -67,8 +67,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
   | The finding | Goes |
   | --- | --- |
-  | Part of the ticket or PR you hold | There: a commit on that PR's branch, or a line in that ticket. Never widen a PR for one that is not. |
-  | **Docs-only** — Markdown, or comments `comment-fingerprint.mjs` proves comment-only — and the code is plainly right | A ticketless PR on its own `claude/docs-<scope>-<slug>` branch, through `/workflow:finalize-pr`. Any size, from any handler, even one that otherwise never pushes. No code in it, and never on a branch under review. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket) |
+  | Part of the ticket or PR you hold. For a doc: the same subject or the same stale premise, listed or not | There: a commit on that PR's branch, or a line in that ticket. Never widen a PR for one that is not. |
+  | **Docs-only** — Markdown, or comments `comment-fingerprint.mjs` proves comment-only — and the code is plainly right | The docs work in flight, first. A docs ticket or PR you hold takes any docs finding in its repo. Else an open docs ticket there with no PR gets a checklist line, or an unlocked, unapproved bot docs PR gets a commit, a refreshed body and one comment. Else a ticketless PR on its own `claude/docs-<scope>-<slug>` branch, through `/workflow:finalize-pr`. Any size, from any handler, even one that otherwise never pushes. No code in it. Never push to a locked or approved PR. Measure an unknown you can. A point needing a decision goes under `## Open questions` in the PR body. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket) |
   | At or under `findings.directFixMaxFiles` files, inside `prAllowlistGlobs` | A ticketless PR, where this handler opens PRs at all. |
   | Anything else | A ticket, through `/workflow:write-ticket` in `create` mode. A docs defect that still needs one — in a repo you cannot push to, or where the code may be the wrong side — is a `Bug`. |
 - **Every unit of work is idempotent.** Check for an existing branch, PR, reply, or child issue

@@ -64,8 +64,8 @@ findings win — the user is the only reviewer.
 
 ## Ticketless PRs
 
-**Any family:** a docs-only finding where the code is plainly right is a ticketless PR, as
-preflight's incidental-finding rule routes it, never a ticket.
+**Any family:** a docs-only finding where the code is plainly right joins the docs work in
+flight, or is a ticketless PR, as preflight's incidental-finding rule routes it — never a ticket.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 Hygiene also prefers a ticketless draft PR where the change is **provably** safe. The proof stands

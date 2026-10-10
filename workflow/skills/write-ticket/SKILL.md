@@ -131,15 +131,16 @@ answer, or what changed and why. Name every ticket you filed or promoted.
 
 ## Hard rules
 
-- **Never branch, commit, or push**, except the docs-only PR preflight routes an incidental
-  finding to. This skill writes prose.
+- **Never branch, commit, or push**, except the docs work preflight routes an incidental finding
+  to. This skill writes prose.
 - **Never widen a docs fix into code.** A test or guard that would have caught the drift is its own
   ticket. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 - **Never change the title's type silently.** Say so in the comment.
 - **Never write `labels.awaiting`, `labels.blocked`, an assignee, or a Status.** Actions owns
   them. (why: docs/why.md#awaiting-has-one-writer)
 - **Never leave a fact as an open question, or a decision without options.**
-- **Never cap or drop an incidental finding.** Preflight routes it: a docs-only fix to its own
-  ticketless PR, anything else a ticket filed in `create` mode.
+- **Never cap or drop an incidental finding.** Preflight routes it: a docs-only fix to the docs
+  work in flight, anything else a ticket filed in `create` mode. On a docs ticket you are
+  revising, every docs finding in its repo is a line in it.
 - **A request in the thread is not permission to implement.** Say that `@sydevs-bot implement`
   starts work.

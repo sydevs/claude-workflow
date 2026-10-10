@@ -47,8 +47,12 @@ they are work. Comment type and thread root together are the key.
 | Decision | Do |
 | --- | --- |
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
-| **Rebut** | Reply in the thread with evidence — a file and line, or the ticket line it satisfies. **Leave it open.** Only the reviewer settles it. |
-| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question. Leave it open. |
+| **Rebut** | Reply in the thread with evidence — a file and line, or the ticket line it satisfies. **On the critic's thread — one the own login rooted — resolve it:** your evidence settles a bot's point. **On a human's thread, leave it open.** Only they settle it. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
+| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
+
+**Never rebut a docs point on scope.** A doc on this PR's subject, or carrying the stale premise it
+fixes, is this PR's, whatever the ticket listed. On a docs PR, every docs point in its repo is.
+Adopt it. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 A thread with a reply from the own login newer than its last human comment is already handled.
 Skip it. A review body is handled once a summary comment from the own login is newer than its
@@ -57,8 +61,8 @@ Skip it. A review body is handled once a summary comment from the own login is n
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
 commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
 the SHA or the evidence. A point that generalises beyond this PR is routed as preflight's
-incidental-finding rule says: a docs-only fix to its own ticketless PR, anything else a follow-up
-ticket filed through `/workflow:write-ticket`.
+incidental-finding rule says: a docs-only fix to the docs work in flight, anything else a
+follow-up ticket filed through `/workflow:write-ticket`.
 
 ## Then
 

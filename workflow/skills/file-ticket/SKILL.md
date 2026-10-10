@@ -65,9 +65,9 @@ Use format-ticket's rule. A request that needs a product decision, or more than 
 PR, is a **Roadmap** ticket. A Bug is always direct.
 
 **A docs-only fix needs no ticket** — a doc says one thing, and the code plainly does the right
-other thing. Ask `Fix it in a PR now (Recommended)` or `File a Bug anyway`. On the PR, branch
-`claude/docs-<scope>-<slug>` in that repo, fix only the docs, and ship through
-`/workflow:finalize-pr`. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+other thing. Ask `Fix it in a PR now (Recommended)` or `File a Bug anyway`. An open docs ticket
+or unapproved docs PR in that repo takes it first, as preflight routes it. Otherwise branch
+`claude/docs-<scope>-<slug>`, fix only the docs, and ship through `/workflow:finalize-pr`. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 ## 4a. A roadmap goal
 
