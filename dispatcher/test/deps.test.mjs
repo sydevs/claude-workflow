@@ -101,6 +101,6 @@ test('unreadable alerts fall back to the weekly run: Monday fires anyway, other 
   assert.ok(fri.comments.some((b) => b.includes('could not read alerts')))
   const mon = fakeGh({ fail })
   await depsTick({ github: mon, core: { ...core, lines: [] }, config, env, now: MON, fetchImpl })
-  assert.deepEqual(fired.map((r) => r.repo).sort(), ['sydevs/SahajAtlasWeb', 'sydevs/SahajAtlasWordpress', 'sydevs/SahajCloud', 'sydevs/WeMeditateWeb'])
+  assert.deepEqual(fired.map((r) => r.repo).sort(), config.deps.repos.map((r) => `sydevs/${r}`).sort())
   assert.ok(mon.comments.some((b) => b.includes('firing the weekly run anyway')))
 })
