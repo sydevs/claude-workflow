@@ -51,6 +51,10 @@ export function defaultAttachedDir() {
 }
 
 const KINDS = new Set(['issue', 'pr'])
+// A repo-scope handler is fired at a repository, not an item: no number, no
+// lock. Only a handler whose config says `scope: "repo"` may carry it.
+// (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
+const REPO_KIND = 'repo'
 // Which job a multi-mode handler is on: `intake`, `revise`, `recheck`,
 // `block`, `verify`, `plan`, `replan`. A word, never instructions.
 const MODE = /^[a-z][a-z-]{0,19}$/
@@ -86,8 +90,15 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     errors.push(`repo "${r.repo}" is not one of ${org}/{${repos.join(', ')}}`)
   }
 
-  if (!KINDS.has(r.kind)) errors.push('kind must be "issue" or "pr"')
-  if (!Number.isInteger(r.number) || r.number < 1) errors.push('number must be a positive integer')
+  const repoScoped = handlers?.[handler]?.scope === 'repo'
+  if (r.kind === REPO_KIND) {
+    if (!repoScoped) errors.push(`kind "repo" is only for a repo-scope handler, not "${handler}"`)
+    if (r.number !== null) errors.push('number must be null for kind "repo"')
+  } else {
+    if (repoScoped) errors.push(`handler "${handler}" is repo-scope, so kind must be "repo"`)
+    if (!KINDS.has(r.kind)) errors.push('kind must be "issue", "pr" or "repo"')
+    if (!Number.isInteger(r.number) || r.number < 1) errors.push('number must be a positive integer')
+  }
   if (typeof r.url !== 'string' || !r.url.startsWith(`https://github.com/${r.repo}/`)) {
     errors.push('url must be an https://github.com/<repo>/… link')
   }
@@ -126,7 +137,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
       flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null },
       owner,
       name,
-      lock,
+      lock: r.kind === REPO_KIND ? null : lock,
       skill: typeof h.skill === 'string' ? h.skill : handler,
       model: typeof h.model === 'string' ? h.model : null,
       deadlineMs: Date.parse(r.deadline),

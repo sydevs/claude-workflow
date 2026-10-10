@@ -56,8 +56,9 @@ Skip it. A review body is handled once a summary comment from the own login is n
 
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
 commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
-the SHA or the evidence. A point that generalises beyond this PR becomes a follow-up ticket,
-filed through `/workflow:write-ticket`.
+the SHA or the evidence. A point that generalises beyond this PR is routed as preflight's
+incidental-finding rule says: a docs-only fix to its own ticketless PR, anything else a follow-up
+ticket filed through `/workflow:write-ticket`.
 
 ## Then
 

@@ -36,25 +36,28 @@ export function tokenFor(repoName, config, env = process.env) {
 export function dispatchId({ repoName, number, handler, now, rand = Math.random }) {
   const stamp = now.toISOString().replace(/[-:]/g, '').replace('.', '')
   const suffix = Math.floor(rand() * 0x10000).toString(16).padStart(4, '0')
-  return `${repoName}-${number}-${handler}-${stamp}-${suffix}`
+  return `${repoName}-${number ?? 'repo'}-${handler}-${stamp}-${suffix}`
 }
 
 export function buildRecord({ handler, target, snapshot, flags, attempt, journalNumber, config, now, rand }) {
   const minutes = config.dispatch.timeoutsMinutes?.[handler] ?? 60
   const deadline = new Date(now.getTime() + minutes * 60_000).toISOString()
   const pr = snapshot.pr
+  // A repo-scope fire points at the repository, holds no lock, and has no
+  // item to link. (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
+  const itemless = target.kind === 'repo'
   return {
     v: 1,
     id: dispatchId({ repoName: target.repo.name, number: target.number, handler, now, rand }),
     handler,
     repo: target.repo.full,
     kind: target.kind,
-    number: target.number,
-    url: snapshot.item?.htmlUrl || `https://github.com/${target.repo.full}/${target.kind === 'pr' ? 'pull' : 'issues'}/${target.number}`,
+    number: itemless ? null : target.number,
+    url: itemless ? `https://github.com/${target.repo.full}/security/dependabot` : snapshot.item?.htmlUrl || `https://github.com/${target.repo.full}/${target.kind === 'pr' ? 'pull' : 'issues'}/${target.number}`,
     head: pr ? { ref: pr.head?.ref || null, sha: pr.head?.sha || null } : null,
     event: target.event || target.reason,
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
-    lock: config.labels.lock,
+    lock: itemless ? null : config.labels.lock,
     flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,

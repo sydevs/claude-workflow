@@ -1434,6 +1434,9 @@ The general shape is worth keeping in view: **anything the dispatcher does on a 
 the dispatcher reads.** That is what `pull_request_target` costs, and every filter over it has to
 be written against what GitHub actually emits rather than what the workflow file says.
 
+Since [Only required checks are CI](#only-required-checks-are-ci), the list matters only when the
+ruleset cannot be read, and every check counts again.
+
 ## A write we cannot make is handed over, not thrown
 
 `markPullRequestReadyForReview` came back `FORBIDDEN` on sydevs/SahajCloud#744 — the dispatch
@@ -2136,15 +2139,155 @@ day has its own family: **risk** files Bug or Task tickets, **experience** files
 family never runs twice in a row, and each angle recurs every four to eight weeks.
 
 Hygiene's ticketless PRs are the one deliberate exception to `prAllowlistGlobs`, and only three
-kinds qualify: a comment sweep that `comment-fingerprint.mjs` proves changed comments only, a
+kinds qualify — though any family now sends a docs-only fix to a PR
+([A docs fix is a PR, not a ticket](#a-docs-fix-is-a-pr-not-a-ticket)): a comment sweep that `comment-fingerprint.mjs` proves changed comments only, a
 dead-code removal proven unreferenced, and a doc fix where the code is plainly right. The proof
 stands in for the ticket, because a ticket would only ask a human to agree to a change that cannot
 alter behaviour. It does not stand in for the review: each PR still needs a human's approval to
 merge. Anything less certain goes back to a ticket.
 
 Each rotation counts the runs of its own day from `auditCalendar.rotationEpoch`, by date rather
-than by journal. An overridden day is not a run, so the first Saturday's `audit-contracts` delays a
-hygiene angle instead of skipping it, and a missed night does not break the count.
+than by journal. An overridden day is not a run, so a monthly override delays an angle instead of
+skipping it, and a missed night does not break the count. A weekday can also hold a list, whose
+skills take turns by the same count. `audit-contracts` used to override the first Saturday. When the
+dispatcher took over vulnerability fixes, it moved to Mondays, taking turns with `audit-deps`'s
+routine updates, and hygiene kept every Saturday.
+([A vulnerability is checked before a session is spent](#a-vulnerability-is-checked-before-a-session-is-spent))
+
+## Intake asks with options
+
+`file-ticket` used to ask in prose and wait for a typed reply, so every clarification, pushback
+and confirmation was an open-ended question in a terminal. With `AskUserQuestion`, each question
+arrives with its options, its consequences and a recommendation — the same shape `## Open
+questions` already uses ([Decisions come with options](#decisions-come-with-options)) — and one
+click answers it. Every open question also offers `Leave it on the ticket`: the person filing is
+often not the person who should decide, and the review on GitHub can settle it.
+
+Who is filing decides what is asked. The login `gh` is signed in as is compared with
+`assignment.reviewer`. Anyone else — or a session with no `gh` login — is treated as
+non-technical:
+
+- **Technical questions go to the ticket unasked.** Offering "defer" as the recommendation still
+  invites an uninformed pick, and the reviewer will see the question on GitHub anyway.
+- **The preview is a plain summary.** An implementation ticket's body is written for a run picking
+  it up cold, not for the person who asked for it.
+- **The hand-over is never offered.** Starting a build is the reviewer's call, and a comment from a
+  login outside `respondTo` would authorise nothing.
+
+Reading the reviewer from `loop-config.json` rather than naming them keeps the rule a data edit.
+
+## An answer before filing is the request
+
+`## Decisions` records who settled what, and when, so the next session does not ask again and the
+next reader can see a choice was made ([Decisions come with options](#decisions-come-with-options)).
+That record earns its place once a ticket exists and people have read it.
+
+Before filing there is no earlier version for an answer to change. The person answering is the
+person asking, and the answer is simply what they want. Listing it as a decision makes a fresh
+ticket read as if it had been argued over, and splits one request across two sections. So an
+intake answer is written into the section it shapes — a scope cut into `## Not included`, a
+behaviour into the goal or the criteria — where the review reads it as the requirement it is.
+After filing, the old rule stands.
+
+## A docs fix is a PR, not a ticket
+
+Sixteen documentation-only fixes became tickets between 2026-08-15 and 2026-10-09. Ten predate the
+routes to a ticketless PR (#132, #152). The six since were routed exactly as the rules said, and
+the rules were the cause:
+
+- **The handlers that find most drift could not open a PR.** `revise-roadmap`, `write-ticket`,
+  `review-pr` and `address-review` never push, so a one-file Markdown fix (SahajCloud#901,
+  SahajAtlasWeb#261) cost a ticket, a verb and an implement session.
+- **A comment fix fell outside `**/*.md`,** so `prAllowlistGlobs` sent it to a ticket
+  (SahajAtlasWeb#264), though `comment-fingerprint.mjs` already proves a change comment-only.
+- **`write-ticket` widened a doc fix into code.** It added a guard test (SahajCloud#810, #862),
+  and then the work genuinely needed its ticket.
+
+Only three of the sixteen needed one: a decision (SahajAtlasWeb#173), a browser measurement
+(SahajAtlasWeb#263), and a copy owned by another repo (SahajAtlasWeb#226).
+
+A ticket for a docs fix asks a human to agree to a change that cannot alter behaviour, then pays a
+session to make it. The PR is the proposal, and the review still gates the merge. So a docs-only
+fix where the code is plainly right is a ticketless PR, of any size, from any handler. It is the
+one exception to the prose handlers' "never push", on a branch of its own, so it never touches a
+PR under review. A doc the current ticket made stale is still fixed in that ticket's own PR.
+
+When one must still be a ticket — the repo is out of the session's reach, or the code may be the
+wrong side — it is a `Bug`. A doc that misdescribes the code is a defect, and a Bug never goes
+through the roadmap.
+
+## Only required checks are CI
+
+GitHub merges on the ruleset's required checks: one in SahajCloud, three each in WeMeditateWeb and
+SahajAtlasWeb, two in SahajAtlasWordpress. The loop counted every check run and status except its
+own. Between 2026-08-28 and 2026-10-09, 19 of 53 `fix-ci` runs chased a red that GitHub did not
+require:
+
+- **A Railway outage on 2026-10-07** turned SahajCloud#879, #880 and #885 red through Railway's
+  commit status. `fix-ci` fired six times with nothing in the PR to fix (claude-workflow#164).
+- **WeMeditateWeb#144 got two CI runs on one head**, and `cancel-in-progress` cancelled one.
+  `filter=latest` dedupes only within a check suite, so the cancelled rows read as failing
+  forever: three runs, then the cap, while GitHub showed green.
+- **A stalled Cloudflare Pages build** held WeMeditateWeb#109.
+
+So `gather` reads the base branch's rules and keeps only the required contexts, newest run of each
+name. A required check that has not reported yet counts as queued, so one late job cannot read as
+green. A red check outside the list is said once on the PR, since a preview link may not open, and
+fires nothing. When the rules cannot be read, or require nothing, every check counts as before:
+calling an untested PR green is the error that ships something broken. `fix-ci` gets the same
+list, through the record's `ci.reason`.
+
+A required check can still fail on infrastructure — `Smoke` waits on the Pages preview — so this
+narrows the false reds. It does not end them.
+
+## A bot PR answers a mention or a review
+
+A bot PR dispatched `address-review` on any comment from a `respondTo` human. A note to a
+colleague, a "will look tomorrow", a thank-you: each cost an Opus session, which then had to find
+something to reply to. Issues already required a mention.
+
+So the rule is now the same on every surface: a conversation comment reaches the bot only through
+`@sydevs-bot`. A review on a PR the bot opened needs none, and neither does a thread reply, which
+GitHub records as a review — reviewing its PR is addressing it. The check sits in the derivation as
+well as the event row, so the 30-minute sweep agrees: an unmentioned comment is owed no reply, and
+leaves `awaiting` where it was. A `review` verb asks for the critic, so it is not also owed a reply.
+
+## A vulnerability is checked before a session is spent
+
+`audit-deps` ran every Monday across every repo, whatever there was to do, and an alert opened on a
+Tuesday waited six days. SahajCloud's nodemailer alerts were open from 2026-09-30. Dependabot
+already knows what that session would establish first: how severe an alert is, whether it reaches
+production code, and whether a patched version exists.
+
+So the dispatcher reads the alerts once a day, and fires `audit-deps` in a repo only when a high or
+critical runtime alert opened in the last day — or, on Monday, one with a fix is still open — and
+no dependency PR is already open there. Whether the vulnerable code is reachable, and what a
+major's changelog breaks, stays the session's judgement.
+
+The check keeps no memory. A session that judged an alert unreachable leaves it open, and Monday
+shows it to a session again: the old weekly re-check, without the empty weeks. A failed fire is not
+retried, because the alert is due again on Monday.
+
+The fire has no item, so it has no lock. It is a repo-scope record, `kind: "repo"`, which
+`payload.mjs` accepts only for a handler configured with `scope: "repo"`. The daily cron and the
+open-PR check keep it idempotent. Routine minor and patch updates have nothing to detect, so they
+stay on the calendar, taking turns on Mondays with `audit-contracts`.
+
+## Dependency review checks what a PR adds
+
+SahajAtlasWeb required a `Dependency Audit` that audited the whole lockfile. Between 2026-09-30 and
+2026-10-03 new advisories against dependencies already on main — undici, then braces — failed
+SahajAtlasWeb#233, #237, #243 and #248, none of which touched a dependency. `fix-ci` then rewrote
+overrides and the audit baseline on those unrelated PRs, leaving two of them in a merge-order
+hazard. A gate that fails a PR for something it did not cause is an outage, not a gate.
+
+What a PR check should stop is a PR *adding* a vulnerable dependency. `dependency-review-action`
+compares only the dependencies a PR changes. An advisory already on main is the daily check's.
+
+It is a reusable workflow in this repo, called from each product repo's own CI, never through
+`dispatcher.yml`. Pausing the loop with `BOT_DISPATCH` skips the whole dispatcher, and a required
+check that never reports blocks every merge. It runs in the merge queue too, against the queue's
+base, and passes at once on any other event, so the required name always reports.
 
 # Retired
 

@@ -75,13 +75,21 @@ it is. Only the dispatcher writes labels and Status; a session only removes its 
 
 | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
 | --- | --- | --- | --- | --- | --- | --- |
-| `audit-deps` | `audit-code` risk | `audit-sentry` | `audit-code` experience | `cut-release` | `audit-code` hygiene (1st Saturday: `audit-contracts`) | `improve-loop` |
+| `audit-deps` and `audit-contracts`, taking turns | `audit-code` risk | `audit-sentry` | `audit-code` experience | `cut-release` | `audit-code` hygiene | `improve-loop` |
+
+**Vulnerabilities** don't wait for Monday. Once a day the dispatcher reads each repo's Dependabot
+alerts, and fires `audit-deps` there only when a high or critical runtime alert is due and no
+dependency PR is open. A quiet day costs no session.
+
+**CI, to the loop, is the ruleset's required checks.** A red preview deploy or Railway status is
+noted on the PR and fires nothing. Each product repo's CI also calls the shared
+`dependency-review.yml`, which fails a PR only for a vulnerable dependency it adds.
 
 ## Skills you run
 
 | Skill | Use it to | Example |
 | --- | --- | --- |
-| `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, then files in the right tier. | `/workflow:file-ticket the map flickers when zooming on Safari` |
+| `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, asks each open question with a recommendation (or leaves it on the ticket), then files in the right tier. A docs-only fix becomes a PR instead. | `/workflow:file-ticket the map flickers when zooming on Safari` |
 | `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh a draft PR. It never merges. | `/workflow:finalize-pr` |
 | `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
 
@@ -102,7 +110,7 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
 | Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link and `blocked`. Rechecked when that issue closes. |
 | Any issue | `@sydevs-bot block waiting on legal sign-off` | A short session picks what to watch and a recheck date. |
-| Bot PR | any comment, review or thread reply — no mention needed | `address-review` adopts or rebuts each point. |
+| Bot PR | a review or thread reply; a comment only with a mention | `address-review` adopts or rebuts each point. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
 | Your own PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into your branch. |
 
@@ -121,7 +129,7 @@ mention. The bot ticks the item and moves it to **Decisions**, with who answered
 
 **Declining a suggestion.** Close it as *not planned*.
 
-**A plain reply with no mention does nothing on an issue**, except that a roadmap ticket's own author marks it `awaiting`. On a bot PR, every comment counts.
+**A plain comment with no mention does nothing**, on an issue or a PR, except that a roadmap ticket's own author marks it `awaiting`. On a bot PR, a review or a thread reply needs no mention.
 
 ## Automated skills
 
@@ -134,19 +142,20 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
-| `address-review` | a review, comment or thread reply on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
-| `fix-ci` | red CI on a bot PR, up to 3 times | one fix commit |
+| `address-review` | a review, thread reply or mention on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
+| `fix-ci` | a red required check on a bot PR, up to 3 times | one fix commit |
+| `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
 | `resolve-conflicts` | an approved bot PR that conflicts | `main` merged in, conflicts resolved |
 
 Run by the nightly routine through `run-audit`:
 
 | Skill | Produces |
 | --- | --- |
-| `audit-deps` | PRs that fix vulnerable dependencies; monthly, routine updates |
-| `audit-code` | one angle a night from that day's family. Risk and experience file tickets. Hygiene opens ticketless PRs it can prove safe (comment sweep, dead code, doc fixes). |
+| `audit-deps` | alternate Mondays: routine minor and patch updates, one PR per repo |
+| `audit-code` | one angle a night from that day's family. Risk and experience file tickets. Hygiene opens ticketless PRs it can prove safe (comment sweep, dead code). Any family sends a docs-only fix straight to a PR. |
 | `audit-sentry` | Bug tickets for production errors worth fixing |
 | `cut-release` | the changelog and version-bump PR; merging it publishes the release |
-| `audit-contracts` | checks the cross-repo contracts, and opens PRs where the source is plainly right |
+| `audit-contracts` | alternate Mondays: checks the cross-repo contracts, and opens PRs where the source is plainly right |
 | `improve-loop` | grades the week, reports usage, and proposes loop changes as a PR, and goals as Roadmap proposals |
 
 Every run begins with `start-run` and ends with `finish-run`, which writes one comment on the day's

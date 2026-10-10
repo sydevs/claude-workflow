@@ -3,14 +3,15 @@
 /**
  * Tonight's audit: which skill, and for `audit-code`, which family and angle.
  *
- * `auditCalendar` maps a UTC weekday to a skill. `monthly.<weekday>.<n>`
- * overrides the nth such weekday of the month (the 1st Saturday runs
- * `audit-contracts`). `auditAngles` gives `audit-code` one rotation per day
- * it runs, so a week always mixes risk, experience and hygiene.
+ * `auditCalendar` maps a UTC weekday to a skill, or to a list of skills that
+ * take turns, one per run of that weekday. `monthly.<weekday>.<n>`, when
+ * present, overrides the nth such weekday of the month. `auditAngles` gives
+ * `audit-code` one rotation per day it runs, so a week always mixes risk,
+ * experience and hygiene.
  *
  * A rotation advances once per run of its own day, counted from
- * `auditCalendar.rotationEpoch`. An overridden day is not a run, so the 1st
- * Saturday does not skip a hygiene angle. Counting dates rather than reading
+ * `auditCalendar.rotationEpoch`. An overridden day is not a run, so an
+ * override never skips an angle. Counting dates rather than reading
  * the journal means a missed night does not break the rotation.
  *
  * Usage:  node calendar.mjs [--date YYYY-MM-DD] [--config path]
@@ -30,23 +31,30 @@ function overrideFor(cal, d) {
   return cal.monthly?.[DAYS[d.getUTCDay()]]?.[nthOfMonth(d)] ?? null
 }
 
-export function tonight(config, date = new Date()) {
-  const cal = config.auditCalendar || {}
-  const d = new Date(`${isoDay(date)}T00:00:00Z`)
-  const day = DAYS[d.getUTCDay()]
-  const override = overrideFor(cal, d)
-  const skill = override ?? cal[day] ?? null
-  const out = { date: isoDay(d), day, skill, override: Boolean(override) }
-  const rotation = config.auditAngles?.[day]
-  if (skill !== 'audit-code' || override || !rotation?.angles?.length) return out
-
+/** Runs of this weekday before `d`, from the epoch. An overridden day is not a run. */
+function runsBefore(cal, day, d) {
   let runs = 0
   const epoch = Date.parse(`${cal.rotationEpoch || '2026-01-01'}T00:00:00Z`)
   for (let t = epoch; t < d.getTime(); t += DAY_MS) {
     const past = new Date(t)
     if (DAYS[past.getUTCDay()] === day && !overrideFor(cal, past)) runs += 1
   }
-  const index = runs % rotation.angles.length
+  return runs
+}
+
+export function tonight(config, date = new Date()) {
+  const cal = config.auditCalendar || {}
+  const d = new Date(`${isoDay(date)}T00:00:00Z`)
+  const day = DAYS[d.getUTCDay()]
+  const override = overrideFor(cal, d)
+  // A list takes turns: Mondays alternate audit-deps and audit-contracts.
+  const slot = cal[day] ?? null
+  const skill = override ?? (Array.isArray(slot) ? slot[runsBefore(cal, day, d) % slot.length] ?? null : slot)
+  const out = { date: isoDay(d), day, skill, override: Boolean(override) }
+  const rotation = config.auditAngles?.[day]
+  if (skill !== 'audit-code' || override || !rotation?.angles?.length) return out
+
+  const index = runsBefore(cal, day, d) % rotation.angles.length
   return { ...out, family: rotation.family, angle: rotation.angles[index], index, of: rotation.angles.length }
 }
 

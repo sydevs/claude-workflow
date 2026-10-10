@@ -1,24 +1,31 @@
 ---
 name: audit-deps
-description: Audit dependency vulnerabilities across the sydevs repos and raise PRs that fix them, accounting for breaking changes. Monthly, also batches routine minor/patch updates. Files PRs directly, not tickets.
+description: Fix dependency vulnerabilities with PRs that account for breaking changes — in one repo, when the dispatcher's daily Dependabot check finds an alert due — and batch routine minor/patch updates on alternate Mondays. Files PRs directly, not tickets.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
 
 # Audit dependencies
 
-Monday's audit. **Raise PRs, not tickets.** A version bump carries its own description. A ticket
-that says "bump X" only adds a round trip.
+**Raise PRs, not tickets.** A version bump carries its own description. A ticket that says
+"bump X" only adds a round trip. Two jobs:
 
-## Vulnerabilities (every Monday)
+| Job | Started by | Scope |
+| --- | --- | --- |
+| **Vulnerabilities** | The dispatcher's daily check: a repo-mode record, `flags.mode: "vulnerabilities"` | The record's repo |
+| **Routine updates** | `run-audit`, on the Mondays `auditCalendar` gives it | Every pnpm repo |
+
+## Vulnerabilities
+
+The dispatcher fired this because Dependabot has a high or critical runtime alert due in this repo:
+opened in the last day, or still open with a fix on `deps.catchUpDay`. It never judged whether the
+alert applies to us. You do. (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
 
 ```bash
-pnpm audit --audit-level=high --json    # the three pnpm repos
+pnpm audit --audit-level=high --json
 ```
 
-SahajAtlasWeb has a **baselined allowlist** at `scripts/audit-baseline.json` and its own
-`pnpm audit:check`. Use that, and respect the baseline — do not re-litigate an entry someone
-already assessed.
+An open `deps.branchPrefix` branch with no PR is a session that died. Continue it.
 
 For each finding, in this order:
 
@@ -32,7 +39,7 @@ For each finding, in this order:
 3. **Read the changelog before you bump.** A major needs its breaking-changes section read and its
    call sites checked. This is why this is an audit, not Dependabot.
 
-## Routine updates (first Monday of the month)
+## Routine updates (alternate Mondays)
 
 Batch minor and patch updates, one PR per repo. Bump majors one at a time, each with its own PR and
 its changelog read — never batched, never combined with a security fix.
@@ -42,7 +49,7 @@ pinned at `2.36.0` in SahajAtlasWeb, and `patches/` exists for a reason.
 
 ## Shipping
 
-Branch `claude/chore-deps-<scope>`, then run `/workflow:finalize-pr`. These PRs are ticketless —
+Branch `deps.branchPrefix` + `<scope>`, then run `/workflow:finalize-pr`. These PRs are ticketless —
 `prAllowlistGlobs` covers them because review is mechanical. They open as drafts. The dispatcher
 runs CI and marks them ready. Push and end.
 
@@ -52,5 +59,6 @@ breakage.** "Bumped 6 packages" is not reviewable.
 ## Hard rules
 
 - **Never** bump a major and a security fix in one PR. If it needs reverting, both go.
-- **Never** weaken or extend an audit baseline to make a run pass.
+- **Never** silence an advisory to make a run pass. A judgement that one does not apply goes in
+  the journal entry, with the reason.
 - **Never** skip a major's changelog because tests pass. Tests cover only what we thought to test.

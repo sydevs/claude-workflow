@@ -5,7 +5,7 @@
  * and mergeable. (why: docs/why.md#ci-truth-lives-in-check-runs)
  */
 
-import { ciVerdict, normalizeMcp, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
+import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
@@ -108,6 +108,24 @@ function latestRequest(comments, config) {
   return null
 }
 
+/**
+ * The status-check contexts the base branch's rulesets require, or null when
+ * they cannot be read or name none — then every check counts, as before,
+ * the safe direction.
+ */
+async function requiredContexts(gh, { owner, repo }, branch) {
+  if (!branch) return null
+  try {
+    const { data } = await gh.request('GET /repos/{owner}/{repo}/rules/branches/{branch}', { owner, repo, branch, per_page: 100 })
+    const contexts = (data || [])
+      .filter((r) => r.type === 'required_status_checks')
+      .flatMap((r) => (r.parameters?.required_status_checks || []).map((c) => c.context))
+    return contexts.length ? contexts : null
+  } catch {
+    return null
+  }
+}
+
 async function pollMergeable(gh, { owner, repo, number }, pr) {
   let cur = pr
   for (let i = 0; i < 5 && (cur.mergeable === null || cur.mergeable === undefined); i += 1) {
@@ -182,9 +200,15 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const ignored = config.ci?.ignoreCheckNames || []
   const ignore = (name) => ignored.some((i) => name === i || name.startsWith(`${i} (`))
   const { data: cr } = await gh.rest.checks.listForRef({ owner, repo, ref: pr.head.sha, per_page: 100, filter: 'latest' })
-  const checkRuns = { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion })) }
   const { data: st } = await gh.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha })
-  const statuses = { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) }
+  // Green is what the base branch's ruleset requires, newest run per name.
+  // (why: docs/why.md#only-required-checks-are-ci)
+  const gate = requiredOnly({
+    checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion })) },
+    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) },
+    required: await requiredContexts(gh, { owner, repo }, pr.base?.ref),
+  })
+  const { checkRuns, statuses } = gate
   setRepoWorkflows(`${owner}/${repo}`, !(config.ci?.noCi || []).includes(repo))
   const inlineCounts = new Map()
   for (const t of threads) for (const c of t.comments) inlineCounts.set(c.author, (inlineCounts.get(c.author) || 0) + 1)
@@ -202,7 +226,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.reviews = reviewsShaped
   s.threads = threads
   s.normalized = normalized
-  s.ci = ciVerdict(normalized, `${owner}/${repo}`)
+  s.ci = { ...ciVerdict(normalized, `${owner}/${repo}`), advisory: gate.advisory }
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)

@@ -9,18 +9,23 @@ const on = (d) => tonight(config, new Date(`${d}T08:00:00Z`))
 test('each weekday names its audit, and audit-code is spaced Tue/Thu/Sat', () => {
   // The week of 2026-10-12: Mon … Sun.
   const week = ['12', '13', '14', '15', '16', '17', '18'].map((n) => on(`2026-10-${n}`).skill)
-  assert.deepEqual(week, ['audit-deps', 'audit-code', 'audit-sentry', 'audit-code', 'cut-release', 'audit-code', 'improve-loop'])
+  assert.deepEqual(week, ['audit-contracts', 'audit-code', 'audit-sentry', 'audit-code', 'cut-release', 'audit-code', 'improve-loop'])
 })
 
-test('the 1st Saturday of a month is audit-contracts, and is not a hygiene run', () => {
-  const first = on('2026-11-07')
+test('Mondays alternate audit-deps and audit-contracts, from the epoch', () => {
+  const mondays = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02'].map((d) => on(d).skill)
+  assert.deepEqual(mondays, ['audit-deps', 'audit-contracts', 'audit-deps', 'audit-contracts', 'audit-deps'])
+})
+
+test('a monthly override still wins, and does not use up a turn', () => {
+  const cfg = { ...config, auditCalendar: { ...config.auditCalendar, monthly: { saturday: { 1: 'audit-contracts' } } } }
+  const at = (d) => tonight(cfg, new Date(`${d}T08:00:00Z`))
+  const first = at('2026-11-07')
   assert.equal(first.skill, 'audit-contracts')
   assert.equal(first.override, true)
   assert.equal(first.angle, undefined)
   // The Saturdays either side are consecutive hygiene angles: the override did not use one up.
-  const before = on('2026-10-31')
-  const after = on('2026-11-14')
-  assert.equal(after.index, (before.index + 1) % before.of)
+  assert.equal(at('2026-11-14').index, (at('2026-10-31').index + 1) % at('2026-10-31').of)
 })
 
 test('each day keeps its own rotation and family', () => {

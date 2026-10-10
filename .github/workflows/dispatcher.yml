@@ -14,8 +14,9 @@
 #
 # Two jobs: `resolve` maps the event to one or more items; `act` handles one
 # item per matrix leg, serialized per item by a concurrency group. Beside
-# them, `journal` keeps the day issue, and `contracts-plan` and
-# `contracts-sync` re-sync a consumer's copy of a producer's contract.
+# them, `journal` keeps the day issue, `deps` fires a dependency fix only
+# when Dependabot has one due, and `contracts-plan` and `contracts-sync`
+# re-sync a consumer's copy of a producer's contract.
 #
 # why: sydevs/claude-workflow/docs/why.md#actions-observes-classifies-locks-and-fires
 name: Dispatcher
@@ -153,6 +154,50 @@ jobs:
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { journalTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
             await journalTick({ github, core, config: loadConfig(`${cw}/loop-config.json`), dryRun: ${{ inputs.dry-run }} })
+
+  # The daily vulnerability check. It reads each repo's open Dependabot
+  # alerts and fires `audit-deps` there only when one is due — opened in
+  # the last day, or, on the catch-up day, still open with a fix — and no
+  # dependency PR is already open. A quiet week costs no session. The
+  # values are `deps` in loop-config.json on main. The cron is the journal
+  # repo's caller's; change both together.
+  # why: sydevs/claude-workflow/docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent
+  deps:
+    if: >-
+      github.repository == 'sydevs/claude-workflow'
+      && ((github.event_name == 'schedule' && github.event.schedule == '20 13 * * *') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DRY_RUN: ${{ inputs.dry-run }}
+      ROUTINE_TOKEN_SAHAJCLOUD: ${{ secrets.ROUTINE_TOKEN_SAHAJCLOUD }}
+      ROUTINE_TOKEN_SAHAJATLASWEB: ${{ secrets.ROUTINE_TOKEN_SAHAJATLASWEB }}
+      ROUTINE_TOKEN_WEMEDITATEWEB: ${{ secrets.ROUTINE_TOKEN_WEMEDITATEWEB }}
+      ROUTINE_TOKEN_SAHAJATLASWORDPRESS: ${{ secrets.ROUTINE_TOKEN_SAHAJATLASWORDPRESS }}
+      ROUTINE_TOKEN_CLAUDE_WORKFLOW: ${{ secrets.ROUTINE_TOKEN_CLAUDE_WORKFLOW }}
+      ROUTINE_ID_SAHAJCLOUD: ${{ vars.ROUTINE_ID_SAHAJCLOUD }}
+      ROUTINE_ID_SAHAJATLASWEB: ${{ vars.ROUTINE_ID_SAHAJATLASWEB }}
+      ROUTINE_ID_WEMEDITATEWEB: ${{ vars.ROUTINE_ID_WEMEDITATEWEB }}
+      ROUTINE_ID_SAHAJATLASWORDPRESS: ${{ vars.ROUTINE_ID_SAHAJATLASWORDPRESS }}
+      ROUTINE_ID_CLAUDE_WORKFLOW: ${{ vars.ROUTINE_ID_CLAUDE_WORKFLOW }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { depsTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            await depsTick({ github, core, config: loadConfig(`${cw}/loop-config.json`), env: process.env, dryRun: process.env.DRY_RUN === 'true' })
 
   # A consumer's committed copy of a producer's file — the generated Payload
   # types, the atlas URL contract — re-synced as soon as the producer's PR

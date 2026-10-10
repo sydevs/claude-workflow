@@ -64,6 +64,52 @@ export function repoHasWorkflows(repo) {
   return workflowCache.has(repo) ? workflowCache.get(repo) : true
 }
 
+/**
+ * The newest check run of each name. Two workflow runs on one head — a
+ * re-run, or a `cancel-in-progress` pair — leave two rows with one name, and
+ * the older one stays cancelled forever (WeMeditateWeb#144). Newest is the
+ * highest `id`, which GitHub assigns in creation order.
+ */
+export function latestPerName(runs) {
+  const newest = new Map()
+  for (const r of runs || []) {
+    const prev = newest.get(r.name)
+    if (!prev || Number(r.id || 0) >= Number(prev.id || 0)) newest.set(r.name, r)
+  }
+  return [...newest.values()]
+}
+
+/**
+ * Keep only what the branch ruleset requires, so the loop's green is
+ * GitHub's green. `required` is the list of contexts, or null when the
+ * ruleset could not be read or names none: then every check counts, as before, since
+ * calling an untested PR green is the error that ships something broken.
+ *
+ * A required context with no row yet is reported as queued, not absent, so
+ * one late check cannot read as green. When none has reported at all, the
+ * rows stay empty and `ciVerdict` reports its usual "no check runs".
+ *
+ * `advisory` names the red checks the ruleset does not require — a preview
+ * deploy, a Railway status. They inform the reviewer and fire nothing.
+ * (why: docs/why.md#only-required-checks-are-ci)
+ */
+export function requiredOnly({ checkRuns, statuses, required }) {
+  const runs = latestPerName(checkRuns?.check_runs || [])
+  const sts = statuses?.statuses || []
+  if (!Array.isArray(required)) return { checkRuns: { check_runs: runs }, statuses: { statuses: sts }, advisory: [] }
+  const need = new Set(required)
+  const red = (c) => BAD_CONCLUSIONS.has(String(c.conclusion || '').toUpperCase())
+  const advisory = [
+    ...runs.filter((c) => !need.has(c.name) && red(c)).map((c) => c.name),
+    ...sts.filter((s) => !need.has(s.context) && ['failure', 'error'].includes(String(s.state).toLowerCase())).map((s) => s.context),
+  ]
+  const keptRuns = runs.filter((c) => need.has(c.name))
+  const keptSts = sts.filter((s) => need.has(s.context))
+  const seen = new Set([...keptRuns.map((c) => c.name), ...keptSts.map((s) => s.context)])
+  const missing = seen.size ? required.filter((n) => !seen.has(n)).map((name) => ({ name, status: 'queued', conclusion: null })) : []
+  return { checkRuns: { check_runs: [...keptRuns, ...missing] }, statuses: { statuses: keptSts }, advisory }
+}
+
 /** Flatten the rollup into `{name, kind, state}` rows. */
 export function checksOf(pr) {
   const nodes = pr?.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes || []
