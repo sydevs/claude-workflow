@@ -238,8 +238,7 @@
     "repos": [
       "SahajCloud",
       "SahajAtlasWeb",
-      "WeMeditateWeb",
-      "SahajAtlasWordpress"
+      "WeMeditateWeb"
     ],
     "handler": "audit-deps",
     "severities": [
