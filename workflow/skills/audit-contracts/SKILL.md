@@ -1,14 +1,14 @@
 ---
 name: audit-contracts
-description: Check that the published contracts between the sydevs repos still describe reality — the embed guide, copied types, changelogs, and the shared code-comments rule. Monthly, on the first Saturday.
+description: Check that the published contracts between the sydevs repos still describe reality — the embed guide, copied types, changelogs, and the shared code-comments rule. Alternate Mondays.
 disable-model-invocation: true
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 ---
 
 # Audit contracts
 
-Monthly, on the first Saturday (`auditCalendar.monthly`). Prose documents the couplings between
-these repos, and nothing enforces them, so they drift silently. This sweep catches the drift and
+Alternate Mondays, taking turns with `audit-deps` (`auditCalendar.monday`). Prose documents the
+couplings between these repos, and nothing enforces them, so they drift silently. This sweep catches the drift and
 **fixes it in a PR** — a sync is the fix, not a proposal, so it needs no ticket.
 (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
 

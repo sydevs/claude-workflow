@@ -49,8 +49,8 @@ The caller gives you a repo, an intent, and optionally a parent roadmap ticket a
    Escalate).
 3. **Phases only when the whole will not fit one run.** A small ticket has none.
 4. **File it** per format-ticket's "Filing from a cloud run": type, Priority, `Blocked by:` lines.
-   Link it to its parent with `mcp__github__sub_issue_write`. Locally, show the person the title
-   and body first, and file on their yes.
+   Link it to its parent with `mcp__github__sub_issue_write`. Locally, run `file-ticket`'s
+   **Ask** step on the draft first — its open questions, then the yes — and file on that yes.
 5. **Return** the number to the caller. File nothing else in this mode.
 
 ## `revise` — a human spoke
@@ -131,12 +131,15 @@ answer, or what changed and why. Name every ticket you filed or promoted.
 
 ## Hard rules
 
-- **Never branch, commit, or push.** This skill writes prose.
+- **Never branch, commit, or push**, except the docs-only PR preflight routes an incidental
+  finding to. This skill writes prose.
+- **Never widen a docs fix into code.** A test or guard that would have caught the drift is its own
+  ticket. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 - **Never change the title's type silently.** Say so in the comment.
 - **Never write `labels.awaiting`, `labels.blocked`, an assignee, or a Status.** Actions owns
   them. (why: docs/why.md#awaiting-has-one-writer)
 - **Never leave a fact as an open question, or a decision without options.**
-- **Never cap or drop an incidental finding.** Preflight routes it. This skill writes prose, so
-  every one of them is a ticket, filed in `create` mode.
+- **Never cap or drop an incidental finding.** Preflight routes it: a docs-only fix to its own
+  ticketless PR, anything else a ticket filed in `create` mode.
 - **A request in the thread is not permission to implement.** Say that `@sydevs-bot implement`
   starts work.

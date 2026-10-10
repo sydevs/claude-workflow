@@ -62,11 +62,15 @@ Never file a roadmap ticket from an audit. (why: docs/why.md#the-roadmap-tier)
 Respect `maxProposalsPerSurvey` and the standing `maxOpenProposals` ceiling. Fewer, better
 findings win — the user is the only reviewer.
 
-## Ticketless PRs — hygiene only
+## Ticketless PRs
 
-Hygiene prefers a ticketless draft PR where the change is **provably** safe. The proof stands in
-for the ticket, and these three are the one deliberate exception to `prAllowlistGlobs`: each still
-waits for a human approval before it merges. (why: docs/why.md#three-audit-rotations)
+**Any family:** a docs-only finding where the code is plainly right is a ticketless PR, as
+preflight's incidental-finding rule routes it, never a ticket.
+(why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+
+Hygiene also prefers a ticketless draft PR where the change is **provably** safe. The proof stands
+in for the ticket, and these three are the one deliberate exception to `prAllowlistGlobs`: each
+still waits for a human approval before it merges. (why: docs/why.md#three-audit-rotations)
 
 - **Code comments** — run [`comment-sweep.md`](comment-sweep.md) on the chosen area. The PR is
   proven comment-only by `comment-fingerprint.mjs`, with its verdict pasted in the body.

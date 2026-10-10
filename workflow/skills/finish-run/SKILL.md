@@ -18,7 +18,8 @@ The record names it: `journal.repo` and `journal.issue`. Never search for it. **
 mode, and say so under `🧭 Friction`.
 (why: docs/why.md#the-journal-pointer-is-an-optimisation)
 
-Cron mode (the nightly audit) has no record. Search open `labels.journal` issues in `journalRepo`, take
+Cron mode (the nightly audit) has no record. A repo-mode record (`kind: "repo"`) has a
+`journal.issue` like any other, and no `number`: link the repo in place of an item. Search open `labels.journal` issues in `journalRepo`, take
 the one created today in `journal.timezone`, and create it with a one-line body if absent.
 
 ## The entry
@@ -67,7 +68,7 @@ them back without `labels.lock`. Touch no other label. That event tells Actions 
 ## Stop
 
 No polling. No timers. Do not try to end the session — a run cannot. Leave nothing that could
-wake you. Cron mode has no lock to release. (why: docs/why.md#sessions-linger)
+wake you. Cron mode and repo mode have no lock to release. (why: docs/why.md#sessions-linger)
 
 ## Local mode
 

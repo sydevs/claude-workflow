@@ -43,9 +43,9 @@ Bug may be attached to a goal for progress, but a goal never creates one.
 | Type | Use when |
 | --- | --- |
 | `Roadmap` | A goal, stated for people, that implementation tickets will deliver. |
-| `Bug` | Something behaves other than intended. Includes regressions and audit-found defects. |
+| `Bug` | Something behaves other than intended. Includes regressions, audit-found defects, and a doc that misdescribes the code. |
 | `Feature` | New capability or a visible extension of one. |
-| `Task` | Work with no user-visible behaviour change: refactors, chores, docs, investigations, decisions. |
+| `Task` | Work with no user-visible behaviour change: refactors, chores, new documentation, investigations, decisions. |
 
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>  type:"Bug"
@@ -53,6 +53,10 @@ mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n
 
 An investigation whose *outcome* is a decision is a `Task`, even when it may lead to a `Feature` —
 type describes the work requested, not what it might become.
+
+**A docs-only fix is rarely a ticket at all.** Preflight routes it straight to a ticketless PR.
+When one must be a ticket, it is a `Bug`, and never goes through the roadmap.
+(why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 ### Priority — a native **field**, not a label
 

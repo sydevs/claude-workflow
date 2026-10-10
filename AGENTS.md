@@ -75,6 +75,11 @@ what failure it prevents. `dispatcher/` beside it is the code, with
 `node --test dispatcher/test/*.test.mjs` as its gate.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
+One file there **is** CI, for the other four: `dependency-review.yml`, which each product repo's
+own CI calls and whose `Dependency Review / review` check their rulesets require. A broken edit to
+it blocks every merge in four repos at once.
+(why: docs/why.md#dependency-review-checks-what-a-pr-adds)
+
 The real gate is a **supervised dispatch**: `BOT_DISPATCH=dry` logs every plan without writing,
 and a scratch `@sydevs-bot revise …` watched end to end (`docs/routine-setup.md` §6). A green
 workflow run means only that no infrastructure error occurred — task-level failures appear only
@@ -99,8 +104,9 @@ much.
 | `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
+| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `deps`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
 | `.github/workflows/dispatcher.yml` + `dispatcher/*.mjs` | The event dispatcher, called by all five repos. **Not CI** — see the warning above. |
+| `.github/workflows/dependency-review.yml` | The one shared CI job: each product repo's CI calls it. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, same shape as every product repo, same rule as `loop-config.json`. |
 | `docs/routine-setup.md` | Bootstrapping the loop on a new Claude account, in dependency order. |
 | `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
