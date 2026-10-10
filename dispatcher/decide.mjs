@@ -156,11 +156,18 @@ function needsAddressReview(snapshot, config) {
     const state = String(r.state || '').toUpperCase()
     if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim()) || r.inline_count > 0) return 'a review asks for changes'
   }
-  const newest = (snapshot.comments || []).filter((c) => !isDispatcherComment(c.body)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]
-  if (newest && respondTo(newest.author, config) && !isBot(newest.author, config) && (!since || newest.createdAt > since)) {
-    return 'the last word is a human comment'
-  }
-  return null
+  // A plain comment is the reviewer talking to the PR; only a mention is
+  // talking to the bot. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
+  const mention = (snapshot.comments || []).some((c) =>
+    !isDispatcherComment(c.body) && respondTo(c.author, config) && !isBot(c.author, config)
+    && (!since || c.createdAt > since) && isAddressMention(c.body, config))
+  return mention ? 'a mention waits on a reply' : null
+}
+
+/** A mention asking for a reply. `review` asks for the critic, which `pendingReviewVerb` handles. */
+function isAddressMention(body, config) {
+  const v = parseVerb(body, config.dispatch, 'pr')
+  return v.mentioned && v.verb !== 'review'
 }
 
 function pendingReviewVerb(snapshot, config) {
@@ -270,11 +277,24 @@ export function evaluatePr(s, config) {
     if ((s.record?.fixCi || 0) < (config.ceilings?.ciFixIterations ?? 3)) return [bumpFixCi(), fire('fix-ci')]
     return [
       label([awaiting], [config.labels.stuck]),
-      commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${s.ci.reason}). I have stopped retrying. A comment or a push from you starts me again.`),
+      commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${s.ci.reason}). I have stopped retrying. A mention or a push from you starts me again.`),
       anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${s.ci.reason}`),
     ]
   }
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
+  return evaluateGreenPr(s, config).concat(advisoryNote(s))
+}
+
+/** A red check the ruleset does not require is said once per set of names, and fires nothing. (why: docs/why.md#only-required-checks-are-ci) */
+function advisoryNote(s) {
+  const names = [...new Set(s.ci?.advisory || [])].sort()
+  if (!names.length) return []
+  return [commentOnce(`advisory ${names.join(' · ')}`, `Not required, so not blocking: ${names.map((n) => `\`${n}\``).join(', ')} failed. A preview link in the body may not open until it passes.`)]
+}
+
+function evaluateGreenPr(s, config) {
+  const pr = s.pr
+  const awaiting = config.labels.awaiting
 
   if (pr.draft) {
     // One ticket, one PR, built across as many implement sessions as it
@@ -543,9 +563,12 @@ function derive(target, s, config) {
       if (!respondTo(facts.author, config)) return [note(`comment by ${facts.author} — not feedback`)]
       if (isHuman(facts.author, config) && !hasAccess(facts.association)) return [note(`comment by ${facts.author} without write access — not feedback`)]
       if (s.kind === 'pr') {
-        if (isBot(s.pr?.user?.login, config)) { plan.push(label([], [L.awaiting, L.stuck])); return plan.concat(evaluatePr(s, config)) }
         const v = parseVerb(facts.body, config.dispatch, 'pr')
-        if (!v.mentioned) return [note('human PR, no mention — ignored')]
+        // On every PR, a comment reaches the bot only through a mention. A
+        // review or a thread reply on its own PR needs none.
+        // (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
+        if (!v.mentioned) return [note(`${isBot(s.pr?.user?.login, config) ? 'bot' : 'human'} PR comment, no mention — ignored`)]
+        if (isBot(s.pr?.user?.login, config)) { plan.push(label([], [L.awaiting, L.stuck])); return plan.concat(evaluatePr(s, config)) }
         if (s.locked) return [recheck()]
         return v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })]
       }

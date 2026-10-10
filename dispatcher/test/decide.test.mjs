@@ -585,3 +585,57 @@ test('a stalled phased PR becomes your turn, said once', () => {
   assert.deepEqual(p[0].add, ['awaiting'])
   assert.match(p[1].body, /Phase 2 of 3/)
 })
+
+// ---- a bot PR answers a mention, a review or a thread reply --------------
+
+const humanComment = (body, createdAt = '2026-10-09T10:00:00Z') => ({ author: 'Ardnived', body, createdAt, association: 'OWNER' })
+
+test('a plain comment on a bot PR fires nothing and leaves awaiting on', () => {
+  const s = prSnap({ item: { number: 5, labels: ['awaiting'] }, comments: [humanComment('looks odd, will check later')] })
+  const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: 'looks odd, will check later', association: 'OWNER' } }, s, config)
+  assert.deepEqual(types(p), ['note'])
+  assert.equal(evaluatePr(s, config).some((a) => a.handler === 'address-review'), false, 'the sweep agrees: an unmentioned comment is not owed a reply')
+})
+
+test('a mention on a bot PR clears awaiting and dispatches address-review', () => {
+  const s = prSnap({ comments: [humanComment('@sydevs-bot rename this helper')] })
+  const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot rename this helper', association: 'OWNER' } }, s, config)
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')))
+  assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'address-review'))
+})
+
+test('a mention stays owed when a plain comment follows it', () => {
+  const s = prSnap({ comments: [humanComment('@sydevs-bot rename this', '2026-10-09T10:00:00Z'), humanComment('also, nice work', '2026-10-09T10:05:00Z')] })
+  assert.ok(evaluatePr(s, config).some((a) => a.handler === 'address-review'))
+})
+
+test('a review verb fires the critic and is not also owed a reply', () => {
+  const s = prSnap({ comments: [humanComment('@sydevs-bot review')], reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review\n…', state: 'COMMENTED', submitted_at: '2026-10-09T11:00:00Z' }] })
+  assert.equal(evaluatePr(s, config).some((a) => a.handler === 'address-review'), false)
+})
+
+test('a review on a bot PR still needs no mention', () => {
+  const s = prSnap({ reviews: [{ user: { login: 'Ardnived' }, body: 'Please split this', state: 'COMMENTED', submitted_at: '2026-10-09T10:00:00Z' }] })
+  assert.ok(evaluatePr(s, config).some((a) => a.handler === 'address-review'))
+})
+
+test('a comment on a human PR still needs a mention', () => {
+  const s = prSnap({ pr: { ...prSnap().pr, user: { login: 'Ardnived' } } })
+  assert.deepEqual(types(decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: 'hmm', association: 'OWNER' } }, s, config)), ['note'])
+})
+
+// ---- only required checks are CI -----------------------------------------
+
+test('a red non-required check is said once and fires nothing', () => {
+  const s = prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory: ['sahajcloud - SahajCloud'] } })
+  const p = evaluatePr(s, config)
+  assert.equal(p.some((a) => a.handler === 'fix-ci'), false)
+  const notes = p.filter((a) => a.type === 'comment' && a.key.startsWith('advisory '))
+  assert.equal(notes.length, 1)
+  assert.match(notes[0].body, /Not required/)
+})
+
+test('no advisory note while required CI is still running', () => {
+  const p = evaluatePr(prSnap({ ci: { ...running, advisory: ['Cloudflare Pages: sahajatlas'] } }), config)
+  assert.deepEqual(types(p), ['note'])
+})
