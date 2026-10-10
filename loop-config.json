@@ -38,7 +38,7 @@
     ]
   },
   "handlers": {
-    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines). Rules in start-run/SKILL.md.",
+    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines). scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
     "implement": {
       "model": "opus",
       "skill": "implement-ticket"
@@ -76,6 +76,11 @@
       "skill": "run-audit",
       "cron": "0 8 * * *",
       "routine": "trig_01WzJ2EnTKEk9BJ2Xf6AQ4x6"
+    },
+    "audit-deps": {
+      "model": "opus",
+      "skill": "audit-deps",
+      "scope": "repo"
     }
   },
   "dispatch": {
@@ -90,7 +95,8 @@
       "address-review",
       "fix-ci",
       "resolve-conflicts",
-      "review-pr"
+      "review-pr",
+      "audit-deps"
     ],
     "routines": {
       "SahajCloud": "trig_01CiCX4hDrAiP32S2FAM2phy",
@@ -131,7 +137,8 @@
       "address-review": 60,
       "fix-ci": 60,
       "resolve-conflicts": 45,
-      "review-pr": 45
+      "review-pr": 45,
+      "audit-deps": 90
     },
     "maxAttempts": 3,
     "orphanDraftHours": 6,
@@ -166,6 +173,9 @@
       "dispatch / resolve",
       "dispatch / act",
       "dispatch / journal",
+      "dispatch / deps",
+      "dispatch / contracts-plan",
+      "dispatch / contracts-sync",
       "legacy",
       "state / state"
     ]
@@ -177,19 +187,17 @@
     ]
   },
   "auditCalendar": {
-    "$comment": "Weekday -> audit skill. Only run-audit dispatches these. monthly.<weekday>.<n> overrides the nth such weekday of the month. Keys are lowercase UTC weekday names, from `date -u +%A | tr A-Z a-z`.",
-    "monday": "audit-deps",
+    "$comment": "Weekday -> audit skill, or a list of skills that take turns on that weekday, one per run, counted from rotationEpoch. Only run-audit dispatches these. monthly.<weekday>.<n>, when present, overrides the nth such weekday of the month. Keys are lowercase UTC weekday names, from `date -u +%A | tr A-Z a-z`.",
+    "monday": [
+      "audit-deps",
+      "audit-contracts"
+    ],
     "tuesday": "audit-code",
     "wednesday": "audit-sentry",
     "thursday": "audit-code",
     "friday": "cut-release",
     "saturday": "audit-code",
     "sunday": "improve-loop",
-    "monthly": {
-      "saturday": {
-        "1": "audit-contracts"
-      }
-    },
     "rotationEpoch": "2026-10-05"
   },
   "auditAngles": {
@@ -224,6 +232,26 @@
         "best practice research"
       ]
     }
+  },
+  "deps": {
+    "$comment": "The dispatcher's daily vulnerability check (dispatcher/deps.mjs). It fires handler in a repo when an open Dependabot alert at these severities and scopes opened within windowHours, or on catchUpDay is still open with a fix, and no bot PR on branchPrefix is open there.",
+    "repos": [
+      "SahajCloud",
+      "SahajAtlasWeb",
+      "WeMeditateWeb",
+      "SahajAtlasWordpress"
+    ],
+    "handler": "audit-deps",
+    "severities": [
+      "critical",
+      "high"
+    ],
+    "scopes": [
+      "runtime"
+    ],
+    "windowHours": 26,
+    "catchUpDay": "monday",
+    "branchPrefix": "claude/chore-deps-"
   },
   "sentry": {
     "$comment": "DE region: the global sentry.io host 404s here. The token lacks org:read, so /organizations/ also 403s. SahajAtlasWordpress ships no Sentry.",

@@ -6,7 +6,8 @@
 #   any other value, including unset: nothing runs
 #
 # All rules live in claude-workflow, so the five repos cannot drift apart.
-# This copy is the journal repo's: it also carries the daily journal crons.
+# This copy is the journal repo's: it also carries the daily journal and
+# dependency-check crons.
 # https://github.com/sydevs/claude-workflow/blob/main/.github/workflows/dispatcher.yml
 name: Workflow state
 
@@ -40,6 +41,7 @@ on:
     - cron: '*/30 * * * *'   # residue sweeper
     - cron: '5 7 * * *'      # journal day, 00:05 America/Vancouver (PDT)
     - cron: '5 8 * * *'      # journal day, 00:05 America/Vancouver (PST)
+    - cron: '20 13 * * *'    # dependency check — the `deps` job in dispatcher.yml matches this string
   workflow_dispatch:
 
 permissions: {}

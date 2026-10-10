@@ -150,3 +150,22 @@ test('the default root satisfies the attached check', () => {
   const r = validate(record(here), config, { now: NOW, attachedDir: defaultAttachedDir() })
   assert.equal(r.ok, true)
 })
+
+// ---- repo-scope fires (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
+
+const repoConfig = { ...config, handlers: { ...config.handlers, 'audit-deps': { skill: 'audit-deps', model: 'opus', scope: 'repo' } } }
+const repoRecord = (over = {}) => record({ id: 'SahajCloud-repo-audit-deps-x', handler: 'audit-deps', kind: 'repo', number: null, url: 'https://github.com/sydevs/SahajCloud/security/dependabot', lock: null, flags: { mode: 'vulnerabilities' }, ...over })
+
+test('a repo-scope handler is fired at the repo, with no number and no lock', () => {
+  const r = validate(repoRecord(), repoConfig, { now: NOW })
+  assert.equal(r.ok, true, r.errors?.join('; '))
+  assert.equal(r.record.lock, null)
+  assert.equal(r.record.skill, 'audit-deps')
+  assert.equal(r.record.flags.mode, 'vulnerabilities')
+})
+
+test('only a repo-scope handler may carry kind "repo", and it may carry nothing else', () => {
+  assert.equal(validate(repoRecord({ handler: 'implement' }), repoConfig, { now: NOW }).ok, false)
+  assert.equal(validate(repoRecord({ number: 5 }), repoConfig, { now: NOW }).ok, false)
+  assert.equal(validate(record({ handler: 'audit-deps' }), repoConfig, { now: NOW }).ok, false)
+})
