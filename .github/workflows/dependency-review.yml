@@ -1,0 +1,52 @@
+# Dependency review — real CI, shared by the four product repos.
+#
+# A PR fails here only when it ADDS a dependency with a known high or
+# critical advisory that reaches production code. An advisory against a
+# dependency already on main fails nothing here: that is the dispatcher's
+# daily check and `audit-deps`, never an unrelated PR's problem. The
+# severity and scope match `deps` in loop-config.json; change both together.
+# why: sydevs/claude-workflow/docs/why.md#dependency-review-checks-what-a-pr-adds
+#
+# Each repo calls it from its own CI workflow, never through dispatcher.yml,
+# so pausing the loop with BOT_DISPATCH cannot leave a required check
+# unreported:
+#
+#   dependencies:
+#     name: Dependency Review
+#     uses: sydevs/claude-workflow/.github/workflows/dependency-review.yml@main
+#     permissions:
+#       contents: read
+#
+# The required check is `Dependency Review / review`. It runs in the merge
+# queue too, against the queue's own base, so the queue never waits on it.
+# On any other event it passes at once.
+name: Dependency review
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  review:
+    name: review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Nothing to compare outside a pull request or the merge queue
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+        run: echo "Dependency review compares a pull request or a merge-queue entry with its base."
+      # No checkout: the action compares GitHub's dependency graph for the
+      # two commits, so nothing from the PR is ever run.
+      - uses: actions/dependency-review-action@v5
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        with:
+          base-ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          head-ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          license-check: false
+          show-openssf-scorecard: false
+          comment-summary-in-pr: never
