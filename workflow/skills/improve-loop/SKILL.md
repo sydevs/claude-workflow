@@ -103,7 +103,7 @@ grows a paragraph per incident becomes unreadable — how the previous three-for
 **When your PR edits a skill, run the rule delta and account for every removal in the body:**
 
 ```bash
-node workflow/lib/rule-delta.mjs --base main workflow/skills
+node workflow/lib/rule-delta.mjs --base origin/main workflow/skills
 ```
 
 It exits non-zero on a directive that vanished with no close match. Each one is a rule you meant

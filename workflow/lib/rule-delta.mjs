@@ -27,8 +27,11 @@
  *
  * ## Usage
  *
- *   rule-delta.mjs --base main                 # git ref vs the working tree
+ *   rule-delta.mjs --base origin/main          # git ref vs the working tree
  *   rule-delta.mjs before/ after/              # two directories
+ *
+ * `--base` compares against the branch point, and prefers `origin/<name>` for
+ * a branch name — `base-ref.mjs` says why both matter.
  *
  * Exits 1 when a directive disappears with no close match. That is the case
  * that needs a human. (why: docs/why.md#lint-measures-style-not-content)
@@ -36,7 +39,8 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join, relative, resolve } from 'node:path'
+import { repoRoot, resolveBaseRefOrExit } from './base-ref.mjs'
 
 /**
  * A directive is bold text, or a heading. Both carry the same force in
@@ -112,12 +116,25 @@ const collect = (dir) => {
   return all
 }
 
-/** Read the same paths from a git ref. Local only, with no network, so a routine can run it. */
-const collectRef = (ref, dir) => {
+/**
+ * Read the same paths from a git ref. Local only, with no network, so a
+ * routine can run it.
+ *
+ * `git show <rev>:<path>` resolves its path against the worktree root, while
+ * `mdFiles` walks from the cwd. Run from a subdirectory the two disagreed,
+ * every `git show` failed, and the `catch` below reported the empty before-set
+ * as a clean delta at exit 0 — the same silent all-clear an unresolvable ref
+ * used to give. Relativising against `root` is what leaves the `catch` one
+ * meaning: the file did not exist at the base.
+ */
+const collectRef = (ref, dir, root) => {
   const all = new Set()
   for (const f of mdFiles(dir)) {
+    const atRoot = relative(root, resolve(f))
     let text = ''
-    try { text = execFileSync('git', ['show', `${ref}:${f}`], { encoding: 'utf8' }) } catch { continue }
+    try {
+      text = execFileSync('git', ['show', `${ref}:${atRoot}`], { cwd: root, encoding: 'utf8' })
+    } catch { continue }
     for (const d of directives(text)) all.add(d)
   }
   return all
@@ -128,8 +145,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const baseIdx = args.indexOf('--base')
   const dir = args.find((a) => !a.startsWith('--') && a !== args[baseIdx + 1]) || 'workflow/skills'
 
+  const root = repoRoot()
   const [before, after] = baseIdx !== -1
-    ? [collectRef(args[baseIdx + 1], dir), collect(dir)]
+    ? [collectRef(resolveBaseRefOrExit(args[baseIdx + 1], { root }).baseline, dir, root), collect(dir)]
     : [collect(args[0]), collect(args[1])]
 
   const r = compare(before, after)

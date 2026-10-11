@@ -112,7 +112,7 @@ Then, in the same PR:
 Leave the fixes between the flip and today alone (#73, #75, #76, #79, #80, #95): they touch
 `dispatcher/` and `docs/`, and reverting them buys nothing.
 
-Check with `node workflow/lib/rule-delta.mjs --base main workflow/skills` — it names anything
+Check with `node workflow/lib/rule-delta.mjs --base origin/main workflow/skills` — it names anything
 that did not come back. It does **not** see deleted files, so read the restored tree yourself.
 
 ### 4. Put the five `legacy` caller jobs back

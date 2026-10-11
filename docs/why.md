@@ -1641,6 +1641,13 @@ missing one: it answers, and the answer looks like a diff. So step 6 fetches fir
 `FETCH_HEAD` is no longer a recipe anywhere — a later fetch overwrites it, which is how
 `review-pr`'s own diff step came back empty three times.
 
+**Three scripts now depend on that fetch**, so trimming it breaks them silently.
+`rule-delta.mjs`, `comment-lint.mjs` and `comment-fingerprint.mjs` resolve a bare `--base <name>`
+through `base-ref.mjs` to `refs/remotes/origin/<name>`, because the clone's `refs/heads/<name>` is
+stale for the same reason. On one clean tree identical to `origin/main`, `--base main` read 25
+skill files behind and handed a human a rule removal nobody had made — the tripwire inverted, in
+the one place a reviewer is told to trust it.
+
 **The install is now deferred rather than owed.** A read-only handler runs no lane, so
 `CI=true pnpm install` buys it nothing, and 11 sessions across four days in that same week
 skipped it and spent a friction line justifying the skip. Blessing the skip alone would have kept

@@ -101,7 +101,7 @@ much.
 | --- | --- |
 | `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
 | `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
-| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
+| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), `base-ref.mjs` (the one baseline a `--base` comparison is taken against), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<script>`. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
 | `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `deps`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
@@ -127,12 +127,14 @@ never its exit code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
 **Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
 
 ```bash
-node workflow/lib/rule-delta.mjs --base main workflow/skills
+node workflow/lib/rule-delta.mjs --base origin/main workflow/skills
 ```
 
 `ste-lint.py` measures a skill's **style**. `rule-delta.mjs` measures its **content**. A rewrite
 can pass the first and fail the second, shrinking and reading cleaner while it drops a rule
-outright. Both are development tools, never run steps.
+outright. Neither is part of the automated gate — `leanGate.command` alone — but both are run
+steps: `improve-loop` runs `rule-delta.mjs` on a skill edit, `audit-code` runs
+`ste-lint.py --json` on its comments angle.
 (why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** Those values come from
