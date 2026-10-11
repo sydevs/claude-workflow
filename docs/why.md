@@ -2403,6 +2403,24 @@ topic, and superseded facts replaced rather than corrected underneath. The issue
 keeps what changed. `writing.budgets.notes` is measured and never refused. A big goal must not
 be blocked from recording what it learned, but it should prune before it grows.
 
+## A goal is settled in the terminal
+
+Answering a goal's questions on GitHub costs a reply in a fixed shape (`@sydevs-bot revise 1A 2B`),
+a cloud session to fold it in, and a wait. And it can be lost. A verb posted while a session holds
+the lock is re-fired on unlock only if it is newer than the bot's last comment, so a session that
+posts its summary after the verb arrived swallows it. On 2026-10-09 an owner's answers to
+SahajCloud#902 were dropped that way: the review finished, renumbered the questions, and the
+answers then pointed at different questions.
+
+The same owner answered about forty questions in one afternoon through `AskUserQuestion` in a local
+session: options to pick, the recommendation first, and a question asked back answered in place.
+So `settle-roadmap` makes that the preferred route. It writes the decisions straight into the body
+— a human's edit, which every later run reconciles around — and posts one comment with no bot
+mention, so nothing fires and nothing races. The draft is shown as a diff before anything is
+written, and a body that changed since it was read is re-read rather than overwritten.
+
+Replying on GitHub still works, for anyone without a local session.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
