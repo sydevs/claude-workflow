@@ -106,6 +106,9 @@ export function detailsShare(text = '') {
 const DID_HEADING = /^#{2,3}\s+(?:\u{1F4C4}\s*)?Did\s*$/u
 const SECTION_HEADING = /^#{2,3}\s/
 const DROPPABLE = /^-\s/
+// `DROPPABLE` is anchored at the margin, so a sub-bullet is not one. It is the
+// dropped bullet's own text, and goes with it. (why: docs/why.md#fit-the-journal-do-not-negotiate-with-it)
+const CONTINUATION = /^\s+\S/
 
 /**
  * Cut an over-budget journal body to fit, instead of asking a run to guess.
@@ -160,8 +163,14 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
       lines = [...lines.slice(0, head), ...lines.slice(cutTo)]
       continue
     }
-    lines.splice(head + 1 + victim, 1)
-    dropped += 1
+    // A bullet's indented lines are part of it. Taking the bullet alone left
+    // them behind, reading as the previous bullet's, so the entry claimed
+    // something the run never said.
+    const start = head + 1 + victim
+    let last = start
+    while (last + 1 < end && CONTINUATION.test(lines[last + 1])) last += 1
+    lines.splice(start, last - start + 1)
+    dropped += last - start + 1
   }
 
   // A Did section that lost its last line keeps its heading only while the

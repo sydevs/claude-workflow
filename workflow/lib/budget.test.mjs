@@ -79,6 +79,40 @@ test('a cut stops at the budget, not below it', () => {
   assert.ok(f.text.includes('a second line'))
 })
 
+/**
+ * A Did section whose bullets carry sub-bullets, the shape `address-review`
+ * and `implement` entries use when one push has several parts.
+ */
+function nested(didPad = '') {
+  return [
+    '💬 **address-review** · [sydevs/WeMeditateWeb#175](url) · `20:00`–`20:12`',
+    '',
+    '### ⚠️ Failed',
+    '- none',
+    '',
+    '### 📄 Did',
+    `- 📦 pushed \`f8d59a6\`, draft${didPad}`,
+    '  - `89a762f` — the first commit',
+    `- 📦 a second push${didPad}`,
+    '  - `9417290` — its own commit',
+  ].join('\n')
+}
+
+// `DROPPABLE` is anchored at the margin, so the search for a victim could not
+// see a sub-bullet. Dropping the parent alone left its sub-bullets behind,
+// reparented under the bullet above — an entry claiming a commit belonged to a
+// push that never carried it. Reported on sydevs/WeMeditateWeb#175, 2026-10-10.
+test('a dropped Did bullet takes its sub-bullets with it', () => {
+  const text = nested('q'.repeat(700))
+  assert.ok(text.length > budgets.journalEntry)
+  const f = fit(text, 'journalEntry', budgets)
+  assert.ok(f.dropped > 0)
+  assert.ok(!f.text.includes('a second push'))
+  assert.ok(!f.text.includes('9417290'), 'an orphaned sub-bullet reparents onto the bullet above')
+  assert.ok(f.text.includes('f8d59a6'))
+  assert.ok(f.text.includes('89a762f'))
+})
+
 test('a failure is never cut, whatever the overage', () => {
   const f = fit(entry('x'.repeat(4000)), 'journalEntry', budgets)
   assert.ok(f.text.includes('### ⚠️ Failed'))
