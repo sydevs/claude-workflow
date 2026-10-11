@@ -157,10 +157,11 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "roadmap": {
-    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. settledMarker opens the comment settle-roadmap posts after writing answers into a body. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
     "type": "Roadmap",
     "spikeBranchPrefix": "claude/spike-",
     "notesMarker": "<!-- sydevs-roadmap-notes v1 -->",
+    "settledMarker": "<!-- sydevs-settled v1 -->",
     "readOnlyKeys": [
       "SAHAJCLOUD_API_KEY"
     ]

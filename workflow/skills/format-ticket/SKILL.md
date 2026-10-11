@@ -164,6 +164,23 @@ A reply such as `@sydevs-bot revise 1A` or free text answers it. Tick the item, 
 `## Decisions` as `- **<question>** → <answer> (<who>, <YYYY-MM-DD>)`.
 (why: docs/why.md#decisions-come-with-options)
 
+**`/workflow:settle-roadmap` answers in the terminal instead.** It writes the same `## Decisions`
+entries into the body itself, then posts one comment that opens with `roadmap.settledMarker` and
+carries no bot mention. That comment records answers already applied: a later run reconciles
+around them, and never applies them again. (why: docs/why.md#a-goal-is-settled-in-the-terminal)
+
+**A reopened decision says what it reopens.** Moving a decision back to `## Open questions` takes
+it out of `## Decisions`, and adds one line under the question, before its options:
+
+```markdown
+- [ ] **2. How are the admin's components sorted?**
+  - Reopened 2026-10-10 by antontcymbal. Was: regroup into tiers (Ardnived, 2026-10-09).
+  - **A — Regroup into tiers:** …
+```
+
+Keep the previous answer's words and its attribution exactly, so the person answering sees what
+they chose before. (why: docs/why.md#a-reopened-question-says-what-it-reopens)
+
 **`implement` waits while any open question is unticked**, on either tier.
 (why: docs/why.md#a-decision-is-settled-before-the-build)
 

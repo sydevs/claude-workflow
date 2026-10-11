@@ -2371,6 +2371,19 @@ one call was the worse trade. The re-run uses the calling repo's own `GITHUB_TOK
 each repo's caller grants `actions: write` on its dispatch job. A refused re-run still counts
 against the cap, so a missing grant ends with a person rather than a loop.
 
+## A reopened question says what it reopens
+
+When a review reopened a decision, the old answer left `## Decisions` and the question came back
+with fresh options, and nothing said what had been chosen before. On 2026-10-10 four of the
+owner's decisions on SahajCloud#902 and #906 were reopened in one afternoon. Showing the owner
+"your previous answer" beside each one meant reading the earlier body and the thread, and
+inferring it from prose such as *"as decided on 2026-10-09"*, which no rule required anyone to
+write.
+
+So a reopened question carries one line, before its options: when it was reopened, by whom, and
+the previous answer with its attribution, word for word. A person answering it sees what they are
+reversing, and `settle-roadmap` can mark that option without guessing.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
