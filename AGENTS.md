@@ -132,10 +132,9 @@ node workflow/lib/rule-delta.mjs --base origin/main workflow/skills
 
 `ste-lint.py` measures a skill's **style**. `rule-delta.mjs` measures its **content**. A rewrite
 can pass the first and fail the second, shrinking and reading cleaner while it drops a rule
-outright. Neither is part of the automated gate — that is `leanGate.command` alone — but both are
-run steps too, not development tools only: the Sunday `improve-loop` run executes
-`rule-delta.mjs` whenever its own PR edits a skill, and `audit-code` runs `ste-lint.py --json`
-whenever its code-comments angle comes up.
+outright. Neither is part of the automated gate — `leanGate.command` alone — but both are run
+steps: `improve-loop` runs `rule-delta.mjs` on a skill edit, `audit-code` runs
+`ste-lint.py --json` on its comments angle.
 (why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** Those values come from
