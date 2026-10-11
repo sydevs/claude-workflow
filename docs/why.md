@@ -2334,6 +2334,43 @@ So a head the cap has not seen, pushed by a `respondTo` person, resets the count
 again. The bot's own pushes never reset it, or the cap would mean nothing. `gather` fetches the
 head commit's author only once the cap is reached, so an ordinary red run costs no extra call.
 
+## An infrastructure failure is re-run, not repaired
+
+Every red required check fired `fix-ci`, whatever turned it red. A session that cannot fix a
+Railway outage, a 25-minute job limit or a preview that never published reads the log, finds
+nothing in the PR to change, and ends — and the attempt is spent. On 2026-10-07 one Railway
+outage drew six `fix-ci` fires across three SahajCloud PRs (claude-workflow#164), and a capped
+PR then sat `awaiting` for a fault that had already cleared.
+
+So `gather` sorts each failing required check before `decide` acts on it:
+
+| Failure | Counted as | What happens |
+| --- | --- | --- |
+| Timed out, never started, or cancelled with no newer run | infrastructure | re-run |
+| A failure carrying an error annotation titled `ci.infraLabel` | infrastructure | re-run |
+| Any other failure | the change | `fix-ci`, as before |
+
+When every red check is infrastructure, the dispatcher re-runs just the failed jobs, at most
+`ceilings.ciInfraReruns` times on one head, then hands the PR to a person with a plain comment.
+No session is spent. A mix of the two still fires `fix-ci`, which leaves the infrastructure ones
+alone, and its push re-runs everything anyway.
+
+**How a check says "not this change".** It writes one annotation before failing, naming what did
+not answer:
+
+```bash
+echo "::error title=infrastructure-failure::Railway published no preview within 15 minutes"
+exit 1
+```
+
+The check still goes red, so nothing merges on a preview that never arrived. Only the response
+changes.
+
+**The token.** The bot's PAT has no Actions scope, and widening a credential used in five repos for
+one call was the worse trade. The re-run uses the calling repo's own `GITHUB_TOKEN` instead, which
+each repo's caller grants `actions: write` on its dispatch job. A refused re-run still counts
+against the cap, so a missing grant ends with a person rather than a loop.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They

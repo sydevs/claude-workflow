@@ -42,6 +42,7 @@ export function renderRecord(rec) {
     lines.push('🤖 no session running')
   }
   if (rec.fixCi) lines.push(`CI fix ${rec.fixCi}`)
+  if (rec.ciReruns?.count) lines.push(`CI re-run ${rec.ciReruns.count} on ${String(rec.ciReruns.sha || '').slice(0, 7)} — infrastructure, not the change`)
   if (rec.recheck) lines.push('an event arrived while a session held the lock — re-derived on unlock')
   const hist = (rec.dispatches || []).slice(-5).reverse()
   if (hist.length) {

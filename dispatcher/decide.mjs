@@ -24,6 +24,7 @@ export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
 export const armAutoMerge = () => ({ type: 'armAutoMerge' })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
+export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
 export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
@@ -215,6 +216,25 @@ function lastEndedImplement(record) {
  * can age an entry out; the ceiling is still the backstop.
  * (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
  */
+/**
+ * Every red required check is infrastructure. Re-run the failed Actions jobs,
+ * up to `ceilings.ciInfraReruns` times on one head, then hand it to a person.
+ * A failed check Actions did not produce cannot be re-run from here.
+ */
+function infraPlan(s, config, infra) {
+  const sha = s.pr.head?.sha
+  const done = s.record?.ciReruns?.sha === sha ? s.record.ciReruns.count || 0 : 0
+  const cap = config.ceilings?.ciInfraReruns ?? 2
+  const names = infra.map((c) => c.name).join(', ')
+  if (done < cap && infra.every((c) => c.jobId)) return [note(`infrastructure failure on ${names} — re-run ${done + 1} of ${cap}`), rerunJobs(sha, infra)]
+  const tried = done ? ` I re-ran it ${done} time${done === 1 ? '' : 's'} and it is still red.` : ''
+  return [
+    label([config.labels.awaiting], [config.labels.stuck]),
+    commentOnce(`ci-infra ${sha}`, `CI failed on infrastructure, not on this change: ${names}.${tried} Re-run it once the service is back, or push.`),
+    anomaly('ci-infra', `${s.repo.full}#${s.pr.number} infrastructure: ${names}`),
+  ]
+}
+
 /** The head the last `fix-ci` fire was about, or null. */
 function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
@@ -238,7 +258,7 @@ function loopMayNotMerge(snapshot, config) {
 
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is.
-const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item that already carries `awaiting` says nothing
@@ -277,6 +297,10 @@ export function evaluatePr(s, config) {
   if (!pr.draft && s.mergeable === 'CONFLICTING') return [fire('resolve-conflicts')]
 
   if (s.ci.failing.length) {
+    // Red only on infrastructure: re-run it, never spend a repair on it.
+    // (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+    const infra = s.ci.infra || []
+    if (infra.length && infra.length === s.ci.failing.length) return infraPlan(s, config, infra)
     const ended = endedFixCiFor(s.record, pr.head?.sha)
     if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
     const cap = config.ceilings?.ciFixIterations ?? 3
