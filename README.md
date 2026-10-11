@@ -137,7 +137,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 
 | Skill | Fired by | Produces |
 | --- | --- | --- |
-| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, a notes comment; or the completion verdict |
+| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, technical notes in the body; or the completion verdict |
 | `implement-roadmap` | the first `implement` on a goal; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |

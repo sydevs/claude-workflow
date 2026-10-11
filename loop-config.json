@@ -157,10 +157,10 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "roadmap": {
-    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. settledMarker opens the comment settle-roadmap posts after writing answers into a body. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. notesMarker opens the Technical notes block at the end of a roadmap body; its v1 spelling marked the old notes comment, which is folded into the block once. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. settledMarker opens the comment settle-roadmap posts after writing answers into a body. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
     "type": "Roadmap",
     "spikeBranchPrefix": "claude/spike-",
-    "notesMarker": "<!-- sydevs-roadmap-notes v1 -->",
+    "notesMarker": "<!-- sydevs-roadmap-notes v2 -->",
     "settledMarker": "<!-- sydevs-settled v1 -->",
     "readOnlyKeys": [
       "SAHAJCLOUD_API_KEY"
@@ -361,12 +361,13 @@
     }
   },
   "writing": {
-    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
+    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted, except notes, the Technical notes block of a roadmap body, which is measured but never refused. Bodies are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
     "budgets": {
       "comment": 1200,
       "reviewReply": 600,
       "reviewBody": 2000,
-      "journalEntry": 1500
+      "journalEntry": 1500,
+      "notes": 8000
     },
     "markerRequired": [
       "comment",

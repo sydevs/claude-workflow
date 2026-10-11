@@ -206,7 +206,8 @@ test('the marker fallbacks equal loop-config.json', () => {
 // `markerRequired` is an allowlist, so a new budget kind would otherwise be
 // silently exempt — the shape of the silence #155 removes. Every budgeted kind
 // is listed there or exempt here, so adding one fails until someone decides.
-const MARKER_EXEMPT = ['journalEntry']
+// `notes` is part of a roadmap body, which carries no comment marker.
+const MARKER_EXEMPT = ['journalEntry', 'notes']
 
 test('every budgeted kind declares whether it carries the marker', () => {
   const required = loop.writing.markerRequired

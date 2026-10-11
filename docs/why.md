@@ -2384,6 +2384,25 @@ So a reopened question carries one line, before its options: when it was reopene
 the previous answer with its attribution, word for word. A person answering it sees what they are
 reversing, and `settle-roadmap` can mark that option without guessing.
 
+## Technical notes live in the body
+
+The notes were one comment per goal, "created once, then edited in place". A session cannot keep
+that promise: the MCP surface edits a body but never a comment. So every revise run that learned
+something posted another notes comment. By 2026-10-11 SahajCloud#902 carried five, the fourth
+opening *"a new comment rather than an edit of the third"*, and a reader had to merge them by hand
+to find what was still true. Each was also long-form prose, written to the 1,200-character
+comment budget in pieces.
+
+So the notes move into the body's last block, after `roadmap.notesMarker`, folded inside one
+`<details>`. A session can edit it in place, so there is one copy, and it stays current. A person
+sees it collapsed under the plain-language goal. The MCP read path drops the `<details>` tags but
+keeps their content, so a later session still reads all of it.
+
+The style rules exist for the same reader: TL;DR first, facts in tables, one collapsible per
+topic, and superseded facts replaced rather than corrected underneath. The issue's edit history
+keeps what changed. `writing.budgets.notes` is measured and never refused. A big goal must not
+be blocked from recording what it learned, but it should prune before it grows.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They
