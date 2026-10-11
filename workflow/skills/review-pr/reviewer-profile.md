@@ -46,7 +46,8 @@
    re-explanation is very unnecessary and is adding extra load to our documentation"* (#247).
    This needs several pieces — a diff that adds one is the layer reading above.
 
-   **Membership, where the diff itself creates the shared owner.** Read the diff whole before
+   **Membership, wherever a shared owner exists — the diff's own, or one already on `main`.** Read
+   the diff whole before
    reading it file by file. When it introduces a plugin, a layout or a helper module, every
    sibling it leaves outside is a finding until you can say why it stayed out: *"Shouldn't this
    endpoint and also the `requestLink` endpoint be part of the `login` plugin and then attached
@@ -64,6 +65,15 @@
    for it:** the same PRs' *"what is the difference between X and Y"* questions and the renames
    that followed them. The reviewer says those were them learning new code, not a design both
    things shared. Do not turn such a question into a duplication finding.
+
+   **The owner need not be new.** A piece added beside one `main` already has is the same
+   question, and the harder one to see, because the sibling is not in the diff: *"Should this
+   maybe be part of the `storage` plugin instead of it's own plugin?"* of a new plugin directory
+   next to the plugin already wiring those collections
+   ([SahajCloud#892](https://github.com/sydevs/SahajCloud/pull/892)), *"Does this interface give
+   value? It seems like unnecessary indirection"* of a type declared beside its only caller
+   ([#896](https://github.com/sydevs/SahajCloud/pull/896)). So name the owner the diff did not
+   touch, and say what it cannot hold.
 
    **Guards, where the piece is a protection.** **Weigh whether a protection should exist before
    weighing its shape.** A defence against a harm nobody has measured is permanent code, and they
@@ -179,6 +189,13 @@ shape-level problems.**
 <!-- Appended by /workflow:improve-loop, newest first, one dated bullet per refinement, each citing
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
+
+- **2026-10-11 — value 1's membership reading asks about an owner already on `main`,** folded
+  into that value rather than left as a bullet. Both of the reviewer's design comments in the
+  week to 2026-10-11 were that reading applied to a pre-existing owner, and this review passed
+  both clean, while raising the same finding on
+  [claude-workflow#175](https://github.com/sydevs/claude-workflow/pull/175), where the diff built
+  the owner itself. The scope was the defect, not the value.
 
 - **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
   was near-absent and told the review not to manufacture findings there. Three PRs in one week
