@@ -113,6 +113,21 @@ test('a dropped Did bullet takes its sub-bullets with it', () => {
   assert.ok(f.text.includes('89a762f'))
 })
 
+// A Did section can lose every bullet, which left an entry recording no
+// outcome under an OK verdict finish-run posts unread — while the Friction
+// prose that caused the overage survived. sydevs/SahajCloud#903, 2026-10-10,
+// read `OK — 1285/1500` and reported a failure rather than post it.
+test('the last Did bullet is never cut, and the overage is reported instead', () => {
+  // Sized so both droppable Did lines go and the Friction line still overruns.
+  const text = entry('y'.repeat(1300))
+  assert.ok(text.length > budgets.journalEntry)
+  const f = fit(text, 'journalEntry', budgets)
+  assert.equal(f.verdict, 'OVER')
+  assert.ok(f.text.includes('### \u{1F4C4} Did'))
+  assert.ok(f.text.includes('SahajCloud/pull/801'), 'the run kept no record of what it did')
+  assert.ok(f.text.includes('a rule misfired'), 'Friction is what OVER tells the run to cut')
+})
+
 test('a failure is never cut, whatever the overage', () => {
   const f = fit(entry('x'.repeat(4000)), 'journalEntry', budgets)
   assert.ok(f.text.includes('### ⚠️ Failed'))

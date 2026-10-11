@@ -136,9 +136,16 @@ const CONTINUATION = /^\s+\S/
  * friction line all survive a fit.
  * (why: docs/why.md#fit-the-journal-do-not-negotiate-with-it)
  *
- * The run table survives too — it is not a list item. When the section empties,
- * the heading goes with it, which is what the skill already requires of an
- * empty section.
+ * **It never cuts the last `\u{1F4C4} Did` bullet.** Dropping every one of them left an
+ * entry that recorded no outcome, under an `OK` verdict `finish-run` posts
+ * unread, while the Friction prose that caused the overage survived intact. One
+ * 2026-10-10 run on sydevs/SahajCloud#903 lost its whole section that way and
+ * reported a failure rather than post it. So the cut stops with one bullet left
+ * and answers `OVER`, which `finish-run` already routes to cutting Friction.
+ *
+ * The run table survives too — it is not a list item. A heading left with no
+ * bullet at all arrives that way, and goes, which is what the skill already
+ * requires of an empty section.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
   const limit = budgets?.[kind]
@@ -157,12 +164,16 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
       if (SECTION_HEADING.test(lines[i])) { end = i; break }
     }
 
-    const victim = lines.slice(head + 1, end).findLastIndex((l) => DROPPABLE.test(l))
+    const section = lines.slice(head + 1, end)
+    const victim = section.findLastIndex((l) => DROPPABLE.test(l))
     if (victim === -1) {
       const cutTo = lines[head + 1] === '' ? head + 2 : head + 1
       lines = [...lines.slice(0, head), ...lines.slice(cutTo)]
       continue
     }
+    // One bullet left is the run's record of what it did. Taking it leaves an
+    // entry that says nothing, so stop and report the overage instead.
+    if (section.filter((l) => DROPPABLE.test(l)).length === 1) break
     // A bullet's indented lines are part of it. Taking the bullet alone left
     // them behind, reading as the previous bullet's, so the entry claimed
     // something the run never said.
