@@ -19,8 +19,9 @@ goal changed under existing children).
 
 ## 1. Read
 
-- The goal's body — its `## Decisions` are binding — and its `roadmap.notesMarker` comment.
-- Its current sub-issues, open and closed, and every ticket the notes comment names as related.
+- The goal's body — its `## Decisions` are binding — and its Technical notes block, after the
+  `roadmap.notesMarker` line. An older goal may keep its notes in `v1` comments instead.
+- Its current sub-issues, open and closed, and every ticket the notes name as related.
 - The code in every repo the goal touches, and the docs of every package the plan leans on.
 
 **Any unticked open question → stop.** Comment that `implement` waits on it, and file nothing.
@@ -51,7 +52,7 @@ Across repos, follow `cross-repo.md`: producer first, and no child for a re-sync
 children likely to touch the same files, add a `Blocked by:` too — unblocked children run in
 parallel.
 
-**Write the plan into the notes comment before you file anything**: each child's one-line purpose,
+**Write the plan into the Technical notes block before you file anything**: each child's one-line purpose,
 its repo, what it provides and consumes, and its order. A resumed run continues from it.
 
 ## 4. Adopt, then file

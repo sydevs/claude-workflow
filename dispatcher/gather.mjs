@@ -126,6 +126,34 @@ async function requiredContexts(gh, { owner, repo }, branch) {
   }
 }
 
+// Conclusions no change causes: a job that ran out of time, never started,
+// or was cancelled with no newer run of the same name to replace it.
+const INFRA_CONCLUSIONS = new Set(['timed_out', 'startup_failure', 'cancelled'])
+
+/**
+ * The failing checks that are infrastructure, not the change: an
+ * `INFRA_CONCLUSIONS` conclusion, or a failure that carries an error
+ * annotation titled `ci.infraLabel`. Each names the Actions job to re-run,
+ * or null for a check Actions did not produce.
+ * (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+ */
+export async function infraFailures(gh, { owner, repo }, runs, config) {
+  const labelName = config.ci?.infraLabel
+  const out = []
+  for (const r of runs || []) {
+    const c = String(r.conclusion || '').toLowerCase()
+    let infra = INFRA_CONCLUSIONS.has(c)
+    if (!infra && c === 'failure' && labelName && r.id) {
+      try {
+        const anns = await gh.paginate(gh.rest.checks.listAnnotations, { owner, repo, check_run_id: r.id, per_page: 100 })
+        infra = (anns || []).some((a) => a.title === labelName)
+      } catch { /* unreadable annotations: treat it as the change's failure */ }
+    }
+    if (infra) out.push({ name: r.name, jobId: Number(String(r.details_url || '').match(/\/actions\/runs\/\d+\/job\/(\d+)/)?.[1]) || null })
+  }
+  return out
+}
+
 async function pollMergeable(gh, { owner, repo, number }, pr) {
   let cur = pr
   for (let i = 0; i < 5 && (cur.mergeable === null || cur.mergeable === undefined); i += 1) {
@@ -204,7 +232,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // Green is what the base branch's ruleset requires, newest run per name.
   // (why: docs/why.md#only-required-checks-are-ci)
   const gate = requiredOnly({
-    checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion })) },
+    checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, details_url: c.details_url })) },
     statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) },
     required: await requiredContexts(gh, { owner, repo }, pr.base?.ref),
   })
@@ -227,6 +255,18 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.threads = threads
   s.normalized = normalized
   s.ci = { ...ciVerdict(normalized, `${owner}/${repo}`), advisory: gate.advisory }
+  const failingNames = new Set(s.ci.failing.map((c) => c.name))
+  s.ci.infra = failingNames.size ? await infraFailures(gh, { owner, repo }, checkRuns.check_runs.filter((c) => failingNames.has(c.name)), config) : []
+  // Who pushed the head matters only once the repair cap is reached: a
+  // person's push is what the cap comment promises restarts it.
+  // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+  s.headAuthor = null
+  if (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3)) {
+    try {
+      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
+      s.headAuthor = c.author?.login || c.committer?.login || null
+    } catch { /* unknown author: the cap holds */ }
+  }
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)

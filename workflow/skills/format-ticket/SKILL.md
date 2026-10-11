@@ -164,6 +164,23 @@ A reply such as `@sydevs-bot revise 1A` or free text answers it. Tick the item, 
 `## Decisions` as `- **<question>** → <answer> (<who>, <YYYY-MM-DD>)`.
 (why: docs/why.md#decisions-come-with-options)
 
+**`/workflow:settle-roadmap` answers in the terminal instead.** It writes the same `## Decisions`
+entries into the body itself, then posts one comment that opens with `roadmap.settledMarker` and
+carries no bot mention. That comment records answers already applied: a later run reconciles
+around them, and never applies them again. (why: docs/why.md#a-goal-is-settled-in-the-terminal)
+
+**A reopened decision says what it reopens.** Moving a decision back to `## Open questions` takes
+it out of `## Decisions`, and adds one line under the question, before its options:
+
+```markdown
+- [ ] **2. How are the admin's components sorted?**
+  - Reopened 2026-10-10 by antontcymbal. Was: regroup into tiers (Ardnived, 2026-10-09).
+  - **A — Regroup into tiers:** …
+```
+
+Keep the previous answer's words and its attribution exactly, so the person answering sees what
+they chose before. (why: docs/why.md#a-reopened-question-says-what-it-reopens)
+
 **`implement` waits while any open question is unticked**, on either tier.
 (why: docs/why.md#a-decision-is-settled-before-the-build)
 
@@ -256,15 +273,44 @@ written before 2026-09-09 still parks, but write the field.
 
 ## Notes
 [`Blocked by:` lines, related goals.]
+
+<!-- sydevs-roadmap-notes v2 -->
+<details><summary>Technical notes</summary>
+
+**TL;DR**
+- [What is settled · what is risky · what is still unknown — three bullets at most]
+
+<details><summary>[Topic — what this block holds, in one line]</summary>
+
+| [Fact] | [Value] | [Evidence: `file:line` or a link] |
+| --- | --- | --- |
+
+</details>
+
+</details>
 ```
 
 - **Title:** a plain sentence, with no `type(scope):` prefix. "Anyone can submit a class
   listing safely."
 - **Plain language only.** No file paths, package names, approach, phases, or jargon. A reader
   who has never seen the code must follow every line.
-- **Technical findings live in one comment**, marked with `roadmap.notesMarker` and edited in
-  place: what the code does today, the packages considered, the experiments run and what they
-  showed. Planning reads it. It never moves into the body.
+- **Technical findings live in the body's last block**: the `roadmap.notesMarker` line, then one
+  collapsed `Technical notes` block, edited in place. What the code does today, the packages
+  considered, the experiments run and what they showed. Planning reads it. Everything above it
+  stays plain language. A session cannot edit a comment, so a notes comment grew a new one per
+  run; a body it can edit. (why: docs/why.md#technical-notes-live-in-the-body)
+- **Write the notes to be scanned:**
+  - **TL;DR first**, three bullets at most: what is settled, what is risky, what is unknown.
+  - **Facts in tables**: measurements, versions, counts, options weighed, and the evidence for each.
+  - **One `<details>` per topic**, its summary saying what is inside. Bullets over prose; no
+    paragraph longer than three lines.
+  - **Replace, never append.** A superseded fact is edited in place, never followed by a
+    "corrections" section; the issue's edit history keeps the past. Cite evidence as `file:line`
+    or a link, never a long quote.
+  - **Measure them**: `budget.mjs --kind notes`. `OVER` → prune superseded and duplicated facts
+    first. Never refuse the write over it; say so in the journal.
+- **An older goal may still carry notes comments** opening with the `v1` marker. The next writer
+  folds them into the block once. A session cannot edit those comments, so they stay as they are.
 - **The bot owns the body**, and keeps it in this shape. A human's direct edit always wins: the
   next run reconciles around it, never over it.
 - **Milestone, not Status.** A goal in a launch carries that milestone, and lives in the
@@ -373,4 +419,4 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 - **Never** park a ticket without a `Hold Until` date or a `Blocked by:` line.
 - **Never** file without searching for a duplicate.
 - **Never** put a fact in `## Open questions`, or a decision without options.
-- **Never** put technical detail in a Roadmap ticket's body.
+- **Never** put technical detail in a Roadmap ticket's body outside its Technical notes block.

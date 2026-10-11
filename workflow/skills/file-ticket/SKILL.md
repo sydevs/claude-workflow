@@ -72,8 +72,8 @@ or unapproved docs PR in that repo takes it first, as preflight routes it. Other
 ## 4a. A roadmap goal
 
 1. **Write the body** in the roadmap template, in plain language. Name the decisions you can see,
-   each with options and a recommendation. Leave technical findings out of the body. If you
-   gathered any, post them afterwards as the `roadmap.notesMarker` comment.
+   each with options and a recommendation. Keep technical findings out of the plain-language
+   sections. If you gathered any, put them in the body's Technical notes block (format-ticket).
 2. **Pick the repo.** A goal in a launch lives in that milestone's repo. Otherwise, the product
    repo whose users feel the outcome.
 3. **Run Ask** on the draft, below, then file on the yes:

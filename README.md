@@ -90,6 +90,7 @@ noted on the PR and fires nothing. Each product repo's CI also calls the shared
 | Skill | Use it to | Example |
 | --- | --- | --- |
 | `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, asks each open question with a recommendation (or leaves it on the ticket), then files in the right tier. A docs-only fix becomes a PR instead. | `/workflow:file-ticket the map flickers when zooming on Safari` |
+| `/workflow:settle-roadmap` | Answer the open questions on roadmap goals in the terminal instead of on GitHub. It briefs each goal, asks each question with a recommendation (and your earlier answer, when one is reopened), researches anything you ask back, then writes the decisions into the ticket on your yes. No cloud session is spent. | `/workflow:settle-roadmap` or `/workflow:settle-roadmap sydevs/SahajCloud#902` |
 | `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh a draft PR. It never merges. | `/workflow:finalize-pr` |
 | `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
 
@@ -137,7 +138,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 
 | Skill | Fired by | Produces |
 | --- | --- | --- |
-| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, a notes comment; or the completion verdict |
+| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, technical notes in the body; or the completion verdict |
 | `implement-roadmap` | the first `implement` on a goal; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |

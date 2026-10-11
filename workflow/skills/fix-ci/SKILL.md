@@ -15,12 +15,16 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 
 ## Reads
 
-- `mcp__github__pull_request_read method:get` — **if `head.sha` differs from `ci.head_sha` in
-  the record, the failure is stale.** Stop, and journal it.
+- `mcp__github__pull_request_read method:get` — **if the PR's `head.sha` differs from the
+  record's `head.sha`, the failure is stale.** Stop, and journal it.
 - `method:get_check_runs` — which check failed. **Fix only a check the record's `ci.reason` names.**
   Those are the ruleset's required checks. Any other red check is advisory, and not yours.
   (why: docs/why.md#only-required-checks-are-ci)
 - `mcp__github__actions_get` — the failing job's log. Read the failure, not the whole log.
+- **A check the dispatcher counts as infrastructure is not yours.** Its job timed out, never
+  started, or was cancelled, or it carries an error annotation titled `ci.infraLabel`. The
+  dispatcher re-runs those itself, so fix only the others.
+  (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
 - **`mergeable: false` means a conflict, not a red check.** A conflicted PR schedules no CI at
   all. Comment one line, and stop — Actions dispatches `resolve-conflicts`.
   (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
