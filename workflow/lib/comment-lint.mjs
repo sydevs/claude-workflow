@@ -34,7 +34,7 @@
  *   comment-lint.mjs --selftest
  *
  * `--base` compares against the branch point, and prefers `origin/<name>` for
- * a bare name — `base-ref.mjs` says why both matter.
+ * a branch name — `base-ref.mjs` says why both matter.
  */
 
 import { createRequire } from 'node:module'

@@ -31,7 +31,7 @@
  *   rule-delta.mjs before/ after/              # two directories
  *
  * `--base` compares against the branch point, and prefers `origin/<name>` for
- * a bare name — `base-ref.mjs` says why both matter.
+ * a branch name — `base-ref.mjs` says why both matter.
  *
  * Exits 1 when a directive disappears with no close match. That is the case
  * that needs a human. (why: docs/why.md#lint-measures-style-not-content)

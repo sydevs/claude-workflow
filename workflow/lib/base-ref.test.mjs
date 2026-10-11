@@ -148,15 +148,61 @@ test('the baseline is the branch point, so commits the base gained stay out', ()
   }
 })
 
-test('a ref with a slash, and a sha, are taken as given', () => {
+test('an already-qualified ref, and a sha, are taken as given', () => {
   const { dir, first } = synced()
   try {
     const warnings = []
-    const slashed = resolveBaseRef('origin/main', { root: dir, onWarn: (m) => warnings.push(m) })
-    assert.equal(slashed.named, 'origin/main')
+    const remote = resolveBaseRef('origin/main', { root: dir, onWarn: (m) => warnings.push(m) })
+    assert.equal(remote.named, 'origin/main')
+
+    const full = resolveBaseRef('refs/heads/main', { root: dir, onWarn: (m) => warnings.push(m) })
+    assert.equal(full.named, 'refs/heads/main')
 
     const sha = resolveBaseRef(first, { root: dir, onWarn: (m) => warnings.push(m) })
     assert.equal(sha.named, first)
+    assert.deepEqual(warnings, [])
+  } finally {
+    cleanup(dir)
+  }
+})
+
+/**
+ * The rule used to stop at the first slash, so it excluded the branch shape it
+ * would actually meet: `AGENTS.md` makes every branch in this repo `claude/*`.
+ * git's own DWIM does not rescue it — `rev-parse claude/other` tries
+ * `refs/remotes/claude/other`, never `refs/remotes/origin/claude/other`.
+ */
+test('a slashed branch name prefers origin/<name> too, and warns the same way', () => {
+  const { dir, g, first, second } = stale()
+  try {
+    g('update-ref', 'refs/remotes/origin/claude/other', second)
+    g('update-ref', 'refs/heads/claude/other', first)
+
+    const warnings = []
+    const r = resolveBaseRef('claude/other', { root: dir, onWarn: (m) => warnings.push(m) })
+
+    assert.equal(r.named, 'refs/remotes/origin/claude/other')
+    assert.equal(r.resolved, second)
+    assert.equal(warnings.length, 1, warnings.join(' | '))
+    assert.match(warnings[0], /Comparing against origin\/claude\/other/)
+  } finally {
+    cleanup(dir)
+  }
+})
+
+test('a slashed branch known only to origin resolves, where git alone exits 1', () => {
+  const { dir, g, second } = stale()
+  try {
+    g('update-ref', 'refs/remotes/origin/claude/other', second)
+    const dwim = spawnSync('git', ['rev-parse', '--verify', '--quiet', 'claude/other'], {
+      cwd: dir,
+      encoding: 'utf8',
+    })
+    assert.notEqual(dwim.status, 0, 'the fixture must leave git unable to resolve it alone')
+
+    const warnings = []
+    const r = resolveBaseRef('claude/other', { root: dir, onWarn: (m) => warnings.push(m) })
+    assert.equal(r.resolved, second)
     assert.deepEqual(warnings, [])
   } finally {
     cleanup(dir)

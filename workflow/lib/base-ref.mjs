@@ -71,6 +71,17 @@ const PSEUDOREFS = new Set([
 /** An abbreviated or full object name. No remote counterpart can exist. */
 const SHA = /^[0-9a-f]{7,40}$/
 
+/**
+ * A ref that already says where it lives: a full `refs/…` ref, or one already
+ * qualified by this module's own remote. Everything else that is not a
+ * pseudoref or a sha is a branch name, and gets the remote counterpart tried
+ * for it. The rule used to stop at the first slash, which excluded every
+ * branch in this repo — `AGENTS.md` makes them all `claude/*`, so
+ * `--base claude/other` exited 2 in a routine clone with
+ * `refs/remotes/origin/claude/other` sitting right there.
+ */
+const QUALIFIED = /^(refs\/|origin\/)/
+
 /** The worktree this process is in, which is the root `git show <rev>:<path>` resolves against. */
 export function repoRoot(cwd = process.cwd()) {
   return git(cwd, ['rev-parse', '--show-toplevel']) ?? cwd
@@ -79,13 +90,14 @@ export function repoRoot(cwd = process.cwd()) {
 /**
  * Resolve `ref` to the commit a delta should be measured from.
  *
- * A bare branch name prefers `refs/remotes/origin/<name>` when that ref
- * exists, and warns once when the local branch of the same name disagrees with
- * it. The warning is the point: a run that prints a clean report cannot
- * otherwise say which of the two refs it compared, and that ambiguity is what
- * produced the phantom removal above. A pseudoref and a sha are taken as
- * given, and `--base <other-branch>` stays unsurprising, because no remote
- * counterpart exists to prefer or to differ from.
+ * A branch name prefers `refs/remotes/origin/<name>` when that ref exists,
+ * and warns once when the local branch of the same name disagrees with it. The
+ * warning is the point: a run that prints a clean report cannot otherwise say
+ * which of the two refs it compared, and that ambiguity is what produced the
+ * phantom removal above. `claude/other` is a branch name like `main`; only a
+ * ref that already says where it lives, a pseudoref and a sha are taken as
+ * given, because for those no remote counterpart can exist to prefer or to
+ * differ from.
  *
  * Returns `{ named, resolved, baseline, branchPoint }`. `baseline` is what
  * callers pass to `git show` and `git diff`.
@@ -99,7 +111,7 @@ export function resolveBaseRef(ref, { root = repoRoot(), onWarn } = {}) {
 
   let named = name
   let resolved = null
-  if (!name.includes('/') && !PSEUDOREFS.has(name) && !SHA.test(name)) {
+  if (!QUALIFIED.test(name) && !PSEUDOREFS.has(name) && !SHA.test(name)) {
     const remote = rev(root, `refs/remotes/origin/${name}`)
     if (remote) {
       named = `refs/remotes/origin/${name}`
