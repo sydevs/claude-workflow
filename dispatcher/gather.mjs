@@ -227,6 +227,17 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.threads = threads
   s.normalized = normalized
   s.ci = { ...ciVerdict(normalized, `${owner}/${repo}`), advisory: gate.advisory }
+  const failingNames = new Set(s.ci.failing.map((c) => c.name))
+  // Who pushed the head matters only once the repair cap is reached: a
+  // person's push is what the cap comment promises restarts it.
+  // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+  s.headAuthor = null
+  if (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3)) {
+    try {
+      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
+      s.headAuthor = c.author?.login || c.committer?.login || null
+    } catch { /* unknown author: the cap holds */ }
+  }
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)

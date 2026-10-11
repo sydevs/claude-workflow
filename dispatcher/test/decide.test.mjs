@@ -639,3 +639,22 @@ test('no advisory note while required CI is still running', () => {
   const p = evaluatePr(prSnap({ ci: { ...running, advisory: ['Cloudflare Pages: sahajatlas'] } }), config)
   assert.deepEqual(types(p), ['note'])
 })
+
+// ---- a push from a person resets the repair count (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+
+test('at the cap, a head a person pushed since the last fix-ci resets the count and repairs again', () => {
+  const s = prSnap({ ci: red, headAuthor: 'Ardnived', pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc', outcome: 'done' }] } })
+  const plan = evaluatePr(s, config)
+  assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
+  assert.deepEqual(plan[0].patch, { fixCi: 0 })
+})
+
+test('at the cap, the bot pushing a new head does not reset the count', () => {
+  const s = prSnap({ ci: red, headAuthor: 'sydevs-bot', pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc', outcome: 'done' }] } })
+  assert.equal(evaluatePr(s, config)[0].type, 'label')
+})
+
+test('at the cap, a person whose push is still the head the last fix-ci saw does not reset it', () => {
+  const s = prSnap({ ci: red, headAuthor: 'Ardnived', pr: { ...prSnap().pr, head: { sha: 'abc' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc' }] } })
+  assert.equal(evaluatePr(s, config)[0].type, 'label')
+})

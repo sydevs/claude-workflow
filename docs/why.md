@@ -2323,6 +2323,17 @@ It is a reusable workflow in this repo, called from each product repo's own CI, 
 check that never reports blocks every merge. It runs in the merge queue too, against the queue's
 base, and passes at once on any other event, so the required name always reports.
 
+## A push from a person resets the repair count
+
+The cap comment has always promised *"A mention or a push from you starts me again"*, but
+`rec.fixCi` was incremented when a session started and never reset anywhere. A person who pushed
+their own fix to a capped PR got nothing: the count stayed at the cap, so the next red run went
+straight back to `awaiting`. The promise was false for every PR that reached it.
+
+So a head the cap has not seen, pushed by a `respondTo` person, resets the count and fires `fix-ci`
+again. The bot's own pushes never reset it, or the cap would mean nothing. `gather` fetches the
+head commit's author only once the cap is reached, so an ordinary red run costs no extra call.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They

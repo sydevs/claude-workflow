@@ -215,6 +215,11 @@ function lastEndedImplement(record) {
  * can age an entry out; the ceiling is still the backstop.
  * (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
  */
+/** The head the last `fix-ci` fire was about, or null. */
+function lastFixCiSha(record) {
+  return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
+}
+
 function endedFixCiFor(record, sha) {
   if (!sha) return null
   return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome) || null
@@ -274,7 +279,12 @@ export function evaluatePr(s, config) {
   if (s.ci.failing.length) {
     const ended = endedFixCiFor(s.record, pr.head?.sha)
     if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
-    if ((s.record?.fixCi || 0) < (config.ceilings?.ciFixIterations ?? 3)) return [bumpFixCi(), fire('fix-ci')]
+    const cap = config.ceilings?.ciFixIterations ?? 3
+    if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci')]
+    // The cap comment promises that a person's push starts the repair again,
+    // so a head they pushed since the last fix-ci resets the count.
+    // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+    if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci')]
     return [
       label([awaiting], [config.labels.stuck]),
       commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${s.ci.reason}). I have stopped retrying. A mention or a push from you starts me again.`),

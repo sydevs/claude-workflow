@@ -15,8 +15,8 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 
 ## Reads
 
-- `mcp__github__pull_request_read method:get` — **if `head.sha` differs from `ci.head_sha` in
-  the record, the failure is stale.** Stop, and journal it.
+- `mcp__github__pull_request_read method:get` — **if the PR's `head.sha` differs from the
+  record's `head.sha`, the failure is stale.** Stop, and journal it.
 - `method:get_check_runs` — which check failed. **Fix only a check the record's `ci.reason` names.**
   Those are the ruleset's required checks. Any other red check is advisory, and not yours.
   (why: docs/why.md#only-required-checks-are-ci)
