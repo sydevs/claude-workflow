@@ -50,8 +50,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
 ## Rules that hold in every handler
 
-- **Re-check the lock before your first write to the item and before every push.** Gone → stop.
-  Write nothing more. Journal a stop.
+- **Re-check the lock before your first write to the item and before every push**, with
+  `issue_read method:get`. Gone → stop. Write nothing more. Journal a stop.
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
   (why: docs/why.md#never-subscribe-to-pr-activity)
 - **Push and end.** Never wait for CI. Never mark a PR ready. Never merge. Never write
