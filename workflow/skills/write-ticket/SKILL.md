@@ -30,8 +30,8 @@ The same reads serve every mode:
 - **The code.** The files the ticket names, their callers and consumers — across repos where a
   contract crosses one — the tests that cover them, and `git log` of the area. Run a targeted spec
   or the lean gate when a claim needs proof.
-- **The parent goal**, when `## Goal context` links one: its body and its
-  `roadmap.notesMarker` comment.
+- **The parent goal**, when `## Goal context` links one: its body, Technical notes block
+  included.
 
 Settle every fact yourself. Only a decision a person owns may become an open question, and it
 carries options and a recommendation. (why: docs/why.md#experiments-answer-facts)
@@ -79,7 +79,8 @@ roadmap-sized: promote it.
 A `Feature` or `Task` that needs a product decision, or more than one reviewable PR, is a goal.
 Never promote a `Bug`, and never promote a roadmap child — escalate instead.
 
-1. Post the technical draft as the `roadmap.notesMarker` comment.
+1. Put the technical draft in the Technical notes block at the end of the new body
+   (format-ticket).
 2. Rewrite the body in the roadmap template, in plain language, with each decision as options and
    a recommendation.
 3. Set type `Roadmap` with `mcp__github__issue_write`, and say so in your summary comment.

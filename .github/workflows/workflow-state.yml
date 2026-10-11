@@ -56,6 +56,10 @@ jobs:
       (vars.BOT_DISPATCH == 'on' || vars.BOT_DISPATCH == 'dry')
       && !(github.event.action == 'unlabeled' && github.event.label.name != 'bot:working')
       && !(github.event_name == 'issues' && github.event.action == 'edited' && !github.event.changes.body)
+    # Lets the dispatcher re-run a job that failed on infrastructure. The
+    # dispatcher's act job asks for exactly this, and fails without it.
+    permissions:
+      actions: write
     uses: sydevs/claude-workflow/.github/workflows/dispatcher.yml@main
     with:
       dry-run: ${{ vars.BOT_DISPATCH == 'dry' }}

@@ -10,10 +10,11 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR; the proposal ceilings bound the audits. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
+    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR, and ciInfraReruns bounds re-runs of an infrastructure failure per head (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired); the proposal ceilings bound the audits. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
-    "ciFixIterations": 3
+    "ciFixIterations": 3,
+    "ciInfraReruns": 2
   },
   "findings": {
     "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in start-run/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR.",
@@ -156,16 +157,18 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "roadmap": {
-    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. notesMarker opens the Technical notes block at the end of a roadmap body; its v1 spelling marked the old notes comment, which is folded into the block once. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. settledMarker opens the comment settle-roadmap posts after writing answers into a body. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
     "type": "Roadmap",
     "spikeBranchPrefix": "claude/spike-",
-    "notesMarker": "<!-- sydevs-roadmap-notes v1 -->",
+    "notesMarker": "<!-- sydevs-roadmap-notes v2 -->",
+    "settledMarker": "<!-- sydevs-settled v1 -->",
     "readOnlyKeys": [
       "SAHAJCLOUD_API_KEY"
     ]
   },
   "ci": {
-    "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci).",
+    "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci). infraLabel is the error-annotation title a check writes to mark its failure as infrastructure, not the change.",
+    "infraLabel": "infrastructure-failure",
     "noCi": [
       "claude-workflow"
     ],
@@ -358,12 +361,13 @@
     }
   },
   "writing": {
-    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted. They are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
+    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted, except notes, the Technical notes block of a roadmap body, which is measured but never refused. Bodies are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
     "budgets": {
       "comment": 1200,
       "reviewReply": 600,
       "reviewBody": 2000,
-      "journalEntry": 1500
+      "journalEntry": 1500,
+      "notes": 8000
     },
     "markerRequired": [
       "comment",

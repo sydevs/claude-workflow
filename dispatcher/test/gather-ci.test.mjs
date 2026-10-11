@@ -103,3 +103,21 @@ test('an unreadable or empty ruleset counts every check, as before', async () =>
     assert.deepEqual(s.ci.advisory, [])
   }
 })
+
+// ---- an infrastructure failure is re-run, not repaired (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+
+test('timed out, startup failures and labelled failures are infrastructure; a plain failure is the change', async () => {
+  const run = (id, name, conclusion) => ({ id, name, status: 'completed', conclusion, details_url: `https://github.com/sydevs/SahajCloud/actions/runs/9/job/${id}0` })
+  const gh = withRules([run(1, 'Lint', 'failure'), run(2, 'Smoke', 'failure'), run(3, 'Build', 'timed_out'), run(4, 'E2E', 'startup_failure')], { required: ['Lint', 'Smoke', 'Build', 'E2E'] })
+  gh.rest.checks.listAnnotations = async ({ check_run_id }) => ({ data: check_run_id === 2 ? [{ title: config.ci.infraLabel, message: 'Railway preview never published' }] : [{ title: 'TypeError' }] })
+  const s = await gather(gh, target, config, when)
+  assert.deepEqual(s.ci.infra.map((c) => c.name).sort(), ['Build', 'E2E', 'Smoke'])
+  assert.deepEqual(s.ci.infra.find((c) => c.name === 'Smoke'), { name: 'Smoke', jobId: 20 })
+})
+
+test('unreadable annotations leave a failure with the change, never with infrastructure', async () => {
+  const gh = withRules([{ id: 5, name: 'Lint', status: 'completed', conclusion: 'failure', details_url: 'https://github.com/sydevs/SahajCloud/actions/runs/9/job/50' }], { required: ['Lint'] })
+  gh.rest.checks.listAnnotations = async () => { throw Object.assign(new Error('Forbidden'), { status: 403 }) }
+  const s = await gather(gh, target, config, when)
+  assert.deepEqual(s.ci.infra, [])
+})

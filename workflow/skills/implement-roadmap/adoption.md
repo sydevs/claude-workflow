@@ -1,7 +1,7 @@
 # Adopting existing tickets
 
 Reference for `implement-roadmap`. A goal usually arrives with work already filed for it — the
-roadmap review's cross-reference lens lists it in the notes comment. Adopt it rather than file a
+roadmap review's cross-reference lens lists it in the Technical notes block. Adopt it rather than file a
 twin.
 
 | The existing ticket | Do |

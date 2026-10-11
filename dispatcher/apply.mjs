@@ -187,6 +187,26 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'bumpFixCi':
         bumpFixCi = true
         break
+      // Infrastructure, not the change: re-run just the failed jobs. The PAT
+      // has no Actions scope, so this uses the calling repo's own token,
+      // which its `actions: write` grant allows. A refusal still counts
+      // against `ceilings.ciInfraReruns`, so a missing grant ends at a person.
+      // (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+      case 'rerunJobs': {
+        log(`re-run: ${a.checks.map((c) => c.name).join(', ')}`)
+        rec.ciReruns = { sha: a.sha, count: (rec.ciReruns?.sha === a.sha ? rec.ciReruns.count || 0 : 0) + 1 }
+        recordDirty = true
+        if (dryRun) break
+        if (!env?.ACTIONS_TOKEN) { log('no ACTIONS_TOKEN — nothing re-run'); break }
+        for (const c of a.checks) {
+          const res = await (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}/actions/jobs/${c.jobId}/rerun`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${env.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
+          })
+          if (!res.ok) log(`re-run of ${c.name} refused (${res.status})`)
+        }
+        break
+      }
       case 'markReady': {
         log('mark ready')
         if (dryRun) break

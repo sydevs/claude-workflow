@@ -2323,6 +2323,104 @@ It is a reusable workflow in this repo, called from each product repo's own CI, 
 check that never reports blocks every merge. It runs in the merge queue too, against the queue's
 base, and passes at once on any other event, so the required name always reports.
 
+## A push from a person resets the repair count
+
+The cap comment has always promised *"A mention or a push from you starts me again"*, but
+`rec.fixCi` was incremented when a session started and never reset anywhere. A person who pushed
+their own fix to a capped PR got nothing: the count stayed at the cap, so the next red run went
+straight back to `awaiting`. The promise was false for every PR that reached it.
+
+So a head the cap has not seen, pushed by a `respondTo` person, resets the count and fires `fix-ci`
+again. The bot's own pushes never reset it, or the cap would mean nothing. `gather` fetches the
+head commit's author only once the cap is reached, so an ordinary red run costs no extra call.
+
+## An infrastructure failure is re-run, not repaired
+
+Every red required check fired `fix-ci`, whatever turned it red. A session that cannot fix a
+Railway outage, a 25-minute job limit or a preview that never published reads the log, finds
+nothing in the PR to change, and ends — and the attempt is spent. On 2026-10-07 one Railway
+outage drew six `fix-ci` fires across three SahajCloud PRs (claude-workflow#164), and a capped
+PR then sat `awaiting` for a fault that had already cleared.
+
+So `gather` sorts each failing required check before `decide` acts on it:
+
+| Failure | Counted as | What happens |
+| --- | --- | --- |
+| Timed out, never started, or cancelled with no newer run | infrastructure | re-run |
+| A failure carrying an error annotation titled `ci.infraLabel` | infrastructure | re-run |
+| Any other failure | the change | `fix-ci`, as before |
+
+When every red check is infrastructure, the dispatcher re-runs just the failed jobs, at most
+`ceilings.ciInfraReruns` times on one head, then hands the PR to a person with a plain comment.
+No session is spent. A mix of the two still fires `fix-ci`, which leaves the infrastructure ones
+alone, and its push re-runs everything anyway.
+
+**How a check says "not this change".** It writes one annotation before failing, naming what did
+not answer:
+
+```bash
+echo "::error title=infrastructure-failure::Railway published no preview within 15 minutes"
+exit 1
+```
+
+The check still goes red, so nothing merges on a preview that never arrived. Only the response
+changes.
+
+**The token.** The bot's PAT has no Actions scope, and widening a credential used in five repos for
+one call was the worse trade. The re-run uses the calling repo's own `GITHUB_TOKEN` instead, which
+each repo's caller grants `actions: write` on its dispatch job. A refused re-run still counts
+against the cap, so a missing grant ends with a person rather than a loop.
+
+## A reopened question says what it reopens
+
+When a review reopened a decision, the old answer left `## Decisions` and the question came back
+with fresh options, and nothing said what had been chosen before. On 2026-10-10 four of the
+owner's decisions on SahajCloud#902 and #906 were reopened in one afternoon. Showing the owner
+"your previous answer" beside each one meant reading the earlier body and the thread, and
+inferring it from prose such as *"as decided on 2026-10-09"*, which no rule required anyone to
+write.
+
+So a reopened question carries one line, before its options: when it was reopened, by whom, and
+the previous answer with its attribution, word for word. A person answering it sees what they are
+reversing, and `settle-roadmap` can mark that option without guessing.
+
+## Technical notes live in the body
+
+The notes were one comment per goal, "created once, then edited in place". A session cannot keep
+that promise: the MCP surface edits a body but never a comment. So every revise run that learned
+something posted another notes comment. By 2026-10-11 SahajCloud#902 carried five, the fourth
+opening *"a new comment rather than an edit of the third"*, and a reader had to merge them by hand
+to find what was still true. Each was also long-form prose, written to the 1,200-character
+comment budget in pieces.
+
+So the notes move into the body's last block, after `roadmap.notesMarker`, folded inside one
+`<details>`. A session can edit it in place, so there is one copy, and it stays current. A person
+sees it collapsed under the plain-language goal. The MCP read path drops the `<details>` tags but
+keeps their content, so a later session still reads all of it.
+
+The style rules exist for the same reader: TL;DR first, facts in tables, one collapsible per
+topic, and superseded facts replaced rather than corrected underneath. The issue's edit history
+keeps what changed. `writing.budgets.notes` is measured and never refused. A big goal must not
+be blocked from recording what it learned, but it should prune before it grows.
+
+## A goal is settled in the terminal
+
+Answering a goal's questions on GitHub costs a reply in a fixed shape (`@sydevs-bot revise 1A 2B`),
+a cloud session to fold it in, and a wait. And it can be lost. A verb posted while a session holds
+the lock is re-fired on unlock only if it is newer than the bot's last comment, so a session that
+posts its summary after the verb arrived swallows it. On 2026-10-09 an owner's answers to
+SahajCloud#902 were dropped that way: the review finished, renumbered the questions, and the
+answers then pointed at different questions.
+
+The same owner answered about forty questions in one afternoon through `AskUserQuestion` in a local
+session: options to pick, the recommendation first, and a question asked back answered in place.
+So `settle-roadmap` makes that the preferred route. It writes the decisions straight into the body
+— a human's edit, which every later run reconciles around — and posts one comment with no bot
+mention, so nothing fires and nothing races. The draft is shown as a diff before anything is
+written, and a body that changed since it was read is re-read rather than overwritten.
+
+Replying on GitHub still works, for anyone without a local session.
+
 # Retired
 
 Each of these is a failure someone paid for, under a mechanism that no longer exists. They

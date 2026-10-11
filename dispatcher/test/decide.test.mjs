@@ -639,3 +639,56 @@ test('no advisory note while required CI is still running', () => {
   const p = evaluatePr(prSnap({ ci: { ...running, advisory: ['Cloudflare Pages: sahajatlas'] } }), config)
   assert.deepEqual(types(p), ['note'])
 })
+
+// ---- a push from a person resets the repair count (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+
+test('at the cap, a head a person pushed since the last fix-ci resets the count and repairs again', () => {
+  const s = prSnap({ ci: red, headAuthor: 'Ardnived', pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc', outcome: 'done' }] } })
+  const plan = evaluatePr(s, config)
+  assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
+  assert.deepEqual(plan[0].patch, { fixCi: 0 })
+})
+
+test('at the cap, the bot pushing a new head does not reset the count', () => {
+  const s = prSnap({ ci: red, headAuthor: 'sydevs-bot', pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc', outcome: 'done' }] } })
+  assert.equal(evaluatePr(s, config)[0].type, 'label')
+})
+
+test('at the cap, a person whose push is still the head the last fix-ci saw does not reset it', () => {
+  const s = prSnap({ ci: red, headAuthor: 'Ardnived', pr: { ...prSnap().pr, head: { sha: 'abc' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc' }] } })
+  assert.equal(evaluatePr(s, config)[0].type, 'label')
+})
+
+// ---- an infrastructure failure is re-run, not repaired (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+
+const infraCfg = { ...config, ceilings: { ciFixIterations: 3, ciInfraReruns: 2 } }
+const infraRed = { ...red, infra: [{ name: 'CI', jobId: 42 }] }
+
+test('red only on infrastructure re-runs the failed job instead of firing fix-ci', () => {
+  const plan = evaluatePr(prSnap({ ci: infraRed }), infraCfg)
+  assert.deepEqual(types(plan), ['note', 'rerunJobs'])
+  assert.deepEqual(plan[1], { type: 'rerunJobs', sha: 'abc', checks: [{ name: 'CI', jobId: 42 }] })
+})
+
+test('after the re-run cap on this head, an infrastructure failure goes to a person, with no fix-ci', () => {
+  const plan = evaluatePr(prSnap({ ci: infraRed, record: { fixCi: 0, ciReruns: { sha: 'abc', count: 2 } } }), infraCfg)
+  assert.deepEqual(types(plan), ['label', 'comment', 'anomaly'])
+  assert.deepEqual(plan[0].add, ['awaiting'])
+  assert.match(plan[1].body, /infrastructure, not on this change/)
+  assert.match(plan[1].body, /re-ran it 2 times/)
+})
+
+test('re-runs counted on an older head do not count against a new one', () => {
+  const plan = evaluatePr(prSnap({ ci: infraRed, record: { fixCi: 0, ciReruns: { sha: 'old', count: 2 } } }), infraCfg)
+  assert.deepEqual(types(plan), ['note', 'rerunJobs'])
+})
+
+test('an infrastructure failure Actions did not produce cannot be re-run, so it goes to a person', () => {
+  const plan = evaluatePr(prSnap({ ci: { ...red, infra: [{ name: 'CI', jobId: null }] } }), infraCfg)
+  assert.equal(plan[0].type, 'label')
+})
+
+test('a code failure beside an infrastructure one still fires fix-ci', () => {
+  const mixed = { ...red, failing: [{ name: 'CI' }, { name: 'Smoke' }], infra: [{ name: 'Smoke', jobId: 7 }] }
+  assert.deepEqual(types(evaluatePr(prSnap({ ci: mixed }), infraCfg)), ['bumpFixCi', 'fire:fix-ci'])
+})

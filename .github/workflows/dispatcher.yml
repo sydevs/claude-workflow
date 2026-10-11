@@ -93,8 +93,15 @@ jobs:
     concurrency:
       group: dispatch-${{ matrix.target.repo.name }}-${{ matrix.target.number }}
       cancel-in-progress: false
+    # The calling repo's own token, used only to re-run a job that failed on
+    # infrastructure. Every caller grants `actions: write` on its dispatch job;
+    # a caller that did not would fail this job before it starts.
+    # (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
+    permissions:
+      actions: write
     env:
       TARGET: ${{ toJSON(matrix.target) }}
+      ACTIONS_TOKEN: ${{ github.token }}
       DRY_RUN: ${{ inputs.dry-run }}
       SENTRY_CLAUDE_WORKFLOW_TOKEN: ${{ secrets.SENTRY_CLAUDE_WORKFLOW_TOKEN }}
       ROUTINE_TOKEN_SAHAJCLOUD: ${{ secrets.ROUTINE_TOKEN_SAHAJCLOUD }}
