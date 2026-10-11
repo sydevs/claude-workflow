@@ -46,7 +46,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveBaseRefOrExit } from './base-ref.mjs'
+import { repoRoot as worktreeRoot, resolveBaseRefOrExit } from './base-ref.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const UNIT = String.fromCharCode(31)
@@ -494,10 +494,7 @@ async function selftest(repoRoot) {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2)
   const ri = args.indexOf('--repo')
-  const repoRoot =
-    ri !== -1
-      ? resolve(args[ri + 1])
-      : execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const repoRoot = ri !== -1 ? resolve(args[ri + 1]) : worktreeRoot()
 
   if (args.includes('--selftest')) process.exit((await selftest(repoRoot)) ? 1 : 0)
 

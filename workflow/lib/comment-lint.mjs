@@ -42,7 +42,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { commentRanges } from './comment-fingerprint.mjs'
-import { resolveBaseRefOrExit } from './base-ref.mjs'
+import { repoRoot, resolveBaseRefOrExit } from './base-ref.mjs'
 
 /**
  * Only phrasings that are wrong whatever they describe.
@@ -158,10 +158,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (args.includes('--selftest')) process.exit(selftest() ? 1 : 0)
 
   const ri = args.indexOf('--repo')
-  const root =
-    ri !== -1
-      ? resolve(args[ri + 1])
-      : execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const root = ri !== -1 ? resolve(args[ri + 1]) : repoRoot()
   const bi = args.indexOf('--base')
   if (bi === -1) {
     console.error('usage: comment-lint.mjs --base <ref> [--repo <dir>] [--strict] | --selftest')

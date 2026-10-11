@@ -235,6 +235,30 @@ for (const { script, args } of cliCases) {
   })
 }
 
+/**
+ * Outside a worktree, the two comment readers hand-rolled `git rev-parse
+ * --show-toplevel` and threw an uncaught stack — the one failure mode this
+ * module exists to remove. `repoRoot()` falls back to the cwd instead, the
+ * base ref then fails to resolve, and all three reach the same one message.
+ */
+for (const { script, args } of cliCases) {
+  test(`${script} outside a worktree gives one message, not a stack`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'base-ref-nogit-'))
+    try {
+      const r = spawnSync(process.execPath, [join(lib, script), ...args], {
+        cwd: dir,
+        encoding: 'utf8',
+      })
+
+      assert.equal(r.status, 2, r.stdout + r.stderr)
+      assert.equal(r.stderr.trim().split('\n').length, 1, r.stderr)
+      assert.doesNotMatch(r.stderr, /fatal:/)
+    } finally {
+      cleanup(dir)
+    }
+  })
+}
+
 test('rule-delta reports a clean delta on a clean tree whose local main is stale', () => {
   const { dir } = stale()
   try {

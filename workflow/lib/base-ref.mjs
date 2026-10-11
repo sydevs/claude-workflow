@@ -33,9 +33,16 @@ import { execFileSync } from 'node:child_process'
 /** A base ref that does not resolve. Carries the one message a CLI prints. */
 export class BaseRefError extends Error {}
 
+// stderr is ignored because every failure here has a caller-written message
+// waiting for it. Outside a worktree `--show-toplevel` alone prints two
+// `fatal:` lines, and "one message, exit 2" is the contract.
 const git = (root, args) => {
   try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim()
   } catch {
     return null
   }
