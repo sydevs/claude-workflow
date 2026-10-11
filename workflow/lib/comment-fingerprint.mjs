@@ -29,12 +29,15 @@
  *
  * ## Usage
  *
- *   comment-fingerprint.mjs --base main           # git ref vs the working tree
- *   comment-fingerprint.mjs --base main --json
+ *   comment-fingerprint.mjs --base origin/main    # git ref vs the working tree
+ *   comment-fingerprint.mjs --base origin/main --json
  *   comment-fingerprint.mjs --selftest            # break it on purpose, both ways
  *
  * Exits 1 on a changed codeHash, a shrunken protected census, a displaced
  * comment, or a WEAK file — each is a case that needs a human.
+ *
+ * `--base` compares against the branch point, and prefers `origin/<name>` for
+ * a branch name — `base-ref.mjs` says why both matter.
  */
 
 import { createHash } from 'node:crypto'
@@ -43,6 +46,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { repoRoot as worktreeRoot, resolveBaseRefOrExit } from './base-ref.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const UNIT = String.fromCharCode(31)
@@ -490,10 +494,7 @@ async function selftest(repoRoot) {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2)
   const ri = args.indexOf('--repo')
-  const repoRoot =
-    ri !== -1
-      ? resolve(args[ri + 1])
-      : execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const repoRoot = ri !== -1 ? resolve(args[ri + 1]) : worktreeRoot()
 
   if (args.includes('--selftest')) process.exit((await selftest(repoRoot)) ? 1 : 0)
 
@@ -502,6 +503,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     console.error('usage: comment-fingerprint.mjs --base <ref> [--repo <dir>] [--json] | --selftest')
     process.exit(2)
   }
-  const r = await run(repoRoot, args[bi + 1], args.includes('--json'))
+  const base = resolveBaseRefOrExit(args[bi + 1], { root: repoRoot }).baseline
+  const r = await run(repoRoot, base, args.includes('--json'))
   process.exit(r.problems.length ? 1 : 0)
 }
