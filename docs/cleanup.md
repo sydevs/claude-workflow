@@ -114,7 +114,7 @@ references removed in the same PR:
 | claude-workflow | `.claude/worktrees/` (a stale worktree holding a pre-split skill) |
 
 Keep what the maintainer asked to keep: `reset-db`, the payload skill, `design-extraction`,
-`component-development`, `ladle-processes`, and every `pr-prep/check.sh`.
+`component-development`, the Storybook component-library skill, and every `pr-prep/check.sh`.
 
 Two stale permission entries to drop in the same pass: SahajCloud's `Bash(gh pr merge:*)` — no
 session merges now — and the absolute `Read(//Users/devindra/…/claude-plugins/…)` path in

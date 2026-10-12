@@ -87,6 +87,9 @@ category before and after. Read it before you start. The categories:
 - **Cross-repo sync pointers** — "keep in sync", "must match", "source of truth", `<Repo>#NNN`.
   Nothing but prose enforces the couplings between these repos.
 - **Issue breadcrumbs** — a `#NNN` carries evidence a compressed comment cannot.
+- **Storybook descriptions** — a JSDoc in a component, view or stories file is what the reference
+  page prints. Keep a description there that restates a prop's name, though rule 1 deletes it
+  anywhere else.
 - **Structural section banners** are navigation, not narration. Collapse a three-line banner to one
   line and keep the label. Never drop the label.
 

@@ -261,7 +261,8 @@ times. (why: docs/why.md#link-the-branch-alias-never-a-commit-alias)
 **A per-commit alias in a PR body is a defect** — its first hostname label is eight hex
 characters.
 
-- **SahajAtlasWeb has two previews** — app and Ladle playground. Link both on a UI change.
+- **SahajAtlasWeb has two previews** — app and Storybook component library. Link both on a UI
+  change.
 - **Deep-link the routes you changed, and re-verify every link when you revise** — an alias keeps
   the host current, never the path, so deleting a component deletes its story.
 - SahajAtlasWordpress has no preview — omit the section.
