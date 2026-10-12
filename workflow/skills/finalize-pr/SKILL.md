@@ -321,11 +321,12 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    returns Railway's commit status. Cloudflare reports a check run instead.
 2. Read it again every `preview.pollSeconds`, for at most `preview.deployWaitMinutes`, both from
    `loop-config.json`. **Run one waiter at a time.** Between reads, wait with a single background
-   `sleep`, because the hook refuses a foreground one. Never read CI while you wait.
+   `sleep`, because Claude Code refuses a foreground one. Never read CI while you wait.
 3. **Success** → seed and verify per *Every link opens on data*. Then refresh the body in one
    `pull_request_write method:update`.
 4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
-   in the report, and end. A failed deploy goes to `fix-ci` through CI, not to this step.
+   in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
+   `fix-ci` deploy pass — never this step's.
 
 ### 8. Push and end
 
