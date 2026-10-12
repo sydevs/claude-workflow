@@ -104,6 +104,19 @@ const reviewedBefore = (s) => (s.record?.dispatches || []).some((d) => d.handler
  * run must know that before it starts. (why: docs/why.md#a-goal-is-verified-not-assumed)
  */
 const verifyFlags = (kids) => (kids.length && kids.every((c) => c.stateReason === 'not_planned') ? { mode: 'verify', withdrawn: true } : { mode: 'verify' })
+/**
+ * The session ending now was the completion check, fired after every child
+ * closed. Children close seconds apart, so a sibling's leg finds that check
+ * holding the lock and re-arms `verifyDue` under it. A timestamp, not the
+ * handler alone: a child reclosed during the run is still owed a check.
+ * (why: docs/why.md#a-goal-is-verified-not-assumed)
+ */
+function verifiedAlready(s, kids) {
+  const cur = s.record?.current
+  if (cur?.handler !== 'revise-roadmap' || cur.flags?.mode !== 'verify' || !cur.firedAt) return false
+  const firedAt = Date.parse(cur.firedAt)
+  return kids.every((c) => c.closedAt && Date.parse(c.closedAt) <= firedAt)
+}
 
 /** The `sydevs-request` the session that just ended left, or null. (why: docs/why.md#a-session-asks-actions-acts) */
 function freshRequest(s) {
@@ -772,7 +785,11 @@ function derive(target, s, config) {
       if (isRoadmap(s, config)) {
         const kids = s.children || []
         if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
-        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
+        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) {
+          if (!verifiedAlready(s, kids)) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
+          // Then end as an unlock with nothing re-armed would.
+          plan.push(record({ verifyDue: false }), note('the verify that just ended already read every child'))
+        }
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }

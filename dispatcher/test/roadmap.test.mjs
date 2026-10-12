@@ -226,6 +226,44 @@ test('the last child closing fires the completion check', () => {
   assert.deepEqual(types(decide({ reason: 'child-closed', facts: {} }, half, config)), ['note'])
   const busy = decide({ reason: 'child-closed', facts: {} }, { ...done, locked: true }, config)
   assert.deepEqual(types(busy), ['record', 'recheck'])
+  // The unlock that consumes a re-armed `verifyDue`. (sydevs/claude-workflow#185)
+  const firedAt = '2026-10-07T10:00:00.500Z'
+  const closedAt = (n) => ({ repo: repo(), number: n, state: 'closed', closedAt: '2026-10-07T09:59:58Z' })
+  const unlock = (children, current) => decide({ reason: 'unlock', facts: {} }, snap({ children, record: { verifyDue: true, current: { firedAt, ...current } } }), config)
+  const verify = { handler: 'revise-roadmap', flags: { mode: 'verify' } }
+  const again = unlock([closedAt(1), closedAt(2)], verify)
+  assert.equal(fires(again).length, 0, 'the verify that just ended already read every child')
+  assert.ok(again.some((a) => a.type === 'record' && a.patch.verifyDue === false), 'and the owed check is cleared')
+  const reclosed = unlock([closedAt(1), { ...closedAt(2), closedAt: '2026-10-07T10:05:00Z' }], verify)
+  assert.deepEqual(fires(reclosed).map((a) => [a.handler, a.flags.mode]), [['revise-roadmap', 'verify']], 'a child closed after the verify fired')
+  for (const current of [{ ...verify, handler: 'implement' }, { ...verify, flags: { mode: 'revise' } }]) {
+    const other = unlock([closedAt(1), closedAt(2)], current)
+    assert.deepEqual(fires(other).map((a) => [a.handler, a.flags.mode]), [['revise-roadmap', 'verify']], `${current.handler} ${current.flags.mode} held the lock`)
+  }
+})
+
+test('children closing seconds apart produce one verify, which ends as any verify does', () => {
+  // sydevs/SahajCloud#897: closed 09:40:24, :27 and :30; verify fired at :43, and again on its own unlock.
+  const kids = [[881, 24], [883, 27], [884, 30]].map(([number, sec]) => ({ repo: repo('SahajCloud'), number, state: 'closed', stateReason: 'completed', closedAt: `2026-10-12T09:40:${sec}Z` }))
+  const current = { handler: 'revise-roadmap', flags: { mode: 'verify' }, firedAt: '2026-10-12T09:40:43.120Z' }
+  let rec = {}
+  let verifies = 0
+  const leg = (reason, over = {}) => {
+    const p = decide({ reason, facts: {} }, snap({ children: kids, record: rec, ...over }), config)
+    for (const a of p) if (a.type === 'record') rec = { ...rec, ...a.patch }
+    verifies += fires(p).filter((a) => a.handler === 'revise-roadmap').length
+    return p
+  }
+  leg('child-closed') // #883's leg already reads all three closed
+  rec = { ...rec, current }
+  leg('child-closed', { locked: true }) // #884's leg finds the lock
+  assert.equal(rec.verifyDue, true)
+  const end = leg('unlock')
+  assert.equal(verifies, 1)
+  assert.equal(rec.verifyDue, false)
+  const plain = decide({ reason: 'unlock', facts: {} }, snap({ children: kids, record: { current } }), config)
+  const rest = (p) => p.filter((a) => a.type !== 'record' && a.type !== 'note')
+  assert.deepEqual(rest(end), rest(plain), 'a gap the verify left is still your turn')
 })
 
 test('children all closed as not planned make a withdrawn verify, on both fire sites', () => {

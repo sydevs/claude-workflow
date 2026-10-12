@@ -2037,7 +2037,9 @@ So the last child closing fires `revise-roadmap` in verify mode. It writes a pla
 what shipped and checks it against `## What success looks like`. A match closes the goal. A gap
 sets `awaiting` and names it, and `implement` on the goal then files only what is missing. If a
 session holds the goal when its last child closes, the dispatcher records that a check is owed and
-runs it on unlock.
+runs it on unlock — unless that session was the check itself and no child closed after it fired.
+Children close seconds apart, so a sibling's leg finds the check running and re-arms it, and
+SahajCloud#897 was verified twice.
 
 Children closed entirely as not planned are the extreme case: nothing shipped, yet the notes block
 still claims work is built. The fire says so with `withdrawn`, so the run reports the goal unstarted

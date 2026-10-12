@@ -313,9 +313,13 @@ function goalWorld(reasons = ['not_planned', 'not_planned', 'not_planned']) {
 }
 const goal = (reason) => ({ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 897, reason, event: 'issues.closed', facts: {} })
 
-test("a goal's gathered children carry why each one closed", async () => {
+test("a goal's gathered children carry why and when each one closed", async () => {
   const s = await gather(fakeGithub(goalWorld(['not_planned', 'completed', null])), goal('child-closed'), config, { now })
-  assert.deepEqual(s.children.map((c) => [c.number, c.state, c.stateReason]), [[881, 'closed', 'not_planned'], [883, 'closed', 'completed'], [884, 'closed', null]])
+  assert.deepEqual(s.children.map((c) => [c.number, c.state, c.stateReason, c.closedAt]), [
+    [881, 'closed', 'not_planned', '2026-09-08T11:40:24Z'],
+    [883, 'closed', 'completed', '2026-09-08T11:40:27Z'],
+    [884, 'closed', null, '2026-09-08T11:40:30Z'],
+  ])
 })
 
 test('dry-run: a withdrawn goal prints the flag in the verify record, and writes nothing', async () => {
@@ -330,4 +334,17 @@ test('dry-run: a withdrawn goal prints the flag in the verify record, and writes
   }
   assert.deepEqual((await run(goalWorld())).flags, { onDemand: false, delegated: false, mode: 'verify', withdrawn: true })
   assert.deepEqual((await run(goalWorld(['not_planned', 'completed', 'not_planned']))).flags, { onDemand: false, delegated: false, mode: 'verify' }, 'something shipped: no flag')
+})
+
+test('a verify session that times out is re-fired by the deadline path, with its own flags', async () => {
+  const world = goalWorld()
+  world.issues[897].labels = [{ name: 'bot:working' }]
+  const current = { id: 'x', handler: 'revise-roadmap', flags: { mode: 'verify', withdrawn: true }, attempt: 1, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }
+  world.comments[897] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, verifyDue: false, current, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  world.refs = new Map([['refs/sydevs-lease/897', 'stale']])
+  const github = fakeGithub(world)
+  const sent = []
+  const fetchImpl = async (url, opts) => { sent.push(JSON.parse(JSON.parse(opts.body).text)); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_9', claude_code_session_url: 'u' }), headers: new Map() } }
+  await act({ github, context: {}, core, config, target: { ...goal('sweep-timeout'), event: 'schedule', facts: { handler: 'revise-roadmap', attempt: 1 } }, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
+  assert.deepEqual(sent.map((r) => [r.handler, r.attempt, r.flags]), [['revise-roadmap', 2, { onDemand: false, delegated: false, mode: 'verify', withdrawn: true }]])
 })
