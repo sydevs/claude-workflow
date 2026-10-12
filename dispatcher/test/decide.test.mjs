@@ -637,8 +637,12 @@ test('a comment on a human PR still needs a mention', () => {
 
 // ---- only required checks are CI -----------------------------------------
 
+const RAILWAY_URL = 'https://railway.com/project/bdff2c72-5af2-4da3-9e2c-913f5e9d1b0f/service/1edee955-6c1f-4d8e-9cef-41737f981187?id=963aac12-f6c4-4b6e-bc9a-9feac615c336&environmentId=a35269c7-37ba-4d31-af10-711c611c2056'
+const advisoryNotes = (advisory) => evaluatePr(prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory } }), config)
+  .filter((a) => a.type === 'comment' && a.key.startsWith('advisory '))
+
 test('a red non-required check is said once and fires nothing', () => {
-  const s = prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory: ['sahajcloud - SahajCloud'] } })
+  const s = prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory: [{ name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: null }] } })
   const p = evaluatePr(s, config)
   assert.equal(p.some((a) => a.handler === 'fix-ci'), false)
   const notes = p.filter((a) => a.type === 'comment' && a.key.startsWith('advisory '))
@@ -646,8 +650,32 @@ test('a red non-required check is said once and fires nothing', () => {
   assert.match(notes[0].body, /Not required/)
 })
 
+test('the advisory note links each failing context to its deployment, keyed by name alone', () => {
+  const notes = advisoryNotes([
+    { name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_URL },
+    { name: 'sahajcloud - SahajCloud', kind: 'check', targetUrl: null },
+  ])
+  assert.equal(notes.length, 1)
+  assert.equal(notes[0].key, 'advisory sahajcloud - SahajCloud', 'the commentOnce key is unchanged, so no note is re-posted')
+  assert.ok(notes[0].body.includes(`[\`sahajcloud - SahajCloud\`](${RAILWAY_URL})`), notes[0].body)
+})
+
+test('an advisory with no link, or one that is not https, is named without one', () => {
+  const [note] = advisoryNotes([
+    { name: 'Cloudflare Pages: sahajatlas', kind: 'check', targetUrl: null },
+    { name: 'evil', kind: 'status', targetUrl: 'javascript:alert(1)' },
+  ])
+  assert.match(note.body, /: `Cloudflare Pages: sahajatlas`, `evil` failed/)
+  assert.doesNotMatch(note.body, /\]\(/)
+})
+
+test('a parenthesis in a link cannot close the Markdown link early', () => {
+  const [note] = advisoryNotes([{ name: 'x', kind: 'status', targetUrl: 'https://example.com/a)b(c' }])
+  assert.ok(note.body.includes('[`x`](https://example.com/a%29b%28c)'), note.body)
+})
+
 test('no advisory note while required CI is still running', () => {
-  const p = evaluatePr(prSnap({ ci: { ...running, advisory: ['Cloudflare Pages: sahajatlas'] } }), config)
+  const p = evaluatePr(prSnap({ ci: { ...running, advisory: [{ name: 'Cloudflare Pages: sahajatlas', kind: 'check', targetUrl: null }] } }), config)
   assert.deepEqual(types(p), ['note'])
 })
 

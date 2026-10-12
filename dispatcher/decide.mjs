@@ -339,11 +339,31 @@ export function evaluatePr(s, config) {
   return evaluateGreenPr(s, config).concat(advisoryNote(s))
 }
 
-/** A red check the ruleset does not require is said once per set of names, and fires nothing. (why: docs/why.md#only-required-checks-are-ci) */
+/**
+ * A red check the ruleset does not require is said once per set of names,
+ * linked to its deployment when it has one, and fires nothing.
+ * (why: docs/why.md#only-required-checks-are-ci)
+ */
 function advisoryNote(s) {
-  const names = [...new Set(s.ci?.advisory || [])].sort()
+  const byName = new Map()
+  for (const a of s.ci?.advisory || []) if (!byName.get(a.name)?.targetUrl) byName.set(a.name, a)
+  const names = [...byName.keys()].sort()
   if (!names.length) return []
-  return [commentOnce(`advisory ${names.join(' · ')}`, `Not required, so not blocking: ${names.map((n) => `\`${n}\``).join(', ')} failed. A preview link in the body may not open until it passes.`)]
+  const shown = names.map((n) => {
+    const href = linkTarget(byName.get(n).targetUrl)
+    return href ? `[\`${n}\`](${href})` : `\`${n}\``
+  })
+  return [commentOnce(`advisory ${names.join(' · ')}`, `Not required, so not blocking: ${shown.join(', ')} failed. A preview link in the body may not open until it passes.`)]
+}
+
+/** An https URL safe inside a Markdown link, or null. A status's `target_url` is whatever its poster set. */
+function linkTarget(url) {
+  try {
+    const u = new URL(String(url))
+    return u.protocol === 'https:' ? u.href.replace(/\(/g, '%28').replace(/\)/g, '%29') : null
+  } catch {
+    return null
+  }
 }
 
 function evaluateGreenPr(s, config) {

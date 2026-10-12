@@ -62,7 +62,9 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}) },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
-    ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason } : null,
+    // `advisory` carries each red non-required check's link. No MCP tool
+    // returns a commit status, so the record is a session's only route to it.
+    ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason, advisory: snapshot.ci.advisory || [] } : null,
     deadline,
     journal: { repo: `${config.org}/${config.journalRepo}`, issue: journalNumber },
     firedAt: now.toISOString(),

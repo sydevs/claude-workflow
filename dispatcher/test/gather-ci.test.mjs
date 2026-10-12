@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { gather } from '../gather.mjs'
+import { buildRecord } from '../fire.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 const bot = { login: config.identity.expectedLogin }
@@ -56,14 +57,37 @@ function withRules(checks, { statuses = [], required = null } = {}) {
 const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 742, reason: 'ci', facts: { sha: 'abc' } }
 const when = { now: new Date('2026-10-09T17:00:00Z') }
 
-test('a red Railway status the ruleset does not require is advisory, not failing', async () => {
+// Verbatim from sydevs/SahajCloud#879's head on 2026-10-12: the failed preview
+// that fired fix-ci blind (claude-workflow#164). The deployment id is `?id=`.
+const RAILWAY_FAILED = {
+  context: 'sahajcloud - SahajCloud',
+  state: 'failure',
+  description: 'Deployment failed',
+  target_url: 'https://railway.com/project/bdff2c72-5af2-4da3-9e2c-913f5e9d1b0f/service/1edee955-6c1f-4d8e-9cef-41737f981187?id=963aac12-f6c4-4b6e-bc9a-9feac615c336&environmentId=a35269c7-37ba-4d31-af10-711c611c2056',
+}
+
+test('a red Railway status the ruleset does not require is advisory, not failing, and keeps its link', async () => {
   const gh = withRules([{ id: 1, name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'success' }], {
-    statuses: [{ context: 'sahajcloud - SahajCloud', state: 'failure' }],
+    statuses: [RAILWAY_FAILED],
     required: ['Lint, Test & Smoke'],
   })
   const s = await gather(gh, target, config, when)
   assert.equal(s.ci.green, true, s.ci.reason)
-  assert.deepEqual(s.ci.advisory, ['sahajcloud - SahajCloud'])
+  assert.deepEqual(s.ci.advisory, [{ name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_FAILED.target_url }])
+})
+
+test("a red advisory's link reaches the dispatch record's ci, with no Railway credential", async () => {
+  const gh = withRules([
+    { id: 1, name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'failure' },
+    { id: 2, name: 'Cloudflare Pages: sahajatlas', status: 'completed', conclusion: 'failure', details_url: 'https://dash.cloudflare.com/x/pages/view/sahajatlas/abc' },
+  ], { statuses: [RAILWAY_FAILED], required: ['Lint, Test & Smoke'] })
+  const s = await gather(gh, target, config, when)
+  const rec = buildRecord({ handler: 'fix-ci', target, snapshot: s, flags: {}, attempt: 1, journalNumber: 1, config, now: when.now })
+  assert.equal(rec.ci.green, false, 'the required check is still red')
+  assert.deepEqual(rec.ci.advisory, [
+    { name: 'Cloudflare Pages: sahajatlas', kind: 'check', targetUrl: 'https://dash.cloudflare.com/x/pages/view/sahajatlas/abc' },
+    { name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_FAILED.target_url },
+  ])
 })
 
 test('a cancelled duplicate run is superseded by the newer run of that name', async () => {

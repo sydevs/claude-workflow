@@ -233,10 +233,11 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { data: cr } = await gh.rest.checks.listForRef({ owner, repo, ref: pr.head.sha, per_page: 100, filter: 'latest' })
   const { data: st } = await gh.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha })
   // Green is what the base branch's ruleset requires, newest run per name.
+  // A status keeps its link: a red preview's `target_url` is its build log.
   // (why: docs/why.md#only-required-checks-are-ci)
   const gate = requiredOnly({
     checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, details_url: c.details_url })) },
-    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) },
+    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state, target_url: x.target_url || null, description: x.description || null })) },
     required: await requiredContexts(gh, { owner, repo }, pr.base?.ref),
   })
   const { checkRuns, statuses } = gate
