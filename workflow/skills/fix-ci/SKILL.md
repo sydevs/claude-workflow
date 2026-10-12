@@ -53,8 +53,9 @@ though `ci.reason` names no check. The dispatcher cannot re-run it, so a cause o
 ends with your comment. The stale-head check still applies.
 
 1. `node <claude-workflow>/workflow/lib/railway.mjs < record.json > railway.json`. Each entry in
-   `deployments` is one failed preview, with its `targetUrl` and a ready `request`. None → journal
-   it, and stop.
+   `deployments` is one failed preview, with its `targetUrl` and a ready `request`. Keep only an
+   entry whose `targetUrl` a failing status in `pull_request_read method:get_status` also carries.
+   None left → journal it, and stop.
 2. `tokenSet: false` → comment one line: the log could not be read, with each `targetUrl`. Journal
    the missing credential. Stop.
 3. Read each preview's logs, `[0]` first, then any others. This is Railway, not GitHub, so `curl`

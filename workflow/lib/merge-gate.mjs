@@ -92,8 +92,8 @@ export function latestPerName(runs) {
  * `advisory` lists the red checks the ruleset does not require — a preview
  * deploy, a Railway status — as `{name, kind, targetUrl}`. They inform the
  * reviewer and fire nothing. `targetUrl` is a status's `target_url` or a check
- * run's `details_url`, else null: the failing deployment, which no MCP tool
- * can look up. (why: docs/why.md#only-required-checks-are-ci)
+ * run's `details_url`, else null: the failing deployment.
+ * (why: docs/why.md#only-required-checks-are-ci)
  */
 export function requiredOnly({ checkRuns, statuses, required }) {
   const runs = latestPerName(checkRuns?.check_runs || [])

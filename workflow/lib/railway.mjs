@@ -5,11 +5,11 @@
  *
  * ## Why this is a script
  *
- * A failing preview reaches the loop only as a commit status, and no
- * `mcp__github__*` tool returns one. The dispatcher copies each red status
- * the ruleset does not require into the record's `ci.advisory`, with its
- * `target_url`. That URL holds the deployment id, so parsing it is the one
- * route to the build log. The dispatcher and the session both need the same
+ * A failing preview reaches the loop only as a commit status. The dispatcher
+ * copies each red status the ruleset does not require into the record's
+ * `ci.advisory`, with its `target_url`, and a session can re-read it with
+ * `pull_request_read method:get_status`. That URL holds the deployment id, so
+ * parsing it is the one route to the build log. The dispatcher and the session both need the same
  * answer: the dispatcher to decide whether a pass is worth firing, the
  * session to know what to read. One definition serves both.
  *
