@@ -2416,6 +2416,26 @@ one call was the worse trade. The re-run uses the calling repo's own `GITHUB_TOK
 each repo's caller grants `actions: write` on its dispatch job. A refused re-run still counts
 against the cap, so a missing grant ends with a person rather than a loop.
 
+## A failed preview is read from its log
+
+A failing Railway preview reached the loop as one commit status: a context name and a state. A
+commit status is not a check run, so the infrastructure path above never sees it, and no
+`mcp__github__*` tool returns one. On 2026-10-07 three SahajCloud previews failed inside 90
+seconds while GitHub's own tests passed (claude-workflow#164). Nothing on the PR said whether the
+change broke the build or Railway did.
+
+Excluding the status from CI was ruled out: a failed build is not to be ignored. So the
+dispatcher keeps each red status's `target_url`, links it in the advisory comment, and carries it
+in the dispatch record's `ci.advisory`, the only route a session has to it. The link holds the
+deployment id (`?id=` on `railway.com/project/<p>/service/<s>`). `workflow/lib/railway.mjs` parses
+it and builds the GraphQL request for that deployment's build and runtime logs. The session sends
+the request. No script holds the token or opens the connection.
+
+**The token** is a Railway project token, named by `railway.tokenEnvVar`. The cloud environment
+has no secret store, and a project token can deploy as well as read, so its one-project scope is
+the defence. Without it, or when Railway refuses it, the link is still commented and a person
+opens the log.
+
 ## A reopened question says what it reopens
 
 When a review reopened a decision, the old answer left `## Decisions` and the question came back

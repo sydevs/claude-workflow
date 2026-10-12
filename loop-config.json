@@ -266,6 +266,15 @@
     },
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
+  "railway": {
+    "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
+    "apiBase": "https://backboard.railway.com/graphql/v2",
+    "tokenEnvVar": "RAILWAY_PROJECT_TOKEN",
+    "statusContexts": [
+      "sahajcloud - SahajCloud"
+    ],
+    "logLines": 500
+  },
   "mailpit": {
     "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here.",
     "url": "https://mailpit-production-db88.up.railway.app",
