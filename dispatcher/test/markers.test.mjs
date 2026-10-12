@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases, parseOpenQuestions, parseRequest } from '../markers.mjs'
+import { parseBlockedBy, stripBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases, parseOpenQuestions, parseRequest } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -25,6 +25,7 @@ test('live in-org issue blockers are parsed; struck, foreign and PR lines are no
 
 test('re-check and sentry lines', () => {
   assert.equal(parseRecheck(body), '2026-10-01')
+  assert.equal(parseRecheck('- Re-check: 2026-10-01\n- ~~Re-check: 2026-10-02~~'), null, 'a list item never reaches it, struck or not')
   assert.deepEqual(parseSentry(body), { url: 'https://sy-developers.sentry.io/issues/123', id: '123' })
   assert.equal(parseRecheck('no markers'), null)
   assert.equal(parseSentry('no markers'), null)
@@ -44,6 +45,7 @@ test('the reader matches the words, not the punctuation — the four live ticket
   const two = parseBlockedBy('**Blocked by sydevs/SahajCloud#705 and sydevs/SahajCloud#706.** Do not start until both merge.', 'sydevs')
   assert.deepEqual(two.map((b) => b.number), [705, 706])
   assert.deepEqual(parseBlockedBy('- Blocked by sydevs/WeMeditateWeb#80', 'sydevs').map((b) => b.number), [80])
+  assert.deepEqual(parseBlockedBy('- **Blocked by sydevs/WeMeditateWeb#9.**', 'sydevs').map((b) => b.number), [9], 'a bullet and bold together')
   // The exact written format still parses, and a URL and shorthand for the
   // same issue count once.
   assert.deepEqual(
@@ -54,10 +56,43 @@ test('the reader matches the words, not the punctuation — the four live ticket
 
 test('loose matching stays closed to everything it should ignore', () => {
   assert.deepEqual(parseBlockedBy('~~Blocked by sydevs/SahajCloud#1~~', 'sydevs'), [], 'struck through')
+  assert.deepEqual(parseBlockedBy('- ~~Blocked by: https://github.com/sydevs/SahajCloud/issues/1~~', 'sydevs'), [], 'struck through, as a list item')
+  assert.deepEqual(parseBlockedBy('- **~~Blocked by sydevs/SahajCloud#1~~**', 'sydevs'), [], 'struck through inside bold')
   assert.deepEqual(parseBlockedBy('Blocked by: https://github.com/sydevs/SahajCloud/pull/9', 'sydevs'), [], 'a PR is not a blocker')
   assert.deepEqual(parseBlockedBy('This is blocked by sydevs/SahajCloud#5', 'sydevs'), [], 'mid-sentence prose')
   assert.deepEqual(parseBlockedBy('Blocked by: https://github.com/other/Repo/issues/3', 'sydevs'), [], 'another org')
   assert.deepEqual(parseBlockedBy('Blocked by #12', 'sydevs'), [], 'a bare number names no repository')
+})
+
+// ---- a converted blocker line is deleted (why: docs/why.md#a-converted-blocker-line-is-deleted)
+const two = { repo: 'SahajCloud', number: 2 }
+const three = { repo: 'SahajAtlasWeb', number: 3 }
+
+test('a converted line is stripped and the rest of the body survives byte for byte', () => {
+  const live = '## Summary\r\nkeep  this\r\n\r\n## Notes\r\n\r\nBlocked by: https://github.com/sydevs/SahajCloud/issues/2 — the endpoint\r\n\r\nSee also #4.\r\n'
+  const out = stripBlockedBy(live, 'sydevs', 'Blocked by', [two])
+  assert.equal(out.body, '## Summary\r\nkeep  this\r\n\r\n## Notes\r\n\r\nSee also #4.\r\n', 'one blank where the line was, CRLF kept')
+  assert.deepEqual(out.dropped, ['Blocked by: https://github.com/sydevs/SahajCloud/issues/2 — the endpoint'])
+  // The heading stays when the line was all it held.
+  assert.equal(stripBlockedBy('## Notes\n- **Blocked by sydevs/SahajCloud#2.**\n', 'sydevs', 'Blocked by', [two]).body, '## Notes\n')
+  assert.equal(stripBlockedBy('## Notes\n\nBlocked by: sydevs/SahajCloud#2', 'sydevs', 'Blocked by', [two]).body, '## Notes\n')
+})
+
+test('a line stays while any in-org target on it is unrelated', () => {
+  const live = '## Notes\nBlocked by: https://github.com/sydevs/SahajCloud/issues/2 and https://github.com/sydevs/SahajAtlasWeb/issues/3\n'
+  assert.deepEqual(stripBlockedBy(live, 'sydevs', 'Blocked by', [two]), { body: live, dropped: [] })
+  assert.equal(stripBlockedBy(live, 'sydevs', 'Blocked by', [two, three]).body, '## Notes\n')
+})
+
+test('the strip leaves every line the reader skips', () => {
+  const live = [
+    '~~Blocked by: https://github.com/sydevs/SahajCloud/issues/2~~',
+    '- ~~Blocked by sydevs/SahajCloud#2~~',
+    'Blocked by: https://github.com/other/Repo/issues/2',
+    'Blocked by #2',
+    'This is blocked by sydevs/SahajCloud#2',
+  ].join('\n')
+  assert.deepEqual(stripBlockedBy(live, 'sydevs', 'Blocked by', [two]), { body: live, dropped: [] })
 })
 
 test('phases are counted from the PR body checklist, up to the next heading', () => {

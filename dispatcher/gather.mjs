@@ -202,6 +202,9 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
     s.markers = { blockedBy: markerBlockers, recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
+    // Every relationship, closed blockers too: a line naming one is already
+    // converted, so it is stripped, never re-POSTed.
+    s.blockedByAll = Array.isArray(blockedBy) ? blockedBy : []
     s.blockedByError = Array.isArray(blockedBy) ? null : blockedBy.error
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)

@@ -1356,6 +1356,38 @@ alone, as `blockedBy` on `Issue`, so the sweeper asks for every open issue with 
 its blockers in one paginated query per repo. That query also turned up a fifth ticket nobody had
 named.
 
+## A converted blocker line is deleted
+
+The dispatcher used to turn a `Blocked by:` line into a native relationship and leave the line in
+the body. The body then held a second copy of the relationship, and the two drifted. Every later
+`issues.edited` pass read the line again, so a blocker a reviewer had cleared by hand was
+re-POSTed, with `blocked` re-applied, on the next unrelated body edit. On
+`sydevs/SahajAtlasWeb#266` a run improvised a clear by striking the line, `- ~~Blocked by: …~~`.
+No skill had ever said to. The reader tested for the strike before it removed the bullet, so it
+read the struck line as live and restored the relationship.
+
+So the line is write-only. The pass that makes the relationship deletes the line, and from then on
+the relationship is the only state.
+
+- **The strip runs where the POST does**, in `apply`, because only that step knows which writes
+  succeeded. A line goes when every in-org target on it ended related: already there in any state,
+  closed included, or POSTed without error. One failed POST keeps the whole line, and the next
+  edit retries it.
+- **It re-reads the body just before the PUT.** `issues.edited` takes no lock, so a session may
+  have rewritten the body since `gather`, and a PUT built from that snapshot would erase its work.
+- **There is no sender filter.** A session's own edit is how its line gets converted at all, so
+  the bot's strip fires `issues.edited` too. That echo pass finds no marker and stops. One extra
+  pass per strip is the cost.
+- **Only a pass that read the body strips it.** A stranger's own line is never converted, so it is
+  never stripped (why: docs/why.md#a-strangers-marker-is-text). A `block on` verb's targets come
+  from a comment, so that pass leaves the body alone.
+
+The strike ordering was fixed anyway. With the strip in place, a misread struck line would create
+a relationship and delete the evidence in one pass. The `— <reason>` prose goes with the line, and
+the issue's edit history keeps the words. A session now loses its only sight of a blocker in the
+body. The `blocked` label and the dispatcher's own pre-fire check are the gate instead, until a
+session can read relationships itself (sydevs/claude-workflow#3).
+
 ## A date belongs in a date field
 
 A park used to be `Re-check: 2026-10-01` in `## Notes`, parsed with a regular expression. That

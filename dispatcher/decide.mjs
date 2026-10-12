@@ -26,7 +26,8 @@ export const armAutoMerge = () => ({ type: 'armAutoMerge' })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
-export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
+/** `strip`: the targets were read from the body, so their lines go once related. A `block on` verb's were not. */
+export const relationships = (blockedBy, strip = false) => ({ type: 'relationships', blockedBy, strip })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
 export const releaseLease = (why) => ({ type: 'releaseLease', why })
@@ -536,7 +537,7 @@ function derive(target, s, config) {
       plan.push({ type: 'ensure' }, status('proposed'))
       if (!bornBlocked) plan.push(label([L.awaiting], []))
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
-      if (blockers.length) plan.push(relationships(blockers))
+      if (blockers.length) plan.push(relationships(blockers, true))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
       // Nothing the loop files is revised on arrival any more: every author
       // writes through write-ticket, so a proposal arrives fully specified.
@@ -556,7 +557,7 @@ function derive(target, s, config) {
       // its body, so this is the one case to refuse.
       // (why: docs/why.md#a-strangers-marker-is-text)
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
-      if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
+      if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
       if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
       return plan.length ? plan : [note('no marker change')]
     }
