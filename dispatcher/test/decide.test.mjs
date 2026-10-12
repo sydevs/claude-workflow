@@ -679,6 +679,64 @@ test('no advisory note while required CI is still running', () => {
   assert.deepEqual(types(p), ['note'])
 })
 
+// ---- a failed preview is read from its log (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+
+const railwayCfg = { ...config, railway: { statusContexts: ['sahajcloud - SahajCloud'] } }
+const PREVIEW = { name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_URL }
+const deployPass = (sha, outcome = 'done') => ({ id: 'SahajCloud-5-fix-ci-20261012T000000000Z-bbbb', handler: 'fix-ci', flags: { mode: 'deploy' }, attempt: 1, firedAt: '2026-10-12T00:00:00.000Z', sha, outcome })
+const fixCiFires = (plan) => plan.filter((a) => a.type === 'fire' && a.handler === 'fix-ci')
+const spendsARepair = (plan) => plan.some((a) => a.type === 'bumpFixCi' || (a.type === 'record' && 'fixCi' in (a.patch || {})))
+
+test('a failed preview with green required CI fires fix-ci in deploy mode, links it, and spends no repair', () => {
+  const plan = evaluatePr(prSnap({ ci: { ...green, advisory: [PREVIEW] } }), railwayCfg)
+  assert.deepEqual(types(plan), ['comment', 'fire:fix-ci'])
+  assert.deepEqual(plan[1].flags, { mode: 'deploy' })
+  assert.ok(plan[0].body.includes(RAILWAY_URL), 'the advisory comment carries the link')
+  assert.equal(spendsARepair(plan), false, 'no bumpFixCi, no fixCi write')
+})
+
+test('a second ci event on the same head fires nothing and leaves record.fixCi unchanged', () => {
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, record: { fixCi: 1, dispatches: [deployPass('abc')] } })
+  const plan = evaluatePr(s, railwayCfg)
+  assert.deepEqual(fixCiFires(plan), [])
+  assert.equal(spendsARepair(plan), false)
+  assert.deepEqual(types(plan), ['fire:review-pr', 'comment'], 'the PR moves on to the critic, with the advisory note')
+})
+
+test('the unlock that ends a deploy pass does not fire another on its head', () => {
+  // `apply` moves `current` into `dispatches` after this plan is made, and the
+  // fire-time entry carries no flags, so `current` is the only witness here.
+  const firedAt = { id: 'SahajCloud-5-fix-ci-20261012T000000000Z-bbbb', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-12T00:00:00.000Z', sha: 'abc' }
+  const { outcome, ...current } = deployPass('abc')
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, record: { fixCi: 0, current, dispatches: [firedAt] } })
+  const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, railwayCfg)
+  assert.deepEqual(fixCiFires(plan), [])
+})
+
+test('a push to a new head gets its own deploy pass', () => {
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 0, dispatches: [deployPass('abc')] } })
+  assert.deepEqual(fixCiFires(evaluatePr(s, railwayCfg)).map((a) => a.flags), [{ mode: 'deploy' }])
+})
+
+test('a deploy pass on this head never stands in for a repair pass', () => {
+  const s = prSnap({ ci: { ...red, advisory: [PREVIEW] }, record: { fixCi: 0, dispatches: [deployPass('abc')] } })
+  assert.deepEqual(types(evaluatePr(s, railwayCfg)), ['bumpFixCi', 'fire:fix-ci'])
+})
+
+test('no deploy pass without a railway key, an unlisted context, or a link that is not a deployment', () => {
+  const quiet = (cfg, advisory) => fixCiFires(evaluatePr(prSnap({ ci: { ...green, advisory } }), cfg))
+  assert.deepEqual(quiet(config, [PREVIEW]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, name: 'other - Railway' }]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, targetUrl: 'https://railway.com/project/x' }]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, targetUrl: null }]), [])
+})
+
+test('no deploy pass while required CI runs, or while the ticket still has phases to build', () => {
+  assert.deepEqual(types(evaluatePr(prSnap({ ci: { ...running, advisory: [PREVIEW] } }), railwayCfg)), ['note'])
+  const plan = evaluatePr(phased(1, 3, { ci: { ...green, advisory: [PREVIEW] } }), railwayCfg)
+  assert.deepEqual(types(plan), ['targets', 'comment'], 'the next phase may be what fixes the build, so only the note')
+})
+
 // ---- a push from a person resets the repair count (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
 
 test('at the cap, a head a person pushed since the last fix-ci resets the count and repairs again', () => {

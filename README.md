@@ -144,7 +144,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
 | `address-review` | a review, thread reply or mention on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
-| `fix-ci` | a red required check on a bot PR, up to 3 times | one fix commit |
+| `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
 | `resolve-conflicts` | an approved bot PR that conflicts | `main` merged in, conflicts resolved |
 

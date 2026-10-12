@@ -2436,6 +2436,14 @@ has no secret store, and a project token can deploy as well as read, so its one-
 the defence. Without it, or when Railway refuses it, the link is still commented and a person
 opens the log.
 
+**The pass.** Reading a log needs a session, so a failed preview with green required CI fires
+`fix-ci` in `deploy` mode. It is a mode, not a new handler: the reads, the worktree and the push are
+already right. It fires once per head and never touches `rec.fixCi`, so a flaky preview cannot
+starve a real test failure of its passes, and no new ceiling ships beside the skill change. It
+never fires mid-phases, where the next phase may be the fix. A cause in the repo is fixed and
+pushed. A cause outside it gets one comment naming the log line. It never redeploys: a retry is a
+write to a vendor account.
+
 ## A reopened question says what it reopens
 
 When a review reopened a decision, the old answer left `## Decisions` and the question came back

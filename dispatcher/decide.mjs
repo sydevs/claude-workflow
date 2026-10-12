@@ -13,6 +13,7 @@
 
 import { parseVerb, parseBlock } from './verbs.mjs'
 import { parsePhases } from './markers.mjs'
+import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
 export const fire = (handler, flags = {}) => ({ type: 'fire', handler, flags })
@@ -260,9 +261,41 @@ function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
 }
 
+/** A repair pass, never a deploy pass: a flaky preview must not stand in for a real test failure. */
 function endedFixCiFor(record, sha) {
   if (!sha) return null
-  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome) || null
+  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome && d.flags?.mode !== 'deploy') || null
+}
+
+/**
+ * A deploy pass already fired against this head: running, just unlocked, or
+ * ended. `current` counts because the unlock that ends a session is decided
+ * before `apply` moves it into `dispatches`, and only `current` and ended
+ * entries carry `flags`. (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+ */
+function deployPassFor(record, sha) {
+  if (!sha) return null
+  const isDeploy = (d) => d?.handler === 'fix-ci' && d.sha === sha && d.flags?.mode === 'deploy'
+  return [record?.current, ...(record?.dispatches || [])].find(isDeploy) || null
+}
+
+/** A phased draft whose ticket still has phases to build, or null. */
+function phasesLeft(s) {
+  const phases = parsePhases(s.item?.body)
+  return s.pr?.draft && phases && phases.done < phases.total && s.linkedIssues?.length ? phases : null
+}
+
+/**
+ * Required CI is green, and a Railway preview `railway.statusContexts` lists
+ * failed. One `fix-ci` pass in `deploy` mode reads its log, once per head,
+ * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass. Not
+ * mid-phases, where the next phase may be what fixes the build.
+ * (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+ */
+function deployPass(s, config) {
+  if (!failedDeploys(s.ci?.advisory, config).length || phasesLeft(s)) return null
+  if (deployPassFor(s.record, s.pr.head?.sha)) return null
+  return advisoryNote(s).concat(fire('fix-ci', { mode: 'deploy' }))
 }
 
 function underThreshold(pr, config) {
@@ -336,7 +369,7 @@ export function evaluatePr(s, config) {
     ]
   }
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
-  return evaluateGreenPr(s, config).concat(advisoryNote(s))
+  return deployPass(s, config) || evaluateGreenPr(s, config).concat(advisoryNote(s))
 }
 
 /**
@@ -375,8 +408,8 @@ function evaluateGreenPr(s, config) {
     // takes. While a phase is unticked the next session continues it, on the
     // ticket's lock, and the critic reads the whole PR once, at the end.
     // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    const phases = parsePhases(s.item?.body)
-    if (phases && phases.done < phases.total && s.linkedIssues?.length) {
+    const phases = phasesLeft(s)
+    if (phases) {
       if ((s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you`)]
       return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
     }
