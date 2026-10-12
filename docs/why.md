@@ -2039,6 +2039,10 @@ sets `awaiting` and names it, and `implement` on the goal then files only what i
 session holds the goal when its last child closes, the dispatcher records that a check is owed and
 runs it on unlock.
 
+Children closed entirely as not planned are the extreme case: nothing shipped, yet the notes block
+still claims work is built. The fire says so with `withdrawn`, so the run reports the goal unstarted
+and rewrites the notes instead of hunting for merged PRs (SahajCloud#897).
+
 ## A late decision goes to the goal
 
 A decision that turns up while writing or building a child is a decision about the goal. Left on

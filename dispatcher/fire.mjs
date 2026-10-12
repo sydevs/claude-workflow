@@ -58,7 +58,8 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     event: target.event || target.reason,
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
     lock: itemless ? null : config.labels.lock,
-    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null },
+    // `withdrawn` rides only when set, so every other record keeps its shape.
+    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}) },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
     ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason } : null,

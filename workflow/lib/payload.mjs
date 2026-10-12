@@ -137,7 +137,8 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     errors: [],
     record: {
       ...r,
-      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null },
+      // `withdrawn`: a verify whose children all closed as not planned. True or absent.
+      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}) },
       owner,
       name,
       lock: r.kind === REPO_KIND ? null : lock,

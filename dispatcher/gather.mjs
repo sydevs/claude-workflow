@@ -77,7 +77,7 @@ function repoFromUrl(url, fallbackOwner) {
 async function subIssues(gh, { owner, repo, number }) {
   try {
     const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
-    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state }))
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null }))
   } catch {
     return []
   }

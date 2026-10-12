@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { act, resolveTargets } from '../index.mjs'
+import { gather } from '../gather.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 config.dispatch.routines.SahajCloud = 'trig_sc'
@@ -62,6 +63,7 @@ function fakeGithub(world) {
     request: async (route, a) => {
       rec('request:' + route, a)
       if (route.includes('dependencies')) return { data: [] }
+      if (route.includes('sub_issues')) return { data: world.subIssues?.[a.n] || [] }
       return { data: {} }
     },
     graphql: async (q, v) => {
@@ -78,7 +80,8 @@ function fakeGithub(world) {
       if (q.includes('markPullRequestReadyForReview')) return { markPullRequestReadyForReview: { pullRequest: { id: 'PR1' } } }
       return {}
     },
-    paginate: async (fn, args) => (await fn(args)).data,
+    // Octokit paginates a route string as well as a method; sub-issues use the route.
+    paginate: async (fn, args) => (typeof fn === 'string' ? await gh.request(fn, args) : await fn(args)).data,
   }
   return gh
 }
@@ -294,4 +297,37 @@ test('a lease that will not delete posts an anomaly instead of going quiet', asy
   const bodies = github.calls.filter((c) => c.name === 'createComment').map((c) => String(c.args.body))
   assert.ok(bodies.some((b) => b.includes('lease-release-failed')), 'the failed release is journalled')
   assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'), 'and the label still comes off')
+})
+
+// ---- a roadmap goal's children (why: docs/why.md#a-goal-is-verified-not-assumed)
+
+// sydevs/SahajCloud#897's shape: a goal whose children closed seconds apart.
+function goalWorld(reasons = ['not_planned', 'not_planned', 'not_planned']) {
+  const child = (number, i) => ({ number, state: 'closed', state_reason: reasons[i], closed_at: `2026-09-08T11:40:${[24, 27, 30][i]}Z`, repository_url: 'https://api.github.com/repos/sydevs/SahajCloud' })
+  return {
+    issues: { 897: { number: 897, node_id: 'N897', state: 'open', title: 'goal', body: '## The goal\nx', labels: [], user: { login: 'Ardnived' }, author_association: 'MEMBER', type: { name: 'Roadmap' }, html_url: 'https://github.com/sydevs/SahajCloud/issues/897', comments: 0, updated_at: '2026-09-08T11:40:30Z' } },
+    comments: {},
+    prs: {},
+    subIssues: { 897: [881, 883, 884].map(child) },
+  }
+}
+const goal = (reason) => ({ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 897, reason, event: 'issues.closed', facts: {} })
+
+test("a goal's gathered children carry why each one closed", async () => {
+  const s = await gather(fakeGithub(goalWorld(['not_planned', 'completed', null])), goal('child-closed'), config, { now })
+  assert.deepEqual(s.children.map((c) => [c.number, c.state, c.stateReason]), [[881, 'closed', 'not_planned'], [883, 'closed', 'completed'], [884, 'closed', null]])
+})
+
+test('dry-run: a withdrawn goal prints the flag in the verify record, and writes nothing', async () => {
+  const run = async (world) => {
+    const github = fakeGithub(world)
+    const lines = []
+    let fired = 0
+    await act({ github, context: {}, core: { info: (m) => lines.push(m), warning: () => {} }, config, target: goal('child-closed'), env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { fired += 1 } })
+    assert.equal(fired, 0)
+    assert.ok(!github.calls.some((c) => ['addLabels', 'removeLabel', 'createComment', 'updateComment', 'createRef'].includes(c.name)), 'no writes in dry run')
+    return JSON.parse(lines.find((l) => l.includes(': record: ')).split(': record: ')[1])
+  }
+  assert.deepEqual((await run(goalWorld())).flags, { onDemand: false, delegated: false, mode: 'verify', withdrawn: true })
+  assert.deepEqual((await run(goalWorld(['not_planned', 'completed', 'not_planned']))).flags, { onDemand: false, delegated: false, mode: 'verify' }, 'something shipped: no flag')
 })

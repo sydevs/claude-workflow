@@ -111,6 +111,9 @@ deliver, end your reply with `<!-- sydevs-request {"replan":true} -->`. The disp
 
 Every child is closed. Did the goal happen? (why: docs/why.md#a-goal-is-verified-not-assumed)
 
+**`flags.withdrawn`**: every child closed as not planned, so nothing shipped and no PR exists to
+read. Report the goal unstarted, correct the Technical notes block, tick nothing, close nothing.
+
 1. Read each child and its merged PR.
 2. Check every line of `## What success looks like` against what shipped, with read-only
    production checks where a person could look.

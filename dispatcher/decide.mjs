@@ -98,6 +98,12 @@ function needsIntake(s, config) {
  */
 const planned = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'implement-roadmap') || s.record?.current?.handler === 'implement-roadmap'
 const reviewedBefore = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'revise-roadmap') || s.record?.current?.handler === 'revise-roadmap'
+/**
+ * The completion check's flags, the one place both of its fire sites read
+ * them. Children closed entirely as not planned delivered nothing, and the
+ * run must know that before it starts. (why: docs/why.md#a-goal-is-verified-not-assumed)
+ */
+const verifyFlags = (kids) => (kids.length && kids.every((c) => c.stateReason === 'not_planned') ? { mode: 'verify', withdrawn: true } : { mode: 'verify' })
 
 /** The `sydevs-request` the session that just ended left, or null. (why: docs/why.md#a-session-asks-actions-acts) */
 function freshRequest(s) {
@@ -641,7 +647,7 @@ function derive(target, s, config) {
       const left = kids.filter((c) => c.state === 'open').length
       if (!kids.length || left) return [note(`${kids.length - left} of ${kids.length} children closed`)]
       if (s.locked) return [record({ verifyDue: true }), recheck()]
-      return [record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' })]
+      return [record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids))]
     }
     // A child's session raised a decision on this roadmap ticket's Open
     // questions. That is your turn here. (why: docs/why.md#a-late-decision-goes-to-the-goal)
@@ -766,7 +772,7 @@ function derive(target, s, config) {
       if (isRoadmap(s, config)) {
         const kids = s.children || []
         if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
-        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' }))
+        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }

@@ -228,6 +228,18 @@ test('the last child closing fires the completion check', () => {
   assert.deepEqual(types(busy), ['record', 'recheck'])
 })
 
+test('children all closed as not planned make a withdrawn verify, on both fire sites', () => {
+  // sydevs/SahajCloud#897: three children withdrawn, verified as if they shipped.
+  const kid = (number, stateReason) => ({ repo: repo(), number, state: 'closed', stateReason })
+  const withdrawn = [kid(881, 'not_planned'), kid(883, 'not_planned'), kid(884, 'not_planned')]
+  const mixed = [kid(881, 'not_planned'), kid(883, 'completed'), kid(884, 'not_planned')]
+  const onClose = (children) => fires(decide({ reason: 'child-closed', facts: {} }, snap({ children }), config))[0].flags
+  const onUnlock = (children) => fires(decide({ reason: 'unlock', facts: { handler: 'implement' } }, snap({ children, record: { verifyDue: true, current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z' } } }), config))[0].flags
+  assert.deepEqual(onClose(withdrawn), { mode: 'verify', withdrawn: true })
+  assert.deepEqual(onClose(mixed), { mode: 'verify' }, 'something shipped: no flag')
+  for (const children of [withdrawn, mixed]) assert.deepEqual(onUnlock(children), onClose(children), 'the unlock path agrees with child-closed')
+})
+
 test('a child that escalated a decision hands the turn to its parent, not to you twice', () => {
   const s = ticket({
     parent: { repo: repo(), number: 300, state: 'open', type: 'Roadmap' },
