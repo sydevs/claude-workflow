@@ -298,6 +298,17 @@ test('a passed Hold Until date fires a recheck, not awaiting; a future one is le
   assert.ok(!early.some((a) => a.type === 'label'))
 })
 
+// The converted line is gone from the body, so the fire names what the ticket
+// waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+test('a recheck after the last blocker closes names the blockers that cleared', () => {
+  const blockedByAll = [{ owner: 'sydevs', repo: 'SahajCloud', number: 632, state: 'closed' }, { owner: 'sydevs', repo: 'WeMeditateWeb', number: 81, state: 'closed' }]
+  const p = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], blockedByAll }), config)
+  assert.deepEqual(types(p), ['record', 'fire:revise'])
+  assert.deepEqual(p[1].flags, { mode: 'recheck', cleared: ['sydevs/SahajCloud#632', 'sydevs/WeMeditateWeb#81'] })
+  const dated = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
+  assert.deepEqual(dated[1].flags, { mode: 'recheck' }, 'a date park names no blocker')
+})
+
 test('unblock-check applies the label when GitHub says blocked and we never labelled it', () => {
   const snap = issueSnap({ item: { number: 195, labels: [] }, blockedByOpen: [{ number: 695 }], markers: { blockedBy: [], recheck: null, recheckPassed: false } })
   const p = decide({ reason: 'unblock-check', facts: {} }, snap, config)

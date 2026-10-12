@@ -93,7 +93,8 @@ The dispatcher fired this instead of handing the ticket back blind.
 (why: docs/why.md#recheck-before-awaiting)
 
 1. **Find why it waited**: the comment beside the `Hold Until` date, the `block` verb, or the
-   `Blocked by:` line and that blocker's outcome.
+   blockers in `flags.cleared` and each one's outcome. A converted `Blocked by:` line is gone from
+   the body.
 2. **Check that condition now**, against source, a release, an upstream issue, or the merged
    blocker's diff.
 3. **Still waiting** → set a new `Hold Until` within `issueFields.holdUntil.maxHorizonDays`, and

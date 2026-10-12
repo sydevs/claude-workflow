@@ -602,7 +602,10 @@ function derive(target, s, config) {
           ].join('\n')),
         ]
       }
-      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck' })]
+      // The converted `Blocked by:` line is gone from the body, so the fire
+      // names what it waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+      const cleared = (s.blockedByAll || []).map((b) => `${b.owner}/${b.repo}#${b.number}`)
+      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck', ...(cleared.length ? { cleared } : {}) })]
     }
     case 'issue_comment': {
       if (isBot(facts.author, config)) return [note('own comment — ignored')]

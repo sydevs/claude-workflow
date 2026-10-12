@@ -61,6 +61,13 @@ const REPO_KIND = 'repo'
 // Which job a multi-mode handler is on: `intake`, `revise`, `recheck`,
 // `block`, `verify`, `plan`, `replan`. A word, never instructions.
 const MODE = /^[a-z][a-z-]{0,19}$/
+// `cleared`: the closed blockers a recheck waited on, as `owner/repo#N`.
+const REF = /^[A-Za-z0-9_.-]{1,39}\/[A-Za-z0-9_.-]{1,100}#\d{1,7}$/
+/** `{ cleared }` holding only well-formed refs, or nothing. A ref, never instructions. */
+function cleared(list) {
+  const refs = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && REF.test(x)) : []
+  return refs.length ? { cleared: refs } : {}
+}
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
 
 /**
@@ -138,7 +145,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     record: {
       ...r,
       // `withdrawn`: a verify whose children all closed as not planned. True or absent.
-      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}) },
+      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}), ...cleared(r.flags?.cleared) },
       owner,
       name,
       lock: r.kind === REPO_KIND ? null : lock,
