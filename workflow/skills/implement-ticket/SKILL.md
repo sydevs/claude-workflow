@@ -38,8 +38,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    re-plan a ticked phase.
 
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
-   ticket and for the `blocked` label. You still read the body: a `Blocked by:` line naming an
-   open issue, or a `Re-check:` date in the future → comment which, and stop.
+   ticket, the `blocked` label and the open native blockers. You still read the body: a
+   `Blocked by:` line it has not converted yet that names an open issue, or a `Re-check:` date in
+   the future → comment which, and stop.
 
 4. **Decide what "done" looks like before you plan how.** Most tickets end in a PR. A ticket
    whose acceptance criteria describe a *decision* — "evaluate", "determine whether",
