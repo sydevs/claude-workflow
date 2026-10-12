@@ -261,10 +261,17 @@ function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
 }
 
-/** A repair pass, never a deploy pass: a flaky preview must not stand in for a real test failure. */
+/**
+ * A repair pass on this head that ended, or is ending now. A deploy pass never
+ * counts: a flaky preview must not stand in for a real test failure.
+ * `current` counts because the unlock that ends a session is decided before
+ * `apply` moves it into `dispatches`; until then only its fire-time entry is
+ * there, with no outcome, and a stood-down pass was fired again.
+ */
 function endedFixCiFor(record, sha) {
   if (!sha) return null
-  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome && d.flags?.mode !== 'deploy') || null
+  const repair = (d) => d?.handler === 'fix-ci' && d.sha === sha && d.flags?.mode !== 'deploy'
+  return (record?.dispatches || []).find((d) => repair(d) && d.outcome) || (repair(record?.current) ? record.current : null)
 }
 
 /**
@@ -355,7 +362,7 @@ export function evaluatePr(s, config) {
     const infra = s.ci.infra || []
     if (infra.length && infra.length === s.ci.failing.length) return infraPlan(s, config, infra)
     const ended = endedFixCiFor(s.record, pr.head?.sha)
-    if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
+    if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
     const cap = config.ceilings?.ciFixIterations ?? 3
     if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci')]
     // The cap comment promises that a person's push starts the repair again,

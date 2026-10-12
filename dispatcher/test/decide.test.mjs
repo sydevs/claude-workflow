@@ -115,6 +115,18 @@ test('the unlock after a stood-down fix-ci makes the PR the human\'s turn, not a
   assert.deepEqual(plan[2].add, ['awaiting'])
 })
 
+// The record as the unlock really sees it: the ending session still in
+// `current`, and only its fire-time entry, with no outcome, in `dispatches`.
+test('the unlock that ends a stood-down fix-ci does not fire it again on the same head', () => {
+  const fired = { id: 'SahajCloud-5-fix-ci-20261001T022800000Z-aaaa', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-01T02:28:00.000Z', sha: '19a284d' }
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, draft: false, head: { sha: '19a284d' } }, record: { fixCi: 1, current: { ...fired, flags: { mode: null } }, dispatches: [fired] } })
+  const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, config)
+  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'note', 'label'])
+  assert.deepEqual(plan[2].add, ['awaiting'])
+  const pushed = { ...s, pr: { ...s.pr, head: { sha: 'b0b0b0b' } } }
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, pushed, config)), ['unlocked:fix-ci', 'bumpFixCi', 'fire:fix-ci'], 'a pass that pushed a new head that is still red is repaired again')
+})
+
 test('red CI fires fix-ci until the cap, then hands over to awaiting', () => {
   assert.deepEqual(types(evaluatePr(prSnap({ ci: red }), config)), ['bumpFixCi', 'fire:fix-ci'])
   const capped = evaluatePr(prSnap({ ci: red, record: { fixCi: 3 } }), config)
