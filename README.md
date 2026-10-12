@@ -206,6 +206,7 @@ plugins instead (`pr-review-toolkit`, `/security-review` with `security-guidance
 ```bash
 claude --plugin-dir ./workflow    # load without installing
 claude plugin validate ./workflow --strict
+node --test workflow/lib/*.test.mjs
 node --test dispatcher/test/*.test.mjs
 ```
 

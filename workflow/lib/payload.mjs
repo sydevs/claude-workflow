@@ -45,6 +45,9 @@ export const SCHEMA_VERSION = 1
  * A routine's skills used to spell this `${CLAUDE_PLUGIN_ROOT}/../..`, which
  * is empty there, so every run guessed it — 52 sessions in the week to
  * 2026-09-20, each costing a refused call and a retry.
+ *
+ * Checkout-only: its one caller is this file's CLI, which `start-run` step 2
+ * runs from the `claude-workflow` checkout, never from a worktree.
  */
 export function defaultAttachedDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')

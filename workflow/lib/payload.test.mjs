@@ -1,7 +1,8 @@
 // node --test workflow/lib/payload.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validate, extractJson, defaultAttachedDir } from './payload.mjs'
@@ -136,19 +137,24 @@ test('journal.issue 0 is legal — the handler finds the day itself', () => {
 })
 
 // The default `--attached` root, which the skills used to spell
-// `${CLAUDE_PLUGIN_ROOT}/../..` — empty in a routine.
-test('defaultAttachedDir is the directory holding the checkouts', () => {
+// `${CLAUDE_PLUGIN_ROOT}/../..` — empty in a routine. Path math only: from a
+// worktree the answer is `.claude/worktrees`, which holds no checkouts, and
+// the CLI is never run from one.
+test('defaultAttachedDir is three levels above workflow/lib', () => {
   const expected = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
   assert.equal(defaultAttachedDir(), expected)
-  assert.ok(existsSync(join(defaultAttachedDir(), 'claude-workflow')))
 })
 
-// Against `claude-workflow`, the one checkout `defaultAttachedDir()` can
-// promise. A dispatch clones the repo it works on, and nothing else.
-test('the default root satisfies the attached check', () => {
+// A dispatch clones the repo it works on, and nothing else, so a root
+// holding `claude-workflow` alone passes the attached check for it.
+test('a root holding the checkout satisfies the attached check', () => {
+  const root = mkdtempSync(join(tmpdir(), 'attached-'))
+  mkdirSync(join(root, 'claude-workflow'))
   const here = { repo: 'sydevs/claude-workflow', url: 'https://github.com/sydevs/claude-workflow/issues/712' }
-  const r = validate(record(here), config, { now: NOW, attachedDir: defaultAttachedDir() })
-  assert.equal(r.ok, true)
+  assert.equal(validate(record(here), config, { now: NOW, attachedDir: root }).ok, true)
+  const r = validate(record(), config, { now: NOW, attachedDir: root })
+  assert.ok(!r.ok)
+  assert.match(r.errors.join('\n'), /no checkout of SahajCloud/)
 })
 
 // ---- repo-scope fires (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
