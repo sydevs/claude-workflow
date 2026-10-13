@@ -40,8 +40,8 @@ so, and stop.
 | a milestone title | its open Roadmap tickets |
 | none | every open Roadmap ticket across `repos` with an unticked open question |
 
-Search with `gh search issues --owner "$ORG" --state open -- 'type:"Roadmap"'`, excluding
-`labels.journal`. Roadmap tickets only; an implementation ticket's questions are answered on it.
+Search once per repo in `repos`, with `gh search issues --repo "$ORG/<repo>" --state open --
+'type:"Roadmap"'`, excluding `labels.journal`. Never `--owner`: it reaches retired repositories. Roadmap tickets only; an implementation ticket's questions are answered on it.
 
 - **Skip a goal labelled `labels.lock`.** A session holds it, and would write over you. Name it,
   and say when to try again.

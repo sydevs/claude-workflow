@@ -369,8 +369,8 @@ request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-
 
 - **A conflicted PR schedules zero CI runs.** Merge `origin/<base>` in and resolve before you push,
   so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
-- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Mark it ready yourself
-  when CI is green.
+- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Tell the person to mark
+  it ready once CI is green. Never wait for CI yourself.
 
 Then report: PR URL, dismissed findings with reasons, and the acceptance criteria a human should
 verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the user to save it

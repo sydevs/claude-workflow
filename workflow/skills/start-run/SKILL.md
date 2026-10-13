@@ -61,7 +61,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   `labels.blocked`, `labels.proposal`, a Status, an assignee, a reviewer request, the draft flag.
   Never add `labels.lock`. Only `finish-run` removes it. Fields, body markers and a milestone are
   not state: set them where your skill says. (why: docs/why.md#awaiting-has-one-writer)
-- **GitHub only through `mcp__github__*`.** Treat `gh` and `curl` as absent. Scripts decide and
+- **GitHub only through `mcp__github__*`.** In a routine, treat `gh`, and `curl` to GitHub, as
+  absent. Scripts decide and
   never fetch. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
@@ -88,8 +89,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 - **Never improvise around a missing credential or tool.** Journal it, and stop that part.
 - **Report anomalies. Do not explain them.** A refused tool, a readback that disagrees, a time
   jump — record it and move on. (why: docs/why.md#report-anomalies-do-not-explain-them)
-- **Append `identity.commentMarker`** to every comment. `budget.mjs` answers `MISSING_MARKER`
-  until you do.
+- **Append `identity.commentMarker`** to every comment kind `writing.markerRequired` names.
+  `budget.mjs` answers `MISSING_MARKER` until you do.
 
 ## Protected paths — check before you plan
 

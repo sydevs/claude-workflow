@@ -7,6 +7,9 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 
 # Audit dependencies
 
+**The vulnerability job is a dispatched run: start with `/workflow:start-run` (repo mode) and end
+with `/workflow:finish-run`.** Routine updates run inside `run-audit`, which journals them.
+
 **Raise PRs, not tickets.** A version bump carries its own description. A ticket that says
 "bump X" only adds a round trip. Two jobs:
 

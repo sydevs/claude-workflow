@@ -25,8 +25,9 @@ that is merely behind. The base ref belongs to that trigger, not to a session's 
 
 ## Do
 
-1. Worktree on the PR branch (`/workflow:implement-ticket` step 6):
-   `git fetch origin <base> <branch>`, then `git merge origin/<base>`.
+1. Worktree on the PR's existing branch: `git fetch origin <base> <branch>`, then
+   `git worktree add .claude/worktrees/<slug> origin/<branch> -B <branch>`, then
+   `git merge origin/<base>`.
 2. Resolve every hunk from both sides' intent. **Keep both behaviours where both are wanted.**
    Never take one side wholesale to make the merge go away.
 3. Lean gate, from `.claude/workflow.json`. Run the specs that cover the conflicted files.

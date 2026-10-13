@@ -96,7 +96,7 @@ mcp__github__add_comment_to_pending_review  … path:<file> line:<n> body:<findi
 mcp__github__pull_request_review_write   method:"submit_pending" … event:"COMMENT" body:<the body below>
 ```
 
-End every inline comment with `identity.commentMarker`. Anchor every finding to a line **inside a
+End every inline comment with `identity.commentMarker`, and measure it with `--kind reviewReply`. Anchor every finding to a line **inside a
 diff hunk**, the unchanged context lines of a hunk included. The call refuses any line outside
 one. Never move a finding onto an unrelated line to satisfy it. That one belongs in the holistic
 assessment, which is where it reads better anyway.
