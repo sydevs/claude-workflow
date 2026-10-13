@@ -59,8 +59,9 @@ file** — record what you found in the journal, to wait for review capacity.
 | A real defect found while implementing, reviewing, or investigating | **No. File it, every time, even over the ceiling** |
 
 An audit manufactures candidates on demand, so a cap fits. An incidental finding is evidence you
-already hold, and filing it costs nothing — `Proposed` commits nobody to anything. **Never discard
-a real finding to respect a number.** `start-run` routes it.
+already hold, and `Proposed` commits nobody to anything. Each ticket still costs a review, so
+format-ticket's join rule applies. **Never discard a real finding to respect a number.**
+`start-run` routes it.
 
 Say where the finding came from, and keep the bar: what is wrong, what it costs, and what to do. A
 finding you cannot point at a line for is a journal note, not a ticket.

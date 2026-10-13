@@ -2158,6 +2158,38 @@ Never split tightly coupled work, and never split on size. A large but coherent 
 ticket is still one PR, built in `## Phases`. The stale-children failure needs connective tissue
 to happen, and a seam is, by definition, where there is little.
 
+**Amended by [Related findings share a ticket](#related-findings-share-a-ticket).** A seam
+permits a split. It does not require one.
+
+## Related findings share a ticket
+
+**This amends [Split at reviewability seams](#split-at-reviewability-seams).** That rule said
+where a split is allowed, and nothing said when to join. So "separable" became a reason to file
+two tickets.
+
+The address-review run on SahajAtlasWeb#284 filed SahajAtlasWeb#285 (a time budget for the unit
+lane) and SahajAtlasWeb#286 (one shared `src/` walker for nine specs) 18 seconds apart. Each named
+the other as its sibling. They shared a verification step, `time pnpm test:run` as a median of
+three runs, and #286's walker limited what #285 could buy. Every incidental finding went to
+`write-ticket` alone. `create` searched only for a duplicate. Neither was a duplicate, so both
+were filed. The reviewer then paid two triages, two `implement` verbs, two PRs, two critic rounds
+and two reviews for one sitting's worth of judgement.
+
+A ticket is not free just because `Proposed` commits nobody. Each one costs what
+[A ticket is built in phases, never split](#a-ticket-is-built-in-phases-never-split) lists. So:
+
+- **Join by default.** Work one reviewer would judge together shares a ticket, even when the
+  changes are distinct. Each change keeps its own Approach part and criteria, so nothing is lost
+  in the merge.
+- **A run's ticket-bound findings go to `write-ticket` in one call**, which groups them before it
+  files anything.
+- **`create` looks for a home, not just a duplicate.** An open ticket nobody has approved yet can
+  absorb related work. An approved ticket cannot: widening it would change what the human said
+  yes to.
+- **`revise absorb #N`** lets the reviewer merge two tickets that already exist with one comment.
+
+Findings are still never dropped or capped. They land in fewer tickets.
+
 ## Decisions come with options
 
 An open-ended question is a design task handed to the reader. *"How should old atlas links

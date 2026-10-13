@@ -1,6 +1,6 @@
 ---
 name: format-ticket
-description: The one definition of a well-formed sydevs ticket, for both tiers — the plain-language Roadmap ticket and the Claude-ready implementation ticket. Types, the Priority and Hold Until fields, Blocked by markers, decisions as options, the split rule, and the body templates. Loaded by every skill that files or edits a ticket.
+description: The one definition of a well-formed sydevs ticket, for both tiers — the plain-language Roadmap ticket and the Claude-ready implementation ticket. Types, the Priority and Hold Until fields, Blocked by markers, decisions as options, the join and split rules, and the body templates. Loaded by every skill that files or edits a ticket.
 allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 ---
 
@@ -360,12 +360,27 @@ returns 200 with regions`, "the marker is maroon on sahajayoga.ca". Not "check i
 **Title:** `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.
 
+## The join rule
+
+**One reviewer, one sitting, one ticket.** Every ticket costs a human verb and a human review, so
+work a reviewer would judge together shares a ticket, even when the changes are distinct:
+
+- the same area or files, or a shared verification step, or
+- one change that limits, measures or unblocks the other.
+
+Each joined change gets its own part of `## Approach` and its own acceptance criteria. Add
+`## Phases` only when the whole will not fit one run. Being separable is never a reason to file
+two tickets. (why: docs/why.md#related-findings-share-a-ticket)
+
 ## The split rule
 
-**Split only where a reviewer can understand each PR on its own.** Two shapes qualify:
+**Split only where joining would make review harder, and each PR stands on its own.** Two shapes
+qualify:
 
-- parts with little connective tissue between them, or
+- parts with little connective tissue between them, too unrelated for one review, or
 - a general capability, built first, that the goal then uses.
+
+A cross-repo change is always split. No commit spans repos.
 
 **Never split tightly coupled work**: a reviewer who must hold two PRs in their head to judge
 either cannot review them. **Never split on size alone** — a large ticket is built in
@@ -405,6 +420,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 
 - [ ] Searched for a duplicate first (`search_issues`), including closed ones and roadmap
       `## Decisions`
+- [ ] Searched for an open, unapproved ticket this joins (the join rule) before filing a new one
 - [ ] Tier chosen by the classification rule. A Bug is direct
 - [ ] Type set
 - [ ] **Priority set, always, by you** — a Priority the reviewer set stands
@@ -421,6 +437,6 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
   does.
 - **Never** leave a ticket without a Priority field value.
 - **Never** park a ticket without a `Hold Until` date or a `Blocked by:` line.
-- **Never** file without searching for a duplicate.
+- **Never** file without searching for a duplicate, and for a ticket the work joins.
 - **Never** put a fact in `## Open questions`, or a decision without options.
 - **Never** put technical detail in a Roadmap ticket's body outside its Technical notes block.
