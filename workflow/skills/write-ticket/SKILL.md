@@ -38,10 +38,17 @@ carries options and a recommendation. (why: docs/why.md#experiments-answer-facts
 
 ## `create` — file a new ticket
 
-The caller gives you a repo, an intent, and optionally a parent roadmap ticket and siblings.
+The caller gives you a repo, one or more intents, and optionally a parent roadmap ticket and
+siblings. Several intents → group them by format-ticket's join rule first. Each group is one
+ticket. (why: docs/why.md#related-findings-share-a-ticket)
 
-1. **Search for a duplicate**, closed tickets and roadmap `## Decisions` included. A match → stop,
-   and return it instead.
+1. **Search for a duplicate or a home**, closed tickets and roadmap `## Decisions` included. A
+   duplicate → stop, and return it instead. A **home** is an open implementation ticket in the
+   same repo that the join rule says this belongs with, and that is still unapproved: no
+   `@sydevs-bot implement` from a `respondTo` login, no lock, and no PR. A home → rewrite its body
+   to add this work (its own Approach part and criteria), post one line on it naming the source,
+   and return its number. An approved or in-flight ticket is never a home. Its scope is what the
+   human authorised. File new instead, and link it under `## Notes`.
 2. **Write the body** in the implementation template, from the code: `## Approach` with
    `file:line` references naming the seam, the call sites and the tests to touch; criteria that
    are true or false; a checklist a run executes cold. A roadmap child also gets `## Goal context`
@@ -51,7 +58,7 @@ The caller gives you a repo, an intent, and optionally a parent roadmap ticket a
 4. **File it** per format-ticket's "Filing from a cloud run": type, Priority, `Blocked by:` lines.
    Link it to its parent with `mcp__github__sub_issue_write`. Locally, run `file-ticket`'s
    **Ask** step on the draft first — its open questions, then the yes — and file on that yes.
-5. **Return** the number to the caller. File nothing else in this mode.
+5. **Return** the numbers to the caller. File nothing else in this mode.
 
 ## `revise` — a human spoke
 
@@ -63,6 +70,7 @@ The comment the record points at (`trigger.id`) is the one to act on.
 | **An answer to an open question** (`1A`, or prose) | Tick it, move it to `## Decisions` with who and when, and fold the consequence into the body. |
 | **A correction or new evidence** | Check it against source. Rewrite the affected part of the body. |
 | **An instruction to grow, narrow or reshape** | Do the deep pass: rewrite the body from the code, preserving what the human wrote and correcting what the code disproves. |
+| **An instruction to absorb another ticket** (`absorb #N`) | Do the deep pass with that ticket's work folded in, then close it as a duplicate with one line linking this one. Never absorb a ticket that is locked or has a PR. Say so instead. |
 | **A request for work** | Do **not** implement it. Put the specification in the body, and say that `@sydevs-bot implement` starts it. (why: docs/why.md#a-request-in-prose-is-not-permission) |
 
 Keep every unconverted `Blocked by:` line, and every `Re-check:` and `Sentry:` line. Add a
