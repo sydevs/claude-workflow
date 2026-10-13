@@ -21,7 +21,7 @@
  *
  *   node <claude-workflow>/workflow/lib/railway.mjs < record.json
  *
- * stdout: `{ apiBase, tokenEnvVar, tokenHeader, tokenSet, deployments }`, where
+ * stdout: `{ apiBase, tokenEnvVar, tokenSet, deployments }`, where
  * each deployment is `{ name, targetUrl, projectId, serviceId, deploymentId,
  * environmentId, request }` and `request` is the GraphQL body to POST.
  * `tokenSet` says only whether the variable is set, never its value.
@@ -30,9 +30,6 @@
 
 import { loadLoopConfig, flag } from './config.mjs'
 import { extractJson } from './payload.mjs'
-
-/** A Railway project token authenticates with this header, not `Authorization`. */
-export const TOKEN_HEADER = 'Project-Access-Token'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HOSTS = new Set(['railway.com', 'railway.app'])
@@ -91,7 +88,6 @@ export function readPlan(record, config, env = process.env) {
   return {
     apiBase: r.apiBase || null,
     tokenEnvVar,
-    tokenHeader: TOKEN_HEADER,
     tokenSet: Boolean(tokenEnvVar && env[tokenEnvVar]),
     deployments: failedDeploys(record?.ci?.advisory, config).map((d) => ({ ...d, request: logRequest(d.deploymentId, r.logLines) })),
   }

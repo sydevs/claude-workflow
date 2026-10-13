@@ -45,33 +45,26 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 ## Deploy mode
 
 `flags.mode: "deploy"` means a Railway preview failed while every required check passed. The
-dispatcher fires it once per head, and it spends no `ceilings.ciFixIterations` pass.
+dispatcher fires it once per head, and it spends no `ceilings.ciFixIterations` pass. The failed
+preview in the record's `ci.advisory` **is** yours, though `ci.reason` names no check, and the
+dispatcher cannot re-run it. The stale-head check still applies.
 (why: docs/why.md#a-failed-preview-is-read-from-its-log)
 
-Two rules in **Reads** change. The failed preview in the record's `ci.advisory` **is** yours,
-though `ci.reason` names no check. The dispatcher cannot re-run it, so a cause outside the repo
-ends with your comment. The stale-head check still applies.
-
-1. `node <claude-workflow>/workflow/lib/railway.mjs < record.json > railway.json`. Each entry in
-   `deployments` is one failed preview, with its `targetUrl` and a ready `request`. Keep only an
-   entry whose `targetUrl` a failing status in `pull_request_read method:get_status` also carries.
-   None left → journal it, and stop.
-2. `tokenSet: false` → comment one line: the log could not be read, with each `targetUrl`. Journal
-   the missing credential. Stop.
-3. Read each preview's logs, `[0]` first, then any others. This is Railway, not GitHub, so `curl`
-   is the client. Never print the token.
+1. `node <claude-workflow>/workflow/lib/railway.mjs < record.json > railway.json`. Keep only a
+   `deployments` entry whose `targetUrl` a failing status in `pull_request_read method:get_status`
+   also carries. None left → journal it, and stop.
+2. Read each one's logs with `curl`. Never print the token. Read the errors and the last lines,
+   not the whole file.
    ```bash
    jq -c '.deployments[0].request' railway.json | curl -sS "$(jq -r .apiBase railway.json)" \
-     -H "$(jq -r .tokenHeader railway.json): $(printenv "$(jq -r .tokenEnvVar railway.json)")" \
+     -H "Authorization: Bearer $(printenv "$(jq -r .tokenEnvVar railway.json)")" \
      -H 'Content-Type: application/json' --data-binary @- > logs.json
    ```
-   Read the errors and the last lines of each log, not the whole file. An `errors` array, or no
-   lines at all → step 2's comment, quoting Railway's error.
-4. A cause in the repo is normal work: a type error, a missing build-time variable, a Nixpacks or
-   Dockerfile fault. Follow **Do**, and quote the log line in the commit body.
-5. A cause outside the repo, or none you can name, gets one comment: the log line and the
-   `targetUrl`. A builder OOM, an image pull failure and a rate limit all qualify. Push nothing.
-   Stop.
+3. A cause in the repo — a type error, a missing build-time variable, a Nixpacks or Dockerfile
+   fault — is normal work. Follow **Do**, and quote the log line in the commit body.
+4. Anything else gets one comment with the `targetUrl`, then stop and push nothing: a cause
+   outside the repo (a builder OOM, an image pull failure, a rate limit) with its log line, or no
+   log at all (`tokenSet: false`, an `errors` array, no lines) with Railway's error.
 
 ## Hard rules
 

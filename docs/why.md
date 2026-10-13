@@ -2463,10 +2463,12 @@ deployment id (`?id=` on `railway.com/project/<p>/service/<s>`). `workflow/lib/r
 it and builds the GraphQL request for that deployment's build and runtime logs. The session sends
 the request. No script holds the token or opens the connection.
 
-**The token** is a Railway project token, named by `railway.tokenEnvVar`. The cloud environment
-has no secret store, and a project token can deploy as well as read, so its one-project scope is
-the defence. Without it, or when Railway refuses it, the link is still commented and a person
-opens the log.
+**The token** is a Railway workspace token, named by `railway.tokenEnvVar`. The cloud environment
+has no secret store, and every Railway token can deploy as well as read. A project token would be
+narrower, but it is made for one existing environment, and each PR preview runs in an environment
+of its own, made when the PR opens and deleted when it closes. So only a workspace token reaches
+previews, and it reaches production too. Without the token, or when Railway refuses it, the pass
+comments the link and a person opens the log. There is no switch to turn the pass off.
 
 **The pass.** Reading a log needs a session, so a failed preview with green required CI fires
 `fix-ci` in `deploy` mode. It is a mode, not a new handler: the reads, the worktree and the push are

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { deploymentFrom, failedDeploys, logRequest, readPlan, TOKEN_HEADER } from './railway.mjs'
+import { deploymentFrom, failedDeploys, logRequest, readPlan } from './railway.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 
@@ -61,7 +61,6 @@ test('with no token, the plan still names the deployment and says the token is u
   const plan = readPlan({ ci: { green: true, reason: 'x', advisory: [RED] } }, config, {})
   assert.equal(plan.tokenSet, false)
   assert.equal(plan.tokenEnvVar, config.railway.tokenEnvVar)
-  assert.equal(plan.tokenHeader, TOKEN_HEADER)
   assert.equal(plan.apiBase, 'https://backboard.railway.com/graphql/v2')
   assert.equal(plan.deployments[0].targetUrl, URL_879)
   const tuned = readPlan({ ci: { advisory: [RED] } }, { ...config, railway: { ...config.railway, logLines: 37 } }, {})

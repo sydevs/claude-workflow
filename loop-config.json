@@ -269,7 +269,7 @@
   "railway": {
     "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
     "apiBase": "https://backboard.railway.com/graphql/v2",
-    "tokenEnvVar": "RAILWAY_PROJECT_TOKEN",
+    "tokenEnvVar": "RAILWAY_TOKEN",
     "statusContexts": [
       "sahajcloud - SahajCloud"
     ],

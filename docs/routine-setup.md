@@ -465,21 +465,19 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 > Mailpit holds fixtures and preview traffic: previews have their own databases, and production mail
 > goes to Resend. Never put a production admin credential here.
 
-**Railway, optional.** A project token for SahajCloud's Railway project, stored under the name
-`railway.tokenEnvVar` gives in `loop-config.json`. A `fix-ci` deploy pass reads a failed preview's
-logs with it and never deploys. Without it, that pass comments the deployment link and stops.
+**Railway.** A workspace token, made at railway.com/account/tokens with the workspace that holds
+SahajCloud picked, stored under the name `railway.tokenEnvVar` gives in `loop-config.json`. A
+`fix-ci` deploy pass reads a failed preview's logs with it and never deploys. Without it, that pass
+comments the deployment link and stops.
 
-> ⚠ **Railway scopes a project token to one environment, and each PR preview runs in its own.**
-> Check that the token reaches a preview before relying on it. The first call names the token's
-> environment. The second reads a failed preview, whose deployment id is the `?id=` in its commit
-> status link. `Not Authorized` or `Deployment not found` in `errors` means previews are out of
-> its reach. An unauthenticated read answers `Deployment not found` too.
+> ⚠ **It reaches every project in the workspace, production included.** A project token would be
+> narrower, but it is made for one existing environment, and each PR preview gets a new one, so it
+> never reaches the next preview. Check the token against a deployment of an **open** PR, whose id
+> is the `?id=` in its `sahajcloud - SahajCloud` status link. Log lines back means it works.
 >
 > ```bash
-> R=https://backboard.railway.com/graphql/v2
-> curl -s $R -H "Project-Access-Token: $TOKEN" -H 'Content-Type: application/json' \
->   -d '{"query":"query { projectToken { projectId environmentId } }"}'
-> curl -s $R -H "Project-Access-Token: $TOKEN" -H 'Content-Type: application/json' \
+> curl -s https://backboard.railway.com/graphql/v2 -H "Authorization: Bearer $TOKEN" \
+>   -H 'Content-Type: application/json' \
 >   -d '{"query":"query($d:String!){ buildLogs(deploymentId:$d, limit:5){ message } }","variables":{"d":"<id>"}}'
 > ```
 
