@@ -2909,3 +2909,16 @@ the next run. A one-line skill fix from an unrelated handler would bypass the ve
 `rule-delta.mjs` and improve-loop's recurrence bar. Those findings go to `🧭 Friction`, where
 improve-loop weighs them.
 
+## A session past its deadline owns nothing
+
+The sweeper's timeout removes the lock, releases the lease, and re-fires the same handler — which
+adds the same `bot:working` label back in the same pass. Sessions linger past their deadline
+([Sessions linger](#sessions-linger)). A slow session, not a dead one, then re-checks the lock
+before a push, finds the label, and pushes onto the branch attempt 2 is building. Its `finish-run`
+strips attempt 2's lock, and the dispatcher re-derives while attempt 2 is still working.
+
+The label alone cannot say whose it is. The deadline can: the record carries it, and once it has
+passed the lease is no longer this session's. So the re-check reads both, and a session past its
+deadline neither pushes nor unlocks. The lock re-check also applies only where the run holds one:
+cron, repo and local runs have none, and read literally the rule stopped them at their first push.
+

@@ -65,6 +65,9 @@ Read the item's labels with `issue_read method:get` — `get_labels` refuses a P
 them back without `labels.lock`. Touch no other label. That event tells Actions the item is free.
 (why: docs/why.md#the-lock-label-is-the-lease)
 
+**Past the record's `deadline`, leave the lock alone.** The dispatcher has already reclaimed it,
+and the label on the item now belongs to the next attempt. Post the journal entry and stop.
+
 ## Stop
 
 No polling. No timers. Do not try to end the session — a run cannot. Leave nothing that could
