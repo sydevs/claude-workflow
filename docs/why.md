@@ -2925,3 +2925,13 @@ passed the lease is no longer this session's. So the re-check reads both, and a 
 deadline neither pushes nor unlocks. The lock re-check also applies only where the run holds one:
 cron, repo and local runs have none, and read literally the rule stopped them at their first push.
 
+## A conflicted draft is resolved too
+
+The dispatcher fired `resolve-conflicts` only on a ready PR. Almost every loop PR is a draft until
+the critic has run, and a conflicted PR schedules no CI. So a conflicted draft never went green,
+`fix-ci` told itself "Actions dispatches resolve-conflicts" and stopped, and the PR sat until the
+orphan sweep. Drafts are resolved now, before any phase continues, since a phase continues only on
+green CI that a conflict prevents. Because `resolve-conflicts` pushes nothing on a semantic
+conflict, a second fire on the same head is refused, as `fix-ci`'s is: the PR waits on a person,
+and a push asks again.
+

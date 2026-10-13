@@ -146,7 +146,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `address-review` | a review, thread reply or mention on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
-| `resolve-conflicts` | an approved bot PR that conflicts | `main` merged in, conflicts resolved |
+| `resolve-conflicts` | a bot PR that conflicts, draft or ready, once per head | `main` merged in, conflicts resolved |
 
 Run by the nightly routine through `run-audit`:
 

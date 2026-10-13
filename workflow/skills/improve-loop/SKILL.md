@@ -60,8 +60,8 @@ mcp__github__search_issues  query:"$SCOPE is:pr author:$BOT reviewed-by:$REVIEWE
 **`perPage` on a journal never exceeds 20.** One oversized reply once broke the run that read it.
 (why: docs/why.md#ground-from-the-body-never-the-thread)
 
-`$WINDOW` is the previous reflection PR's merge date (find it in this repo's merged PRs). With no
-previous reflection, use seven days.
+`$WINDOW` is the creation date of the oldest open journal issue: the journals are closed every
+week, so the open ones are exactly the unread week. With none open, use seven days.
 
 Each session comment starts with a `<!-- sydevs-dispatch-done v1 {…} -->` marker naming the
 handler, the item, the session, and its failure count. Each dispatcher line starts with
@@ -83,7 +83,7 @@ added for one bad night outlives its cause.
 | --- | --- |
 | The same `⚠️ Failed` bullet on 2+ days | A real defect, not an environment blip |
 | A `🧭 Friction` entry repeating | The rule misfires in practice. The rule is usually wrong |
-| `timed out` anomalies for one handler | Its `dispatch.timeoutsMinutes` is wrong, or the skill does not push and end |
+| `timed-out` anomalies for one handler | Its `dispatch.timeoutsMinutes` is wrong, or the skill does not push and end |
 | `session ended silently` anomalies | A handler skipped its journal or its summary comment |
 | `ci-capped` on 2+ PRs | A flaky gate, or a change class the lean gate misses |
 | `429` or `paused` anomalies on 2+ days | Usage is the binding constraint — say so in the usage report |
@@ -139,7 +139,9 @@ comments into one review, one verb at a time, a
 `Hold Until` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
 The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
-into tonight's journal entry under `📄 Did`, fitted like any entry. The report is written every
+into tonight's journal entry as its own `### 📊 Usage` section, which `budget.mjs --fit` never
+cuts. An `OVER` the report alone causes is expected: post the entry, and report nothing under
+`⚠️ Failed` for it. The report is written every
 week, even when nothing else is.
 
 ## Refining the reviewer profile
@@ -202,8 +204,9 @@ goes in the journal.
 
 ## Close the week's journals
 
-Once the reflection PR is open, close every `label:ops-journal is:open` issue you read, each with
-a one-line comment linking the reflection PR. They are working memory for a week, not a permanent
+Once the usage report is written, whether or not a reflection PR opened, close every
+`label:<labels.journal> is:open` issue you read, each with a one-line comment linking the
+reflection PR or tonight's journal entry. They are working memory for a week, not a permanent
 record — left open, they make next Sunday's read grow without bound and clutter the issue list.
 
 Close them **last**. A crash midway through the reflection should leave the journals intact — they

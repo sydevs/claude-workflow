@@ -1,6 +1,6 @@
 ---
 name: resolve-conflicts
-description: Resolve one loop-authored PR that GitHub reports as conflicting, from both sides' intent, then push and end. Fired only when the branch genuinely no longer merges. Runnable locally against a PR number.
+description: Resolve one loop-authored PR, draft or ready, that GitHub reports as conflicting, from both sides' intent, then push and end. Fired only when the branch genuinely no longer merges, once per head. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
@@ -41,8 +41,9 @@ the choice was not obvious. A conflict resolved the only way it could be resolve
 sentence, not a section.
 
 **A semantic conflict** — `main` removed what this PR extends, or changed a contract it relies on
-— is not yours to guess. Comment the question with `identity.commentMarker`, push nothing, and
-stop.
+— is not yours to guess. Comment the question in format-ticket's options shape, with
+`identity.commentMarker`, push nothing, and stop. The dispatcher fires nothing more on this head:
+the PR becomes the person's turn until a push.
 
 **A human's PR** (`flags.delegated`, or the author is not the own login): you cannot push to it.
 Comment the resolution as a patch or a description, and stop.

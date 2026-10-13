@@ -52,7 +52,9 @@ pinned at `2.36.0` in SahajAtlasWeb, and `patches/` exists for a reason.
 
 ## Shipping
 
-Branch `deps.branchPrefix` + `<scope>`, then run `/workflow:finalize-pr`. These PRs are ticketless —
+Branch `deps.branchPrefix` + `<scope>` for a vulnerability fix, or `deps.routineBranchPrefix` +
+`<scope>` for routine updates — never one for the other, because the dispatcher holds back a
+vulnerability fire while a `deps.branchPrefix` PR is open. Then run `/workflow:finalize-pr`. These PRs are ticketless —
 `prAllowlistGlobs` covers them because review is mechanical. They open as drafts. The dispatcher
 runs CI and marks them ready. Push and end.
 
