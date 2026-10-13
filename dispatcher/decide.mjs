@@ -154,11 +154,22 @@ export function pendingVerb(snapshot, config, surface) {
   return best
 }
 
-function ownReview(snapshot, config) {
+/**
+ * When each critic review was posted. review-pr falls back to one PR comment
+ * led by the header when its pending-review tools fail, and that comment is
+ * the review as much as a submitted one is.
+ */
+function criticReviewTimes(snapshot, config) {
   const header = config.review?.bodyHeader || '## 🧐 Adversarial review'
-  return (snapshot.reviews || []).some(
-    (r) => isBot(r.user?.login, config) && String(r.body || '').trimStart().startsWith(header),
-  )
+  const led = (body) => String(body || '').trimStart().startsWith(header)
+  return [
+    ...(snapshot.reviews || []).filter((r) => isBot(r.user?.login, config) && led(r.body)).map((r) => r.submitted_at),
+    ...(snapshot.comments || []).filter((c) => isBot(c.author, config) && led(c.body)).map((c) => c.createdAt),
+  ]
+}
+
+function ownReview(snapshot, config) {
+  return criticReviewTimes(snapshot, config).length > 0
 }
 
 /**
@@ -206,6 +217,8 @@ function pendingReviewVerb(snapshot, config) {
   const newestBotReview = (snapshot.reviews || [])
     .filter((r) => isBot(r.user?.login, config))
     .map((r) => r.submitted_at)
+    .concat(criticReviewTimes(snapshot, config))
+    .filter(Boolean)
     .sort()
     .pop()
   for (const c of snapshot.comments || []) {

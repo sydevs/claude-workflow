@@ -836,3 +836,31 @@ test('review.questionMarker names the marker when it is set', () => {
   assert.equal(evaluatePr(prSnap({ reviews: [criticReview], threads: [asked] }), custom).some((a) => a.handler === 'address-review'), false)
   assert.ok(evaluatePr(prSnap({ reviews: [criticReview], threads: [questionThread()] }), custom).some((a) => a.handler === 'address-review'), 'the default literal is not also honoured once a marker is configured')
 })
+
+// ---- a fallback review is the review ---------------------------------------
+
+const fallbackReview = (createdAt = '2026-10-09T12:00:00Z') => ({ author: 'sydevs-bot', createdAt, body: '\n## 🧐 Adversarial review\nThe pending-review tools failed, so here it is as one comment.' })
+
+test('a critic review posted as one comment counts, so the draft is marked ready', () => {
+  const s = prSnap({ comments: [fallbackReview()] })
+  const p = evaluatePr(s, config)
+  assert.equal(p.some((a) => a.handler === 'review-pr'), false, 'the critic is not fired again')
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'])
+  const unlock = decide({ reason: 'unlock', facts: { handler: 'review-pr' } }, s, config)
+  assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
+})
+
+test('only the bot\'s comment with the header counts as the critic', () => {
+  const human = prSnap({ comments: [{ ...fallbackReview(), author: 'Ardnived' }] })
+  assert.deepEqual(types(evaluatePr(human, config)), ['fire:review-pr'])
+  const plain = prSnap({ comments: [{ ...fallbackReview(), body: 'Revision done.\n## 🧐 Adversarial review' }] })
+  assert.deepEqual(types(evaluatePr(plain, config)), ['fire:review-pr'], 'the header must lead the body')
+})
+
+test('a review verb is answered by a fallback review posted after it', () => {
+  const asked = humanComment('@sydevs-bot review', '2026-10-09T11:00:00Z')
+  const answered = prSnap({ comments: [asked, fallbackReview('2026-10-09T12:00:00Z')] })
+  assert.equal(evaluatePr(answered, config).some((a) => a.handler === 'review-pr'), false)
+  const before = prSnap({ comments: [fallbackReview('2026-10-09T10:00:00Z'), asked] })
+  assert.deepEqual(types(evaluatePr(before, config)), ['fire:review-pr'], 'a verb after the review still asks again')
+})
