@@ -287,7 +287,7 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
   so on that link's line.
 - **No preview yet** means the PR is new, or this push has not deployed. Wait for it in step 7b,
   then seed and verify. If step 7b times out, write the links anyway, plus one line:
-  `Data: not seeded yet`. The next run that refreshes this body seeds the preview.
+  `Data: not seeded yet`. No later run is promised to seed it, so the line stays as a disclosure.
 - **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
   Write one line naming what is missing. Never leave a link that lands on nothing without saying
   so.
@@ -401,4 +401,4 @@ to memory.
 - Change outline views: `change-outline.md`
 - Per-repo settings: `<worktree>/.claude/workflow.json`
 - Why each rule exists: `docs/why.md` in `sydevs/claude-workflow`
-- Lean gate implementation: `<repo>/.claude/skills/pr-prep/check.sh`
+- Lean gate: `leanGate.command` in `<worktree>/.claude/workflow.json`

@@ -58,7 +58,7 @@ ticks included. Otherwise delete this section.]
 ## Email previews
 
 [ONLY when the diff touches `src/plugins/email/` or `src/emails/`. Mailpit links
-from the relevant `scripts/preview-*-emails.ts` run; they stay live 7 days.
+from the relevant `scripts/preview-*-emails.ts` run; they stay live `mailpit.retentionDays` days.
 Otherwise delete this section.]
 
 - [scenario] — <mailpit url>

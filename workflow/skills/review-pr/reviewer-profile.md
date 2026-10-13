@@ -4,7 +4,8 @@
 > Sunday `improve-loop` survey refines it, and only on recurring evidence. It was seeded on 2026-09-02
 > from the reviewer's full review history across the five sydevs repos: 55 inline review comments,
 > 32 reviews, 33 PR-conversation comments. Two caveats apply permanently. `claude-workflow` PRs
-> merge **without formal reviews** — feedback arrives as ticket comments instead. And some
+> merge **without formal reviews** — the repo is ticketless, so feedback arrives in PR comments and
+> merge decisions instead. And some
 > comments under this login are loop-written text, recognisable by its long, structured,
 > self-narrating format. Only human-voiced items informed this profile. Every claim below carries
 > at least one PR link.
@@ -171,8 +172,8 @@ shape-level problems.**
 - **WeMeditateWeb** — reach for Vike/ecosystem solutions before custom code
   ([WeMeditateWeb#72](https://github.com/sydevs/WeMeditateWeb/pull/72)).
 - **SahajAtlasWordpress** — essentially no review history; no learned sensitivities yet.
-- **claude-workflow** — merged without formal reviews; reviewer judgement arrives on tickets and
-  in merge decisions instead.
+- **claude-workflow** — merged without formal reviews; reviewer judgement arrives in PR comments
+  and merge decisions instead.
 
 ## Recent refinements
 

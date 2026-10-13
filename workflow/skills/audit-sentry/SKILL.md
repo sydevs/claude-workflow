@@ -12,7 +12,7 @@ An error's fix is usually a judgement call about intended behaviour, and the rev
 `@sydevs-bot implement` exists to capture that call.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
-`loop-config.json`. The token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. On a
+`loop-config.json`. The token is the environment variable `sentry.tokenEnvVar` names. On a
 missing token, journal the failure and stop. Do not silently skip.
 
 **Use `apiBase`, never `sentry.io` directly.** This org lives on Sentry's **DE** region. The
@@ -26,7 +26,7 @@ chasing the wrong problem. The token also has no `org:read`, so `/organizations/
 API=$(jq -r '.sentry.apiBase' loop-config.json)
 ORG=$(jq -r '.sentry.org' loop-config.json)
 curl -s "$API/projects/$ORG/$PROJECT/issues/?query=is:unresolved&statsPeriod=14d" \
-  -H "Authorization: Bearer $SENTRY_CLAUDE_WORKFLOW_TOKEN" \
+  -H "Authorization: Bearer $<sentry.tokenEnvVar>" \
   | jq '.[] | {id, title, culprit, count, userCount, firstSeen, lastSeen, permalink}'
 ```
 
@@ -62,7 +62,7 @@ The `## Notes` section must carry the link back, in this exact form, so the disp
 resolve it when the fixing PR merges:
 
 ```markdown
-Sentry: https://sy-developers.sentry.io/issues/<id>/  (id: <id>)
+Sentry: https://<sentry.org>.sentry.io/issues/<id>/  (id: <id>)
 ```
 
 When the error clearly stands in the way of an open roadmap ticket's goal, pass that ticket to

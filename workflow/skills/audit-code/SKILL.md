@@ -55,7 +55,7 @@ priority by consequence, honestly: most findings are `Medium` or `Low`, and infl
 the field useless.
 
 **Attach to the roadmap.** When a finding clearly serves an open ticket of type `roadmap.type`
-(`search_issues "$SCOPE is:issue is:open type:<roadmap.type> -label:ops-journal"`), pass it to
+(`search_issues "$SCOPE is:issue is:open type:<roadmap.type> -label:<labels.journal>"`), pass it to
 `write-ticket` as the parent, which links a native sub-issue (`mcp__github__sub_issue_write`),
 under format-ticket's attach rule. Never file a roadmap ticket from an audit: format-ticket says
 what to do with roadmap-sized work.

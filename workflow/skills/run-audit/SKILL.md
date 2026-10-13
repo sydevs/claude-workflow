@@ -23,7 +23,7 @@ comment, commit, push, or label.
 
 `$SCOPE` is `repo:` qualifiers built from `repos`, never a bare `org:` — the org still holds
 retired repositories. Every hand-written query carries `is:issue` or `is:pr`, and
-`-label:ops-journal`.
+`-label:<labels.journal>`.
 
 ## Audit
 

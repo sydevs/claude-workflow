@@ -21,7 +21,7 @@ gap has already cost a maintainer eight days of stale skills:
 
 | Consumer | Reads | A merge reaches it |
 | --- | --- | --- |
-| The two scheduled cloud routines | `loop-config.json` and the skills fresh from `main` on every run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json) | **Next run.** Genuinely live. |
+| The cloud routines — one per repo, fired by the dispatcher, plus the nightly audit's | `loop-config.json` and the skills fresh from `main` on every run — see `deployTarget` in [.claude/workflow.json](.claude/workflow.json) | **Next run.** Genuinely live. |
 | `/plugin install workflow@sydevs` | The commit that `main` pointed at **when it was installed**, cached under `~/.claude/plugins/cache/sydevs/workflow/<version>/` | **Never**, until `version` in `workflow/.claude-plugin/plugin.json` changes or the maintainer runs `/plugin` → update. |
 
 So a merge's blast radius is *the next run of the routines* — **nothing else**. There is no
@@ -104,10 +104,10 @@ much.
 | --- | --- |
 | `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
 | `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
-| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), `base-ref.mjs` (the one baseline a `--base` comparison is taken against), `test-only.mjs` (proves a branch changed only `findings.testGlobs` paths), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). |
+| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), `base-ref.mjs` (the one baseline a `--base` comparison is taken against), `test-only.mjs` (proves a branch changed only `findings.testGlobs` paths), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). Also `budget.mjs` (writing budgets and the journal fitter), `rule-delta.mjs` (rules a skill edit dropped), `payload.mjs` (checks a dispatch record), `merge-verdict.mjs` (the review decision), `railway.mjs` and `ste-lint.py`. |
 | `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/<name>/<script>`: a routine has no `CLAUDE_PLUGIN_ROOT`, and reads the skills from the checkout. **None of them fetch** — see below. |
 | `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `deps`, `sentry`, `journal`. Read fresh from `main` each dispatch. |
+| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `deps`, `sentry`, `journal`, `repos`, `org`, `journalRepo`, `writing`, `relationships`, `contractSync`, `preview`, `railway`, `mailpit`, `storybook`. Read fresh from `main` each dispatch. |
 | `.github/workflows/dispatcher.yml` + `dispatcher/*.mjs` | The event dispatcher, called by all five repos. **Not CI** — see the warning above. |
 | `.github/workflows/dependency-review.yml` | The one shared CI job: each product repo's CI calls it. |
 | `.claude/workflow.json` | This repo's own per-repo **values**, same shape as every product repo, same rule as `loop-config.json`. |

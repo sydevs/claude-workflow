@@ -180,7 +180,8 @@ metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
 
 **Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
 `leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,
-`prAllowlistGlobs` (where a ticketless PR may open), `worktreeSetup` and `devServer`. Loop-wide
+`prAllowlistGlobs` (where a ticketless PR may open), `previewUrl`, `worktreeSetup`,
+`worktreeNotes`, `deployTarget` and `devServer`. Loop-wide
 values live in [`loop-config.json`](loop-config.json).
 
 **Installing in a repo.** Each repo declares the marketplace in `.claude/settings.json`.

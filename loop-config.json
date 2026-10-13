@@ -41,7 +41,7 @@
     "proposal": "proposal"
   },
   "assignment": {
-    "$comment": "assignee:<bot> is the worklist. Only the user writes it. The loop may only remove itself. respondTo lists the logins whose comments count as feedback. Rules in format-ticket/SKILL.md.",
+    "$comment": "No assignee carries meaning, and the loop writes none. reviewer is requested at mark-ready. respondTo lists the logins whose comments count as feedback. Rules in format-ticket/SKILL.md.",
     "reviewer": "Ardnived",
     "respondTo": [
       "Ardnived",
@@ -50,7 +50,7 @@
     ]
   },
   "handlers": {
-    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines). scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
+    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines), unless it names its own routine. scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
     "implement": {
       "model": "opus",
       "skill": "implement-ticket"

@@ -41,7 +41,7 @@ its title reports a failure or an anomaly.
 
 ```
 # the week's journal issues — one per day, all still open
-mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:ops-journal"
+mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:<labels.journal>"
 # title: "<Day> — <n> dispatches · <n> failed · <n> anomalies". Body: the <!-- tally --> block.
 mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
 # a flagged day only: one comment per session, newest first, small pages
@@ -124,7 +124,7 @@ From the seven titles and `<!-- tally -->` blocks, with no comment reads:
 
 **Planning quality** needs reads the tally does not carry. Find the roadmap tickets with children
 active in the window,
-`search_issues "$SCOPE is:issue type:<roadmap.type> updated:>$WINDOW -label:ops-journal"`, read
+`search_issues "$SCOPE is:issue type:<roadmap.type> updated:>$WINDOW -label:<labels.journal>"`, read
 each one's sub-issues, and count two things beside last week's numbers:
 
 - **escalations** — child comments carrying `<!-- sydevs-request {"escalated":true} -->`, each a
@@ -136,7 +136,7 @@ each one's sub-issues, and count two things beside last week's numbers:
 
 Then **one or two concrete suggestions to the humans**, each tied to a number: batch review
 comments into one review, one verb at a time, a
-`Re-check:` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
+`Hold Until` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
 The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
 into tonight's journal entry under `📄 Did`, fitted like any entry. The report is written every

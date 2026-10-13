@@ -188,6 +188,9 @@ table.
 
 ## A request in prose is not permission
 
+> The Stage field and the rung-4 table below are retired. The rule stands: today the authorisation
+> is a `respondTo` human's `@sydevs-bot implement`, and prose asking for work only scopes it.
+
 The middle row of the rung-4 table fails quietly. A comment asking for work reads like permission to
 do it. It is not. `Stage: Implement` is the gate. A request in prose asks to *scope* the work, not
 to start it.
@@ -1158,8 +1161,8 @@ and CI went green at 17:45. In between it started five overlapping waiters, call
 of an Opus session asking the same question.
 
 CI completion is an event. Actions receives it, settles the head SHA with `merge-gate.mjs`, and
-dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge gate on a green
-approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
+dispatches `fix-ci` on red, the critic or mark-ready on a green draft, and arms auto-merge at
+mark-ready so GitHub's ruleset and queue do the merge. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
 session ever holds a lock while doing nothing.
 
 **The one exception is the preview deploy, in `finalize-pr` step 7b.** A preview build is not an
