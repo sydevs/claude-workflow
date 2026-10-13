@@ -37,7 +37,9 @@ Two lenses carry the most weight, in this order:
 1. **Simplicity and scope.** Read the linked ticket first, then measure the diff against it. Is
    the diff larger than the problem? Does it contain anything the ticket did not ask for — an
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
-   strongest finding this review can produce is "half of this PR should not exist."
+   strongest finding this review can produce is "half of this PR should not exist." A change the
+   `## Summary` names as joined is not smuggled. Judge it by format-ticket's join rule, and flag
+   only one the rule does not join.
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
    `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access
@@ -47,10 +49,10 @@ Two lenses carry the most weight, in this order:
 Flag correctness, tests, and security only when you trip over them, at the bar the loop uses
 everywhere: a finding names a file and a line, or it is not a finding.
 
-**A real defect that is not this PR's is still filed.** Preflight routes every incidental
-finding, and a critic never touches the branch under review: a docs-only one goes to the docs
-work in flight, anything else a ticket. A stale doc this PR should have updated is a finding on
-this PR — and on a docs PR, so is every docs finding in its repo. Name it in the holistic assessment as well. Never park it on an unrelated line as an
+**A real defect the join rule joins to this PR is a finding on it**, so `address-review` folds it
+in — a stale doc this PR should have updated included. On a docs PR, so is every docs finding in
+its repo. A defect the rule does not join is still filed: preflight routes it, and a critic never
+touches the branch under review. Name it in the holistic assessment as well. Never park it on an unrelated line as an
 inline comment.
 
 ## Read the reviewer's profile

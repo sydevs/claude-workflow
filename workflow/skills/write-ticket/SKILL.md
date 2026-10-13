@@ -48,7 +48,8 @@ ticket. (why: docs/why.md#related-findings-share-a-ticket)
    `@sydevs-bot implement` from a `respondTo` login, no lock, and no PR. A home → rewrite its body
    to add this work (its own Approach part and criteria), post one line on it naming the source,
    and return its number. An approved or in-flight ticket is never a home. Its scope is what the
-   human authorised. File new instead, and link it under `## Notes`.
+   human authorised. File new instead, and link it under `## Notes`. The run that holds a ticket
+   joins work to it through start-run's table, not here.
 2. **Write the body** in the implementation template, from the code: `## Approach` with
    `file:line` references naming the seam, the call sites and the tests to touch; criteria that
    are true or false; a checklist a run executes cold. A roadmap child also gets `## Goal context`

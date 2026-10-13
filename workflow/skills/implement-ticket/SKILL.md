@@ -65,9 +65,10 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    that fits one run has no phases.
    (why: docs/why.md#a-ticket-is-built-in-phases-never-split, docs/why.md#split-at-reviewability-seams)
 
-   **File what you trip over**, as preflight's incidental-finding rule routes it. Fold the fix
-   into this PR only when the defect is this ticket's. A doc on its subject, or carrying the stale
-   premise it fixes, is — and on a docs ticket, so is every docs finding in the repo.
+   **File what you trip over**, as preflight's incidental-finding rule routes it. A finding the
+   join rule joins to this ticket is this PR's, listed or not: fold it in, with its own
+   `## Summary` bullet. On a docs ticket, so is every docs finding in the repo.
+   (why: docs/why.md#the-work-you-hold-takes-what-joins-it)
 
 5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
    destructive work. In a routine nobody can answer, a decision goes as step 4 says.
@@ -143,8 +144,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never wait for CI, mark a PR ready, or merge.** Push and end.
 - **Never remove a worktree before its branch is pushed.**
 - **Never write a test fixture without verifying its shape against the real configuration.**
-- **Never open a second branch or PR for a ticket that has one.** A docs-only finding that is not
-  this ticket's is not a second PR for it: preflight routes it to the docs work in flight.
+- **Never open a second branch or PR for a ticket that has one.** A docs-only finding the join
+  rule does not join is not a second PR for it: preflight routes it to the docs work in flight.
 - **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
 - **Never resolve a product decision yourself.** It goes to `## Open questions` with options, or
   to a question thread with the recommended option built (step 4).

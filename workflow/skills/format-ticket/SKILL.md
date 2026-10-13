@@ -366,15 +366,20 @@ returns 200 with regions`, "the marker is maroon on sahajayoga.ca". Not "check i
 
 ## The join rule
 
-**One reviewer, one sitting, one ticket.** Every ticket costs a human verb and a human review, so
-work a reviewer would judge together shares a ticket, even when the changes are distinct:
+**One reviewer, one sitting, one ticket — and one PR.** Every ticket and every PR costs a human
+review, so work a reviewer would judge together shares one, even when the changes are distinct:
 
+- the same root cause, or a finding that disproves the ticket's premise,
 - the same area or files, or a shared verification step, or
 - one change that limits, measures or unblocks the other.
 
 Each joined change gets its own part of `## Approach` and its own acceptance criteria. Add
 `## Phases` only when the whole will not fit one run. Being separable is never a reason to file
 two tickets. (why: docs/why.md#related-findings-share-a-ticket)
+
+**It binds work in flight too.** A finding it joins to the ticket or PR a run holds goes there,
+listed or not, through start-run's incidental-finding table. Only a part that will not fit the run
+is filed. (why: docs/why.md#the-work-you-hold-takes-what-joins-it)
 
 ## The split rule
 

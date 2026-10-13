@@ -53,9 +53,10 @@ they are work. Comment type and thread root together are the key.
 | **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
 | **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
 
-**Never rebut a docs point on scope.** A doc on this PR's subject, or carrying the stale premise it
-fixes, is this PR's, whatever the ticket listed. On a docs PR, every docs point in its repo is.
-Adopt it. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+**Never rebut a point on scope that format-ticket's join rule joins to this PR**, whatever the
+ticket listed. A reviewer's ask to apply a fix across the same system is one. On a docs PR, every
+docs point in its repo is this PR's. Adopt it.
+(why: docs/why.md#the-work-you-hold-takes-what-joins-it, docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 A thread with a reply from the own login newer than its last human comment is already handled.
 Skip it. A review body is handled once a summary comment from the own login is newer than its
@@ -64,9 +65,8 @@ Skip it. A review body is handled once a summary comment from the own login is n
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
 commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
 the SHA or the evidence. An ask becomes a question thread on the line it concerns
-(`/workflow:finalize-pr` step 7c), and the summary links it. A point that generalises beyond this PR is routed as preflight's
-incidental-finding rule says: a docs-only fix to the docs work in flight, anything else a
-follow-up ticket filed through `/workflow:write-ticket`.
+(`/workflow:finalize-pr` step 7c), and the summary links it. A point the join rule does not join is routed as
+preflight's incidental-finding rule says.
 
 ## Then
 
@@ -97,7 +97,7 @@ session pushes only to `claude/*`. In order:
    this even when nothing else happens.
 2. **Open a stacked PR** from `claude/<type>-<number>-<slug>` targeting **their branch**, not
    `main`, through `/workflow:finalize-pr` with `base:<their branch>`. Name it in the summary.
-3. **File a follow-up ticket** for anything that generalises beyond this PR.
+3. **Route what the stacked PR does not take** as preflight's incidental-finding rule says.
 
 ⚠ **Check the stacked PR's base is their branch before you open it.**
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)

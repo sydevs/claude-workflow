@@ -2858,3 +2858,33 @@ question's root carries `review.questionMarker`, and the dispatcher reads an una
 the person's turn, not the bot's. The marker also exempts it from `review-pr`'s exclusive right to
 start threads.
 
+## The work you hold takes what joins it
+
+**This amends [Related findings share a ticket](#related-findings-share-a-ticket)**, which joined
+findings into one ticket but never applied to the ticket a run was building.
+
+The incidental-finding table said "Never widen a PR" for a finding not "part of" the ticket, and
+runs read "part of" as "listed in". Two tickets show the cost:
+
+- **SahajCloud#920** was filed while implementing #899. Both were the same URL-pattern collision
+  binning legitimate proposal fields, one on the create path and one in the screening job. The
+  ticket said so itself: "shares a root cause". It cost a second triage, verb, PR, critic round
+  and review.
+- **SahajCloud#939** was filed while implementing #938, a raise of Next's upload body cap. The run
+  found the 413 masked as a 500 and three contradictory size declarations, in the same files and
+  under the same verification step, and found #938's premise ("bodies over 50 MB already get
+  Payload's 413") false. Only the ceiling value needed a person. All of it became a new ticket,
+  and the critic's point on #940 was then "routed" there too.
+
+The critic and `address-review` pushed the same way. `review-pr` treated anything the ticket did
+not list as scope creep, and `address-review` filed a ticket for "anything that generalises" —
+against the reviewer's own stated habit of sending a fix back to be applied across the system.
+
+So one test now decides membership for tickets and PRs alike: format-ticket's join rule, extended
+with the same root cause and a disproved premise. A joined finding is folded into the work in
+flight, gets its own Summary bullet so the reviewer sees it, and puts any decision it needs to the
+reviewer as a question thread with the recommended option already built. Only a part that will not
+fit the run is filed. An approved ticket still never absorbs another ticket — that changes what a
+human said yes to — but the PR built from it is reviewed before it merges, so it can take what the
+review will judge in the same sitting.
+
