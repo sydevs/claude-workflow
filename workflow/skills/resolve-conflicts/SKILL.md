@@ -43,7 +43,7 @@ sentence, not a section.
 **A semantic conflict** — `main` removed what this PR extends, or changed a contract it relies on
 — is not yours to guess. Comment the question in format-ticket's options shape, with
 `identity.commentMarker`, push nothing, and stop. The dispatcher fires nothing more on this head:
-the PR becomes the person's turn until a push.
+the PR becomes the person's turn until a push. (why: docs/why.md#a-conflicted-draft-is-resolved-too)
 
 **A human's PR** (`flags.delegated`, or the author is not the own login): you cannot push to it.
 Comment the resolution as a patch or a description, and stop.

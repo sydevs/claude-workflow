@@ -53,6 +53,7 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 - **Where the run holds a lock, re-check it before your first write to the item and before every
   push:** the label is on, **and** the record's `deadline` has not passed. Past it, the label may
   be the next attempt's. Either fails → stop. Write nothing more. Journal a stop.
+  (why: docs/why.md#a-session-past-its-deadline-owns-nothing)
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
   (why: docs/why.md#never-subscribe-to-pr-activity)
 - **Push and end.** Never wait for CI. Never mark a PR ready. Never merge.
