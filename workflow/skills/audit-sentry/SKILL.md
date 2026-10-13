@@ -69,10 +69,10 @@ When the error clearly stands in the way of an open roadmap ticket's goal, pass 
 `write-ticket` as the parent, so the Bug lands as its native sub-issue, under format-ticket's
 attach rule. Never file a roadmap ticket.
 
-Respect `maxProposalsPerSurvey`. Over the ceiling, journal what you found and file nothing.
+Respect `run-audit`'s proposal rule, and journal what it leaves unfiled.
 
 ## Hard rules
 
 - **Never** file a ticket you have not traced into our source.
 - **Never** resolve a Sentry issue here. The dispatcher resolves it when the fix merges.
-- **Never** file more than the ceiling, even for a bad week.
+- **Never** file past `run-audit`'s proposal rule, even for a bad week.

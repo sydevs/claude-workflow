@@ -10,7 +10,7 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps the dispatcher enforces. ciFixIterations bounds fix-ci per PR, and ciInfraReruns bounds re-runs of an infrastructure failure per head (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired); the proposal ceilings bound the audits. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
+    "$comment": "Stock caps. The dispatcher enforces ciFixIterations (fix-ci per PR) and ciInfraReruns (re-runs of an infrastructure failure per head, why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired); run-audit's proposal rule enforces the proposal ceilings. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,

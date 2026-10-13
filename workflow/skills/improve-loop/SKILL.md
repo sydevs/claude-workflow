@@ -93,7 +93,7 @@ added for one bad night outlives its cause.
 | The reviewer flagged something the adversarial review passed clean | A profile gap |
 | Adversarial-review findings the reviewer resolved without change | The bot review over-flags — trim the profile, not the code |
 | A PR under `review.skipWhen` that the reviewer then changed | The threshold is too generous |
-| Proposals sitting unreviewed | Audits outrun review capacity — lower `maxProposalsPerSurvey` |
+| Proposals sitting unreviewed | Audits outrun review capacity — lower `ceilings.maxProposalsPerSurvey` |
 | Escalations or post-plan revisions on 2+ roadmap tickets | Planning misses decisions — `implement-roadmap` re-research, or a `revise-roadmap` lens, is the gap |
 | A recheck storm on one item | Humans comment while the bot works — a note for the usage report, not a rule |
 
@@ -184,7 +184,7 @@ next author reads it:
   its lease expires. Propose the change instead.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
   proposal ticket in that repo instead, filed through `/workflow:write-ticket` in `create` mode,
-  under `maxOpenProposals` like every audit proposal. The
+  under `ceilings.maxOpenProposals` like every audit proposal. The
   dispatcher sets its Status and `awaiting`.
 
 **A recurring theme across the week's work** — the same kind of finding, request or friction on
@@ -192,7 +192,7 @@ two or more distinct days, which no single ticket owns — may become a **Roadma
 Apply `/workflow:file-ticket`'s steps 2 and 4a.1–2: search for a duplicate goal and a contrary
 decision first, then write the plain-language roadmap template in `/workflow:format-ticket`, in the
 repo that skill places the goal in. Skip its Ask: nobody is there to answer, so each decision
-stays an open question with options. It counts under `maxOpenProposals`, and it lands as a bot proposal that nothing
+stays an open question with options. It counts under `ceilings.maxOpenProposals`, and it lands as a bot proposal that nothing
 acts on until a member's `@sydevs-bot revise` accepts it. Never file its children.
 (why: docs/why.md#the-roadmap-tier)
 

@@ -48,14 +48,15 @@ mcp__github__search_issues  query:"$SCOPE is:issue is:open label:proposal"
 ```
 
 The dispatcher applies `proposal` only to bot-filed tickets, and removes it on the first human
-verb, so the count is exactly the unreviewed proposals. At or over `maxOpenProposals`, **do not
-file** — record what you found in the journal, to wait for review capacity.
+verb, so the count is exactly the unreviewed proposals. **The proposal rule, which every audit
+cites:** file at most `ceilings.maxProposalsPerSurvey`, best first, and stop once the open count
+reaches `ceilings.maxOpenProposals`. Record the rest in the journal, to wait for review capacity.
 
 **The ceiling governs proposals you went looking for, not defects you tripped over.**
 
 | Where it came from | Capped? |
 | --- | --- |
-| An audit — you set out to find candidates | **Yes.** Respect `maxOpenProposals` and `maxProposalsPerSurvey` |
+| An audit — you set out to find candidates | **Yes.** The proposal rule above |
 | A real defect found while implementing, reviewing, or investigating | **No. File it, every time, even over the ceiling** |
 
 An audit manufactures candidates on demand, so a cap fits. An incidental finding is evidence you

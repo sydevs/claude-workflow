@@ -60,7 +60,7 @@ the field useless.
 under format-ticket's attach rule. Never file a roadmap ticket from an audit: format-ticket says
 what to do with roadmap-sized work.
 
-Respect `maxProposalsPerSurvey` and the standing `maxOpenProposals` ceiling. Fewer, better
+Respect `run-audit`'s proposal rule. Fewer, better
 findings win — the user is the only reviewer.
 
 ## Ticketless PRs
