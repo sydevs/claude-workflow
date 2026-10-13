@@ -159,7 +159,7 @@ wherever a rule can be evaluated. (why: docs/why.md#a-script-here-never-fetches)
 
 - **Frontmatter is a security surface.** `allowed-tools` on a `SKILL.md` instructs an agent with
   write access to five repositories. An over-broad line here is this repo's equivalent of an RCE.
-  `securityReview.triggerPattern` covers every `SKILL.md` and every hook for that reason. Grant the
+  `securityReview.triggerPattern` covers every skill `.md`, every hook, `workflow/lib`, the dispatcher and its workflows for that reason. Grant the
   narrowest set that works — compare `file-ticket` (`Bash(gh issue:*)`,
   `Bash(gh api:*)`, …) against the pipeline skills that genuinely need `Bash(*)`.
 - **`disable-model-invocation: true` unless the skill is a helper.** Every user- or
