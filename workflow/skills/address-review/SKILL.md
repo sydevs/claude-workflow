@@ -28,7 +28,9 @@ and the run ends. **Start with `/workflow:start-run` and end with
 Any one of these, and nothing else:
 
 - an unresolved thread whose last comment comes from a login in `assignment.respondTo`,
-- an unresolved thread the own login rooted, with no reply — the adversarial review,
+- an unresolved thread the own login rooted, with no reply — the adversarial review. A root
+  carrying `review.questionMarker` is a question thread instead: it waits on the person, and
+  becomes work only once they reply,
 - **a review body** from a login in `assignment.respondTo`, non-empty, submitted after the own
   login's last comment. Each distinct point in it is one item. General feedback lives here as
   often as in file threads — a review whose body you skip is a review you ignored.
@@ -48,7 +50,8 @@ they are work. Comment type and thread root together are the key.
 | --- | --- |
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
 | **Rebut** | Reply in the thread with evidence — a file and line, or the ticket line it satisfies. **On the critic's thread — one the own login rooted — resolve it:** your evidence settles a bot's point. **On a human's thread, leave it open.** Only they settle it. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
-| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
+| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
+| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
 
 **Never rebut a docs point on scope.** A doc on this PR's subject, or carrying the stale premise it
 fixes, is this PR's, whatever the ticket listed. On a docs PR, every docs point in its repo is.
@@ -60,7 +63,8 @@ Skip it. A review body is handled once a summary comment from the own login is n
 
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
 commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
-the SHA or the evidence. A point that generalises beyond this PR is routed as preflight's
+the SHA or the evidence. An ask becomes a question thread on the line it concerns
+(`/workflow:finalize-pr` step 7c), and the summary links it. A point that generalises beyond this PR is routed as preflight's
 incidental-finding rule says: a docs-only fix to the docs work in flight, anything else a
 follow-up ticket filed through `/workflow:write-ticket`.
 
@@ -100,8 +104,9 @@ session pushes only to `claude/*`. In order:
 
 ## Hard rules
 
-- **Never start a new review thread.** That channel belongs to `review-pr` alone. Reply
-  inside existing threads only. (why: docs/why.md#the-author-filters-one-exception)
+- **Never start a new review thread**, except a question thread. That channel belongs to
+  `review-pr` alone. Reply inside existing threads only.
+  (why: docs/why.md#the-author-filters-one-exception, docs/why.md#a-pr-question-is-a-thread-on-the-line)
 - **Never `APPROVE` or `REQUEST_CHANGES`.** (why: docs/why.md#reviews-are-comment-only)
 - **Never force-push, rebase, or squash history.**
 - **Never touch the draft flag, an assignee, a reviewer request, or a label other than the

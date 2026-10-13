@@ -2350,7 +2350,7 @@ hold, or carrying the stale premise it fixes, is that work's, listed or not. A d
 takes any docs finding in its repo. Without one in hand, an open docs ticket gets a line, and an
 open bot docs PR gets a commit — but never one that is locked, which another session owns, or
 approved, which auto-merge would land with commits the reviewer never saw. Only then is a new PR
-opened. A point that needs a decision is a question in that PR's body, and an unknown the run can
+opened. A point that needs a decision is a question thread on that PR, and an unknown the run can
 measure, it measures. Neither splits a docs fix into a ticket.
 
 ## Only required checks are CI
@@ -2832,3 +2832,29 @@ So correcting an earlier claim needs no addendum. Fix it in the body, where the 
 comment stays as the historical record of what that run believed at the time — which is what a log
 is for. The record then has one authoritative surface, even though its entries stay immutable.
 Someone catching up reads the body, not eight comments in sequence.
+
+## A PR question is a thread on the line
+
+The docs route told a run to put a decision point under `## Open questions` in the PR body. The PR
+template had no such section and forbade adding one, so a run either broke the template or dropped
+the question. Even where it landed, a body section is read once, above the diff, and nothing makes
+anyone answer it before the merge.
+
+A review thread on the line the decision lands on fixes all three. The reviewer meets it inside the
+diff they are already judging. The ruleset refuses to merge while it is unresolved, so it cannot be
+skipped. A reply in it is an event the dispatcher already routes to `address-review`. The run builds
+its recommended option first, so the branch is complete whatever the answer, and a different answer
+costs one commit.
+
+Every question the loop asks a person — on a ticket, in a PR thread, in an `address-review` reply —
+carries options, what each implies, and a recommendation. A bare question makes the reader do the
+analysis the run already did.
+
+**Why a marker, not the review state.** The dispatcher treats an own-rooted thread with no reply as
+the critic's finding, and fires `address-review` to answer it. A question thread is own-rooted too.
+Telling them apart by review state does not work: GitHub refuses `REQUEST_CHANGES` on a PR its own
+author reviews, so the critic and the questions are both `COMMENT` reviews by the bot. So each
+question's root carries `review.questionMarker`, and the dispatcher reads an unanswered question as
+the person's turn, not the bot's. The marker also exempts it from `review-pr`'s exclusive right to
+start threads.
+

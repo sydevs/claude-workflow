@@ -51,8 +51,11 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    → do not guess. Settle every fact yourself. A decision goes in `## Open questions` with options
    and a recommendation — on the roadmap parent when `## Goal context` links one, following
    `write-ticket`'s Escalate steps. Comment what is unresolved, and stop. The dispatcher sets
-   `awaiting` when you unlock. (why: docs/why.md#awaiting-has-one-writer,
-   docs/why.md#a-late-decision-goes-to-the-goal)
+   `awaiting` when you unlock — on the ticket, or on its roadmap parent when you escalated.
+   (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-late-decision-goes-to-the-goal)
+
+   **A decision only part of the work turns on does not stop the build.** Build the recommended
+   option, and ask the decision as a question thread (`/workflow:finalize-pr` step 7c).
 
    **A ticket that will not fit one run is built in phases, on this one branch and one PR.**
    Never split it into child tickets or several PRs here: splitting is planning, done before
@@ -67,7 +70,7 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    premise it fixes, is — and on a docs ticket, so is every docs finding in the repo.
 
 5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
-   destructive work. In a routine nobody can answer: comment the question and stop.
+   destructive work. In a routine nobody can answer, a decision goes as step 4 says.
 
 6. **Worktree by default, on its final branch.** `EnterWorktree` names its own branch, and a
    rename afterwards breaks `ExitWorktree`. Create the worktree yourself, then enter it by path:
@@ -91,8 +94,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    both fit, ship what is ticked and end. The dispatcher starts the next session once CI is
    green. **Every session ends with at least one more box ticked.** A phase too big for one
    session is split into smaller boxes, and you tick the part you finished. A session that ticks
-   nothing stalls the PR, and it becomes the reviewer's turn — so when a question stops you,
-   comment it on the PR and end.
+   nothing stalls the PR, and it becomes the reviewer's turn — so when a decision stops you, ask
+   it as a question thread (`/workflow:finalize-pr` step 7c) and end.
 
 8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs
    it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
@@ -143,7 +146,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never open a second branch or PR for a ticket that has one.** A docs-only finding that is not
   this ticket's is not a second PR for it: preflight routes it to the docs work in flight.
 - **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
-- **Never resolve a product decision yourself.** It goes to `## Open questions` with options.
+- **Never resolve a product decision yourself.** It goes to `## Open questions` with options, or
+  to a question thread with the recommended option built (step 4).
 
 ## References
 

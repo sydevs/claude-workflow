@@ -160,6 +160,10 @@ it:
   - **B — Temporary until 2027:** we can reuse the old paths later, but old links eventually break.
 ```
 
+**The same shape asks every question the loop puts to a person** — a ticket's open question, a
+PR question thread (`/workflow:finalize-pr` step 7c), and an `address-review` ask. Each option
+says what it implies, and the recommended one comes first.
+
 A reply such as `@sydevs-bot revise 1A` or free text answers it. Tick the item, and move it to
 `## Decisions` as `- **<question>** → <answer> (<who>, <YYYY-MM-DD>)`.
 (why: docs/why.md#decisions-come-with-options)

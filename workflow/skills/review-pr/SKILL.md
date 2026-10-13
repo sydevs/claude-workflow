@@ -138,7 +138,8 @@ the header is the idempotency key on this path only. Journal that you used the f
 - **Never `APPROVE` or `REQUEST_CHANGES`**, even where the API allows it.
 - **One review per PR, ever**, unless `flags.onDemand`. An existing own-login review on arrival
   means stop and report that nothing was posted.
-- **Starting review threads is this skill's exclusive channel.** Reply threads belong to
+- **Starting review threads is this skill's exclusive channel**, except question threads, whose
+  root carries `review.questionMarker`. Leave those to the person. Reply threads belong to
   `address-review`.
 - **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.

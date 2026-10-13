@@ -328,6 +328,34 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
    `fix-ci` deploy pass — never this step's.
 
+### 7c. Ask the reviewer, on the line
+
+**A decision this branch could not settle is a question thread, never a section of the body.** The
+reviewer reads threads inside the diff they judge, and the ruleset merges nothing while one is
+open. (why: docs/why.md#a-pr-question-is-a-thread-on-the-line)
+
+1. **Ask only a decision a person owns.** Settle every fact yourself first
+   (format-ticket's *Decisions, facts, and open questions*).
+2. **Build the recommended option.** The branch is then complete whatever the answer, and any
+   other answer costs one commit.
+3. **Never ask twice.** A thread whose root carries `review.questionMarker` and asks the same
+   thing already asks it.
+4. **Post every new question in one review.** `pull_request_review_write method:create`, then
+   one `add_comment_to_pending_review` per question, on the diff line the decision lands on.
+   With no line inside a hunk, use the first changed line of the file it most concerns. Submit
+   with `method:"submit_pending"` and `event:"COMMENT"`. The body is one line, `<n> question(s)
+   for the reviewer, one per thread.`, plus `identity.commentMarker`. Never open it with
+   `review.bodyHeader`, which marks the critic's review.
+5. **Shape each question as format-ticket's options:** the question in bold, then options A, B…,
+   each with what it implies, the recommended one first and marked as built. End with `Reply
+   with a letter, or your own answer.`, then `review.questionMarker`, then
+   `identity.commentMarker`. Measure it with `--kind comment`.
+6. **If the pending-review tools do not resolve**, post the questions as one PR comment in the
+   same shape. The reviewer answers it with a mention.
+
+The dispatcher never counts a question thread as the bot's turn. It waits on the person, and
+their reply fires `address-review`. Name each question in the report.
+
 ### 8. Push and end
 
 **This skill never watches CI, never marks a PR ready, and never merges.** Its one wait is the
@@ -354,6 +382,7 @@ to memory.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Never** link a preview page that shows no data, unless a line in the body says why.
+- **Never** put a decision in the PR body. It is a question thread (step 7c).
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
   the critic agree.
