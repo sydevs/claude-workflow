@@ -309,6 +309,25 @@ function deployPassFor(record, sha) {
   return [record?.current, ...(record?.dispatches || [])].find(isDeploy) || null
 }
 
+/**
+ * A conflicted PR, draft or ready. A conflicted branch schedules no CI, so
+ * nothing downstream of this — fix-ci, the critic, the next phase — can ever
+ * move it: the conflict goes first. Two exceptions. A stalled phased draft
+ * labelled awaiting stays your turn. A resolve-conflicts session that already
+ * ended on this head, or is ending now, stopped on a conflict it would not
+ * guess, so that is your turn too, until a push gives it a new head.
+ */
+function conflictPlan(s, config) {
+  const awaiting = config.labels.awaiting
+  const phases = phasesLeft(s)
+  if (phases && (s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you, conflicted`)]
+  const sha = s.pr.head?.sha
+  const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
+  const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
+  if (ended) return [label([awaiting], []), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
+  return [fire('resolve-conflicts')]
+}
+
 /** A phased draft whose ticket still has phases to build, or null. */
 function phasesLeft(s) {
   const phases = parsePhases(s.item?.body)
@@ -377,7 +396,7 @@ export function evaluatePr(s, config) {
   const why = needsAddressReview(s, config)
   if (why) return [note(why), fire('address-review')]
 
-  if (!pr.draft && s.mergeable === 'CONFLICTING') return [fire('resolve-conflicts')]
+  if (s.mergeable === 'CONFLICTING') return conflictPlan(s, config)
 
   if (s.ci.failing.length) {
     // Red only on infrastructure: re-run it, never spend a repair on it.
@@ -830,8 +849,9 @@ function derive(target, s, config) {
       ]
     case 'linked-abandoned':
       return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
+    // Drafts too: evaluatePr already leaves a branch a session holds alone.
     case 'conflict-scan':
-      return s.pr?.draft ? [note('draft — another session owns it')] : evaluatePr(s, config)
+      return evaluatePr(s, config)
     case 'unlock': {
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })

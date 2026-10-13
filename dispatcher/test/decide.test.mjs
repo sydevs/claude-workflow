@@ -864,3 +864,44 @@ test('a review verb is answered by a fallback review posted after it', () => {
   const before = prSnap({ comments: [fallbackReview('2026-10-09T10:00:00Z'), asked] })
   assert.deepEqual(types(evaluatePr(before, config)), ['fire:review-pr'], 'a verb after the review still asks again')
 })
+
+// ---- a conflicted draft is resolved, not left to the orphan sweep ---------
+
+const conflicted = (over = {}) => prSnap({ mergeable: 'CONFLICTING', ci: { green: false, reason: 'no checks', running: [], failing: [] }, ...over })
+
+test('a conflicted draft fires resolve-conflicts', () => {
+  assert.deepEqual(types(evaluatePr(conflicted(), config)), ['fire:resolve-conflicts'])
+})
+
+test('a red, conflicted draft gets resolve-conflicts, not fix-ci', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ ci: red }), config)), ['fire:resolve-conflicts'])
+})
+
+test('a conflicted draft whose branch a session holds is left to it', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ locked: true }), config)), ['recheck'])
+  assert.deepEqual(types(evaluatePr(conflicted({ linkedLocked: [9] }), config)), ['note'])
+})
+
+test('a conflict is resolved before the next phase continues', () => {
+  const s = phased(1, 3, { mergeable: 'CONFLICTING', ci: red })
+  assert.deepEqual(types(evaluatePr(s, config)), ['fire:resolve-conflicts'])
+  const stalled = phased(1, 3, { mergeable: 'CONFLICTING' })
+  stalled.item.labels = ['awaiting']
+  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'a stalled phased draft stays your turn')
+  stalled.ci = red
+  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'and a stale red check does not fire fix-ci on it')
+})
+
+test('a conflict-scan after a merge re-derives a draft too', () => {
+  assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, conflicted(), config)), ['fire:resolve-conflicts'])
+})
+
+test('a resolve-conflicts that ended on this head is not fired again; a new head asks again', () => {
+  const ended = { id: 'x', handler: 'resolve-conflicts', attempt: 1, firedAt: '2026-10-09T10:00:00Z', sha: 'abc', outcome: 'done' }
+  const p = evaluatePr(conflicted({ record: { dispatches: [ended] } }), config)
+  assert.equal(p.some((a) => a.type === 'fire'), false, 'a session that stopped on a semantic conflict is not looped')
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'it is your turn')
+  const unlock = decide({ reason: 'unlock', facts: { handler: 'resolve-conflicts' } }, conflicted({ record: { current: { ...ended, outcome: undefined } } }), config)
+  assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
+  assert.deepEqual(types(evaluatePr(conflicted({ record: { dispatches: [{ ...ended, sha: 'old' }] } }), config)), ['fire:resolve-conflicts'])
+})
