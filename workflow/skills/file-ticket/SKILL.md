@@ -1,6 +1,6 @@
 ---
 name: file-ticket
-description: Raise a new ticket — a bug, a small change, or a roadmap goal. Pushes back first when the work is already in the pipeline or contradicts a recorded decision, classifies it, asks each open question with a recommendation, then files it in the right tier. A docs-only fix becomes a PR instead. Proposes a milestone when related goals have none. User-invoked only; it files nothing without your yes.
+description: Raise a new ticket — a bug, a small change, or a roadmap goal. Pushes back first when the work is already in the pipeline or contradicts a recorded decision, classifies it, asks each open question with a recommendation, then files it in the right tier. A docs- or test-only fix becomes a PR instead. Proposes a milestone when related goals have none. User-invoked only; it files nothing without your yes.
 argument-hint: '[what you want, in your own words]'
 disable-model-invocation: true
 allowed-tools: Bash(git log:*), Bash(gh issue:*), Bash(gh api:*), Read, Grep, Glob, AskUserQuestion
@@ -68,6 +68,11 @@ PR, is a **Roadmap** ticket. A Bug is always direct.
 other thing. Ask `Fix it in a PR now (Recommended)` or `File a Bug anyway`. An open docs ticket
 or unapproved docs PR in that repo takes it first, as preflight routes it. Otherwise branch
 `claude/docs-<scope>-<slug>`, fix only the docs, and ship through `/workflow:finalize-pr`. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+
+**A test-only fix needs no ticket either** — the product code is right and a test, fixture or test
+config is wrong or missing. Ask the same way. Branch `claude/test-<scope>-<slug>`, change only files
+`test-only.mjs` accepts, and ship through `/workflow:finalize-pr`.
+(why: docs/why.md#a-test-fix-is-a-pr-not-a-ticket)
 
 ## 4a. A roadmap goal
 

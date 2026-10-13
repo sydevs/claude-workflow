@@ -144,8 +144,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never wait for CI, mark a PR ready, or merge.** Push and end.
 - **Never remove a worktree before its branch is pushed.**
 - **Never write a test fixture without verifying its shape against the real configuration.**
-- **Never open a second branch or PR for a ticket that has one.** A docs-only finding the join
-  rule does not join is not a second PR for it: preflight routes it to the docs work in flight.
+- **Never open a second branch or PR for a ticket that has one.** A docs- or test-only finding
+  the join rule does not join is not a second PR for it: preflight routes it.
 - **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
 - **Never resolve a product decision yourself.** It goes to `## Open questions` with options, or
   to a question thread with the recommended option built (step 4).

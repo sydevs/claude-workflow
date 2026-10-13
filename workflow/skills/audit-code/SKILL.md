@@ -64,7 +64,7 @@ findings win — the user is the only reviewer.
 
 ## Ticketless PRs
 
-**Any family:** a docs-only finding where the code is plainly right joins the docs work in
+**Any family:** a docs- or test-only finding where the product code is plainly right joins the work in
 flight, or is a ticketless PR, as preflight's incidental-finding rule routes it — never a ticket.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 

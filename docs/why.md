@@ -2888,3 +2888,24 @@ fit the run is filed. An approved ticket still never absorbs another ticket — 
 human said yes to — but the PR built from it is reviewed before it merges, so it can take what the
 review will judge in the same sitting.
 
+## A test fix is a PR, not a ticket
+
+SahajAtlasWeb#285 (a time budget for the unit lane) and #286 (one shared `src/` walker for nine
+specs) came out of one review of #284. Neither touched a line that ships: both changed specs, test
+helpers and test config. The only ticketless routes were docs-only and `prAllowlistGlobs` —
+lockfiles, Markdown and generated types — so both became tickets, each asking a human to approve a
+change that could not alter behaviour, and then paying a session to make it.
+
+A test-only change is in the same position as a docs fix. The PR is the proposal, and the review
+still gates the merge. So it takes the same route, with one difference: tests never batch into an
+open test PR. Each is its own ticketless PR, unless the join rule already sends it to the work in
+flight. `findings.testGlobs` says what counts, and `test-only.mjs` proves a branch stays inside it.
+It proves paths only: a spec that loosens its own assertion passes it, so the reviewer still judges
+whether each test is a real guard.
+
+**Neither route reaches claude-workflow's own skills.** In a product repo a doc cannot change what
+ships. In claude-workflow, `workflow/**` and `loop-config.json` *are* what ships, to every repo on
+the next run. A one-line skill fix from an unrelated handler would bypass the version bump,
+`rule-delta.mjs` and improve-loop's recurrence bar. Those findings go to `🧭 Friction`, where
+improve-loop weighs them.
+

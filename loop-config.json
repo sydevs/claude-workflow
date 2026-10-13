@@ -17,8 +17,19 @@
     "ciInfraReruns": 2
   },
   "findings": {
-    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in start-run/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR.",
-    "directFixMaxFiles": 2
+    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in start-run/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR. testGlobs are the paths workflow/lib/test-only.mjs accepts as a test-only change.",
+    "directFixMaxFiles": 2,
+    "testGlobs": [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/tests/**",
+      "**/test/**",
+      "**/__tests__/**",
+      "**/__mocks__/**",
+      "**/test-support/**",
+      "vitest.*",
+      "playwright.config.*"
+    ]
   },
   "labels": {
     "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Hold Until date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in start-run/SKILL.md.",
