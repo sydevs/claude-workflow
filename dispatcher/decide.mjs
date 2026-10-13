@@ -844,7 +844,9 @@ function derive(target, s, config) {
     case 'phases-stalled':
       return [
         label([L.awaiting], []),
-        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. Comment here and I will pick it up again.`),
+        // A push is not a word: only a mention or a review re-arms the
+        // continuation (phase-continue reads `humanAt`).
+        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. A mention (\`${config.dispatch.commandPrefix}\`) or a review from you starts me again.`),
         anomaly('phases-stalled', `${s.repo.full}#${s.pr?.number} phase ${facts.done + 1}/${facts.total} stalled`),
       ]
     case 'linked-abandoned':
@@ -936,7 +938,7 @@ function derive(target, s, config) {
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
       if (p.some((a) => ['fire', 'armAutoMerge', 'markReady', 'targets'].includes(a.type))) return [note('still moving — not an orphan')]
-      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
+      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, `This draft has had no CI activity for hours and no session holds it. A mention (\`${config.dispatch.commandPrefix}\`) or a push from you starts me again.`), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]

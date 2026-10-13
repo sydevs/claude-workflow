@@ -905,3 +905,22 @@ test('a resolve-conflicts that ended on this head is not fired again; a new head
   assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
   assert.deepEqual(types(evaluatePr(conflicted({ record: { dispatches: [{ ...ended, sha: 'old' }] } }), config)), ['fire:resolve-conflicts'])
 })
+
+// ---- a wake hint promises only what wakes the bot ------------------------
+
+const wakeComment = (plan) => plan.find((a) => a.type === 'comment')
+
+test('the orphan notice asks for a mention or a push, never a plain comment', () => {
+  const stalled = { pr: { ...prSnap().pr, draft: true }, reviews: [criticReview], ci: red, record: { fixCi: 3 } }
+  const c = wakeComment(decide({ reason: 'sweep-orphan', facts: {} }, prSnap(stalled), config).filter((a) => a.key?.startsWith('orphan ')))
+  assert.match(c.key, /^orphan abc$/, 'the key is unchanged, so no item is told twice')
+  assert.match(c.body, /A mention \(`@sydevs-bot`\) or a push from you starts me again\./)
+  assert.doesNotMatch(c.body, /Comment or push/)
+})
+
+test('the phases-stalled notice asks for a mention or a review, never a plain comment', () => {
+  const c = wakeComment(decide({ reason: 'phases-stalled', facts: { done: 1, total: 3 } }, phased(1, 3), config))
+  assert.equal(c.key, 'phases-stalled abc')
+  assert.match(c.body, /A mention \(`@sydevs-bot`\) or a review from you starts me again\./)
+  assert.doesNotMatch(c.body, /Comment here/)
+})
