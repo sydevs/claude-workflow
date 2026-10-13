@@ -10,7 +10,7 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 # Implement Issue
 
 Policy and sequencing only. Existing tools do the work: worktrees by `git worktree`, review by
-`pr-review-toolkit`, shipping by `/workflow:finalize-pr`, the gate by `workflow.json`. A
+`/code-review` (`pr-review-toolkit` where installed), shipping by `/workflow:finalize-pr`, the gate by `workflow.json`. A
 repo-specific step belongs in `.claude/workflow.json`, not here.
 
 **Start with `/workflow:start-run` and end with `/workflow:finish-run`.** The
@@ -103,8 +103,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
    the WordPress plugin. Honour `onExit124` where set: hand off rather than retry.
 
-9. **Tests.** Write them for what changed. `/workflow:finalize-pr`'s `pr-test-analyzer` judges
-   coverage — do not duplicate that analysis here.
+9. **Tests.** Write them for what changed, and own the coverage check: every changed behaviour has
+   a test that fails without it. Watch each one fail before you keep it. No routine has
+   `pr-test-analyzer` (`/workflow:finalize-pr` step 2), so nothing after you checks this.
 
    **Fixture pre-mortem, before you write a fixture.** State in one line what it assumes about
    the real configuration, then open the real config and verify it. Name the file you checked in

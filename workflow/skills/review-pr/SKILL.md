@@ -28,7 +28,8 @@ invoked locally. Names and values below come from `loop-config.json` — read it
 ## Stance
 
 Be adversarial about the PR, not about code style. The author-side review already ran before this
-PR opened (`/finalize-pr` step 2, six lenses over the diff) — **do not re-run it, and do not
+PR opened (`/finalize-pr` step 2: `/code-review high` and `/simplify`, or the toolkit's six
+lenses where it is installed) — **do not re-run it, and do not
 re-litigate lint- or nit-level findings.** That pass asked "is this code good?" You ask: **should
 this PR exist in this shape?**
 
@@ -71,9 +72,11 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    Judge a ticketless PR against its own body.
 2. **The PR body** — what the author claims the change is. Check its `## Change outline` against
    the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
-   first. Then open each `## Preview` link, signed in as the repo guide says. The preview has
-   built by the time you run. A link that shows no data, or an input the body names that does not
-   exist, is a `should-fix` (`/workflow:finalize-pr` step 7).
+   first. Then open each `## Preview` link, signed in as the repo guide says. A preview deploy is
+   not a required check, so it may still be building: a link that does not open yet goes in What
+   was checked, not in the findings. A link that shows no data with no line in the body saying
+   why, or an input the body names that does not exist, is a `should-fix`
+   (`/workflow:finalize-pr` step 7).
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use
@@ -145,4 +148,5 @@ the header is the idempotency key on this path only. Journal that you used the f
   `address-review`.
 - **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.
-- **Never duplicate the author-side pass.** Style, formatting, and naming taste are not yours.
+- **Never duplicate the author-side pass.** Style, formatting, spelling and casing are not yours.
+  A misleading or shadowing name is, as the reviewer profile says.
