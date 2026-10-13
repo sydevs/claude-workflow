@@ -183,14 +183,16 @@ next author reads it:
   `.gitconfig` and the rest of the list in `AGENTS.md`. The prompt stalls an unattended run until
   its lease expires. Propose the change instead.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
-  proposal issue in that repo instead, under `maxOpenProposals` like every audit proposal. The
+  proposal ticket in that repo instead, filed through `/workflow:write-ticket` in `create` mode,
+  under `maxOpenProposals` like every audit proposal. The
   dispatcher sets its Status and `awaiting`.
 
 **A recurring theme across the week's work** — the same kind of finding, request or friction on
 two or more distinct days, which no single ticket owns — may become a **Roadmap ticket proposal**.
-Apply `/workflow:file-ticket`'s rules: search for a duplicate goal and a contrary decision first,
-then write the plain-language roadmap template in `/workflow:format-ticket`, in the repo that
-skill places the goal in. It counts under `maxOpenProposals`, and it lands as a bot proposal that nothing
+Apply `/workflow:file-ticket`'s steps 2 and 4a.1–2: search for a duplicate goal and a contrary
+decision first, then write the plain-language roadmap template in `/workflow:format-ticket`, in the
+repo that skill places the goal in. Skip its Ask: nobody is there to answer, so each decision
+stays an open question with options. It counts under `maxOpenProposals`, and it lands as a bot proposal that nothing
 acts on until a member's `@sydevs-bot revise` accepts it. Never file its children.
 (why: docs/why.md#the-roadmap-tier)
 

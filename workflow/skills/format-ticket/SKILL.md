@@ -26,7 +26,7 @@ divergence that produced three forks of the workflow started exactly this way.
 
 | Tier | Type | Written for | Written by |
 | --- | --- | --- | --- |
-| **Roadmap ticket** | `Roadmap` | Anyone, including the public. Plain language. | `file-ticket`, the public form, then `revise-roadmap` |
+| **Roadmap ticket** | `Roadmap` | Anyone, including the public. Plain language. | `file-ticket`, the public form, `improve-loop`'s proposals and `write-ticket`'s Promote, then `revise-roadmap` |
 | **Implementation ticket** | `Bug` · `Feature` · `Task` | An automated run picking it up cold | `write-ticket` only, whoever asked for it |
 
 **Classify before you write.** A request is **Roadmap** when it needs a product decision, or more

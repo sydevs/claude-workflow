@@ -16,7 +16,7 @@ one the loop filed are indistinguishable and equally ready to build.
 
 As a handler, **start with `/workflow:start-run` and end with `/workflow:finish-run`.** The
 record's `flags.mode` names the job: `revise`, `recheck` or `block`. Called by another skill, the
-job is `create`, with no record.
+job is `create`, or `update` for a ticket that skill must reshape. Neither has a record.
 
 ## Ground from the code
 
@@ -42,10 +42,14 @@ The caller gives you a repo, one or more intents, and optionally a parent roadma
 siblings. Several intents → group them by format-ticket's join rule first. Each group is one
 ticket. (why: docs/why.md#related-findings-share-a-ticket)
 
+**A caller that passes a parent and siblings skips the home search.** That is `implement-roadmap`
+filing its plan: the split is binding, and adoption already placed the existing tickets.
+
 1. **Search for a duplicate or a home**, closed tickets and roadmap `## Decisions` included. A
    duplicate → stop, and return it instead. A **home** is an open implementation ticket in the
    same repo that the join rule says this belongs with, and that is still unapproved: no
-   `@sydevs-bot implement` from a `respondTo` login, no lock, and no PR. A home → rewrite its body
+   `@sydevs-bot implement` from a `respondTo` login, no lock, no PR, and no roadmap parent. A
+   goal's `implement` approves every child, so a child is never a home. A home → rewrite its body
    to add this work (its own Approach part and criteria), post one line on it naming the source,
    and return its number. An approved or in-flight ticket is never a home. Its scope is what the
    human authorised. File new instead, and link it under `## Notes`. The run that holds a ticket
@@ -60,6 +64,12 @@ ticket. (why: docs/why.md#related-findings-share-a-ticket)
    Link it to its parent with `mcp__github__sub_issue_write`. Locally, run `file-ticket`'s
    **Ask** step on the draft first — its open questions, then the yes — and file on that yes.
 5. **Return** the numbers to the caller. File nothing else in this mode.
+
+## `update` — another skill reshapes a ticket
+
+The caller gives a ticket and what must change: `implement-roadmap`'s replan, or its adoption of an
+existing ticket. Do `revise`'s deep pass, with the caller's intent standing in for the comment. A
+ticket that is locked, or has an open PR, is left as it is: return it, and say why.
 
 ## `revise` — a human spoke
 

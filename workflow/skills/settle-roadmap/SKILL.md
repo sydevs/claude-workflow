@@ -101,8 +101,10 @@ For each goal touched:
 - **What the answers change elsewhere**: the lines under `## What success looks like`, the costs,
   `## Not included`, and the Technical notes block in format-ticket's notes style. Change the
   fewest lines that keep the goal true.
-- **Other tickets** an answer changes: their bodies and their `Blocked by:` relationships,
-  drafted the same way.
+- **Other goals** an answer changes: their bodies and their `Blocked by:` relationships,
+  drafted the same way. Never edit an implementation ticket here — `write-ticket` is its one
+  author. When answers change a planned goal's children, name them, and offer step 7's
+  `@sydevs-bot revise` on the goal instead of `implement`: its review requests the replan.
 
 Show the whole change at once: a short diff per ticket, then every relationship to add or remove.
 Ask `Write these changes (Recommended)`, `Change something`, or `Discard`. On a change, redraft and
@@ -130,7 +132,9 @@ A goal with no unticked question left can be built. Ask:
 
 > All questions on sydevs/SahajCloud#902 are settled. Post `@sydevs-bot implement` as you now?
 
-On a yes, post exactly that comment. It is the authorisation, and the only verb this skill posts.
+On a yes, post exactly that comment. It is the authorisation. When the answers changed a planned
+goal's children, offer `@sydevs-bot revise` instead, so the review replans them first. Those two
+are the only verbs this skill posts.
 (why: docs/why.md#a-request-in-prose-is-not-permission)
 
 ## Hard rules
@@ -138,6 +142,6 @@ On a yes, post exactly that comment. It is the authorisation, and the only verb 
 - **Never answer for the person.** A recommendation is not a decision, and silence is not an answer.
 - **Never write a body you have not shown as a diff**, or one that changed since you read it.
 - **Never write to a goal while `labels.lock` is on it.**
-- **Never post a bot verb** except `implement`, and only on an explicit yes.
+- **Never post a bot verb** except `implement`, or `revise` for a replan, and only on an explicit yes.
 - **Never put technical detail outside the Technical notes block.** Decisions stay plain language.
 - **Never write a label, a Status, or an assignee.** The dispatcher does.

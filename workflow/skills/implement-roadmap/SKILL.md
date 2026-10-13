@@ -75,7 +75,7 @@ Compare every child with the goal as it now reads:
 | Child | Do |
 | --- | --- |
 | Still right | Leave it. |
-| Needs to change, no PR open | Update it through `write-ticket`, and say what changed on the child. |
+| Needs to change, no PR open | Update it through `write-ticket` in `update` mode, and say what changed on the child. |
 | No longer needed | Close it as not planned, with one line saying why. |
 | Missing | File it as in step 4. |
 | Has an open PR | Leave it. Name the drift on the goal instead. |
