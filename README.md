@@ -180,7 +180,7 @@ metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
 
 **Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
 `leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,
-`prAllowlistGlobs` (where a ticketless PR may open), `previewUrl`, `worktreeSetup`,
+`prAllowlistGlobs` (where any run's small ticketless fix may open; docs- and test-only fixes have their own route), `previewUrl`, `worktreeSetup`,
 `worktreeNotes`, `deployTarget` and `devServer`. Loop-wide
 values live in [`loop-config.json`](loop-config.json).
 

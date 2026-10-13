@@ -1,6 +1,6 @@
 ---
 name: write-ticket
-description: The only author of implementation tickets. Creates one from an intent (for file-ticket, implement-roadmap and the audits), or updates one on `@sydevs-bot revise` — answering a question, applying a correction, or reshaping it from the code. Also rechecks a held ticket and sets a hold the bot chooses. Runnable locally against an issue number.
+description: The only author of implementation tickets. Creates one from an intent (for file-ticket, implement-roadmap, improve-loop and the audits), updates one for a calling skill, or updates one on `@sydevs-bot revise` — answering a question, applying a correction, or reshaping it from the code. Also rechecks a held ticket and sets a hold the bot chooses. Runnable locally against an issue number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max

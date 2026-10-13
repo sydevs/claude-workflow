@@ -2262,7 +2262,7 @@ day has its own family: **risk** files Bug or Task tickets, **experience** files
 **hygiene** prefers ticketless PRs. The old `comment-cleanup` skill became one hygiene angle. A
 family never runs twice in a row, and each angle recurs every four to eight weeks.
 
-Hygiene's ticketless PRs are the one deliberate exception to `prAllowlistGlobs`, and only three
+Hygiene's ticketless PRs are a deliberate exception to `prAllowlistGlobs`, beside the docs and test routes, and only three
 kinds qualify — though any family now sends a docs-only fix to a PR
 ([A docs fix is a PR, not a ticket](#a-docs-fix-is-a-pr-not-a-ticket)): a comment sweep that `comment-fingerprint.mjs` proves changed comments only, a
 dead-code removal proven unreferenced, and a doc fix where the code is plainly right. The proof

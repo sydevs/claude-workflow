@@ -214,10 +214,9 @@ function isAddressMention(body, config) {
 }
 
 function pendingReviewVerb(snapshot, config) {
-  const newestBotReview = (snapshot.reviews || [])
-    .filter((r) => isBot(r.user?.login, config))
-    .map((r) => r.submitted_at)
-    .concat(criticReviewTimes(snapshot, config))
+  // Only the critic's review answers the verb. A question review is the
+  // bot's too, and must not swallow a review someone asked for.
+  const newestBotReview = criticReviewTimes(snapshot, config)
     .filter(Boolean)
     .sort()
     .pop()

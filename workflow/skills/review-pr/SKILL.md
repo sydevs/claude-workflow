@@ -20,7 +20,9 @@ look is `flags.onDemand` in the record — a human wrote `@sydevs-bot review`.
 
 **Start with `/workflow:start-run` and end with `/workflow:finish-run`.** On
 arrival, `pull_request_read method:get` (still open) and `method:get_reviews`: an own-login
-review already exists and `flags.onDemand` is false → post nothing, journal that, and end.
+review led by `review.bodyHeader` already exists, or a fallback comment led by it, and
+`flags.onDemand` is false → post nothing, journal that, and end. A question review is not yours,
+and never stops you.
 
 GitHub access follows the loop's rule: `mcp__github__*` in a routine or subagent, `gh` only when
 invoked locally. Names and values below come from `loop-config.json` — read it first.
@@ -141,8 +143,8 @@ the header is the idempotency key on this path only. Journal that you used the f
 
 - **Never modify the branch.** A critic with a keyboard is an author — `git` here is read-only.
 - **Never `APPROVE` or `REQUEST_CHANGES`**, even where the API allows it.
-- **One review per PR, ever**, unless `flags.onDemand`. An existing own-login review on arrival
-  means stop and report that nothing was posted.
+- **One review per PR, ever**, unless `flags.onDemand`. An existing critic review on arrival —
+  led by `review.bodyHeader` — means stop and report that nothing was posted.
 - **Starting review threads is this skill's exclusive channel**, except question threads, whose
   root carries `review.questionMarker`. Leave those to the person. Reply threads belong to
   `address-review`.

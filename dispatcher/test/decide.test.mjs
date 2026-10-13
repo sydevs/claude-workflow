@@ -924,3 +924,17 @@ test('the phases-stalled notice asks for a mention or a review, never a plain co
   assert.match(c.body, /A mention \(`@sydevs-bot`\) or a review from you starts me again\./)
   assert.doesNotMatch(c.body, /Comment here/)
 })
+
+// ---- a question review is not the critic's -------------------------------
+
+const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at, inline_count: 0 })
+
+test('a question review neither counts as the critic nor answers a review verb', () => {
+  const s = prSnap({ reviews: [questionReview('2026-10-09T10:00:00Z')] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['fire:review-pr'], 'the critic still has to run')
+  const asked = humanComment('@sydevs-bot review', '2026-10-09T11:00:00Z')
+  const critic = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review\n…', state: 'COMMENTED', submitted_at: '2026-10-09T09:00:00Z' }
+  const after = prSnap({ comments: [asked], reviews: [critic, questionReview('2026-10-09T12:00:00Z')] })
+  const fired = evaluatePr(after, config).find((a) => a.handler === 'review-pr')
+  assert.equal(fired?.flags?.onDemand, true, 'the verb is still owed')
+})

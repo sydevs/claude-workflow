@@ -25,8 +25,9 @@ chasing the wrong problem. The token also has no `org:read`, so `/organizations/
 ```bash
 API=$(jq -r '.sentry.apiBase' loop-config.json)
 ORG=$(jq -r '.sentry.org' loop-config.json)
+TOKEN=$(printenv "$(jq -r '.sentry.tokenEnvVar' loop-config.json)")
 curl -s "$API/projects/$ORG/$PROJECT/issues/?query=is:unresolved&statsPeriod=14d" \
-  -H "Authorization: Bearer $<sentry.tokenEnvVar>" \
+  -H "Authorization: Bearer $TOKEN" \
   | jq '.[] | {id, title, culprit, count, userCount, firstSeen, lastSeen, permalink}'
 ```
 

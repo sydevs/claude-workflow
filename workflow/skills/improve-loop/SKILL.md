@@ -204,9 +204,10 @@ goes in the journal.
 
 ## Close the week's journals
 
-Once the usage report is written, whether or not a reflection PR opened, close every
-`label:<labels.journal> is:open` issue you read, each with a one-line comment linking the
-reflection PR or tonight's journal entry. They are working memory for a week, not a permanent
+Once the usage report is written, close every `label:<labels.journal> is:open` issue you read,
+each with a one-line comment linking the reflection PR or tonight's journal entry — a quiet week
+included. **Except when an unreviewed reflection PR held this week's back:** leave them open, so
+next Sunday reads both weeks. They are working memory for a week, not a permanent
 record — left open, they make next Sunday's read grow without bound and clutter the issue list.
 
 Close them **last**. A crash midway through the reflection should leave the journals intact — they

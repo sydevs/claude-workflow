@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task

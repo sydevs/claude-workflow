@@ -40,9 +40,10 @@ says in `## Notes` that it is roadmap-sized, and leaves the promotion to `write-
 a human's `revise`.
 
 A Roadmap ticket's children are implementation tickets, linked as native sub-issues. An existing
-Bug may be attached to a goal for progress, but a goal never creates one. **Attach a bot-filed
-ticket only to a goal that has no children yet.** A planned goal's `implement` approves every
-open child, so a proposal attached to one would be approved unseen. Link a planned goal under
+Bug may be attached to a goal for progress, but a goal never creates one. **Attach a proposal —
+an audit's or `improve-loop`'s ticket — only to a goal that has no children yet.** A planned goal's
+`implement` approves every open child, so a proposal attached to one would be approved unseen.
+`implement-roadmap` filing its own plan is not a proposal. Link a planned goal under
 `## Notes` instead.
 
 ## The fields

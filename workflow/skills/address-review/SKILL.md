@@ -37,7 +37,7 @@ Any one of these, and nothing else:
   (why: docs/why.md#a-review-body-is-feedback)
 - the newest conversation comment comes from a login in `assignment.respondTo`, is newer than
   the own login's last comment, and mentions `dispatch.commandPrefix` with any verb but
-  `review`. An unmentioned comment is the reviewer talking to the PR, not to you.
+  `review` or its alias. An unmentioned comment is the reviewer talking to the PR, not to you.
   (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
 
 A preview-URL, coverage, or CI bot sits off the allowlist. None of them starts a revision.
