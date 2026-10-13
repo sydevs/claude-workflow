@@ -35,8 +35,10 @@ Any one of these, and nothing else:
   login's last comment. Each distinct point in it is one item. General feedback lives here as
   often as in file threads — a review whose body you skip is a review you ignored.
   (why: docs/why.md#a-review-body-is-feedback)
-- the newest conversation comment comes from a login in `assignment.respondTo`, and is newer
-  than the own login's last comment.
+- the newest conversation comment comes from a login in `assignment.respondTo`, is newer than
+  the own login's last comment, and mentions `dispatch.commandPrefix` with any verb but
+  `review`. An unmentioned comment is the reviewer talking to the PR, not to you.
+  (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
 
 A preview-URL, coverage, or CI bot sits off the allowlist. None of them starts a revision.
 (why: docs/why.md#respondto-is-an-allowlist) **Actions filtered the trigger. You still filter
@@ -63,23 +65,22 @@ Skip it. A review body is handled once a summary comment from the own login is n
 `submitted_at`. Those two rules are what make a resumed run safe.
 
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
-commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
+commit per adopted point, and answer every point in step 6's summary comment: quote it, then give
 the SHA or the evidence. An ask becomes a question thread on the line it concerns
 (`/workflow:finalize-pr` step 7c), and the summary links it. A point the join rule does not join is routed as
 preflight's incidental-finding rule says.
 
 ## Then
 
-1. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
-2. Docs sync (`/workflow:finalize-pr` step 5).
-3. `git push`. Never force-push. Never rebase.
-4. Refresh the PR title and body from `origin/main...HEAD` **where this push made either one
-   false** — a `## Change outline` view the new commits contradict is false, and
-   `review-pr` step 2 reads it first (`/workflow:finalize-pr` step 7). Re-send the body
-   preflight step 4 already read, with the delta applied; `update_pull_request` replaces the
-   whole body, so never retype one from nothing. A body merely incomplete stays, and step 5's
-   comment carries that delta.
-5. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
+1. Security review, when the push touches `securityReview.triggerPattern`
+   (`/workflow:finalize-pr` step 3). A reviewer's ask can widen `allowed-tools` too.
+2. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
+3. Docs sync (`/workflow:finalize-pr` step 5).
+4. `git push`. Never force-push. Never rebase.
+5. Refresh the PR title and body **where this push made either one false**, as `pr-template.md`'s
+   *Refresh* says — a `## Change outline` view the new commits contradict is false, and
+   `review-pr` step 2 reads it first.
+6. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
    linking its thread, or quoting its review-body point — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 

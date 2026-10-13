@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of implement-ticket, address-review, audit-deps, and reflect.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -55,11 +55,13 @@ nobody has looked at.
 ## Invocation
 
 ```
-/finalize-pr
+/finalize-pr [base:<branch>]
 ```
 
-Operates on the current branch, no arguments. The diff under review is always the **whole
-branch** — `origin/main...HEAD`, not the last commit. Reuse that range throughout.
+Operates on the current branch. `<base>` is the repo's default branch unless the caller passes
+one — a stacked PR passes the branch it targets. The diff under review is always the **whole
+branch** — `origin/<base>...HEAD`, not the last commit. Reuse that range, and that base,
+throughout.
 
 ## Pipeline
 
@@ -68,14 +70,14 @@ branch** — `origin/main...HEAD`, not the last commit. Reuse that range through
 ```bash
 git branch --show-current                 # must NOT be main or a shared branch
 git status --short
-git rev-list --count origin/main..HEAD
+git rev-list --count origin/<base>..HEAD
 ```
 
 - **Abort if on `main`** or any shared branch.
 - **Commit pending working-tree changes** — the Adjust phase ends here, so those edits ship too.
   If anything looks unrelated, stop and ask (or abort, non-interactively). Never commit secrets or
   `.env`.
-- **Nothing ahead of `origin/main`**, and the PR exists → say so and exit.
+- **Nothing ahead of `origin/<base>`**, and the PR exists → say so and exit.
 
 ### 1. Simplify
 
@@ -122,7 +124,7 @@ Then run the deterministic comment check, which the six lenses do not cover — 
 comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/comment-lint.mjs" --base origin/main
+node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/comment-lint.mjs" --base origin/<base>
 ```
 
 **Advisory. It never fails the gate.** It catches phrasings that are wrong whatever they describe —
@@ -136,14 +138,14 @@ Gate on `securityReview` from `workflow.json`:
 
 ```bash
 PATTERN=$(jq -r '.securityReview.triggerPattern' .claude/workflow.json)
-git diff --name-only origin/main...HEAD | grep -E "$PATTERN"
+git diff --name-only origin/<base>...HEAD | grep -E "$PATTERN"
 ```
 
 Where the repo also sets `contentPattern`, check for newly-introduced sinks regardless of path:
 
 ```bash
 CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
-[ -n "$CONTENT" ] && git diff origin/main...HEAD -- $(jq -r '.securityReview.contentPaths[]?' .claude/workflow.json) \
+[ -n "$CONTENT" ] && git diff origin/<base>...HEAD -- $(jq -r '.securityReview.contentPaths[]?' .claude/workflow.json) \
   | grep -E "^\+" | grep -E "$CONTENT"
 ```
 
@@ -167,7 +169,7 @@ Documentation ships in the same push as the code it describes. Sweep the branch 
 impact **before** pushing:
 
 ```bash
-git diff --name-only origin/main...HEAD
+git diff --name-only origin/<base>...HEAD
 grep -rn "<changed setting / env var / command / behaviour>" \
   docs/ AGENTS.md .env.example $(git ls-files '**/AGENTS.md')
 ```
@@ -294,7 +296,7 @@ Create or refresh with MCP, which takes the body directly — no temp file, and 
 markdown-mangling that made `gh --body` unusable:
 
 ```
-mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main draft:true title:"…" body:"…"
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:true title:"…" body:"…"
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
@@ -306,10 +308,9 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   this*. The dispatcher clears the flag once CI is green and the critic has run, or at once for a
   PR under `review.skipWhen`. (why: docs/why.md#draft-is-the-prs-baton,
   docs/why.md#the-critic-skips-small-prs)
-- **PR exists** → refresh **title and body**, both re-derived from the current
-  `origin/main...HEAD`. **Leave the assignee alone**, and **never put a ready PR back into
-  draft** — `draft:false` means "has been ready at least once", and the once-ever review depends
-  on that staying true.
+- **PR exists** → refresh **title and body** as `pr-template.md`'s *Refresh* says. **Leave the
+  assignee alone**, and **never put a ready PR back into draft** — the dispatcher reads draft as
+  "the loop is still working", so a ready PR would drop out of the reviewer's queue.
 
 ### 7b. Wait for the preview, only when step 7 needs it
 
@@ -366,7 +367,7 @@ CI completion is an event. The dispatcher reads it through `workflow/lib/merge-g
 box, else the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
-- **A conflicted PR schedules zero CI runs.** Merge `origin/main` in and resolve before you push,
+- **A conflicted PR schedules zero CI runs.** Merge `origin/<base>` in and resolve before you push,
   so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 - **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Mark it ready yourself
   when CI is green.

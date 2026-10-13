@@ -6,7 +6,7 @@
 
 The outline is the reviewer's map of the diff. It shows the **shape** of the change, so the
 reviewer knows what to expect before they open a file. Build it from the full
-`origin/main...HEAD` diff, never the last commit.
+`origin/<base>...HEAD` diff, never the last commit.
 
 ## Pick the views
 
