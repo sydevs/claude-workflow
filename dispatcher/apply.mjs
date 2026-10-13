@@ -311,6 +311,15 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // the whole point of a timeout, and a ref the dead session left is
         // what would refuse every later fire.
         await release(gh, config, t, { now, dryRun, log })
+        // Every timeout, re-fired or the last: improve-loop counts them per
+        // handler to tune `dispatch.timeoutsMinutes`. A journal failure must
+        // not cost the re-fire.
+        if (cur && !dryRun) {
+          try {
+            const j = await ensureJournalDay(gh, config, now)
+            await postAnomaly(gh, config, j.number, { kind: 'timed-out', text: `${t.repo.full}#${t.number} ${cur.handler} attempt ${cur.attempt || 1}`, id: cur.id || null })
+          } catch { /* the journal is not the deadline's keeper */ }
+        }
         if (!cur || attempt > max) {
           await labels(gh, t, snapshot, [config.labels.awaiting], [config.labels.stuck], dryRun, log)
           // On a PR only a mention, a review or a push wakes the bot; on an

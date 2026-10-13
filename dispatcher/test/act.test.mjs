@@ -456,3 +456,38 @@ test('attempts-exhausted on a PR asks for a mention or a push', async () => {
   assert.match(body, /A mention \(`@sydevs-bot`\) or a push from you starts me again\./)
   assert.doesNotMatch(body, /A comment/)
 })
+
+// ---- every timeout is journalled -----------------------------------------
+
+const timedOutWorld = (attempt) => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  const current = { id: `SahajCloud-9-implement-a${attempt}`, handler: 'implement', attempt, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }
+  world.comments[9] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, current, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  return world
+}
+const timeoutTarget = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'implement', attempt: 1 } }
+const anomalies = (github) => github.calls.filter((c) => c.name === 'createComment' && String(c.args.body).startsWith('<!-- sydevs-dispatcher-anomaly')).map((c) => String(c.args.body))
+const okFire = async () => ({ status: 200, json: async () => ({ claude_code_session_id: 'cse_9', claude_code_session_url: 'u' }), headers: new Map() })
+
+test('a timeout that is re-fired is journalled as timed-out, with its dispatch id', async () => {
+  const github = fakeGithub(timedOutWorld(1))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl: okFire })
+  const line = anomalies(github).find((b) => b.includes('**timed-out**'))
+  assert.ok(line, 'the re-fire is journalled')
+  assert.match(line, /"kind":"timed-out","id":"SahajCloud-9-implement-a1"/)
+  assert.match(line, /⚠️ \*\*timed-out\*\* · sydevs\/SahajCloud#9 implement attempt 1$/)
+})
+
+test('the last timeout is journalled as timed-out too, beside attempts-exhausted', async () => {
+  const github = fakeGithub(timedOutWorld(3))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const kinds = anomalies(github).map((b) => JSON.parse(b.slice(b.indexOf('{'), b.indexOf(' -->'))).kind)
+  assert.deepEqual(kinds, ['timed-out', 'attempts-exhausted'])
+})
+
+test('a dry run journals no timeout', async () => {
+  const github = fakeGithub(timedOutWorld(1))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.equal(anomalies(github).length, 0)
+})
