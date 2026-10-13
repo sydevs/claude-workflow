@@ -74,4 +74,4 @@ dispatcher cannot re-run it. The stale-head check still applies.
 - **Never mark the PR ready, re-run CI, or wait for it.** (why: docs/why.md#push-and-end)
 - **Never redeploy, restart, or change anything on Railway.** The token can. Each is a write to a
   vendor account.
-- **Never touch a label other than the lock, the draft flag, or an assignee.**
+- **Never write state** (start-run's list). Touch no label but the lock.

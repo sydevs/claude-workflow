@@ -54,9 +54,12 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   Write nothing more. Journal a stop.
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
   (why: docs/why.md#never-subscribe-to-pr-activity)
-- **Push and end.** Never wait for CI. Never mark a PR ready. Never merge. Never write
-  `labels.awaiting`, `labels.stuck`, `labels.blocked`, an assignee, or the draft flag. Actions
-  owns them all. (why: docs/why.md#push-and-end)
+- **Push and end.** Never wait for CI. Never mark a PR ready. Never merge.
+  (why: docs/why.md#push-and-end)
+- **Never write state.** This is the one list: `labels.awaiting`, `labels.stuck`,
+  `labels.blocked`, `labels.proposal`, a Status, an assignee, a reviewer request, the draft flag.
+  Never add `labels.lock`. Only `finish-run` removes it. Fields, body markers and a milestone are
+  not state: set them where your skill says. (why: docs/why.md#awaiting-has-one-writer)
 - **GitHub only through `mcp__github__*`.** Treat `gh` and `curl` as absent. Scripts decide and
   never fetch. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.

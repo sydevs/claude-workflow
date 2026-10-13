@@ -130,7 +130,8 @@ events, within seconds:
 | `proposal` | Bot-filed, no human verdict yet. |
 | Status `Proposed` / `Revising` / `Approved` / `Done` | Where an implementation ticket or PR sits on the board. **A Roadmap ticket carries none.** |
 
-**Never write any of them.** Set the fields and the body markers below. The dispatcher does the
+**Never write any of them** — start-run's list, whose one exception is `finish-run` removing the
+lock. Set the fields and the body markers below. The dispatcher does the
 rest. (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-roadmap-ticket-has-no-status)
 
 **To hand a ticket to the loop, comment a verb**: `@sydevs-bot implement`, `revise` (or
@@ -450,8 +451,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 
 ## Hard rules
 
-- **Never** write `awaiting`, `blocked`, `proposal`, `bot:working`, `stuck`, a Status, or an
-  assignee. The dispatcher owns them.
+- **Never** write a turn marker (start-run's list). The dispatcher owns them.
 - **Never** authorise work by editing a ticket. Only a `respondTo` human's `@sydevs-bot implement`
   does.
 - **Never** leave a ticket without a Priority field value.

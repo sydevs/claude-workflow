@@ -109,6 +109,5 @@ session pushes only to `claude/*`. In order:
   (why: docs/why.md#the-author-filters-one-exception, docs/why.md#a-pr-question-is-a-thread-on-the-line)
 - **Never `APPROVE` or `REQUEST_CHANGES`.** (why: docs/why.md#reviews-are-comment-only)
 - **Never force-push, rebase, or squash history.**
-- **Never touch the draft flag, an assignee, a reviewer request, or a label other than the
-  lock.** Actions owns them.
+- **Never write state** (start-run's list). Actions owns it.
 - **Never wait for CI.** Push and end.

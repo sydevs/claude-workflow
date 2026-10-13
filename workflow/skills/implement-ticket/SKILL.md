@@ -138,8 +138,7 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never implement a ticket nobody authorised.** In a routine the dispatch record is the
   authorisation. Locally, the person running you is.
 - **Never implement a ticket that already has an open PR closing it.** Refresh that PR instead.
-- **Never write `awaiting`, `blocked`, `proposal`, a Status, or an assignee.** The dispatcher
-  owns them. (why: docs/why.md#awaiting-has-one-writer)
+- **Never write state** (start-run's list). The dispatcher owns it.
 - **Never edit files in the main checkout while a worktree is active.**
 - **Never hand-roll shipping** — `/workflow:finalize-pr` is the only path to a PR.
 - **Never wait for CI, mark a PR ready, or merge.** Push and end.

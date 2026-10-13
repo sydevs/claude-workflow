@@ -157,8 +157,7 @@ answer, or what changed and why. Name every ticket you filed or promoted.
 - **Never widen a docs fix into code.** A guard test that would have caught the drift is
   test-only: its own PR, as preflight routes it. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 - **Never change the title's type silently.** Say so in the comment.
-- **Never write `labels.awaiting`, `labels.blocked`, an assignee, or a Status.** Actions owns
-  them. (why: docs/why.md#awaiting-has-one-writer)
+- **Never write state** (start-run's list). Actions owns it.
 - **Never leave a fact as an open question, or a decision without options.**
 - **Never cap or drop an incidental finding.** Preflight routes it: a docs- or test-only fix to a
   PR, anything else a ticket filed in `create` mode. On a docs ticket you are

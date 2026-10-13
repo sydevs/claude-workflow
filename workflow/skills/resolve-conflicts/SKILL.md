@@ -53,4 +53,4 @@ Comment the resolution as a patch or a description, and stop.
 - **Never `rebase`, `--force`, or `--force-with-lease`.** A merge commit only.
 - **Never squash or rewrite history.**
 - **Never mark the PR ready, or wait for CI.** (why: docs/why.md#push-and-end)
-- **Never touch a label other than the lock, the draft flag, or an assignee.**
+- **Never write state** (start-run's list). Touch no label but the lock.
