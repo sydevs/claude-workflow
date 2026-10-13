@@ -28,8 +28,9 @@ goal changed under existing children).
 
 ## 2. Settle every fact
 
-Verify each claim the plan rests on, in the code or the package's own docs and source. A fact you
-cannot settle without a person is a decision. Then:
+Verify each claim the plan rests on, in the code or the package's own docs and source, or by an
+experiment in your scratchpad that pushes nothing. A fact only a person's access can settle — a
+vendor account, production data — is written as a decision. Then:
 
 1. Write it into the goal's `## Open questions`, in plain language, with options and a
    recommendation.

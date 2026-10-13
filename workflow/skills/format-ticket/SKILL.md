@@ -8,7 +8,7 @@ allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 
 ## Tooling: MCP everywhere, `gh` for one thing
 
-Every GitHub operation in these skills uses `mcp__github__*`. That is not a cloud concession — it
+Every GitHub operation in a handler uses `mcp__github__*`. That is not a cloud concession — it
 is the better interface in both places: bodies pass as parameters (no `mktemp`, no `--body-file`,
 no markdown mangling), type and fields set in the same call as the create, and one set of
 instructions reads the same locally and in a routine.
@@ -16,7 +16,8 @@ instructions reads the same locally and in a routine.
 **The single exception is Relationships**, which no MCP tool exposes. A local session may set
 them with `gh`. A cloud session writes the body marker instead, and the dispatcher converts it —
 see below. Sub-issues do have an MCP tool: `mcp__github__sub_issue_write`. `git` itself is still
-`git`.
+`git`. The two attended local skills, `file-ticket` and `settle-roadmap`, also use `gh` for what
+MCP lacks — milestones, transfers, and a raw body read.
 
 This is the one definition of a well-formed sydevs ticket. `file-ticket`, `write-ticket`, the
 roadmap skills, the audits and the handlers all read this rather than carry their own copy — the
@@ -31,10 +32,18 @@ divergence that produced three forks of the workflow started exactly this way.
 
 **Classify before you write.** A request is **Roadmap** when it needs a product decision, or more
 than one reviewable PR. Everything else is direct. **A Bug is always direct** — it never goes
-through the roadmap. (why: docs/why.md#the-roadmap-tier)
+through the roadmap. (why: docs/why.md#the-roadmap-tier) A cross-repo change is split anyway
+(the split rule), so a cross-repo Bug is sibling direct Bugs, producer first.
+
+**A run that may not file a goal** — the audits — files roadmap-sized work as a direct ticket,
+says in `## Notes` that it is roadmap-sized, and leaves the promotion to `write-ticket`'s Promote on
+a human's `revise`.
 
 A Roadmap ticket's children are implementation tickets, linked as native sub-issues. An existing
-Bug may be attached to a goal for progress, but a goal never creates one.
+Bug may be attached to a goal for progress, but a goal never creates one. **Attach a bot-filed
+ticket only to a goal that has no children yet.** A planned goal's `implement` approves every
+open child, so a proposal attached to one would be approved unseen. Link a planned goal under
+`## Notes` instead.
 
 ## The fields
 
@@ -56,7 +65,8 @@ type describes the work requested, not what it might become.
 
 **A docs-only or test-only fix is rarely a ticket at all.** Preflight routes it into the work
 already in flight, or straight to a ticketless PR. (why: docs/why.md#a-test-fix-is-a-pr-not-a-ticket)
-When one must be a ticket, it is a `Bug`, and never goes through the roadmap.
+When a docs defect must be a ticket, a doc known to misdescribe correct code is a `Bug`, and an
+open question of which side is right is a `Task`. Neither goes through the roadmap.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 ### Priority — a native **field**, not a label
@@ -76,8 +86,8 @@ a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
 **You set Priority, always**, on both tiers. Choose `Medium` when the consequence is not clear. A
 Priority the reviewer already set stands: the `issue_write` call below merges, so omitting it
-keeps their value. There is no Effort field any more. Size shows up as `## Phases` in an
-implementation ticket that will not fit one run, and nowhere else.
+keeps their value. There is no Effort field any more. Size shows up as `## Phases`: in an
+implementation ticket that will not fit one run, and in the PR built from it.
 (why: docs/why.md#effort-was-removed)
 
 ```
@@ -389,7 +399,7 @@ qualify:
 - parts with little connective tissue between them, too unrelated for one review, or
 - a general capability, built first, that the goal then uses.
 
-A cross-repo change is always split. No commit spans repos.
+A cross-repo change is always split, and this wins over every rule below. No commit spans repos.
 
 **Never split tightly coupled work**: a reviewer who must hold two PRs in their head to judge
 either cannot review them. **Never split on size alone** — a large ticket is built in

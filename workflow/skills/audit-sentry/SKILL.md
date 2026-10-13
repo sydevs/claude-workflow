@@ -66,8 +66,8 @@ Sentry: https://sy-developers.sentry.io/issues/<id>/  (id: <id>)
 ```
 
 When the error clearly stands in the way of an open roadmap ticket's goal, pass that ticket to
-`write-ticket` as the parent, so the Bug lands as its native sub-issue. Never file a roadmap
-ticket. (why: docs/why.md#the-roadmap-tier)
+`write-ticket` as the parent, so the Bug lands as its native sub-issue, under format-ticket's
+attach rule. Never file a roadmap ticket.
 
 Respect `maxProposalsPerSurvey`. Over the ceiling, journal what you found and file nothing.
 

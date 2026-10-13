@@ -85,9 +85,9 @@ carries it from there. Name the source you checked it against in the body.
 
 **File a ticket only when the code may be the wrong side** — when the document describes what a
 host needs and the code does something else, which is right is a decision, not a sync. Then file
-through `/workflow:write-ticket` in create mode, type `Task`, never by hand, with an open roadmap
-ticket it clearly serves as the parent. Never file a roadmap ticket.
-(why: docs/why.md#one-author-writes-every-implementation-ticket, docs/why.md#the-roadmap-tier)
+through `/workflow:write-ticket` in create mode, never by hand, typed as format-ticket says. An
+open roadmap ticket it clearly serves is the parent, under format-ticket's attach rule. Never file
+a roadmap ticket. (why: docs/why.md#one-author-writes-every-implementation-ticket)
 Set priority by who is hurt: `High` for a wrong embed guide (it breaks integrations we do not
 control), lower where only our own code reads the contract.
 

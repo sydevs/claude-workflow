@@ -61,8 +61,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    Never split it into child tickets or several PRs here: splitting is planning, done before
    approval by `implement-roadmap` at reviewability seams, never by a build run on size. Order the
    phases so each leaves the branch green and the next builds on it — schema before endpoint
-   before UI. Write them as the `## Phases` checklist in the PR body (`pr-template.md`). A ticket
-   that fits one run has no phases.
+   before UI. A ticket that carries `## Phases` is your plan: copy it, and change only what the
+   code disproves. Write them as the `## Phases` checklist in the PR body (`pr-template.md`). A
+   ticket that fits one run has no phases.
    (why: docs/why.md#a-ticket-is-built-in-phases-never-split, docs/why.md#split-at-reviewability-seams)
 
    **File what you trip over**, as preflight's incidental-finding rule routes it. A finding the

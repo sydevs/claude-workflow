@@ -22,14 +22,15 @@ always adds a free-text answer. (why: docs/why.md#intake-asks-with-options)
 
 ```bash
 gh api user --jq .login
-gh api "repos/$ORG/claude-workflow/contents/loop-config.json" -H 'Accept: application/vnd.github.raw' --jq .assignment.reviewer
+gh api "repos/$ORG/claude-workflow/contents/loop-config.json" -H 'Accept: application/vnd.github.raw' --jq .assignment
 ```
 
-The same login → **technical**. A different login, or `gh` not logged in → **non-technical**:
+The login equal to `reviewer` → **technical**. A different login, or `gh` not logged in →
+**non-technical**: write every question and preview in plain language, and never ask a technical
+question (see **Ask**).
 
-- write every question and preview in plain language;
-- never ask a technical question (see **Ask**);
-- never offer the hand-over in step 5.
+**Only a login in `respondTo` is offered the hand-over in step 5.** Anyone else's `implement`
+would authorise nothing.
 
 ## 1. Understand the request
 
@@ -85,7 +86,7 @@ config is wrong or missing. Ask the same way. Branch `claude/test-<scope>-<slug>
    ```
    mcp__github__issue_write  method:create  owner:$ORG  repo:$REPO
      title:"<plain sentence>"  body:"<body>"  type:"Roadmap"
-     issue_fields:[{field_name:"Priority", field_option_name:"Medium"}]
+     issue_fields:[{field_name:"Priority", field_option_name:"<by consequence>"}]
    ```
    Then set the milestone with `gh issue edit <n> --repo "$ORG/$REPO" --milestone "<title>"`.
 4. **Stop.** The dispatcher starts `revise-roadmap` on a member's goal within a minute. The review
@@ -134,8 +135,8 @@ Before anything is filed:
 
 ## 5. Hand over
 
-Never authorise work on your own initiative, and **never offer this to a non-technical person**.
-For a technical person and an implementation ticket, ask:
+Never authorise work on your own initiative, and **never offer this to a login outside
+`respondTo`**. For a `respondTo` login and an implementation ticket, ask:
 
 > Filed as sydevs/SahajCloud#661 (Bug, High). Hand it to the loop now? I would comment
 > `@sydevs-bot implement` as you.
