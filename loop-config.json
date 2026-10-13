@@ -368,6 +368,7 @@
   "review": {
     "$comment": "review-pr. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both. Rules in review-pr/SKILL.md.",
     "bodyHeader": "## 🧐 Adversarial review",
+    "questionMarker": "<!-- sydevs-question -->",
     "profilePath": "workflow/skills/review-pr/reviewer-profile.md",
     "skipWhen": {
       "maxFiles": 2,

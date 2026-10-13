@@ -161,6 +161,15 @@ function ownReview(snapshot, config) {
   )
 }
 
+/**
+ * A thread the bot rooted to ask a human something. It waits on that human:
+ * only their reply, caught by the rule before it, makes it the bot's turn.
+ */
+function isQuestion(root, config) {
+  const marker = config.review?.questionMarker || '<!-- sydevs-question -->'
+  return isBot(root.author, config) && String(root.body || '').includes(marker)
+}
+
 function needsAddressReview(snapshot, config) {
   const since = botLastWordAt(snapshot.comments, config)
   for (const t of snapshot.threads || []) {
@@ -170,6 +179,7 @@ function needsAddressReview(snapshot, config) {
     const root = cs[0]
     const last = cs[cs.length - 1]
     if (respondTo(last.author, config) && !isBot(last.author, config)) return 'a thread waits on a reply'
+    if (isQuestion(root, config)) continue
     if (isBot(root.author, config) && !cs.slice(1).some((c) => isBot(c.author, config))) return 'own-rooted thread unanswered'
   }
   for (const r of snapshot.reviews || []) {

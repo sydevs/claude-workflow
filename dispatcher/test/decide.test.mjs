@@ -801,3 +801,38 @@ test('a code failure beside an infrastructure one still fires fix-ci', () => {
   const mixed = { ...red, failing: [{ name: 'CI' }, { name: 'Smoke' }], infra: [{ name: 'Smoke', jobId: 7 }] }
   assert.deepEqual(types(evaluatePr(prSnap({ ci: mixed }), infraCfg)), ['bumpFixCi', 'fire:fix-ci'])
 })
+
+// ---- a question the bot asked waits on the human -------------------------
+
+const criticReview = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review\n…', state: 'COMMENTED', submitted_at: '2026-10-09T10:00:00Z' }
+const questionThread = (replies = []) => ({ isResolved: false, comments: [
+  { author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: '<!-- sydevs-question -->\nShould the cache key include the locale?' },
+  ...replies,
+] })
+
+test('an unanswered question thread is the human\'s turn, not address-review', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread()] })
+  const p = evaluatePr(s, config)
+  assert.equal(p.some((a) => a.handler === 'address-review'), false, 'the bot does not answer its own question')
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'], 'the green draft still moves on')
+  assert.equal(decide({ reason: 'sweep-pr', facts: {} }, s, config).some((a) => a.handler === 'address-review'), false, 'the sweep agrees')
+})
+
+test('a human reply in a question thread fires address-review', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread([{ author: 'Ardnived', createdAt: '2026-10-09T11:00:00Z', body: 'Yes, include it.' }])] })
+  const p = evaluatePr(s, config)
+  assert.deepEqual(types(p), ['note', 'fire:address-review'])
+  assert.equal(p[0].text, 'a thread waits on a reply')
+})
+
+test('a plain own-rooted thread is still owed an answer beside a question', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread(), { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: 'finding' }] }] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
+})
+
+test('review.questionMarker names the marker when it is set', () => {
+  const custom = { ...config, review: { ...config.review, questionMarker: '<!-- ask -->' } }
+  const asked = { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: '<!-- ask -->\nWhich one?' }] }
+  assert.equal(evaluatePr(prSnap({ reviews: [criticReview], threads: [asked] }), custom).some((a) => a.handler === 'address-review'), false)
+  assert.ok(evaluatePr(prSnap({ reviews: [criticReview], threads: [questionThread()] }), custom).some((a) => a.handler === 'address-review'), 'the default literal is not also honoured once a marker is configured')
+})
