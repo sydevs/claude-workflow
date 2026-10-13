@@ -248,7 +248,7 @@
     }
   },
   "deps": {
-    "$comment": "The dispatcher's daily vulnerability check (dispatcher/deps.mjs). It fires handler in a repo when an open Dependabot alert at these severities and scopes opened within windowHours, or on catchUpDay is still open with a fix, and no bot PR on branchPrefix is open there.",
+    "$comment": "The dispatcher's daily vulnerability check (dispatcher/deps.mjs). It fires handler in a repo when an open Dependabot alert at these severities and scopes opened within windowHours, or on catchUpDay is still open with a fix, and no bot PR on branchPrefix is open there. routineBranchPrefix is the routine-updates job's; the dispatcher ignores it.",
     "repos": [
       "SahajCloud",
       "SahajAtlasWeb",
@@ -264,7 +264,8 @@
     ],
     "windowHours": 26,
     "catchUpDay": "monday",
-    "branchPrefix": "claude/chore-deps-"
+    "branchPrefix": "claude/fix-deps-",
+    "routineBranchPrefix": "claude/chore-deps-"
   },
   "sentry": {
     "$comment": "DE region: the global sentry.io host 404s here. The token lacks org:read, so /organizations/ also 403s. SahajAtlasWordpress ships no Sentry.",

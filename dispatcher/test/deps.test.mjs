@@ -31,10 +31,21 @@ test('severity and scope below the bar never fire a session', () => {
   assert.deepEqual(dueAlerts([alert(8, { severity: 'critical' })], config, FRI), [8])
 })
 
-test('a bot PR on the deps branch prefix is the fix in flight; a human one is not', () => {
-  const pulls = [{ number: 9, user: { login: 'Ardnived' }, head: { ref: 'claude/chore-deps-x' } }, { number: 10, user: { login: 'sydevs-bot' }, head: { ref: 'claude/feat-1-x' } }]
+test('a bot PR on the vulnerability branch prefix is the fix in flight; a human one is not', () => {
+  const pulls = [{ number: 9, user: { login: 'Ardnived' }, head: { ref: 'claude/fix-deps-x' } }, { number: 10, user: { login: 'sydevs-bot' }, head: { ref: 'claude/feat-1-x' } }]
   assert.equal(depsPrInFlight(pulls, config), null)
-  assert.equal(depsPrInFlight([...pulls, { number: 11, user: { login: 'sydevs-bot' }, head: { ref: 'claude/chore-deps-sahajcloud' } }], config).number, 11)
+  assert.equal(depsPrInFlight([...pulls, { number: 11, user: { login: 'sydevs-bot' }, head: { ref: 'claude/fix-deps-sahajcloud' } }], config).number, 11)
+})
+
+test('a routine-updates PR awaiting review never holds back a vulnerability fix', () => {
+  const routine = [{ number: 12, user: { login: 'sydevs-bot' }, head: { ref: `${config.deps.routineBranchPrefix}minor` } }]
+  assert.equal(depsPrInFlight(routine, config), null)
+})
+
+test('neither deps branch prefix is a prefix of the other', () => {
+  const { branchPrefix: fix, routineBranchPrefix: routine } = config.deps
+  assert.ok(fix && routine, 'both are configured')
+  assert.equal(fix.startsWith(routine) || routine.startsWith(fix), false)
 })
 
 function fakeGh({ alerts = {}, pulls = {}, fail = {} }) {
@@ -67,7 +78,10 @@ test('the tick fires one repo-scope record where an alert is due and nothing is 
   const fetchImpl = async (url, init) => { fired.push({ url, record: JSON.parse(JSON.parse(init.body).text) }); return { status: 200, json: async () => ({ claude_code_session_id: 's', claude_code_session_url: 'u' }) } }
   const gh = fakeGh({
     alerts: { SahajCloud: [alert(1)], SahajAtlasWeb: [alert(2)], WeMeditateWeb: [alert(3, { severity: 'low' })] },
-    pulls: { SahajAtlasWeb: [{ number: 7, user: { login: 'sydevs-bot' }, head: { ref: 'claude/chore-deps-atlas' } }] },
+    pulls: {
+      SahajAtlasWeb: [{ number: 7, user: { login: 'sydevs-bot' }, head: { ref: 'claude/fix-deps-atlas' } }],
+      SahajCloud: [{ number: 8, user: { login: 'sydevs-bot' }, head: { ref: 'claude/chore-deps-sahajcloud' } }],
+    },
   })
   await depsTick({ github: gh, core: { ...core, lines: [] }, config, env, now: FRI, fetchImpl, dryRun: false })
   assert.equal(fired.length, 1)
