@@ -52,7 +52,7 @@ Search with `gh search issues --owner "$ORG" --state open -- 'type:"Roadmap"'`, 
 
 ```bash
 gh api "repos/$ORG/$REPO/issues/$N" --jq '{body, updated_at, labels: [.labels[].name]}'
-gh api "repos/$ORG/$REPO/issues/$N" --jq .body | node "${CLAUDE_PLUGIN_ROOT}/skills/settle-roadmap/parse-questions.mjs"
+gh api "repos/$ORG/$REPO/issues/$N" --jq .body | node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/settle-roadmap/parse-questions.mjs"
 ```
 
 The parser returns each question with its options, its recommendation, its `Reopened` line, and

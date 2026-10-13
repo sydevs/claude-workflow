@@ -18,7 +18,7 @@ and the run ends. **Start with `/workflow:start-run` and end with
 - `mcp__github__pull_request_read method:get` — open, head branch, base, author, `mergeable`.
 - `method:get_review_comments` — every thread, its root author, `is_resolved`.
 - `method:get_reviews` — every review's **body** as well as its state. Derive the decision with
-  `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT}/lib/merge-verdict.mjs`, never from memory.
+  `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/merge-verdict.mjs`, never from memory.
 - `method:get_comments` — **the newest page only**, `perPage` small, the page computed from the
   `comments` count on `get`.
 - The linked ticket's body, for scope. Then `git fetch origin <branch>` and the touched files.

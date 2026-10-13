@@ -122,7 +122,7 @@ Then run the deterministic comment check, which the six lenses do not cover — 
 comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/lib/comment-lint.mjs" --base origin/main
+node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/comment-lint.mjs" --base origin/main
 ```
 
 **Advisory. It never fails the gate.** It catches phrasings that are wrong whatever they describe —
@@ -247,7 +247,7 @@ derived:
 #   mcp__github__get_comments   → the Cloudflare bot's comment bodies
 #   the PR's Cloudflare check runs → each output.summary
 echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
-  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
+  | ${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/finalize-pr/branch-preview-url.mjs
 ```
 
 It prints one `project status url` line per preview, and **always the branch alias, never a
