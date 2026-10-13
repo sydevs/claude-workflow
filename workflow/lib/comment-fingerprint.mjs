@@ -251,22 +251,30 @@ export async function fingerprint({ src, path, repoRoot, ts, prettier }) {
   return { codeHash, templateHash, strength: n.strength, why: n.why, parseErrors, comments }
 }
 
-const globToRe = (g) =>
-  new RegExp('^' + g.replace(/\./g, '\\.').replace(/\*\*\//g, '(.*/)?').replace(/\*/g, '[^/]*') + '$')
+// `**` spans any depth and `*` one segment. One pass, so no token's output is
+// rewritten by another's rule: replacing `**/` first and every `*` after it
+// turned `(.*/)?` into `(.[^/]*/)?`, one segment at most, and K5 matched no
+// story file in either repo (#180).
+const GLOB = { '**/': '(.*/)?', '**': '.*', '*': '[^/]*', '.': '\\.' }
+export const globToRe = (g) => new RegExp('^' + g.replace(/\*\*\/|\*\*|\*|\./g, (t) => GLOB[t]) + '$')
 
 /**
  * Count how many comments each protection rule matches. A census, not a scan.
  *
- * A rule scoped with `pathGlob` counts zero outside its own paths. Ignoring
- * that scope once made K5 — whose pattern matches any comment at all, because
- * what it protects is a POSITION in a stories file rather than a phrase —
+ * A rule scoped with `pathGlob`, one glob or an array, counts zero outside its
+ * own paths. Ignoring that scope once made K5, whose pattern was then `^`,
  * count every comment in the repo, so any file that lost a comment reported a
  * protected-list violation.
+ *
+ * Keep an array under that one key. `comment-sweep.mjs` leaves every rule
+ * carrying it out of the codemod, and K5 matches every docblock: under a
+ * second key it would stop tier 2 collapsing any docblock anywhere.
  */
 export function census(comments, rules = RULES, path = '') {
   const counts = {}
   for (const rule of [...rules.frozen, ...rules.keep]) {
-    if (rule.pathGlob && !globToRe(rule.pathGlob).test(path)) {
+    const globs = rule.pathGlob && [].concat(rule.pathGlob)
+    if (globs && !globs.some((g) => globToRe(g).test(path))) {
       counts[rule.id] = 0
       continue
     }

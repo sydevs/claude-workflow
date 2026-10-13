@@ -58,10 +58,13 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     event: target.event || target.reason,
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
     lock: itemless ? null : config.labels.lock,
-    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null },
+    // `withdrawn` and `cleared` ride only when set, so every other record keeps its shape.
+    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}) },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
-    ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason } : null,
+    // `advisory` carries each red non-required check's link, so a deploy
+    // pass starts from it. The session confirms it with `get_status`.
+    ci: snapshot.ci ? { green: snapshot.ci.green, reason: snapshot.ci.reason, advisory: snapshot.ci.advisory || [] } : null,
     deadline,
     journal: { repo: `${config.org}/${config.journalRepo}`, issue: journalNumber },
     firedAt: now.toISOString(),

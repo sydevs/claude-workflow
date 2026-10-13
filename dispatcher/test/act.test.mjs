@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { act, resolveTargets } from '../index.mjs'
+import { gather } from '../gather.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 config.dispatch.routines.SahajCloud = 'trig_sc'
@@ -62,6 +63,7 @@ function fakeGithub(world) {
     request: async (route, a) => {
       rec('request:' + route, a)
       if (route.includes('dependencies')) return { data: [] }
+      if (route.includes('sub_issues')) return { data: world.subIssues?.[a.n] || [] }
       return { data: {} }
     },
     graphql: async (q, v) => {
@@ -78,7 +80,8 @@ function fakeGithub(world) {
       if (q.includes('markPullRequestReadyForReview')) return { markPullRequestReadyForReview: { pullRequest: { id: 'PR1' } } }
       return {}
     },
-    paginate: async (fn, args) => (await fn(args)).data,
+    // Octokit paginates a route string as well as a method; sub-issues use the route.
+    paginate: async (fn, args) => (typeof fn === 'string' ? await gh.request(fn, args) : await fn(args)).data,
   }
   return gh
 }
@@ -294,4 +297,134 @@ test('a lease that will not delete posts an anomaly instead of going quiet', asy
   const bodies = github.calls.filter((c) => c.name === 'createComment').map((c) => String(c.args.body))
   assert.ok(bodies.some((b) => b.includes('lease-release-failed')), 'the failed release is journalled')
   assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'), 'and the label still comes off')
+})
+
+// ---- a roadmap goal's children (why: docs/why.md#a-goal-is-verified-not-assumed)
+
+// sydevs/SahajCloud#897's shape: a goal whose children closed seconds apart.
+function goalWorld(reasons = ['not_planned', 'not_planned', 'not_planned']) {
+  const child = (number, i) => ({ number, state: 'closed', state_reason: reasons[i], closed_at: `2026-09-08T11:40:${[24, 27, 30][i]}Z`, repository_url: 'https://api.github.com/repos/sydevs/SahajCloud' })
+  return {
+    issues: { 897: { number: 897, node_id: 'N897', state: 'open', title: 'goal', body: '## The goal\nx', labels: [], user: { login: 'Ardnived' }, author_association: 'MEMBER', type: { name: 'Roadmap' }, html_url: 'https://github.com/sydevs/SahajCloud/issues/897', comments: 0, updated_at: '2026-09-08T11:40:30Z' } },
+    comments: {},
+    prs: {},
+    subIssues: { 897: [881, 883, 884].map(child) },
+  }
+}
+const goal = (reason) => ({ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 897, reason, event: 'issues.closed', facts: {} })
+
+test("a goal's gathered children carry why and when each one closed", async () => {
+  const s = await gather(fakeGithub(goalWorld(['not_planned', 'completed', null])), goal('child-closed'), config, { now })
+  assert.deepEqual(s.children.map((c) => [c.number, c.state, c.stateReason, c.closedAt]), [
+    [881, 'closed', 'not_planned', '2026-09-08T11:40:24Z'],
+    [883, 'closed', 'completed', '2026-09-08T11:40:27Z'],
+    [884, 'closed', null, '2026-09-08T11:40:30Z'],
+  ])
+})
+
+test('dry-run: a withdrawn goal prints the flag in the verify record, and writes nothing', async () => {
+  const run = async (world) => {
+    const github = fakeGithub(world)
+    const lines = []
+    let fired = 0
+    await act({ github, context: {}, core: { info: (m) => lines.push(m), warning: () => {} }, config, target: goal('child-closed'), env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { fired += 1 } })
+    assert.equal(fired, 0)
+    assert.ok(!github.calls.some((c) => ['addLabels', 'removeLabel', 'createComment', 'updateComment', 'createRef'].includes(c.name)), 'no writes in dry run')
+    return JSON.parse(lines.find((l) => l.includes(': record: ')).split(': record: ')[1])
+  }
+  assert.deepEqual((await run(goalWorld())).flags, { onDemand: false, delegated: false, mode: 'verify', withdrawn: true })
+  assert.deepEqual((await run(goalWorld(['not_planned', 'completed', 'not_planned']))).flags, { onDemand: false, delegated: false, mode: 'verify' }, 'something shipped: no flag')
+})
+
+test('a verify session that times out is re-fired by the deadline path, with its own flags', async () => {
+  const world = goalWorld()
+  world.issues[897].labels = [{ name: 'bot:working' }]
+  const current = { id: 'x', handler: 'revise-roadmap', flags: { mode: 'verify', withdrawn: true }, attempt: 1, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }
+  world.comments[897] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, verifyDue: false, current, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  world.refs = new Map([['refs/sydevs-lease/897', 'stale']])
+  const github = fakeGithub(world)
+  const sent = []
+  const fetchImpl = async (url, opts) => { sent.push(JSON.parse(JSON.parse(opts.body).text)); return { status: 200, json: async () => ({ claude_code_session_id: 'cse_9', claude_code_session_url: 'u' }), headers: new Map() } }
+  await act({ github, context: {}, core, config, target: { ...goal('sweep-timeout'), event: 'schedule', facts: { handler: 'revise-roadmap', attempt: 1 } }, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
+  assert.deepEqual(sent.map((r) => [r.handler, r.attempt, r.flags]), [['revise-roadmap', 2, { onDemand: false, delegated: false, mode: 'verify', withdrawn: true }]])
+})
+
+// ---- a converted blocker line is deleted (why: docs/why.md#a-converted-blocker-line-is-deleted)
+const NOTES = '## Summary\nx\n\n## Notes\nBlocked by: https://github.com/sydevs/SahajCloud/issues/2 — the endpoint\n'
+
+function blockerWorld(body, item = {}) {
+  const w = issueWorld()
+  Object.assign(w.issues[9], { body }, item)
+  w.issues[2] = { number: 2, id: 1002, state: 'open', labels: [] }
+  w.issues[3] = { number: 3, id: 1003, state: 'open', labels: [] }
+  return w
+}
+
+/** Relationships the fake already holds, POSTs it refuses, and a hook run as each POST lands. */
+function withDependencies(github, { related = [], refuse = [], onPost } = {}) {
+  const base = github.request
+  github.request = async (route, a) => {
+    const res = await base(route, a)
+    if (!route.includes('dependencies')) return res
+    if (route.startsWith('GET')) return { data: route.endsWith('blocked_by') ? related : [] }
+    if (refuse.includes(a.issue_id)) throw Object.assign(new Error('Validation Failed'), { status: 422 })
+    onPost?.(a)
+    return res
+  }
+  return github
+}
+
+const onIssue = (reason, facts = {}) => ({ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason, event: reason, facts })
+const puts = (github) => github.calls.filter((c) => c.name === 'updateIssue')
+const posts = (github) => github.calls.filter((c) => c.name.startsWith('request:POST') && c.name.includes('dependencies'))
+
+test('the relationships action PUTs the live body without the converted line', async () => {
+  const world = blockerWorld(NOTES)
+  // A session rewrites the body between gather and the strip: the PUT must
+  // carry its words, so the strip reads the body again, never the snapshot.
+  const github = withDependencies(fakeGithub(world), { onPost: () => { world.issues[9].body = NOTES.replace('\nx\n', '\nrewritten by a session\n') } })
+  await act({ github, context: {}, core, config, target: onIssue('issues.edited', { sender: 'Ardnived' }), env: {}, dryRun: false, now })
+  assert.equal(posts(github).length, 1)
+  assert.deepEqual(puts(github).map((c) => c.args.body), ['## Summary\nrewritten by a session\n\n## Notes\n'])
+})
+
+test('a line naming a closed blocker that is already related is stripped, not re-POSTed', async () => {
+  const github = withDependencies(fakeGithub(blockerWorld(NOTES)), { related: [{ number: 2, state: 'closed', repository: { name: 'SahajCloud', owner: { login: 'sydevs' } } }] })
+  await act({ github, context: {}, core, config, target: onIssue('issues.edited', { sender: 'Ardnived' }), env: {}, dryRun: false, now })
+  assert.equal(posts(github).length, 0)
+  assert.deepEqual(puts(github).map((c) => c.args.body), ['## Summary\nx\n\n## Notes\n'])
+})
+
+test('one failed POST keeps the whole line', async () => {
+  const body = '## Notes\nBlocked by: sydevs/SahajCloud#2 and sydevs/SahajCloud#3\n'
+  const github = withDependencies(fakeGithub(blockerWorld(body)), { refuse: [1003] })
+  await act({ github, context: {}, core, config, target: onIssue('issues.edited', { sender: 'Ardnived' }), env: {}, dryRun: false, now })
+  assert.equal(posts(github).length, 2)
+  assert.equal(puts(github).length, 0)
+})
+
+test('a dry run names the line it would strip and PUTs nothing', async () => {
+  const logs = []
+  const github = withDependencies(fakeGithub(blockerWorld(NOTES)))
+  await act({ github, context: {}, core: { info: (m) => logs.push(m), warning: () => {} }, config, target: onIssue('issues.edited', { sender: 'Ardnived' }), env: {}, dryRun: true, now })
+  assert.equal(posts(github).length, 0)
+  assert.equal(puts(github).length, 0)
+  assert.ok(logs.some((m) => m.includes('strip: Blocked by: https://github.com/sydevs/SahajCloud/issues/2')), 'the line is named')
+})
+
+test("a non-member's own line is never converted or stripped, and a verb leaves the body alone", async () => {
+  const stranger = { user: { login: 'drive-by' }, author_association: 'NONE' }
+  for (const target of [onIssue('issues.opened'), onIssue('issues.edited', { sender: 'drive-by' })]) {
+    const github = withDependencies(fakeGithub(blockerWorld(NOTES, stranger)))
+    await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now })
+    assert.equal(posts(github).length, 0, `${target.reason}: no relationship`)
+    assert.equal(puts(github).length, 0, `${target.reason}: no strip`)
+  }
+  // A member's `block on` makes the relationship from a comment, not the body.
+  const world = blockerWorld(NOTES, stranger)
+  world.comments[9] = [{ id: 78, body: '@sydevs-bot block on sydevs/SahajCloud#2', user: { login: 'Ardnived' }, created_at: '2026-09-08T11:59:00Z', author_association: 'MEMBER' }]
+  const github = withDependencies(fakeGithub(world))
+  await act({ github, context: {}, core, config, target: onIssue('issue_comment', { author: 'Ardnived', body: '@sydevs-bot block on sydevs/SahajCloud#2', association: 'MEMBER', commentId: 78 }), env: {}, dryRun: false, now })
+  assert.equal(posts(github).length, 1, 'the verb is obeyed')
+  assert.equal(puts(github).length, 0, "and the stranger's line stays")
 })

@@ -1,5 +1,5 @@
 {
-  "note": "Comment protection rules, consumed by comment-fingerprint.mjs and by any comment codemod. FROZEN means byte-identical text AND an unchanged anchor. KEEP means the information must survive somewhere in the file's comments; rewording is allowed. A repo adds its own under `protectedComments` in its .claude/workflow.json.",
+  "note": "Comment protection rules, consumed by comment-fingerprint.mjs and by any comment codemod. FROZEN means byte-identical text AND an unchanged anchor. KEEP means the information must survive somewhere in the file's comments; rewording is allowed. `pathGlob` (one repo-relative glob, or an array) scopes a rule to those paths. A repo adds its own under `protectedComments` in its .claude/workflow.json.",
   "frozen": [
     {
       "id": "F1",
@@ -61,11 +61,10 @@
     },
     {
       "id": "K5",
-      "name": "Ladle story description",
-      "pathGlob": "**/*.stories.tsx",
-      "pattern": "^",
-      "position": "leading",
-      "reason": "Ladle renders a story's leading JSDoc as its description in the component explorer. Collapsing it is not a test failure, so nothing catches it — it is a silent docs-UI regression in SahajAtlasWeb and WeMeditateWeb."
+      "name": "Storybook reference description",
+      "pathGlob": ["components/**/*.tsx", "src/components/**/*.tsx", "src/views/**/*.tsx", "**/*.stories.tsx"],
+      "pattern": "^/\\*\\*",
+      "reason": "Storybook's reference page prints a component's leading JSDoc as its description, and each prop's JSDoc as that prop's row, so a description that only restates the prop's name is still the row's whole content. Deleting one fails no test: it is a silent docs regression in SahajAtlasWeb and WeMeditateWeb. Docblocks only, because a `//` comment is never printed and stays sweepable. The globs also cover SahajCloud's components, which costs nothing, because protection is fail-safe."
     }
   ],
   "denyPaths": [

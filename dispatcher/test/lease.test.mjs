@@ -163,3 +163,11 @@ test('a lease ref whose tail is not canonical digits is never read as a number',
   }
   assert.deepEqual(await listLeases(gh, 'sydevs', 'SahajCloud'), [858], 'only the canonical ref is a lease')
 })
+
+test('a recheck record carries the cleared blockers, and no other record grows the key', () => {
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9 }
+  const build = (flags) => buildRecord({ handler: 'revise', target, snapshot: {}, flags, attempt: 1, journalNumber: 1, config, now: new Date('2026-10-12T10:00:00Z') }).flags
+  assert.deepEqual(build({ mode: 'recheck', cleared: ['sydevs/SahajCloud#632'] }), { onDemand: false, delegated: false, mode: 'recheck', cleared: ['sydevs/SahajCloud#632'] })
+  assert.equal('cleared' in build({ mode: 'recheck' }), false)
+  assert.equal('cleared' in build({ mode: 'recheck', cleared: [] }), false)
+})

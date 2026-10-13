@@ -65,10 +65,10 @@ The comment the record points at (`trigger.id`) is the one to act on.
 | **An instruction to grow, narrow or reshape** | Do the deep pass: rewrite the body from the code, preserving what the human wrote and correcting what the code disproves. |
 | **A request for work** | Do **not** implement it. Put the specification in the body, and say that `@sydevs-bot implement` starts it. (why: docs/why.md#a-request-in-prose-is-not-permission) |
 
-Keep every `Blocked by:`, `Re-check:` and `Sentry:` line. Add a `Blocked by:` line when the code
-shows a dependency the ticket missed. Set a Priority where the ticket has none; a Priority the
-reviewer set stands. **Update the ticket itself** — agreeing to a change in a reply while the body
-still states the old thing has not done the job.
+Keep every unconverted `Blocked by:` line, and every `Re-check:` and `Sentry:` line. Add a
+`Blocked by:` line when the code shows a dependency the ticket missed. Set a Priority where the
+ticket has none; a Priority the reviewer set stands. **Update the ticket itself** — agreeing to a
+change in a reply while the body still states the old thing has not done the job.
 
 When the work turns out to be two deliverables, apply format-ticket's split rule. Coupled work
 stays one ticket, in phases. Separable work with no roadmap parent means the request was
@@ -93,7 +93,8 @@ The dispatcher fired this instead of handing the ticket back blind.
 (why: docs/why.md#recheck-before-awaiting)
 
 1. **Find why it waited**: the comment beside the `Hold Until` date, the `block` verb, or the
-   `Blocked by:` line and that blocker's outcome.
+   blockers in `flags.cleared` and each one's outcome. A converted `Blocked by:` line is gone from
+   the body.
 2. **Check that condition now**, against source, a release, an upstream issue, or the merged
    blocker's diff.
 3. **Still waiting** → set a new `Hold Until` within `issueFields.holdUntil.maxHorizonDays`, and

@@ -406,6 +406,30 @@ truncated, so constructing one risks a link that works and lies
 That asymmetry is why one rule could never cover both. `workflow/skills/finalize-pr/SKILL.md` owns
 the mechanism and the config key that says which kind of host a repo has.
 
+## A preview link must open on data
+
+SahajCloud#874 ran for eighteen phases. Its Preview section linked three admin pages: the
+country list, the state list, and the import batches. Every phase refreshed that section, and the
+critic read the body once. None of them opened a link. The preview database held one row: the
+admin account that the deploy provisions. The country list was empty, so no one could reach the
+Import tab that the PR was about. The manual-verification steps also named
+`tests/fixtures/event-import-sample.csv`, a file that was never committed.
+
+The links passed every check the skill had. The host was right and the paths existed. The rule
+asked for a link to the changed route. It never asked whether that route showed the change.
+Seeding the preview by hand after the fact turned up three defects in the import. Nine of
+thirteen German addresses geocoded to the wrong town. Any reviewer with data would have seen
+that in a minute.
+
+A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR, not
+one per push. A preview is reachable by anyone who has its URL and the admin address, so the seed
+uses synthetic or anonymised people. The 874 seed replaced 495 coordinator identities with
+`atlas-manager-<id>@preview.invalid`.
+
+A Railway host builds only after its PR opens, so the run that opens the PR is the one that has to
+wait. Leaving it to the next run did not work: a single-phase PR with a clean critic has no next run
+before a human reads it.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, then Phases, then an optional `## Changes` file list. A
@@ -1138,6 +1162,13 @@ dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge
 approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
 session ever holds a lock while doing nothing.
 
+**The one exception is the preview deploy, in `finalize-pr` step 7b.** A preview build is not an
+event the dispatcher routes anywhere, and no other run fills the preview with data. A PR that opens
+before its preview exists would reach the reviewer with links that show nothing (see
+[A preview link must open on data](#a-preview-link-must-open-on-data)). The wait is bounded by
+`preview.deployWaitMinutes`. It allows one waiter at a time and reads the deploy status only, never
+CI. So it cannot turn back into the polling that this rule replaced.
+
 ## The bot-actor exception
 
 The dispatcher ignores the bot's own comments and reviews, or every reply it posts would fire a
@@ -1355,6 +1386,38 @@ could only ever find what it was not looking for. The relationship is reachable 
 alone, as `blockedBy` on `Issue`, so the sweeper asks for every open issue with its labels and
 its blockers in one paginated query per repo. That query also turned up a fifth ticket nobody had
 named.
+
+## A converted blocker line is deleted
+
+The dispatcher used to turn a `Blocked by:` line into a native relationship and leave the line in
+the body. The body then held a second copy of the relationship, and the two drifted. Every later
+`issues.edited` pass read the line again, so a blocker a reviewer had cleared by hand was
+re-POSTed, with `blocked` re-applied, on the next unrelated body edit. On
+`sydevs/SahajAtlasWeb#266` a run improvised a clear by striking the line, `- ~~Blocked by: …~~`.
+No skill had ever said to. The reader tested for the strike before it removed the bullet, so it
+read the struck line as live and restored the relationship.
+
+So the line is write-only. The pass that makes the relationship deletes the line, and from then on
+the relationship is the only state.
+
+- **The strip runs where the POST does**, in `apply`, because only that step knows which writes
+  succeeded. A line goes when every in-org target on it ended related: already there in any state,
+  closed included, or POSTed without error. One failed POST keeps the whole line, and the next
+  edit retries it.
+- **It re-reads the body just before the PUT.** `issues.edited` takes no lock, so a session may
+  have rewritten the body since `gather`, and a PUT built from that snapshot would erase its work.
+- **There is no sender filter.** A session's own edit is how its line gets converted at all, so
+  the bot's strip fires `issues.edited` too. That echo pass finds no marker and stops. One extra
+  pass per strip is the cost.
+- **Only a pass that read the body strips it.** A stranger's own line is never converted, so it is
+  never stripped (why: docs/why.md#a-strangers-marker-is-text). A `block on` verb's targets come
+  from a comment, so that pass leaves the body alone.
+
+The strike ordering was fixed anyway. With the strip in place, a misread struck line would create
+a relationship and delete the evidence in one pass. The `— <reason>` prose goes with the line, and
+the issue's edit history keeps the words. A session now loses its only sight of a blocker in the
+body. The `blocked` label and the dispatcher's own pre-fire check are the gate instead, until a
+session can read relationships itself (sydevs/claude-workflow#3).
 
 ## A date belongs in a date field
 
@@ -2037,7 +2100,13 @@ So the last child closing fires `revise-roadmap` in verify mode. It writes a pla
 what shipped and checks it against `## What success looks like`. A match closes the goal. A gap
 sets `awaiting` and names it, and `implement` on the goal then files only what is missing. If a
 session holds the goal when its last child closes, the dispatcher records that a check is owed and
-runs it on unlock.
+runs it on unlock — unless that session was the check itself and no child closed after it fired.
+Children close seconds apart, so a sibling's leg finds the check running and re-arms it, and
+SahajCloud#897 was verified twice.
+
+Children closed entirely as not planned are the extreme case: nothing shipped, yet the notes block
+still claims work is built. The fire says so with `withdrawn`, so the run reports the goal unstarted
+and rewrites the notes instead of hunting for merged PRs (SahajCloud#897).
 
 ## A late decision goes to the goal
 
@@ -2377,6 +2446,37 @@ changes.
 one call was the worse trade. The re-run uses the calling repo's own `GITHUB_TOKEN` instead, which
 each repo's caller grants `actions: write` on its dispatch job. A refused re-run still counts
 against the cap, so a missing grant ends with a person rather than a loop.
+
+## A failed preview is read from its log
+
+A failing Railway preview reached the loop as one commit status: a context name and a state. A
+commit status is not a check run, so the infrastructure path above never sees it. On 2026-10-07 three SahajCloud previews failed inside 90
+seconds while GitHub's own tests passed (claude-workflow#164). Nothing on the PR said whether the
+change broke the build or Railway did.
+
+Excluding the status from CI was ruled out: a failed build is not to be ignored. So the
+dispatcher keeps each red status's `target_url`, links it in the advisory comment, and carries it
+in the dispatch record's `ci.advisory`. A record is only as trustworthy as its sender, so the
+session confirms each link against `pull_request_read method:get_status` on the head, which
+returns the same commit statuses, before it reads anything. The link holds the
+deployment id (`?id=` on `railway.com/project/<p>/service/<s>`). `workflow/lib/railway.mjs` parses
+it and builds the GraphQL request for that deployment's build and runtime logs. The session sends
+the request. No script holds the token or opens the connection.
+
+**The token** is a Railway workspace token, named by `railway.tokenEnvVar`. The cloud environment
+has no secret store, and every Railway token can deploy as well as read. A project token would be
+narrower, but it is made for one existing environment, and each PR preview runs in an environment
+of its own, made when the PR opens and deleted when it closes. So only a workspace token reaches
+previews, and it reaches production too. Without the token, or when Railway refuses it, the pass
+comments the link and a person opens the log. There is no switch to turn the pass off.
+
+**The pass.** Reading a log needs a session, so a failed preview with green required CI fires
+`fix-ci` in `deploy` mode. It is a mode, not a new handler: the reads, the worktree and the push are
+already right. It fires once per head and never touches `rec.fixCi`, so a flaky preview cannot
+starve a real test failure of its passes, and no new ceiling ships beside the skill change. It
+never fires mid-phases, where the next phase may be the fix. A cause in the repo is fixed and
+pushed. A cause outside it gets one comment naming the log line. It never redeploys: a retry is a
+write to a vendor account.
 
 ## A reopened question says what it reopens
 

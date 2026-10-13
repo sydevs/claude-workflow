@@ -58,13 +58,16 @@ own entries as tickets. Check this exclusion in every query you add to a skill.
 ## The gate
 
 ```bash
-claude plugin validate ./workflow --strict     # leanGate.command
+claude plugin validate ./workflow --strict     # leanGate.command, first half
+node --test workflow/lib/*.test.mjs            # leanGate.command, second half
 claude --plugin-dir ./workflow                 # load the plugin without installing it
 ```
 
-**That validator is the entire automated gate for the plugin's prose** — there is no test suite or
-CI here. It checks only the plugin manifest and skill frontmatter, never whether the prose is
-*right*, because the skills are prose.
+**That validator is the entire automated gate for the plugin's prose** — there is no CI here. It
+checks only the plugin manifest and skill frontmatter, never whether the prose is *right*, because
+the skills are prose. The lib suite tests the `workflow/lib/` scripts that own mechanical rules.
+It must pass from the checkout **and** from a `.claude/worktrees/<slug>` worktree, because
+`implement-ticket` runs the gate from one.
 
 ⚠ **`.github/workflows/` exists, and it is not CI.** It holds `dispatcher.yml` — the reusable
 workflow that observes every GitHub event in all five repos, classifies it, locks the item, fires

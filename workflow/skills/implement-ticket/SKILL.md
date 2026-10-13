@@ -38,8 +38,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    re-plan a ticked phase.
 
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
-   ticket and for the `blocked` label. You still read the body: a `Blocked by:` line naming an
-   open issue, or a `Re-check:` date in the future → comment which, and stop.
+   ticket, the `blocked` label and the open native blockers. You still read the body: a
+   `Blocked by:` line it has not converted yet that names an open issue, or a `Re-check:` date in
+   the future → comment which, and stop.
 
 4. **Decide what "done" looks like before you plan how.** Most tickets end in a PR. A ticket
    whose acceptance criteria describe a *decision* — "evaluate", "determine whether",
@@ -106,8 +107,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 
 10. **Collect the review aids** the PR body needs. **A preview host keyed on the pull request number is
     constructed; one keyed on a branch slug is discovered** — `/workflow:finalize-pr` step 7
-    is the canonical rule. Either way, link the pages a reviewer should open, not the root. **Email previews** when the diff touches `src/plugins/email/` or
-    `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
+    is the canonical rule. Either way, link the pages a reviewer should open, not the root, and
+    make sure each one opens on data (*Every link opens on data*). **Email previews** when the
+    diff touches `src/plugins/email/` or `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
     `/view/<id>` links.
 
 11. **Ship.** Hand to `/workflow:finalize-pr`. It opens the PR **as a draft** and pushes. Never

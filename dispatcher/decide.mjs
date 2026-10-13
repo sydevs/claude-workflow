@@ -13,6 +13,7 @@
 
 import { parseVerb, parseBlock } from './verbs.mjs'
 import { parsePhases } from './markers.mjs'
+import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
 export const fire = (handler, flags = {}) => ({ type: 'fire', handler, flags })
@@ -26,7 +27,8 @@ export const armAutoMerge = () => ({ type: 'armAutoMerge' })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
-export const relationships = (blockedBy) => ({ type: 'relationships', blockedBy })
+/** `strip`: the targets were read from the body, so their lines go once related. A `block on` verb's were not. */
+export const relationships = (blockedBy, strip = false) => ({ type: 'relationships', blockedBy, strip })
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
 export const releaseLease = (why) => ({ type: 'releaseLease', why })
@@ -98,6 +100,25 @@ function needsIntake(s, config) {
  */
 const planned = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'implement-roadmap') || s.record?.current?.handler === 'implement-roadmap'
 const reviewedBefore = (s) => (s.record?.dispatches || []).some((d) => d.handler === 'revise-roadmap') || s.record?.current?.handler === 'revise-roadmap'
+/**
+ * The completion check's flags, the one place both of its fire sites read
+ * them. Children closed entirely as not planned delivered nothing, and the
+ * run must know that before it starts. (why: docs/why.md#a-goal-is-verified-not-assumed)
+ */
+const verifyFlags = (kids) => (kids.length && kids.every((c) => c.stateReason === 'not_planned') ? { mode: 'verify', withdrawn: true } : { mode: 'verify' })
+/**
+ * The session ending now was the completion check, fired after every child
+ * closed. Children close seconds apart, so a sibling's leg finds that check
+ * holding the lock and re-arms `verifyDue` under it. A timestamp, not the
+ * handler alone: a child reclosed during the run is still owed a check.
+ * (why: docs/why.md#a-goal-is-verified-not-assumed)
+ */
+function verifiedAlready(s, kids) {
+  const cur = s.record?.current
+  if (cur?.handler !== 'revise-roadmap' || cur.flags?.mode !== 'verify' || !cur.firedAt) return false
+  const firedAt = Date.parse(cur.firedAt)
+  return kids.every((c) => c.closedAt && Date.parse(c.closedAt) <= firedAt)
+}
 
 /** The `sydevs-request` the session that just ended left, or null. (why: docs/why.md#a-session-asks-actions-acts) */
 function freshRequest(s) {
@@ -240,9 +261,48 @@ function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
 }
 
+/**
+ * A repair pass on this head that ended, or is ending now. A deploy pass never
+ * counts: a flaky preview must not stand in for a real test failure.
+ * `current` counts because the unlock that ends a session is decided before
+ * `apply` moves it into `dispatches`; until then only its fire-time entry is
+ * there, with no outcome, and a stood-down pass was fired again.
+ */
 function endedFixCiFor(record, sha) {
   if (!sha) return null
-  return (record?.dispatches || []).find((d) => d.handler === 'fix-ci' && d.sha === sha && d.outcome) || null
+  const repair = (d) => d?.handler === 'fix-ci' && d.sha === sha && d.flags?.mode !== 'deploy'
+  return (record?.dispatches || []).find((d) => repair(d) && d.outcome) || (repair(record?.current) ? record.current : null)
+}
+
+/**
+ * A deploy pass already fired against this head: running, just unlocked, or
+ * ended. `current` counts because the unlock that ends a session is decided
+ * before `apply` moves it into `dispatches`, and only `current` and ended
+ * entries carry `flags`. (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+ */
+function deployPassFor(record, sha) {
+  if (!sha) return null
+  const isDeploy = (d) => d?.handler === 'fix-ci' && d.sha === sha && d.flags?.mode === 'deploy'
+  return [record?.current, ...(record?.dispatches || [])].find(isDeploy) || null
+}
+
+/** A phased draft whose ticket still has phases to build, or null. */
+function phasesLeft(s) {
+  const phases = parsePhases(s.item?.body)
+  return s.pr?.draft && phases && phases.done < phases.total && s.linkedIssues?.length ? phases : null
+}
+
+/**
+ * Required CI is green, and a Railway preview `railway.statusContexts` lists
+ * failed. One `fix-ci` pass in `deploy` mode reads its log, once per head,
+ * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass. Not
+ * mid-phases, where the next phase may be what fixes the build.
+ * (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+ */
+function deployPass(s, config) {
+  if (!failedDeploys(s.ci?.advisory, config).length || phasesLeft(s)) return null
+  if (deployPassFor(s.record, s.pr.head?.sha)) return null
+  return advisoryNote(s).concat(fire('fix-ci', { mode: 'deploy' }))
 }
 
 function underThreshold(pr, config) {
@@ -302,7 +362,7 @@ export function evaluatePr(s, config) {
     const infra = s.ci.infra || []
     if (infra.length && infra.length === s.ci.failing.length) return infraPlan(s, config, infra)
     const ended = endedFixCiFor(s.record, pr.head?.sha)
-    if (ended) return [note(`fix-ci ${ended.outcome} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
+    if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
     const cap = config.ceilings?.ciFixIterations ?? 3
     if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci')]
     // The cap comment promises that a person's push starts the repair again,
@@ -316,14 +376,34 @@ export function evaluatePr(s, config) {
     ]
   }
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
-  return evaluateGreenPr(s, config).concat(advisoryNote(s))
+  return deployPass(s, config) || evaluateGreenPr(s, config).concat(advisoryNote(s))
 }
 
-/** A red check the ruleset does not require is said once per set of names, and fires nothing. (why: docs/why.md#only-required-checks-are-ci) */
+/**
+ * A red check the ruleset does not require is said once per set of names,
+ * linked to its deployment when it has one, and fires nothing.
+ * (why: docs/why.md#only-required-checks-are-ci)
+ */
 function advisoryNote(s) {
-  const names = [...new Set(s.ci?.advisory || [])].sort()
+  const byName = new Map()
+  for (const a of s.ci?.advisory || []) if (!byName.get(a.name)?.targetUrl) byName.set(a.name, a)
+  const names = [...byName.keys()].sort()
   if (!names.length) return []
-  return [commentOnce(`advisory ${names.join(' · ')}`, `Not required, so not blocking: ${names.map((n) => `\`${n}\``).join(', ')} failed. A preview link in the body may not open until it passes.`)]
+  const shown = names.map((n) => {
+    const href = linkTarget(byName.get(n).targetUrl)
+    return href ? `[\`${n}\`](${href})` : `\`${n}\``
+  })
+  return [commentOnce(`advisory ${names.join(' · ')}`, `Not required, so not blocking: ${shown.join(', ')} failed. A preview link in the body may not open until it passes.`)]
+}
+
+/** An https URL safe inside a Markdown link, or null. A status's `target_url` is whatever its poster set. */
+function linkTarget(url) {
+  try {
+    const u = new URL(String(url))
+    return u.protocol === 'https:' ? u.href.replace(/\(/g, '%28').replace(/\)/g, '%29') : null
+  } catch {
+    return null
+  }
 }
 
 function evaluateGreenPr(s, config) {
@@ -335,8 +415,8 @@ function evaluateGreenPr(s, config) {
     // takes. While a phase is unticked the next session continues it, on the
     // ticket's lock, and the critic reads the whole PR once, at the end.
     // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    const phases = parsePhases(s.item?.body)
-    if (phases && phases.done < phases.total && s.linkedIssues?.length) {
+    const phases = phasesLeft(s)
+    if (phases) {
       if ((s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you`)]
       return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
     }
@@ -517,7 +597,7 @@ function derive(target, s, config) {
       plan.push({ type: 'ensure' }, status('proposed'))
       if (!bornBlocked) plan.push(label([L.awaiting], []))
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
-      if (blockers.length) plan.push(relationships(blockers))
+      if (blockers.length) plan.push(relationships(blockers, true))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
       // Nothing the loop files is revised on arrival any more: every author
       // writes through write-ticket, so a proposal arrives fully specified.
@@ -537,7 +617,7 @@ function derive(target, s, config) {
       // its body, so this is the one case to refuse.
       // (why: docs/why.md#a-strangers-marker-is-text)
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
-      if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy))
+      if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
       if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
       return plan.length ? plan : [note('no marker change')]
     }
@@ -582,7 +662,10 @@ function derive(target, s, config) {
           ].join('\n')),
         ]
       }
-      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck' })]
+      // The converted `Blocked by:` line is gone from the body, so the fire
+      // names what it waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+      const cleared = (s.blockedByAll || []).map((b) => `${b.owner}/${b.repo}#${b.number}`)
+      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck', ...(cleared.length ? { cleared } : {}) })]
     }
     case 'issue_comment': {
       if (isBot(facts.author, config)) return [note('own comment — ignored')]
@@ -641,7 +724,7 @@ function derive(target, s, config) {
       const left = kids.filter((c) => c.state === 'open').length
       if (!kids.length || left) return [note(`${kids.length - left} of ${kids.length} children closed`)]
       if (s.locked) return [record({ verifyDue: true }), recheck()]
-      return [record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' })]
+      return [record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids))]
     }
     // A child's session raised a decision on this roadmap ticket's Open
     // questions. That is your turn here. (why: docs/why.md#a-late-decision-goes-to-the-goal)
@@ -766,7 +849,11 @@ function derive(target, s, config) {
       if (isRoadmap(s, config)) {
         const kids = s.children || []
         if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
-        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', { mode: 'verify' }))
+        if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) {
+          if (!verifiedAlready(s, kids)) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
+          // Then end as an unlock with nothing re-armed would.
+          plan.push(record({ verifyDue: false }), note('the verify that just ended already read every child'))
+        }
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }

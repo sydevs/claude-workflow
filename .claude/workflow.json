@@ -2,8 +2,8 @@
   "$comment": "Per-repo values read by the sydevs `workflow` plugin and its skills. Values only — the rules that consume them live in the skills, the stories in docs/why.md. This repo is unusual: it holds the plugin itself, so a change here changes how every other repo is worked on.",
   "packageManager": "none",
   "leanGate": {
-    "command": "claude plugin validate ./workflow --strict",
-    "contents": "Plugin manifest + skill frontmatter validation. There is no test suite — the skills are prose, and their real gate is a supervised loop run."
+    "command": "claude plugin validate ./workflow --strict && node --test workflow/lib/*.test.mjs",
+    "contents": "Plugin manifest + skill frontmatter validation, then the workflow/lib unit tests — the scripts that own mechanical rules (budgets, the dispatch payload, base refs). The skills are prose, and their real gate is a supervised loop run."
   },
   "securityReview": {
     "triggerPattern": "^workflow/hooks/|^workflow/skills/[^/]+/[^/]+\\.md$|^loop-config\\.json$",

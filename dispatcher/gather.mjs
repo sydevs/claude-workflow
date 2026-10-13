@@ -77,7 +77,7 @@ function repoFromUrl(url, fallbackOwner) {
 async function subIssues(gh, { owner, repo, number }) {
   try {
     const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
-    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state }))
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null }))
   } catch {
     return []
   }
@@ -202,6 +202,9 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
     s.markers = { blockedBy: markerBlockers, recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
+    // Every relationship, closed blockers too: a line naming one is already
+    // converted, so it is stripped, never re-POSTed.
+    s.blockedByAll = Array.isArray(blockedBy) ? blockedBy : []
     s.blockedByError = Array.isArray(blockedBy) ? null : blockedBy.error
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)
@@ -230,10 +233,11 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { data: cr } = await gh.rest.checks.listForRef({ owner, repo, ref: pr.head.sha, per_page: 100, filter: 'latest' })
   const { data: st } = await gh.rest.repos.getCombinedStatusForRef({ owner, repo, ref: pr.head.sha })
   // Green is what the base branch's ruleset requires, newest run per name.
+  // A status keeps its link: a red preview's `target_url` is its build log.
   // (why: docs/why.md#only-required-checks-are-ci)
   const gate = requiredOnly({
     checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, details_url: c.details_url })) },
-    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state })) },
+    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state, target_url: x.target_url || null, description: x.description || null })) },
     required: await requiredContexts(gh, { owner, repo }, pr.base?.ref),
   })
   const { checkRuns, statuses } = gate

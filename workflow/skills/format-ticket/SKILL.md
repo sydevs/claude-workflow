@@ -194,7 +194,8 @@ carries `<!-- sydevs-request {"escalated":true} -->`. The dispatcher then gives 
 
 GitHub calls these **Relationships**. The REST resource is `dependencies`. **The relationship is
 what every gate reads.** The body line exists because a cloud session cannot write one, so the
-dispatcher converts the line. Set the relationship where you can, and write the line always.
+dispatcher converts the line, then deletes it. Set the relationship where you can, and write the
+line always.
 
 Write it in exactly this form, one line per blocker, in `## Notes`:
 
@@ -203,7 +204,9 @@ Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint thi
 ```
 
 The dispatcher reads that line on `issues.opened` and `issues.edited`, creates the native
-relationship, and applies `blocked`. A line a non-member writes into their own issue stays text.
+relationship, and applies `blocked`. Once every blocker on the line is related, it deletes the
+line. Never restore a deleted line. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+A line a non-member writes into their own issue stays text.
 (why: docs/why.md#a-strangers-marker-is-text) When the last blocker closes, the dispatcher fires
 a **recheck**, not `awaiting`: a session reads why the ticket waited and re-holds it quietly, or
 hands it back. A ticket approved while blocked starts on its own once the recheck clears it.
@@ -211,8 +214,9 @@ hands it back. A ticket approved while blocked starts on its own once the rechec
 
 **Write the format. Do not rely on it when reading.** The reader matches the words `Blocked by`,
 with or without a colon, through leading bold or a list bullet, and takes either a full in-org
-issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as are a PR URL and
-a struck-through line. (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
+issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as is a PR URL.
+(why: docs/why.md#the-marker-reader-matches-words-not-punctuation) Never strike a line through
+to clear a blocker. A blocker clears when its issue closes or a person removes the relationship.
 
 A local session may also set the native relationship directly. Cross-repo needs the full URL:
 

@@ -89,8 +89,10 @@ export function latestPerName(runs) {
  * one late check cannot read as green. When none has reported at all, the
  * rows stay empty and `ciVerdict` reports its usual "no check runs".
  *
- * `advisory` names the red checks the ruleset does not require — a preview
- * deploy, a Railway status. They inform the reviewer and fire nothing.
+ * `advisory` lists the red checks the ruleset does not require — a preview
+ * deploy, a Railway status — as `{name, kind, targetUrl}`. They inform the
+ * reviewer and fire nothing. `targetUrl` is a status's `target_url` or a check
+ * run's `details_url`, else null: the failing deployment.
  * (why: docs/why.md#only-required-checks-are-ci)
  */
 export function requiredOnly({ checkRuns, statuses, required }) {
@@ -100,8 +102,10 @@ export function requiredOnly({ checkRuns, statuses, required }) {
   const need = new Set(required)
   const red = (c) => BAD_CONCLUSIONS.has(String(c.conclusion || '').toUpperCase())
   const advisory = [
-    ...runs.filter((c) => !need.has(c.name) && red(c)).map((c) => c.name),
-    ...sts.filter((s) => !need.has(s.context) && ['failure', 'error'].includes(String(s.state).toLowerCase())).map((s) => s.context),
+    ...runs.filter((c) => !need.has(c.name) && red(c)).map((c) => ({ name: c.name, kind: 'check', targetUrl: c.details_url || null })),
+    ...sts
+      .filter((s) => !need.has(s.context) && ['failure', 'error'].includes(String(s.state).toLowerCase()))
+      .map((s) => ({ name: s.context, kind: 'status', targetUrl: s.target_url || null })),
   ]
   const keptRuns = runs.filter((c) => need.has(c.name))
   const keptSts = sts.filter((s) => need.has(s.context))

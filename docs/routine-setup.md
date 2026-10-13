@@ -465,6 +465,22 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 > Mailpit holds fixtures and preview traffic: previews have their own databases, and production mail
 > goes to Resend. Never put a production admin credential here.
 
+**Railway.** A workspace token, made at railway.com/account/tokens with the workspace that holds
+SahajCloud picked, stored under the name `railway.tokenEnvVar` gives in `loop-config.json`. A
+`fix-ci` deploy pass reads a failed preview's logs with it and never deploys. Without it, that pass
+comments the deployment link and stops.
+
+> ⚠ **It reaches every project in the workspace, production included.** A project token would be
+> narrower, but it is made for one existing environment, and each PR preview gets a new one, so it
+> never reaches the next preview. Check the token against a deployment of an **open** PR, whose id
+> is the `?id=` in its `sahajcloud - SahajCloud` status link. Log lines back means it works.
+>
+> ```bash
+> curl -s https://backboard.railway.com/graphql/v2 -H "Authorization: Bearer $TOKEN" \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"query($d:String!){ buildLogs(deploymentId:$d, limit:5){ message } }","variables":{"d":"<id>"}}'
+> ```
+
 **Read-only keys for experiments.** `revise-roadmap` and `write-ticket` settle facts by
 experiment, including read-only calls to production SahajCloud and vendor APIs. They use only the
 variables named in `roadmap.readOnlyKeys` — today `SAHAJCLOUD_API_KEY`, the read-scoped client

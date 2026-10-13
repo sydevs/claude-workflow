@@ -115,6 +115,18 @@ test('the unlock after a stood-down fix-ci makes the PR the human\'s turn, not a
   assert.deepEqual(plan[2].add, ['awaiting'])
 })
 
+// The record as the unlock really sees it: the ending session still in
+// `current`, and only its fire-time entry, with no outcome, in `dispatches`.
+test('the unlock that ends a stood-down fix-ci does not fire it again on the same head', () => {
+  const fired = { id: 'SahajCloud-5-fix-ci-20261001T022800000Z-aaaa', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-01T02:28:00.000Z', sha: '19a284d' }
+  const s = prSnap({ ci: red, pr: { ...prSnap().pr, draft: false, head: { sha: '19a284d' } }, record: { fixCi: 1, current: { ...fired, flags: { mode: null } }, dispatches: [fired] } })
+  const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, config)
+  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'note', 'label'])
+  assert.deepEqual(plan[2].add, ['awaiting'])
+  const pushed = { ...s, pr: { ...s.pr, head: { sha: 'b0b0b0b' } } }
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, pushed, config)), ['unlocked:fix-ci', 'bumpFixCi', 'fire:fix-ci'], 'a pass that pushed a new head that is still red is repaired again')
+})
+
 test('red CI fires fix-ci until the cap, then hands over to awaiting', () => {
   assert.deepEqual(types(evaluatePr(prSnap({ ci: red }), config)), ['bumpFixCi', 'fire:fix-ci'])
   const capped = evaluatePr(prSnap({ ci: red, record: { fixCi: 3 } }), config)
@@ -296,6 +308,17 @@ test('a passed Hold Until date fires a recheck, not awaiting; a future one is le
   assert.ok(!passed.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'nobody is pinged on the date alone')
   const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } }), config)
   assert.ok(!early.some((a) => a.type === 'label'))
+})
+
+// The converted line is gone from the body, so the fire names what the ticket
+// waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+test('a recheck after the last blocker closes names the blockers that cleared', () => {
+  const blockedByAll = [{ owner: 'sydevs', repo: 'SahajCloud', number: 632, state: 'closed' }, { owner: 'sydevs', repo: 'WeMeditateWeb', number: 81, state: 'closed' }]
+  const p = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], blockedByAll }), config)
+  assert.deepEqual(types(p), ['record', 'fire:revise'])
+  assert.deepEqual(p[1].flags, { mode: 'recheck', cleared: ['sydevs/SahajCloud#632', 'sydevs/WeMeditateWeb#81'] })
+  const dated = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
+  assert.deepEqual(dated[1].flags, { mode: 'recheck' }, 'a date park names no blocker')
 })
 
 test('unblock-check applies the label when GitHub says blocked and we never labelled it', () => {
@@ -626,8 +649,12 @@ test('a comment on a human PR still needs a mention', () => {
 
 // ---- only required checks are CI -----------------------------------------
 
+const RAILWAY_URL = 'https://railway.com/project/bdff2c72-5af2-4da3-9e2c-913f5e9d1b0f/service/1edee955-6c1f-4d8e-9cef-41737f981187?id=963aac12-f6c4-4b6e-bc9a-9feac615c336&environmentId=a35269c7-37ba-4d31-af10-711c611c2056'
+const advisoryNotes = (advisory) => evaluatePr(prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory } }), config)
+  .filter((a) => a.type === 'comment' && a.key.startsWith('advisory '))
+
 test('a red non-required check is said once and fires nothing', () => {
-  const s = prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory: ['sahajcloud - SahajCloud'] } })
+  const s = prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 }, ci: { ...green, advisory: [{ name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: null }] } })
   const p = evaluatePr(s, config)
   assert.equal(p.some((a) => a.handler === 'fix-ci'), false)
   const notes = p.filter((a) => a.type === 'comment' && a.key.startsWith('advisory '))
@@ -635,9 +662,91 @@ test('a red non-required check is said once and fires nothing', () => {
   assert.match(notes[0].body, /Not required/)
 })
 
+test('the advisory note links each failing context to its deployment, keyed by name alone', () => {
+  const notes = advisoryNotes([
+    { name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_URL },
+    { name: 'sahajcloud - SahajCloud', kind: 'check', targetUrl: null },
+  ])
+  assert.equal(notes.length, 1)
+  assert.equal(notes[0].key, 'advisory sahajcloud - SahajCloud', 'the commentOnce key is unchanged, so no note is re-posted')
+  assert.ok(notes[0].body.includes(`[\`sahajcloud - SahajCloud\`](${RAILWAY_URL})`), notes[0].body)
+})
+
+test('an advisory with no link, or one that is not https, is named without one', () => {
+  const [note] = advisoryNotes([
+    { name: 'Cloudflare Pages: sahajatlas', kind: 'check', targetUrl: null },
+    { name: 'evil', kind: 'status', targetUrl: 'javascript:alert(1)' },
+  ])
+  assert.match(note.body, /: `Cloudflare Pages: sahajatlas`, `evil` failed/)
+  assert.doesNotMatch(note.body, /\]\(/)
+})
+
+test('a parenthesis in a link cannot close the Markdown link early', () => {
+  const [note] = advisoryNotes([{ name: 'x', kind: 'status', targetUrl: 'https://example.com/a)b(c' }])
+  assert.ok(note.body.includes('[`x`](https://example.com/a%29b%28c)'), note.body)
+})
+
 test('no advisory note while required CI is still running', () => {
-  const p = evaluatePr(prSnap({ ci: { ...running, advisory: ['Cloudflare Pages: sahajatlas'] } }), config)
+  const p = evaluatePr(prSnap({ ci: { ...running, advisory: [{ name: 'Cloudflare Pages: sahajatlas', kind: 'check', targetUrl: null }] } }), config)
   assert.deepEqual(types(p), ['note'])
+})
+
+// ---- a failed preview is read from its log (why: docs/why.md#a-failed-preview-is-read-from-its-log)
+
+const railwayCfg = { ...config, railway: { statusContexts: ['sahajcloud - SahajCloud'] } }
+const PREVIEW = { name: 'sahajcloud - SahajCloud', kind: 'status', targetUrl: RAILWAY_URL }
+const deployPass = (sha, outcome = 'done') => ({ id: 'SahajCloud-5-fix-ci-20261012T000000000Z-bbbb', handler: 'fix-ci', flags: { mode: 'deploy' }, attempt: 1, firedAt: '2026-10-12T00:00:00.000Z', sha, outcome })
+const fixCiFires = (plan) => plan.filter((a) => a.type === 'fire' && a.handler === 'fix-ci')
+const spendsARepair = (plan) => plan.some((a) => a.type === 'bumpFixCi' || (a.type === 'record' && 'fixCi' in (a.patch || {})))
+
+test('a failed preview with green required CI fires fix-ci in deploy mode, links it, and spends no repair', () => {
+  const plan = evaluatePr(prSnap({ ci: { ...green, advisory: [PREVIEW] } }), railwayCfg)
+  assert.deepEqual(types(plan), ['comment', 'fire:fix-ci'])
+  assert.deepEqual(plan[1].flags, { mode: 'deploy' })
+  assert.ok(plan[0].body.includes(RAILWAY_URL), 'the advisory comment carries the link')
+  assert.equal(spendsARepair(plan), false, 'no bumpFixCi, no fixCi write')
+})
+
+test('a second ci event on the same head fires nothing and leaves record.fixCi unchanged', () => {
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, record: { fixCi: 1, dispatches: [deployPass('abc')] } })
+  const plan = evaluatePr(s, railwayCfg)
+  assert.deepEqual(fixCiFires(plan), [])
+  assert.equal(spendsARepair(plan), false)
+  assert.deepEqual(types(plan), ['fire:review-pr', 'comment'], 'the PR moves on to the critic, with the advisory note')
+})
+
+test('the unlock that ends a deploy pass does not fire another on its head', () => {
+  // `apply` moves `current` into `dispatches` after this plan is made, and the
+  // fire-time entry carries no flags, so `current` is the only witness here.
+  const firedAt = { id: 'SahajCloud-5-fix-ci-20261012T000000000Z-bbbb', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-12T00:00:00.000Z', sha: 'abc' }
+  const { outcome, ...current } = deployPass('abc')
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, record: { fixCi: 0, current, dispatches: [firedAt] } })
+  const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, railwayCfg)
+  assert.deepEqual(fixCiFires(plan), [])
+})
+
+test('a push to a new head gets its own deploy pass', () => {
+  const s = prSnap({ ci: { ...green, advisory: [PREVIEW] }, pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 0, dispatches: [deployPass('abc')] } })
+  assert.deepEqual(fixCiFires(evaluatePr(s, railwayCfg)).map((a) => a.flags), [{ mode: 'deploy' }])
+})
+
+test('a deploy pass on this head never stands in for a repair pass', () => {
+  const s = prSnap({ ci: { ...red, advisory: [PREVIEW] }, record: { fixCi: 0, dispatches: [deployPass('abc')] } })
+  assert.deepEqual(types(evaluatePr(s, railwayCfg)), ['bumpFixCi', 'fire:fix-ci'])
+})
+
+test('no deploy pass without a railway key, an unlisted context, or a link that is not a deployment', () => {
+  const quiet = (cfg, advisory) => fixCiFires(evaluatePr(prSnap({ ci: { ...green, advisory } }), cfg))
+  assert.deepEqual(quiet(config, [PREVIEW]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, name: 'other - Railway' }]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, targetUrl: 'https://railway.com/project/x' }]), [])
+  assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, targetUrl: null }]), [])
+})
+
+test('no deploy pass while required CI runs, or while the ticket still has phases to build', () => {
+  assert.deepEqual(types(evaluatePr(prSnap({ ci: { ...running, advisory: [PREVIEW] } }), railwayCfg)), ['note'])
+  const plan = evaluatePr(phased(1, 3, { ci: { ...green, advisory: [PREVIEW] } }), railwayCfg)
+  assert.deepEqual(types(plan), ['targets', 'comment'], 'the next phase may be what fixes the build, so only the note')
 })
 
 // ---- a push from a person resets the repair count (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)

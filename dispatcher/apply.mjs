@@ -9,6 +9,7 @@ import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
+import { stripBlockedBy } from './markers.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -243,16 +244,32 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         break
       }
       case 'relationships': {
+        // Related means already there, in any state, or POSTed without error.
+        const related = []
         for (const b of a.blockedBy) {
-          const exists = (snapshot.blockedByOpen || []).some((x) => x.number === b.number && x.repo === b.repo)
-          if (exists) continue
+          const exists = (snapshot.blockedByAll || []).some((x) => x.number === b.number && x.repo === b.repo)
+          if (exists) { related.push(b); continue }
           log(`blocked_by += ${b.owner}/${b.repo}#${b.number}`)
-          if (dryRun) continue
+          if (dryRun) { related.push(b); continue }
           try {
             const { data: blocker } = await gh.rest.issues.get({ owner: b.owner, repo: b.repo, issue_number: b.number })
             await gh.request('POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by', { ...args, n: t.number, issue_id: blocker.id })
+            related.push(b)
           } catch (e) { log(`relationship write failed: ${e.status || ''} ${e.message}`) }
         }
+        if (!a.strip || !related.length) break
+        // The converted line goes, so the body never holds a second copy of
+        // the relationship that drifts from it. Re-read first: `issues.edited`
+        // takes no lock, so a session may have rewritten the body since
+        // `gather`. A failure leaves the line, which the next edit retries.
+        // (why: docs/why.md#a-converted-blocker-line-is-deleted)
+        try {
+          const { data: live } = await gh.rest.issues.get({ ...args, issue_number: t.number })
+          const out = stripBlockedBy(live.body, config.org, config.relationships?.bodyMarker, related)
+          if (!out.dropped.length) break
+          log(`strip: ${out.dropped.map((l) => l.trim()).join(' | ')}`)
+          if (!dryRun) await gh.rest.issues.update({ ...args, issue_number: t.number, body: out.body })
+        } catch (e) { log(`strip failed: ${e.status || ''} ${e.message}`) }
         break
       }
       case 'anomaly': {
