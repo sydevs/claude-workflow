@@ -226,9 +226,8 @@ already makes every author re-check, and the standing ticket itself would sit `a
 So the finding is routed, never dropped: into the PR that owns it, into a ticketless PR when the
 fix is small enough to review on its own, and into a ticket otherwise. An ask-first instruction
 cannot bind a run with nobody to ask. It still binds an attended session, so the carve-out on
-`SahajCloud/AGENTS.md:21` is extended rather than that line deleted. That edit is still owed: the
-run that added this entry had its `git push` to SahajCloud refused, so the line needs an attended
-run.
+`SahajCloud/AGENTS.md:21` is extended rather than that line deleted (SahajCloud#949): an
+unattended run follows `start-run` instead, and those rules win there.
 
 ## Every claim names the call that produced it
 
