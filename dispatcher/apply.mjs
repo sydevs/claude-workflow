@@ -311,9 +311,22 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // the whole point of a timeout, and a ref the dead session left is
         // what would refuse every later fire.
         await release(gh, config, t, { now, dryRun, log })
+        // Every timeout, re-fired or the last: improve-loop counts them per
+        // handler to tune `dispatch.timeoutsMinutes`. A journal failure must
+        // not cost the re-fire.
+        if (cur && !dryRun) {
+          try {
+            const j = await ensureJournalDay(gh, config, now)
+            await postAnomaly(gh, config, j.number, { kind: 'timed-out', text: `${t.repo.full}#${t.number} ${cur.handler} attempt ${cur.attempt || 1}`, id: cur.id || null })
+          } catch { /* the journal is not the deadline's keeper */ }
+        }
         if (!cur || attempt > max) {
           await labels(gh, t, snapshot, [config.labels.awaiting], [config.labels.stuck], dryRun, log)
-          await commentOnce(gh, t, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. A comment, a verb, or a push from you starts me again.`, dryRun, log)
+          // On a PR only a mention, a review or a push wakes the bot; on an
+          // issue, a verb or a bare mention. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
+          const p = config.dispatch.commandPrefix
+          const wake = t.kind === 'pr' ? `A mention (\`${p}\`) or a push from you starts me again.` : `A \`${p}\` verb or mention from you starts me again.`
+          await commentOnce(gh, t, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. ${wake}`, dryRun, log)
           if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'attempts-exhausted', text: `${t.repo.full}#${t.number} ${cur?.handler || ''}`, id: cur?.id || null }) }
           break
         }

@@ -20,7 +20,9 @@ look is `flags.onDemand` in the record — a human wrote `@sydevs-bot review`.
 
 **Start with `/workflow:start-run` and end with `/workflow:finish-run`.** On
 arrival, `pull_request_read method:get` (still open) and `method:get_reviews`: an own-login
-review already exists and `flags.onDemand` is false → post nothing, journal that, and end.
+review led by `review.bodyHeader` already exists, or a fallback comment led by it, and
+`flags.onDemand` is false → post nothing, journal that, and end. A question review is not yours,
+and never stops you.
 
 GitHub access follows the loop's rule: `mcp__github__*` in a routine or subagent, `gh` only when
 invoked locally. Names and values below come from `loop-config.json` — read it first.
@@ -28,7 +30,8 @@ invoked locally. Names and values below come from `loop-config.json` — read it
 ## Stance
 
 Be adversarial about the PR, not about code style. The author-side review already ran before this
-PR opened (`/finalize-pr` step 2, six lenses over the diff) — **do not re-run it, and do not
+PR opened (`/finalize-pr` step 2: `/code-review high` and `/simplify`, or the toolkit's six
+lenses where it is installed) — **do not re-run it, and do not
 re-litigate lint- or nit-level findings.** That pass asked "is this code good?" You ask: **should
 this PR exist in this shape?**
 
@@ -37,7 +40,9 @@ Two lenses carry the most weight, in this order:
 1. **Simplicity and scope.** Read the linked ticket first, then measure the diff against it. Is
    the diff larger than the problem? Does it contain anything the ticket did not ask for — an
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
-   strongest finding this review can produce is "half of this PR should not exist."
+   strongest finding this review can produce is "half of this PR should not exist." A change the
+   `## Summary` names as joined is not smuggled. Judge it by format-ticket's join rule, and flag
+   only one the rule does not join.
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
    `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access
@@ -47,10 +52,10 @@ Two lenses carry the most weight, in this order:
 Flag correctness, tests, and security only when you trip over them, at the bar the loop uses
 everywhere: a finding names a file and a line, or it is not a finding.
 
-**A real defect that is not this PR's is still filed.** Preflight routes every incidental
-finding, and a critic never touches the branch under review: a docs-only one goes to the docs
-work in flight, anything else a ticket. A stale doc this PR should have updated is a finding on
-this PR — and on a docs PR, so is every docs finding in its repo. Name it in the holistic assessment as well. Never park it on an unrelated line as an
+**A real defect the join rule joins to this PR is a finding on it**, so `address-review` folds it
+in — a stale doc this PR should have updated included. On a docs PR, so is every docs finding in
+its repo. A defect the rule does not join is still filed: preflight routes it, and a critic never
+touches the branch under review. Name it in the holistic assessment as well. Never park it on an unrelated line as an
 inline comment.
 
 ## Read the reviewer's profile
@@ -69,9 +74,11 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    Judge a ticketless PR against its own body.
 2. **The PR body** — what the author claims the change is. Check its `## Change outline` against
    the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
-   first. Then open each `## Preview` link, signed in as the repo guide says. The preview has
-   built by the time you run. A link that shows no data, or an input the body names that does not
-   exist, is a `should-fix` (`/workflow:finalize-pr` step 7).
+   first. Then open each `## Preview` link, signed in as the repo guide says. A preview deploy is
+   not a required check, so it may still be building: a link that does not open yet goes in What
+   was checked, not in the findings. A link that shows no data with no line in the body saying
+   why, or an input the body names that does not exist, is a `should-fix`
+   (`/workflow:finalize-pr` step 7).
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use
@@ -91,7 +98,7 @@ mcp__github__add_comment_to_pending_review  … path:<file> line:<n> body:<findi
 mcp__github__pull_request_review_write   method:"submit_pending" … event:"COMMENT" body:<the body below>
 ```
 
-End every inline comment with `identity.commentMarker`. Anchor every finding to a line **inside a
+End every inline comment with `identity.commentMarker`, and measure it with `--kind reviewReply`. Anchor every finding to a line **inside a
 diff hunk**, the unchanged context lines of a hunk included. The call refuses any line outside
 one. Never move a finding onto an unrelated line to satisfy it. That one belongs in the holistic
 assessment, which is where it reads better anyway.
@@ -136,10 +143,12 @@ the header is the idempotency key on this path only. Journal that you used the f
 
 - **Never modify the branch.** A critic with a keyboard is an author — `git` here is read-only.
 - **Never `APPROVE` or `REQUEST_CHANGES`**, even where the API allows it.
-- **One review per PR, ever**, unless `flags.onDemand`. An existing own-login review on arrival
-  means stop and report that nothing was posted.
-- **Starting review threads is this skill's exclusive channel.** Reply threads belong to
+- **One review per PR, ever**, unless `flags.onDemand`. An existing critic review on arrival —
+  led by `review.bodyHeader` — means stop and report that nothing was posted.
+- **Starting review threads is this skill's exclusive channel**, except question threads, whose
+  root carries `review.questionMarker`. Leave those to the person. Reply threads belong to
   `address-review`.
 - **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.
-- **Never duplicate the author-side pass.** Style, formatting, and naming taste are not yours.
+- **Never duplicate the author-side pass.** Style, formatting, spelling and casing are not yours.
+  A misleading or shadowing name is, as the reviewer profile says.

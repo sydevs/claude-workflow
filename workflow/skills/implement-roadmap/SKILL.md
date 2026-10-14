@@ -28,8 +28,9 @@ goal changed under existing children).
 
 ## 2. Settle every fact
 
-Verify each claim the plan rests on, in the code or the package's own docs and source. A fact you
-cannot settle without a person is a decision. Then:
+Verify each claim the plan rests on, in the code or the package's own docs and source, or by an
+experiment in your scratchpad that pushes nothing. A fact only a person's access can settle — a
+vendor account, production data — is written as a decision. Then:
 
 1. Write it into the goal's `## Open questions`, in plain language, with options and a
    recommendation.
@@ -75,7 +76,7 @@ Compare every child with the goal as it now reads:
 | Child | Do |
 | --- | --- |
 | Still right | Leave it. |
-| Needs to change, no PR open | Update it through `write-ticket`, and say what changed on the child. |
+| Needs to change, no PR open | Update it through `write-ticket` in `update` mode, and say what changed on the child. |
 | No longer needed | Close it as not planned, with one line saying why. |
 | Missing | File it as in step 4. |
 | Has an open PR | Leave it. Name the drift on the goal instead. |

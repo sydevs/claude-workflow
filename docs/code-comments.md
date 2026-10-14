@@ -2,7 +2,7 @@
 
 The canonical rule. Each product repo carries a copy at `docs/rules/code-comments.md`, symlinked
 into `.claude/rules/`, plus its own carve-outs. `audit-contracts` checks the copies against this
-file every Thursday.
+file on the Mondays `auditCalendar` gives it.
 
 Keep the copies short. A person reads this file. An agent reads each copy on every session in four
 repos, so every line in a copy costs tokens daily.

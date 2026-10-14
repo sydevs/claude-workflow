@@ -188,6 +188,9 @@ table.
 
 ## A request in prose is not permission
 
+> The Stage field and the rung-4 table below are retired. The rule stands: today the authorisation
+> is a `respondTo` human's `@sydevs-bot implement`, and prose asking for work only scopes it.
+
 The middle row of the rung-4 table fails quietly. A comment asking for work reads like permission to
 do it. It is not. `Stage: Implement` is the gate. A request in prose asks to *scope* the work, not
 to start it.
@@ -1158,8 +1161,8 @@ and CI went green at 17:45. In between it started five overlapping waiters, call
 of an Opus session asking the same question.
 
 CI completion is an event. Actions receives it, settles the head SHA with `merge-gate.mjs`, and
-dispatches `fix-ci` on red, the critic or mark-ready on a green draft, the merge gate on a green
-approved PR. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
+dispatches `fix-ci` on red, the critic or mark-ready on a green draft, and arms auto-merge at
+mark-ready so GitHub's ruleset and queue do the merge. So a session pushes and ends. Nothing it could learn by waiting is lost, and no
 session ever holds a lock while doing nothing.
 
 **The one exception is the preview deploy, in `finalize-pr` step 7b.** A preview build is not an
@@ -2259,7 +2262,7 @@ day has its own family: **risk** files Bug or Task tickets, **experience** files
 **hygiene** prefers ticketless PRs. The old `comment-cleanup` skill became one hygiene angle. A
 family never runs twice in a row, and each angle recurs every four to eight weeks.
 
-Hygiene's ticketless PRs are the one deliberate exception to `prAllowlistGlobs`, and only three
+Hygiene's ticketless PRs are a deliberate exception to `prAllowlistGlobs`, beside the docs and test routes, and only three
 kinds qualify — though any family now sends a docs-only fix to a PR
 ([A docs fix is a PR, not a ticket](#a-docs-fix-is-a-pr-not-a-ticket)): a comment sweep that `comment-fingerprint.mjs` proves changed comments only, a
 dead-code removal proven unreferenced, and a doc fix where the code is plainly right. The proof
@@ -2350,7 +2353,7 @@ hold, or carrying the stale premise it fixes, is that work's, listed or not. A d
 takes any docs finding in its repo. Without one in hand, an open docs ticket gets a line, and an
 open bot docs PR gets a commit — but never one that is locked, which another session owns, or
 approved, which auto-merge would land with commits the reviewer never saw. Only then is a new PR
-opened. A point that needs a decision is a question in that PR's body, and an unknown the run can
+opened. A point that needs a decision is a question thread on that PR, and an unknown the run can
 measure, it measures. Neither splits a docs fix into a ticket.
 
 ## Only required checks are CI
@@ -2832,3 +2835,103 @@ So correcting an earlier claim needs no addendum. Fix it in the body, where the 
 comment stays as the historical record of what that run believed at the time — which is what a log
 is for. The record then has one authoritative surface, even though its entries stay immutable.
 Someone catching up reads the body, not eight comments in sequence.
+
+## A PR question is a thread on the line
+
+The docs route told a run to put a decision point under `## Open questions` in the PR body. The PR
+template had no such section and forbade adding one, so a run either broke the template or dropped
+the question. Even where it landed, a body section is read once, above the diff, and nothing makes
+anyone answer it before the merge.
+
+A review thread on the line the decision lands on fixes all three. The reviewer meets it inside the
+diff they are already judging. The ruleset refuses to merge while it is unresolved, so it cannot be
+skipped. A reply in it is an event the dispatcher already routes to `address-review`. The run builds
+its recommended option first, so the branch is complete whatever the answer, and a different answer
+costs one commit.
+
+Every question the loop asks a person — on a ticket, in a PR thread, in an `address-review` reply —
+carries options, what each implies, and a recommendation. A bare question makes the reader do the
+analysis the run already did.
+
+**Why a marker, not the review state.** The dispatcher treats an own-rooted thread with no reply as
+the critic's finding, and fires `address-review` to answer it. A question thread is own-rooted too.
+Telling them apart by review state does not work: GitHub refuses `REQUEST_CHANGES` on a PR its own
+author reviews, so the critic and the questions are both `COMMENT` reviews by the bot. So each
+question's root carries `review.questionMarker`, and the dispatcher reads an unanswered question as
+the person's turn, not the bot's. The marker also exempts it from `review-pr`'s exclusive right to
+start threads.
+
+## The work you hold takes what joins it
+
+**This amends [Related findings share a ticket](#related-findings-share-a-ticket)**, which joined
+findings into one ticket but never applied to the ticket a run was building.
+
+The incidental-finding table said "Never widen a PR" for a finding not "part of" the ticket, and
+runs read "part of" as "listed in". Two tickets show the cost:
+
+- **SahajCloud#920** was filed while implementing #899. Both were the same URL-pattern collision
+  binning legitimate proposal fields, one on the create path and one in the screening job. The
+  ticket said so itself: "shares a root cause". It cost a second triage, verb, PR, critic round
+  and review.
+- **SahajCloud#939** was filed while implementing #938, a raise of Next's upload body cap. The run
+  found the 413 masked as a 500 and three contradictory size declarations, in the same files and
+  under the same verification step, and found #938's premise ("bodies over 50 MB already get
+  Payload's 413") false. Only the ceiling value needed a person. All of it became a new ticket,
+  and the critic's point on #940 was then "routed" there too.
+
+The critic and `address-review` pushed the same way. `review-pr` treated anything the ticket did
+not list as scope creep, and `address-review` filed a ticket for "anything that generalises" —
+against the reviewer's own stated habit of sending a fix back to be applied across the system.
+
+So one test now decides membership for tickets and PRs alike: format-ticket's join rule, extended
+with the same root cause and a disproved premise. A joined finding is folded into the work in
+flight, gets its own Summary bullet so the reviewer sees it, and puts any decision it needs to the
+reviewer as a question thread with the recommended option already built. Only a part that will not
+fit the run is filed. An approved ticket still never absorbs another ticket — that changes what a
+human said yes to — but the PR built from it is reviewed before it merges, so it can take what the
+review will judge in the same sitting.
+
+## A test fix is a PR, not a ticket
+
+SahajAtlasWeb#285 (a time budget for the unit lane) and #286 (one shared `src/` walker for nine
+specs) came out of one review of #284. Neither touched a line that ships: both changed specs, test
+helpers and test config. The only ticketless routes were docs-only and `prAllowlistGlobs` —
+lockfiles, Markdown and generated types — so both became tickets, each asking a human to approve a
+change that could not alter behaviour, and then paying a session to make it.
+
+A test-only change is in the same position as a docs fix. The PR is the proposal, and the review
+still gates the merge. So it takes the same route, with one difference: tests never batch into an
+open test PR. Each is its own ticketless PR, unless the join rule already sends it to the work in
+flight. `findings.testGlobs` says what counts, and `test-only.mjs` proves a branch stays inside it.
+It proves paths only: a spec that loosens its own assertion passes it, so the reviewer still judges
+whether each test is a real guard.
+
+**Neither route reaches claude-workflow's own skills.** In a product repo a doc cannot change what
+ships. In claude-workflow, `workflow/**` and `loop-config.json` *are* what ships, to every repo on
+the next run. A one-line skill fix from an unrelated handler would bypass the version bump,
+`rule-delta.mjs` and improve-loop's recurrence bar. Those findings go to `🧭 Friction`, where
+improve-loop weighs them.
+
+## A session past its deadline owns nothing
+
+The sweeper's timeout removes the lock, releases the lease, and re-fires the same handler — which
+adds the same `bot:working` label back in the same pass. Sessions linger past their deadline
+([Sessions linger](#sessions-linger)). A slow session, not a dead one, then re-checks the lock
+before a push, finds the label, and pushes onto the branch attempt 2 is building. Its `finish-run`
+strips attempt 2's lock, and the dispatcher re-derives while attempt 2 is still working.
+
+The label alone cannot say whose it is. The deadline can: the record carries it, and once it has
+passed the lease is no longer this session's. So the re-check reads both, and a session past its
+deadline neither pushes nor unlocks. The lock re-check also applies only where the run holds one:
+cron, repo and local runs have none, and read literally the rule stopped them at their first push.
+
+## A conflicted draft is resolved too
+
+The dispatcher fired `resolve-conflicts` only on a ready PR. Almost every loop PR is a draft until
+the critic has run, and a conflicted PR schedules no CI. So a conflicted draft never went green,
+`fix-ci` told itself "Actions dispatches resolve-conflicts" and stopped, and the PR sat until the
+orphan sweep. Drafts are resolved now, before any phase continues, since a phase continues only on
+green CI that a conflict prevents. Because `resolve-conflicts` pushes nothing on a semantic
+conflict, a second fire on the same head is refused, as `fix-ci`'s is: the PR waits on a person,
+and a push asks again.
+

@@ -4,7 +4,7 @@
 # through a thin caller (workflow-state.yml in each repo). It classifies the
 # event with no tokens, applies the `bot:working` lock, and fires one cloud
 # routine per handler with a pointer. Everything an event determines —
-# merge, mark ready, board Status, `awaiting`, Sentry resolve, unblocking,
+# arming auto-merge, mark ready, board Status, `awaiting`, Sentry resolve, unblocking,
 # the implement queue, the residue sweep — happens here, mechanically.
 #
 # The decision is re-derived from current GitHub state on every run. The

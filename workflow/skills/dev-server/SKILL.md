@@ -11,9 +11,9 @@ A server keyed to the repo either refuses to start there, or — worse — serve
 code to a test that expects this one.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/dev-server/dev-server.sh            # start + tail logs
-${CLAUDE_PLUGIN_ROOT}/skills/dev-server/dev-server.sh start|stop|restart|status|health|logs [n]
-${CLAUDE_PLUGIN_ROOT}/skills/dev-server/dev-server.sh teardown   # stop + drop the database
+${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh            # start + tail logs
+${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh start|stop|restart|status|health|logs [n]
+${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh teardown   # stop + drop the database
 ```
 
 Configuration comes from `<worktree>/.claude/workflow.json` → `devServer`:

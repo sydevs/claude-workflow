@@ -16,7 +16,8 @@ alternatives, measurements — and let the reviewer decide what to open.
 ## Summary
 
 [1–2 short bullets: what changed and why, at the level of outcomes. Leave
-the detail to the outline.]
+the detail to the outline. Add one bullet per joined change the ticket did
+not list, saying what joins it to the ticket.]
 
 - [bullet]
 
@@ -57,7 +58,7 @@ ticks included. Otherwise delete this section.]
 ## Email previews
 
 [ONLY when the diff touches `src/plugins/email/` or `src/emails/`. Mailpit links
-from the relevant `scripts/preview-*-emails.ts` run; they stay live 7 days.
+from the relevant `scripts/preview-*-emails.ts` run; they stay live `mailpit.retentionDays` days.
 Otherwise delete this section.]
 
 - [scenario] — <mailpit url>
@@ -94,7 +95,8 @@ automated tests do not reach. Omit when genuinely nothing applies.]
 ## Notes for reviewer
 
 [Only what changes how they review: a judgement call you want checked, a known
-follow-up, an area wanting extra scrutiny. Dismissed review findings and why.]
+follow-up linked where it was routed, an area wanting extra scrutiny. Dismissed
+review findings and why. A decision is never here: it is a question thread.]
 
 <details>
 <summary>Detail</summary>
@@ -106,6 +108,15 @@ rejected and why, measurements, file-by-file rationale, tool limitations hit.]
 
 Closes #NNN
 ```
+
+## Refresh
+
+One rule for every run that refreshes a body, `finalize-pr` and `address-review` alike. Start from
+the body you read, never from nothing: `pull_request_write method:update` replaces it whole.
+Re-derive what the new commits made false — the Change outline from the full
+`origin/<base>...HEAD` diff, the Summary, Test results — and keep everything still true: `## Phases`
+ticks, preview lines, links another run added. A body merely incomplete stays; the run's comment
+carries that delta.
 
 ## Title
 

@@ -6,11 +6,11 @@
     "contents": "Plugin manifest + skill frontmatter validation, then the workflow/lib unit tests — the scripts that own mechanical rules (budgets, the dispatch payload, base refs). The skills are prose, and their real gate is a supervised loop run."
   },
   "securityReview": {
-    "triggerPattern": "^workflow/hooks/|^workflow/skills/[^/]+/[^/]+\\.md$|^loop-config\\.json$",
-    "rationale": "Hooks run in a maintainer's session with their credentials, and every .md in a skill directory is an instruction to an agent holding write access to five repos."
+    "triggerPattern": "^workflow/hooks/|^workflow/skills/.+\\.md$|^workflow/lib/|^loop-config\\.json$|^dispatcher/|^\\.github/workflows/",
+    "rationale": "Hooks run in a maintainer's session with their credentials. Every .md under a skill directory, nested ones included, is an instruction to an agent holding write access to five repos. workflow/lib scripts handle tokens, and the dispatcher and its workflows act in every repo."
   },
   "worktreeSetup": [],
-  "deployTarget": "Consumed live from `main` by the Claude routines and by `/plugin install workflow@sydevs`. There is no release step: merging to main IS the deploy, and the next routine run picks it up.",
+  "deployTarget": "Consumed live from `main` by the Claude routines on their next run. An installed plugin (`/plugin install workflow@sydevs`) is pinned to the commit it installed, and moves only when `version` in workflow/.claude-plugin/plugin.json changes. There is no release step: merging to main IS the deploy.",
   "devServer": null,
   "generatedFiles": [],
   "prAllowlistGlobs": [

@@ -1,6 +1,6 @@
 ---
 name: file-ticket
-description: Raise a new ticket — a bug, a small change, or a roadmap goal. Pushes back first when the work is already in the pipeline or contradicts a recorded decision, classifies it, asks each open question with a recommendation, then files it in the right tier. A docs-only fix becomes a PR instead. Proposes a milestone when related goals have none. User-invoked only; it files nothing without your yes.
+description: Raise a new ticket — a bug, a small change, or a roadmap goal. Pushes back first when the work is already in the pipeline or contradicts a recorded decision, classifies it, asks each open question with a recommendation, then files it in the right tier. A docs- or test-only fix becomes a PR instead. Proposes a milestone when related goals have none. User-invoked only; it files nothing without your yes.
 argument-hint: '[what you want, in your own words]'
 disable-model-invocation: true
 allowed-tools: Bash(git log:*), Bash(gh issue:*), Bash(gh api:*), Read, Grep, Glob, AskUserQuestion
@@ -22,14 +22,15 @@ always adds a free-text answer. (why: docs/why.md#intake-asks-with-options)
 
 ```bash
 gh api user --jq .login
-gh api "repos/$ORG/claude-workflow/contents/loop-config.json" -H 'Accept: application/vnd.github.raw' --jq .assignment.reviewer
+gh api "repos/$ORG/claude-workflow/contents/loop-config.json" -H 'Accept: application/vnd.github.raw' --jq .assignment
 ```
 
-The same login → **technical**. A different login, or `gh` not logged in → **non-technical**:
+The login equal to `reviewer` → **technical**. A different login, or `gh` not logged in →
+**non-technical**: write every question and preview in plain language, and never ask a technical
+question (see **Ask**).
 
-- write every question and preview in plain language;
-- never ask a technical question (see **Ask**);
-- never offer the hand-over in step 5.
+**Only a login in `respondTo` is offered the hand-over in step 5.** Anyone else's `implement`
+would authorise nothing.
 
 ## 1. Understand the request
 
@@ -69,6 +70,11 @@ other thing. Ask `Fix it in a PR now (Recommended)` or `File a Bug anyway`. An o
 or unapproved docs PR in that repo takes it first, as preflight routes it. Otherwise branch
 `claude/docs-<scope>-<slug>`, fix only the docs, and ship through `/workflow:finalize-pr`. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
+**A test-only fix needs no ticket either** — the product code is right and a test, fixture or test
+config is wrong or missing. Ask the same way. Branch `claude/test-<scope>-<slug>`, change only files
+`test-only.mjs` accepts, and ship through `/workflow:finalize-pr`.
+(why: docs/why.md#a-test-fix-is-a-pr-not-a-ticket)
+
 ## 4a. A roadmap goal
 
 1. **Write the body** in the roadmap template, in plain language. Name the decisions you can see,
@@ -80,7 +86,7 @@ or unapproved docs PR in that repo takes it first, as preflight routes it. Other
    ```
    mcp__github__issue_write  method:create  owner:$ORG  repo:$REPO
      title:"<plain sentence>"  body:"<body>"  type:"Roadmap"
-     issue_fields:[{field_name:"Priority", field_option_name:"Medium"}]
+     issue_fields:[{field_name:"Priority", field_option_name:"<by consequence>"}]
    ```
    Then set the milestone with `gh issue edit <n> --repo "$ORG/$REPO" --milestone "<title>"`.
 4. **Stop.** The dispatcher starts `revise-roadmap` on a member's goal within a minute. The review
@@ -129,8 +135,8 @@ Before anything is filed:
 
 ## 5. Hand over
 
-Never authorise work on your own initiative, and **never offer this to a non-technical person**.
-For a technical person and an implementation ticket, ask:
+Never authorise work on your own initiative, and **never offer this to a login outside
+`respondTo`**. For a `respondTo` login and an implementation ticket, ask:
 
 > Filed as sydevs/SahajCloud#661 (Bug, High). Hand it to the loop now? I would comment
 > `@sydevs-bot implement` as you.

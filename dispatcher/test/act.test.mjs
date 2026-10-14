@@ -428,3 +428,66 @@ test("a non-member's own line is never converted or stripped, and a verb leaves 
   assert.equal(posts(github).length, 1, 'the verb is obeyed')
   assert.equal(puts(github).length, 0, "and the stranger's line stays")
 })
+
+// ---- a wake hint promises only what wakes the bot ------------------------
+
+const exhaustedRecord = (handler) => `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, current: { id: 'x', handler, attempt: 3, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }, dispatches: [] })} -->\nrunning`
+const exhaustedNotice = (github) => github.calls.filter((c) => c.name === 'createComment').map((c) => String(c.args.body)).find((b) => b.includes('sydevs-dispatcher: attempts-exhausted x '))
+
+test('attempts-exhausted on an issue asks for a verb or a mention', async () => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  world.comments[9] = [{ id: 1, body: exhaustedRecord('implement'), user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  const github = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'implement', attempt: 3 } }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const body = exhaustedNotice(github)
+  assert.match(body, /A `@sydevs-bot` verb or mention from you starts me again\./)
+  assert.doesNotMatch(body, /A comment/)
+})
+
+test('attempts-exhausted on a PR asks for a mention or a push', async () => {
+  const pr = { number: 5, node_id: 'PR1', state: 'open', draft: true, merged: false, user: { login: 'sydevs-bot' }, head: { ref: 'claude/x', sha: 'abc' }, base: { ref: 'main' }, mergeable: true, mergeable_state: 'clean', changed_files: 8, additions: 120, deletions: 4, requested_reviewers: [] }
+  const world = { issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [{ name: 'bot:working' }], user: { login: 'sydevs-bot' }, pull_request: {}, html_url: 'u', comments: 1 } }, comments: { 5: [{ id: 1, body: exhaustedRecord('fix-ci'), user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }] }, prs: { 5: pr } }
+  const github = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'fix-ci', attempt: 3 } }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const body = exhaustedNotice(github)
+  assert.match(body, /A mention \(`@sydevs-bot`\) or a push from you starts me again\./)
+  assert.doesNotMatch(body, /A comment/)
+})
+
+// ---- every timeout is journalled -----------------------------------------
+
+const timedOutWorld = (attempt) => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  const current = { id: `SahajCloud-9-implement-a${attempt}`, handler: 'implement', attempt, firedAt: '2026-09-08T09:00:00Z', deadline: '2026-09-08T10:00:00Z' }
+  world.comments[9] = [{ id: 1, body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending: null, current, dispatches: [] })} -->\nrunning`, user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' }]
+  return world
+}
+const timeoutTarget = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts: { handler: 'implement', attempt: 1 } }
+const anomalies = (github) => github.calls.filter((c) => c.name === 'createComment' && String(c.args.body).startsWith('<!-- sydevs-dispatcher-anomaly')).map((c) => String(c.args.body))
+const okFire = async () => ({ status: 200, json: async () => ({ claude_code_session_id: 'cse_9', claude_code_session_url: 'u' }), headers: new Map() })
+
+test('a timeout that is re-fired is journalled as timed-out, with its dispatch id', async () => {
+  const github = fakeGithub(timedOutWorld(1))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl: okFire })
+  const line = anomalies(github).find((b) => b.includes('**timed-out**'))
+  assert.ok(line, 'the re-fire is journalled')
+  assert.match(line, /"kind":"timed-out","id":"SahajCloud-9-implement-a1"/)
+  assert.match(line, /⚠️ \*\*timed-out\*\* · sydevs\/SahajCloud#9 implement attempt 1$/)
+})
+
+test('the last timeout is journalled as timed-out too, beside attempts-exhausted', async () => {
+  const github = fakeGithub(timedOutWorld(3))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const kinds = anomalies(github).map((b) => JSON.parse(b.slice(b.indexOf('{'), b.indexOf(' -->'))).kind)
+  assert.deepEqual(kinds, ['timed-out', 'attempts-exhausted'])
+})
+
+test('a dry run journals no timeout', async () => {
+  const github = fakeGithub(timedOutWorld(1))
+  await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.equal(anomalies(github).length, 0)
+})

@@ -12,7 +12,7 @@ An error's fix is usually a judgement call about intended behaviour, and the rev
 `@sydevs-bot implement` exists to capture that call.
 
 SahajAtlasWordpress ships no Sentry. Org, project slugs, and **`apiBase`** all come from
-`loop-config.json`. The token is `SENTRY_CLAUDE_WORKFLOW_TOKEN` in the cloud environment. On a
+`loop-config.json`. The token is the environment variable `sentry.tokenEnvVar` names. On a
 missing token, journal the failure and stop. Do not silently skip.
 
 **Use `apiBase`, never `sentry.io` directly.** This org lives on Sentry's **DE** region. The
@@ -25,8 +25,9 @@ chasing the wrong problem. The token also has no `org:read`, so `/organizations/
 ```bash
 API=$(jq -r '.sentry.apiBase' loop-config.json)
 ORG=$(jq -r '.sentry.org' loop-config.json)
+TOKEN=$(printenv "$(jq -r '.sentry.tokenEnvVar' loop-config.json)")
 curl -s "$API/projects/$ORG/$PROJECT/issues/?query=is:unresolved&statsPeriod=14d" \
-  -H "Authorization: Bearer $SENTRY_CLAUDE_WORKFLOW_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   | jq '.[] | {id, title, culprit, count, userCount, firstSeen, lastSeen, permalink}'
 ```
 
@@ -62,17 +63,17 @@ The `## Notes` section must carry the link back, in this exact form, so the disp
 resolve it when the fixing PR merges:
 
 ```markdown
-Sentry: https://sy-developers.sentry.io/issues/<id>/  (id: <id>)
+Sentry: https://<sentry.org>.sentry.io/issues/<id>/  (id: <id>)
 ```
 
 When the error clearly stands in the way of an open roadmap ticket's goal, pass that ticket to
-`write-ticket` as the parent, so the Bug lands as its native sub-issue. Never file a roadmap
-ticket. (why: docs/why.md#the-roadmap-tier)
+`write-ticket` as the parent, so the Bug lands as its native sub-issue, under format-ticket's
+attach rule. Never file a roadmap ticket.
 
-Respect `maxProposalsPerSurvey`. Over the ceiling, journal what you found and file nothing.
+Respect `run-audit`'s proposal rule, and journal what it leaves unfiled.
 
 ## Hard rules
 
 - **Never** file a ticket you have not traced into our source.
 - **Never** resolve a Sentry issue here. The dispatcher resolves it when the fix merges.
-- **Never** file more than the ceiling, even for a bad week.
+- **Never** file past `run-audit`'s proposal rule, even for a bad week.

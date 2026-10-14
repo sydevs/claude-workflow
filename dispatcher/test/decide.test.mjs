@@ -801,3 +801,140 @@ test('a code failure beside an infrastructure one still fires fix-ci', () => {
   const mixed = { ...red, failing: [{ name: 'CI' }, { name: 'Smoke' }], infra: [{ name: 'Smoke', jobId: 7 }] }
   assert.deepEqual(types(evaluatePr(prSnap({ ci: mixed }), infraCfg)), ['bumpFixCi', 'fire:fix-ci'])
 })
+
+// ---- a question the bot asked waits on the human -------------------------
+
+const criticReview = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review\n…', state: 'COMMENTED', submitted_at: '2026-10-09T10:00:00Z' }
+const questionThread = (replies = []) => ({ isResolved: false, comments: [
+  { author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: '<!-- sydevs-question -->\nShould the cache key include the locale?' },
+  ...replies,
+] })
+
+test('an unanswered question thread is the human\'s turn, not address-review', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread()] })
+  const p = evaluatePr(s, config)
+  assert.equal(p.some((a) => a.handler === 'address-review'), false, 'the bot does not answer its own question')
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'], 'the green draft still moves on')
+  assert.equal(decide({ reason: 'sweep-pr', facts: {} }, s, config).some((a) => a.handler === 'address-review'), false, 'the sweep agrees')
+})
+
+test('a human reply in a question thread fires address-review', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread([{ author: 'Ardnived', createdAt: '2026-10-09T11:00:00Z', body: 'Yes, include it.' }])] })
+  const p = evaluatePr(s, config)
+  assert.deepEqual(types(p), ['note', 'fire:address-review'])
+  assert.equal(p[0].text, 'a thread waits on a reply')
+})
+
+test('a plain own-rooted thread is still owed an answer beside a question', () => {
+  const s = prSnap({ reviews: [criticReview], threads: [questionThread(), { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: 'finding' }] }] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
+})
+
+test('review.questionMarker names the marker when it is set', () => {
+  const custom = { ...config, review: { ...config.review, questionMarker: '<!-- ask -->' } }
+  const asked = { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: '<!-- ask -->\nWhich one?' }] }
+  assert.equal(evaluatePr(prSnap({ reviews: [criticReview], threads: [asked] }), custom).some((a) => a.handler === 'address-review'), false)
+  assert.ok(evaluatePr(prSnap({ reviews: [criticReview], threads: [questionThread()] }), custom).some((a) => a.handler === 'address-review'), 'the default literal is not also honoured once a marker is configured')
+})
+
+// ---- a fallback review is the review ---------------------------------------
+
+const fallbackReview = (createdAt = '2026-10-09T12:00:00Z') => ({ author: 'sydevs-bot', createdAt, body: '\n## 🧐 Adversarial review\nThe pending-review tools failed, so here it is as one comment.' })
+
+test('a critic review posted as one comment counts, so the draft is marked ready', () => {
+  const s = prSnap({ comments: [fallbackReview()] })
+  const p = evaluatePr(s, config)
+  assert.equal(p.some((a) => a.handler === 'review-pr'), false, 'the critic is not fired again')
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'])
+  const unlock = decide({ reason: 'unlock', facts: { handler: 'review-pr' } }, s, config)
+  assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
+})
+
+test('only the bot\'s comment with the header counts as the critic', () => {
+  const human = prSnap({ comments: [{ ...fallbackReview(), author: 'Ardnived' }] })
+  assert.deepEqual(types(evaluatePr(human, config)), ['fire:review-pr'])
+  const plain = prSnap({ comments: [{ ...fallbackReview(), body: 'Revision done.\n## 🧐 Adversarial review' }] })
+  assert.deepEqual(types(evaluatePr(plain, config)), ['fire:review-pr'], 'the header must lead the body')
+})
+
+test('a review verb is answered by a fallback review posted after it', () => {
+  const asked = humanComment('@sydevs-bot review', '2026-10-09T11:00:00Z')
+  const answered = prSnap({ comments: [asked, fallbackReview('2026-10-09T12:00:00Z')] })
+  assert.equal(evaluatePr(answered, config).some((a) => a.handler === 'review-pr'), false)
+  const before = prSnap({ comments: [fallbackReview('2026-10-09T10:00:00Z'), asked] })
+  assert.deepEqual(types(evaluatePr(before, config)), ['fire:review-pr'], 'a verb after the review still asks again')
+})
+
+// ---- a conflicted draft is resolved, not left to the orphan sweep ---------
+
+const conflicted = (over = {}) => prSnap({ mergeable: 'CONFLICTING', ci: { green: false, reason: 'no checks', running: [], failing: [] }, ...over })
+
+test('a conflicted draft fires resolve-conflicts', () => {
+  assert.deepEqual(types(evaluatePr(conflicted(), config)), ['fire:resolve-conflicts'])
+})
+
+test('a red, conflicted draft gets resolve-conflicts, not fix-ci', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ ci: red }), config)), ['fire:resolve-conflicts'])
+})
+
+test('a conflicted draft whose branch a session holds is left to it', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ locked: true }), config)), ['recheck'])
+  assert.deepEqual(types(evaluatePr(conflicted({ linkedLocked: [9] }), config)), ['note'])
+})
+
+test('a conflict is resolved before the next phase continues', () => {
+  const s = phased(1, 3, { mergeable: 'CONFLICTING', ci: red })
+  assert.deepEqual(types(evaluatePr(s, config)), ['fire:resolve-conflicts'])
+  const stalled = phased(1, 3, { mergeable: 'CONFLICTING' })
+  stalled.item.labels = ['awaiting']
+  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'a stalled phased draft stays your turn')
+  stalled.ci = red
+  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'and a stale red check does not fire fix-ci on it')
+})
+
+test('a conflict-scan after a merge re-derives a draft too', () => {
+  assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, conflicted(), config)), ['fire:resolve-conflicts'])
+})
+
+test('a resolve-conflicts that ended on this head is not fired again; a new head asks again', () => {
+  const ended = { id: 'x', handler: 'resolve-conflicts', attempt: 1, firedAt: '2026-10-09T10:00:00Z', sha: 'abc', outcome: 'done' }
+  const p = evaluatePr(conflicted({ record: { dispatches: [ended] } }), config)
+  assert.equal(p.some((a) => a.type === 'fire'), false, 'a session that stopped on a semantic conflict is not looped')
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'it is your turn')
+  const unlock = decide({ reason: 'unlock', facts: { handler: 'resolve-conflicts' } }, conflicted({ record: { current: { ...ended, outcome: undefined } } }), config)
+  assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
+  assert.deepEqual(types(evaluatePr(conflicted({ record: { dispatches: [{ ...ended, sha: 'old' }] } }), config)), ['fire:resolve-conflicts'])
+})
+
+// ---- a wake hint promises only what wakes the bot ------------------------
+
+const wakeComment = (plan) => plan.find((a) => a.type === 'comment')
+
+test('the orphan notice asks for a mention or a push, never a plain comment', () => {
+  const stalled = { pr: { ...prSnap().pr, draft: true }, reviews: [criticReview], ci: red, record: { fixCi: 3 } }
+  const c = wakeComment(decide({ reason: 'sweep-orphan', facts: {} }, prSnap(stalled), config).filter((a) => a.key?.startsWith('orphan ')))
+  assert.match(c.key, /^orphan abc$/, 'the key is unchanged, so no item is told twice')
+  assert.match(c.body, /A mention \(`@sydevs-bot`\) or a push from you starts me again\./)
+  assert.doesNotMatch(c.body, /Comment or push/)
+})
+
+test('the phases-stalled notice asks for a mention or a review, never a plain comment', () => {
+  const c = wakeComment(decide({ reason: 'phases-stalled', facts: { done: 1, total: 3 } }, phased(1, 3), config))
+  assert.equal(c.key, 'phases-stalled abc')
+  assert.match(c.body, /A mention \(`@sydevs-bot`\) or a review from you starts me again\./)
+  assert.doesNotMatch(c.body, /Comment here/)
+})
+
+// ---- a question review is not the critic's -------------------------------
+
+const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at, inline_count: 0 })
+
+test('a question review neither counts as the critic nor answers a review verb', () => {
+  const s = prSnap({ reviews: [questionReview('2026-10-09T10:00:00Z')] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['fire:review-pr'], 'the critic still has to run')
+  const asked = humanComment('@sydevs-bot review', '2026-10-09T11:00:00Z')
+  const critic = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review\n…', state: 'COMMENTED', submitted_at: '2026-10-09T09:00:00Z' }
+  const after = prSnap({ comments: [asked], reviews: [critic, questionReview('2026-10-09T12:00:00Z')] })
+  const fired = evaluatePr(after, config).find((a) => a.handler === 'review-pr')
+  assert.equal(fired?.flags?.onDemand, true, 'the verb is still owed')
+})

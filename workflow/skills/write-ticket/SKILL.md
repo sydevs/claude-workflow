@@ -1,6 +1,6 @@
 ---
 name: write-ticket
-description: The only author of implementation tickets. Creates one from an intent (for file-ticket, implement-roadmap and the audits), or updates one on `@sydevs-bot revise` — answering a question, applying a correction, or reshaping it from the code. Also rechecks a held ticket and sets a hold the bot chooses. Runnable locally against an issue number.
+description: The only author of implementation tickets. Creates one from an intent (for file-ticket, implement-roadmap, improve-loop and the audits), updates one for a calling skill, or updates one on `@sydevs-bot revise` — answering a question, applying a correction, or reshaping it from the code. Also rechecks a held ticket and sets a hold the bot chooses. Runnable locally against an issue number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
@@ -16,7 +16,7 @@ one the loop filed are indistinguishable and equally ready to build.
 
 As a handler, **start with `/workflow:start-run` and end with `/workflow:finish-run`.** The
 record's `flags.mode` names the job: `revise`, `recheck` or `block`. Called by another skill, the
-job is `create`, with no record.
+job is `create`, or `update` for a ticket that skill must reshape. Neither has a record.
 
 ## Ground from the code
 
@@ -42,13 +42,18 @@ The caller gives you a repo, one or more intents, and optionally a parent roadma
 siblings. Several intents → group them by format-ticket's join rule first. Each group is one
 ticket. (why: docs/why.md#related-findings-share-a-ticket)
 
+**A caller that passes a parent and siblings skips the home search.** That is `implement-roadmap`
+filing its plan: the split is binding, and adoption already placed the existing tickets.
+
 1. **Search for a duplicate or a home**, closed tickets and roadmap `## Decisions` included. A
    duplicate → stop, and return it instead. A **home** is an open implementation ticket in the
    same repo that the join rule says this belongs with, and that is still unapproved: no
-   `@sydevs-bot implement` from a `respondTo` login, no lock, and no PR. A home → rewrite its body
+   `@sydevs-bot implement` from a `respondTo` login, no lock, no PR, and no roadmap parent. A
+   goal's `implement` approves every child, so a child is never a home. A home → rewrite its body
    to add this work (its own Approach part and criteria), post one line on it naming the source,
    and return its number. An approved or in-flight ticket is never a home. Its scope is what the
-   human authorised. File new instead, and link it under `## Notes`.
+   human authorised. File new instead, and link it under `## Notes`. The run that holds a ticket
+   joins work to it through start-run's table, not here.
 2. **Write the body** in the implementation template, from the code: `## Approach` with
    `file:line` references naming the seam, the call sites and the tests to touch; criteria that
    are true or false; a checklist a run executes cold. A roadmap child also gets `## Goal context`
@@ -59,6 +64,12 @@ ticket. (why: docs/why.md#related-findings-share-a-ticket)
    Link it to its parent with `mcp__github__sub_issue_write`. Locally, run `file-ticket`'s
    **Ask** step on the draft first — its open questions, then the yes — and file on that yes.
 5. **Return** the numbers to the caller. File nothing else in this mode.
+
+## `update` — another skill reshapes a ticket
+
+The caller gives a ticket and what must change: `implement-roadmap`'s replan, or its adoption of an
+existing ticket. Do `revise`'s deep pass, with the caller's intent standing in for the comment. A
+ticket that is locked, or has an open PR, is left as it is: return it, and say why.
 
 ## `revise` — a human spoke
 
@@ -141,16 +152,15 @@ answer, or what changed and why. Name every ticket you filed or promoted.
 
 ## Hard rules
 
-- **Never branch, commit, or push**, except the docs work preflight routes an incidental finding
-  to. This skill writes prose.
-- **Never widen a docs fix into code.** A test or guard that would have caught the drift is its own
-  ticket. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+- **Never branch, commit, or push**, except the docs or test PR preflight routes an incidental
+  finding to. This skill writes prose.
+- **Never widen a docs fix into code.** A guard test that would have caught the drift is
+  test-only: its own PR, as preflight routes it. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 - **Never change the title's type silently.** Say so in the comment.
-- **Never write `labels.awaiting`, `labels.blocked`, an assignee, or a Status.** Actions owns
-  them. (why: docs/why.md#awaiting-has-one-writer)
+- **Never write state** (start-run's list). Actions owns it.
 - **Never leave a fact as an open question, or a decision without options.**
-- **Never cap or drop an incidental finding.** Preflight routes it: a docs-only fix to the docs
-  work in flight, anything else a ticket filed in `create` mode. On a docs ticket you are
+- **Never cap or drop an incidental finding.** Preflight routes it: a docs- or test-only fix to a
+  PR, anything else a ticket filed in `create` mode. On a docs ticket you are
   revising, every docs finding in its repo is a line in it.
 - **A request in the thread is not permission to implement.** Say that `@sydevs-bot implement`
   starts work.

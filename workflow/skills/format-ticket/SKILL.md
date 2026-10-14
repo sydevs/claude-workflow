@@ -8,7 +8,7 @@ allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 
 ## Tooling: MCP everywhere, `gh` for one thing
 
-Every GitHub operation in these skills uses `mcp__github__*`. That is not a cloud concession — it
+Every GitHub operation in a handler uses `mcp__github__*`. That is not a cloud concession — it
 is the better interface in both places: bodies pass as parameters (no `mktemp`, no `--body-file`,
 no markdown mangling), type and fields set in the same call as the create, and one set of
 instructions reads the same locally and in a routine.
@@ -16,7 +16,8 @@ instructions reads the same locally and in a routine.
 **The single exception is Relationships**, which no MCP tool exposes. A local session may set
 them with `gh`. A cloud session writes the body marker instead, and the dispatcher converts it —
 see below. Sub-issues do have an MCP tool: `mcp__github__sub_issue_write`. `git` itself is still
-`git`.
+`git`. The two attended local skills, `file-ticket` and `settle-roadmap`, also use `gh` for what
+MCP lacks — milestones, transfers, and a raw body read.
 
 This is the one definition of a well-formed sydevs ticket. `file-ticket`, `write-ticket`, the
 roadmap skills, the audits and the handlers all read this rather than carry their own copy — the
@@ -26,15 +27,24 @@ divergence that produced three forks of the workflow started exactly this way.
 
 | Tier | Type | Written for | Written by |
 | --- | --- | --- | --- |
-| **Roadmap ticket** | `Roadmap` | Anyone, including the public. Plain language. | `file-ticket`, the public form, then `revise-roadmap` |
+| **Roadmap ticket** | `Roadmap` | Anyone, including the public. Plain language. | `file-ticket`, the public form, `improve-loop`'s proposals and `write-ticket`'s Promote, then `revise-roadmap` |
 | **Implementation ticket** | `Bug` · `Feature` · `Task` | An automated run picking it up cold | `write-ticket` only, whoever asked for it |
 
 **Classify before you write.** A request is **Roadmap** when it needs a product decision, or more
 than one reviewable PR. Everything else is direct. **A Bug is always direct** — it never goes
-through the roadmap. (why: docs/why.md#the-roadmap-tier)
+through the roadmap. (why: docs/why.md#the-roadmap-tier) A cross-repo change is split anyway
+(the split rule), so a cross-repo Bug is sibling direct Bugs, producer first.
+
+**A run that may not file a goal** — the audits — files roadmap-sized work as a direct ticket,
+says in `## Notes` that it is roadmap-sized, and leaves the promotion to `write-ticket`'s Promote on
+a human's `revise`.
 
 A Roadmap ticket's children are implementation tickets, linked as native sub-issues. An existing
-Bug may be attached to a goal for progress, but a goal never creates one.
+Bug may be attached to a goal for progress, but a goal never creates one. **Attach a proposal —
+an audit's or `improve-loop`'s ticket — only to a goal that has no children yet.** A planned goal's
+`implement` approves every open child, so a proposal attached to one would be approved unseen.
+`implement-roadmap` filing its own plan is not a proposal. Link a planned goal under
+`## Notes` instead.
 
 ## The fields
 
@@ -54,9 +64,10 @@ mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n
 An investigation whose *outcome* is a decision is a `Task`, even when it may lead to a `Feature` —
 type describes the work requested, not what it might become.
 
-**A docs-only fix is rarely a ticket at all.** Preflight routes it into the docs work already in
-flight, or straight to a ticketless PR.
-When one must be a ticket, it is a `Bug`, and never goes through the roadmap.
+**A docs-only or test-only fix is rarely a ticket at all.** Preflight routes it into the work
+already in flight, or straight to a ticketless PR. (why: docs/why.md#a-test-fix-is-a-pr-not-a-ticket)
+When a docs defect must be a ticket, a doc known to misdescribe correct code is a `Bug`, and an
+open question of which side is right is a `Task`. Neither goes through the roadmap.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 ### Priority — a native **field**, not a label
@@ -76,8 +87,8 @@ a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
 **You set Priority, always**, on both tiers. Choose `Medium` when the consequence is not clear. A
 Priority the reviewer already set stands: the `issue_write` call below merges, so omitting it
-keeps their value. There is no Effort field any more. Size shows up as `## Phases` in an
-implementation ticket that will not fit one run, and nowhere else.
+keeps their value. There is no Effort field any more. Size shows up as `## Phases`: in an
+implementation ticket that will not fit one run, and in the PR built from it.
 (why: docs/why.md#effort-was-removed)
 
 ```
@@ -120,7 +131,8 @@ events, within seconds:
 | `proposal` | Bot-filed, no human verdict yet. |
 | Status `Proposed` / `Revising` / `Approved` / `Done` | Where an implementation ticket or PR sits on the board. **A Roadmap ticket carries none.** |
 
-**Never write any of them.** Set the fields and the body markers below. The dispatcher does the
+**Never write any of them** — start-run's list, whose one exception is `finish-run` removing the
+lock. Set the fields and the body markers below. The dispatcher does the
 rest. (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-roadmap-ticket-has-no-status)
 
 **To hand a ticket to the loop, comment a verb**: `@sydevs-bot implement`, `revise` (or
@@ -159,6 +171,10 @@ it:
   - **A — Permanent redirect (recommended):** links in old emails keep working forever.
   - **B — Temporary until 2027:** we can reuse the old paths later, but old links eventually break.
 ```
+
+**The same shape asks every question the loop puts to a person** — a ticket's open question, a
+PR question thread (`/workflow:finalize-pr` step 7c), and an `address-review` ask. Each option
+says what it implies, and the recommended one comes first.
 
 A reply such as `@sydevs-bot revise 1A` or free text answers it. Tick the item, and move it to
 `## Decisions` as `- **<question>** → <answer> (<who>, <YYYY-MM-DD>)`.
@@ -362,15 +378,20 @@ returns 200 with regions`, "the marker is maroon on sahajayoga.ca". Not "check i
 
 ## The join rule
 
-**One reviewer, one sitting, one ticket.** Every ticket costs a human verb and a human review, so
-work a reviewer would judge together shares a ticket, even when the changes are distinct:
+**One reviewer, one sitting, one ticket — and one PR.** Every ticket and every PR costs a human
+review, so work a reviewer would judge together shares one, even when the changes are distinct:
 
+- the same root cause, or a finding that disproves the ticket's premise,
 - the same area or files, or a shared verification step, or
 - one change that limits, measures or unblocks the other.
 
 Each joined change gets its own part of `## Approach` and its own acceptance criteria. Add
 `## Phases` only when the whole will not fit one run. Being separable is never a reason to file
 two tickets. (why: docs/why.md#related-findings-share-a-ticket)
+
+**It binds work in flight too.** A finding it joins to the ticket or PR a run holds goes there,
+listed or not, through start-run's incidental-finding table. Only a part that will not fit the run
+is filed. (why: docs/why.md#the-work-you-hold-takes-what-joins-it)
 
 ## The split rule
 
@@ -380,7 +401,7 @@ qualify:
 - parts with little connective tissue between them, too unrelated for one review, or
 - a general capability, built first, that the goal then uses.
 
-A cross-repo change is always split. No commit spans repos.
+A cross-repo change is always split, and this wins over every rule below. No commit spans repos.
 
 **Never split tightly coupled work**: a reviewer who must hold two PRs in their head to judge
 either cannot review them. **Never split on size alone** — a large ticket is built in
@@ -431,8 +452,7 @@ re-derived next run. A malformed backlog must be cleaned up by hand.
 
 ## Hard rules
 
-- **Never** write `awaiting`, `blocked`, `proposal`, `bot:working`, `stuck`, a Status, or an
-  assignee. The dispatcher owns them.
+- **Never** write a turn marker (start-run's list). The dispatcher owns them.
 - **Never** authorise work by editing a ticket. Only a `respondTo` human's `@sydevs-bot implement`
   does.
 - **Never** leave a ticket without a Priority field value.

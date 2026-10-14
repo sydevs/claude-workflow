@@ -41,7 +41,7 @@ its title reports a failure or an anomaly.
 
 ```
 # the week's journal issues — one per day, all still open
-mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:ops-journal"
+mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open label:<labels.journal>"
 # title: "<Day> — <n> dispatches · <n> failed · <n> anomalies". Body: the <!-- tally --> block.
 mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
 # a flagged day only: one comment per session, newest first, small pages
@@ -60,8 +60,8 @@ mcp__github__search_issues  query:"$SCOPE is:pr author:$BOT reviewed-by:$REVIEWE
 **`perPage` on a journal never exceeds 20.** One oversized reply once broke the run that read it.
 (why: docs/why.md#ground-from-the-body-never-the-thread)
 
-`$WINDOW` is the previous reflection PR's merge date (find it in this repo's merged PRs). With no
-previous reflection, use seven days.
+`$WINDOW` is the creation date of the oldest open journal issue: the journals are closed every
+week, so the open ones are exactly the unread week. With none open, use seven days.
 
 Each session comment starts with a `<!-- sydevs-dispatch-done v1 {…} -->` marker naming the
 handler, the item, the session, and its failure count. Each dispatcher line starts with
@@ -83,7 +83,7 @@ added for one bad night outlives its cause.
 | --- | --- |
 | The same `⚠️ Failed` bullet on 2+ days | A real defect, not an environment blip |
 | A `🧭 Friction` entry repeating | The rule misfires in practice. The rule is usually wrong |
-| `timed out` anomalies for one handler | Its `dispatch.timeoutsMinutes` is wrong, or the skill does not push and end |
+| `timed-out` anomalies for one handler | Its `dispatch.timeoutsMinutes` is wrong, or the skill does not push and end |
 | `session ended silently` anomalies | A handler skipped its journal or its summary comment |
 | `ci-capped` on 2+ PRs | A flaky gate, or a change class the lean gate misses |
 | `429` or `paused` anomalies on 2+ days | Usage is the binding constraint — say so in the usage report |
@@ -93,7 +93,7 @@ added for one bad night outlives its cause.
 | The reviewer flagged something the adversarial review passed clean | A profile gap |
 | Adversarial-review findings the reviewer resolved without change | The bot review over-flags — trim the profile, not the code |
 | A PR under `review.skipWhen` that the reviewer then changed | The threshold is too generous |
-| Proposals sitting unreviewed | Audits outrun review capacity — lower `maxProposalsPerSurvey` |
+| Proposals sitting unreviewed | Audits outrun review capacity — lower `ceilings.maxProposalsPerSurvey` |
 | Escalations or post-plan revisions on 2+ roadmap tickets | Planning misses decisions — `implement-roadmap` re-research, or a `revise-roadmap` lens, is the gap |
 | A recheck storm on one item | Humans comment while the bot works — a note for the usage report, not a rule |
 
@@ -124,7 +124,7 @@ From the seven titles and `<!-- tally -->` blocks, with no comment reads:
 
 **Planning quality** needs reads the tally does not carry. Find the roadmap tickets with children
 active in the window,
-`search_issues "$SCOPE is:issue type:<roadmap.type> updated:>$WINDOW -label:ops-journal"`, read
+`search_issues "$SCOPE is:issue type:<roadmap.type> updated:>$WINDOW -label:<labels.journal>"`, read
 each one's sub-issues, and count two things beside last week's numbers:
 
 - **escalations** — child comments carrying `<!-- sydevs-request {"escalated":true} -->`, each a
@@ -136,10 +136,12 @@ each one's sub-issues, and count two things beside last week's numbers:
 
 Then **one or two concrete suggestions to the humans**, each tied to a number: batch review
 comments into one review, one verb at a time, a
-`Re-check:` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
+`Hold Until` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
 The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
-into tonight's journal entry under `📄 Did`, fitted like any entry. The report is written every
+into tonight's journal entry as its own `### 📊 Usage` section, which `budget.mjs --fit` never
+cuts. An `OVER` the report alone causes is expected: post the entry, and report nothing under
+`⚠️ Failed` for it. The report is written every
 week, even when nothing else is.
 
 ## Refining the reviewer profile
@@ -183,14 +185,16 @@ next author reads it:
   `.gitconfig` and the rest of the list in `AGENTS.md`. The prompt stalls an unattended run until
   its lease expires. Propose the change instead.
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
-  proposal issue in that repo instead, under `maxOpenProposals` like every audit proposal. The
+  proposal ticket in that repo instead, filed through `/workflow:write-ticket` in `create` mode,
+  under `ceilings.maxOpenProposals` like every audit proposal. The
   dispatcher sets its Status and `awaiting`.
 
 **A recurring theme across the week's work** — the same kind of finding, request or friction on
 two or more distinct days, which no single ticket owns — may become a **Roadmap ticket proposal**.
-Apply `/workflow:file-ticket`'s rules: search for a duplicate goal and a contrary decision first,
-then write the plain-language roadmap template in `/workflow:format-ticket`, in the repo that
-skill places the goal in. It counts under `maxOpenProposals`, and it lands as a bot proposal that nothing
+Apply `/workflow:file-ticket`'s steps 2 and 4a.1–2: search for a duplicate goal and a contrary
+decision first, then write the plain-language roadmap template in `/workflow:format-ticket`, in the
+repo that skill places the goal in. Skip its Ask: nobody is there to answer, so each decision
+stays an open question with options. It counts under `ceilings.maxOpenProposals`, and it lands as a bot proposal that nothing
 acts on until a member's `@sydevs-bot revise` accepts it. Never file its children.
 (why: docs/why.md#the-roadmap-tier)
 
@@ -200,8 +204,10 @@ goes in the journal.
 
 ## Close the week's journals
 
-Once the reflection PR is open, close every `label:ops-journal is:open` issue you read, each with
-a one-line comment linking the reflection PR. They are working memory for a week, not a permanent
+Once the usage report is written, close every `label:<labels.journal> is:open` issue you read,
+each with a one-line comment linking the reflection PR or tonight's journal entry — a quiet week
+included. **Except when an unreviewed reflection PR held this week's back:** leave them open, so
+next Sunday reads both weeks. They are working memory for a week, not a permanent
 record — left open, they make next Sunday's read grow without bound and clutter the issue list.
 
 Close them **last**. A crash midway through the reflection should leave the journals intact — they

@@ -85,6 +85,38 @@ test('a failure is never cut, whatever the overage', () => {
   assert.ok(f.text.includes('- none'))
 })
 
+// improve-loop's weekly usage report, written into the journal entry when no
+// reflection PR opens. Cutting from the end of Did took it first.
+const USAGE = [
+  '### 📊 Usage',
+  '- SahajCloud 41 · WeMeditateWeb 22 · SahajAtlasWeb 9',
+  '- 3.1 sessions per merged PR',
+  '- SahajCloud#879 ×5 (fix-ci, address-review)',
+]
+
+test('a 📊 Usage section is never cut, wherever it sits', () => {
+  const after = `${entry('', 'y'.repeat(500))}\n\n${USAGE.join('\n')}`
+  // Nested under Did, as a run told to put it "under 📄 Did" writes it.
+  const nested = `${entry('', 'y'.repeat(500))}\n${USAGE.map((l) => l.replace(/^### /, '#### ')).join('\n')}`
+  for (const text of [after, nested]) {
+    assert.ok(text.length > budgets.journalEntry)
+    const f = fit(text, 'journalEntry', budgets)
+    assert.equal(f.verdict, 'OK', f.reason)
+    assert.ok(f.dropped > 0, 'Did still pays for the cut')
+    for (const l of USAGE.slice(1)) assert.ok(f.text.includes(l), `kept: ${l}`)
+    assert.ok(f.text.includes('SahajCloud/pull/801'), 'and the PR line is still the last Did line to go')
+  }
+})
+
+test('an entry whose usage report alone is over budget is OVER, with the report whole', () => {
+  const long = [...USAGE, ...Array.from({ length: 30 }, (_, i) => `- item ${i} ${'u'.repeat(40)}`)]
+  const f = fit(`${entry('', 'y'.repeat(20))}\n\n${long.join('\n')}`, 'journalEntry', budgets)
+  assert.equal(f.verdict, 'OVER')
+  assert.ok(!f.text.includes('### 📄 Did'), 'everything cuttable went first')
+  for (const l of long) assert.ok(f.text.includes(l))
+  assert.equal(f.chars, f.text.length, 'and every character of it is counted')
+})
+
 test('check still reports over and under on the whole artefact', () => {
   const noMarker = { markerRequired: [] }
   assert.equal(check('x'.repeat(1201), 'comment', budgets, noMarker).verdict, 'OVER')

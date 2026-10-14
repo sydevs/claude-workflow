@@ -10,7 +10,7 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 # Implement Issue
 
 Policy and sequencing only. Existing tools do the work: worktrees by `git worktree`, review by
-`pr-review-toolkit`, shipping by `/workflow:finalize-pr`, the gate by `workflow.json`. A
+`/code-review` (`pr-review-toolkit` where installed), shipping by `/workflow:finalize-pr`, the gate by `workflow.json`. A
 repo-specific step belongs in `.claude/workflow.json`, not here.
 
 **Start with `/workflow:start-run` and end with `/workflow:finish-run`.** The
@@ -51,23 +51,28 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    → do not guess. Settle every fact yourself. A decision goes in `## Open questions` with options
    and a recommendation — on the roadmap parent when `## Goal context` links one, following
    `write-ticket`'s Escalate steps. Comment what is unresolved, and stop. The dispatcher sets
-   `awaiting` when you unlock. (why: docs/why.md#awaiting-has-one-writer,
-   docs/why.md#a-late-decision-goes-to-the-goal)
+   `awaiting` when you unlock — on the ticket, or on its roadmap parent when you escalated.
+   (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-late-decision-goes-to-the-goal)
+
+   **A decision only part of the work turns on does not stop the build.** Build the recommended
+   option, and ask the decision as a question thread (`/workflow:finalize-pr` step 7c).
 
    **A ticket that will not fit one run is built in phases, on this one branch and one PR.**
    Never split it into child tickets or several PRs here: splitting is planning, done before
    approval by `implement-roadmap` at reviewability seams, never by a build run on size. Order the
    phases so each leaves the branch green and the next builds on it — schema before endpoint
-   before UI. Write them as the `## Phases` checklist in the PR body (`pr-template.md`). A ticket
-   that fits one run has no phases.
+   before UI. A ticket that carries `## Phases` is your plan: copy it, and change only what the
+   code disproves. Write them as the `## Phases` checklist in the PR body (`pr-template.md`). A
+   ticket that fits one run has no phases.
    (why: docs/why.md#a-ticket-is-built-in-phases-never-split, docs/why.md#split-at-reviewability-seams)
 
-   **File what you trip over**, as preflight's incidental-finding rule routes it. Fold the fix
-   into this PR only when the defect is this ticket's. A doc on its subject, or carrying the stale
-   premise it fixes, is — and on a docs ticket, so is every docs finding in the repo.
+   **File what you trip over**, as preflight's incidental-finding rule routes it. A finding the
+   join rule joins to this ticket is this PR's, listed or not: fold it in, with its own
+   `## Summary` bullet. On a docs ticket, so is every docs finding in the repo.
+   (why: docs/why.md#the-work-you-hold-takes-what-joins-it)
 
 5. **Plan.** Proceed when the ticket is clear. Locally, pause on genuine ambiguity or
-   destructive work. In a routine nobody can answer: comment the question and stop.
+   destructive work. In a routine nobody can answer, a decision goes as step 4 says.
 
 6. **Worktree by default, on its final branch.** `EnterWorktree` names its own branch, and a
    rename afterwards breaks `ExitWorktree`. Create the worktree yourself, then enter it by path:
@@ -91,15 +96,16 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    both fit, ship what is ticked and end. The dispatcher starts the next session once CI is
    green. **Every session ends with at least one more box ticked.** A phase too big for one
    session is split into smaller boxes, and you tick the part you finished. A session that ticks
-   nothing stalls the PR, and it becomes the reviewer's turn — so when a question stops you,
-   comment it on the PR and end.
+   nothing stalls the PR, and it becomes the reviewer's turn — so when a decision stops you, ask
+   it as a question thread (`/workflow:finalize-pr` step 7c) and end.
 
 8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs
    it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
    the WordPress plugin. Honour `onExit124` where set: hand off rather than retry.
 
-9. **Tests.** Write them for what changed. `/workflow:finalize-pr`'s `pr-test-analyzer` judges
-   coverage — do not duplicate that analysis here.
+9. **Tests.** Write them for what changed, and own the coverage check: every changed behaviour has
+   a test that fails without it. Watch each one fail before you keep it. No routine has
+   `pr-test-analyzer` (`/workflow:finalize-pr` step 2), so nothing after you checks this.
 
    **Fixture pre-mortem, before you write a fixture.** State in one line what it assumes about
    the real configuration, then open the real config and verify it. Name the file you checked in
@@ -133,17 +139,17 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never implement a ticket nobody authorised.** In a routine the dispatch record is the
   authorisation. Locally, the person running you is.
 - **Never implement a ticket that already has an open PR closing it.** Refresh that PR instead.
-- **Never write `awaiting`, `blocked`, `proposal`, a Status, or an assignee.** The dispatcher
-  owns them. (why: docs/why.md#awaiting-has-one-writer)
+- **Never write state** (start-run's list). The dispatcher owns it.
 - **Never edit files in the main checkout while a worktree is active.**
 - **Never hand-roll shipping** — `/workflow:finalize-pr` is the only path to a PR.
 - **Never wait for CI, mark a PR ready, or merge.** Push and end.
 - **Never remove a worktree before its branch is pushed.**
 - **Never write a test fixture without verifying its shape against the real configuration.**
-- **Never open a second branch or PR for a ticket that has one.** A docs-only finding that is not
-  this ticket's is not a second PR for it: preflight routes it to the docs work in flight.
+- **Never open a second branch or PR for a ticket that has one.** A docs- or test-only finding
+  the join rule does not join is not a second PR for it: preflight routes it.
 - **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
-- **Never resolve a product decision yourself.** It goes to `## Open questions` with options.
+- **Never resolve a product decision yourself.** It goes to `## Open questions` with options, or
+  to a question thread with the recommended option built (step 4).
 
 ## References
 

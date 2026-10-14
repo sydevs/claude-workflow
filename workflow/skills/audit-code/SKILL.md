@@ -55,21 +55,22 @@ priority by consequence, honestly: most findings are `Medium` or `Low`, and infl
 the field useless.
 
 **Attach to the roadmap.** When a finding clearly serves an open ticket of type `roadmap.type`
-(`search_issues "$SCOPE is:issue is:open type:<roadmap.type> -label:ops-journal"`), pass it to
-`write-ticket` as the parent, which links a native sub-issue (`mcp__github__sub_issue_write`).
-Never file a roadmap ticket from an audit. (why: docs/why.md#the-roadmap-tier)
+(`search_issues "$SCOPE is:issue is:open type:<roadmap.type> -label:<labels.journal>"`), pass it to
+`write-ticket` as the parent, which links a native sub-issue (`mcp__github__sub_issue_write`),
+under format-ticket's attach rule. Never file a roadmap ticket from an audit: format-ticket says
+what to do with roadmap-sized work.
 
-Respect `maxProposalsPerSurvey` and the standing `maxOpenProposals` ceiling. Fewer, better
+Respect `run-audit`'s proposal rule. Fewer, better
 findings win — the user is the only reviewer.
 
 ## Ticketless PRs
 
-**Any family:** a docs-only finding where the code is plainly right joins the docs work in
+**Any family:** a docs- or test-only finding where the product code is plainly right joins the work in
 flight, or is a ticketless PR, as preflight's incidental-finding rule routes it — never a ticket.
 (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 Hygiene also prefers a ticketless draft PR where the change is **provably** safe. The proof stands
-in for the ticket, and these three are the one deliberate exception to `prAllowlistGlobs`: each
+in for the ticket, and these three are hygiene's deliberate exception to `prAllowlistGlobs`, beside the docs and test routes: each
 still waits for a human approval before it merges. (why: docs/why.md#three-audit-rotations)
 
 - **Code comments** — run [`comment-sweep.md`](comment-sweep.md) on the chosen area. The PR is

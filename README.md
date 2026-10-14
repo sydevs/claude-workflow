@@ -89,7 +89,7 @@ noted on the PR and fires nothing. Each product repo's CI also calls the shared
 
 | Skill | Use it to | Example |
 | --- | --- | --- |
-| `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, asks each open question with a recommendation (or leaves it on the ticket), then files in the right tier. A docs-only fix becomes a PR instead. | `/workflow:file-ticket the map flickers when zooming on Safari` |
+| `/workflow:file-ticket` | File a bug, a change or a roadmap goal. It checks for duplicates and past decisions first, asks each open question with a recommendation (or leaves it on the ticket), then files in the right tier. A docs- or test-only fix becomes a PR instead. | `/workflow:file-ticket the map flickers when zooming on Safari` |
 | `/workflow:settle-roadmap` | Answer the open questions on roadmap goals in the terminal instead of on GitHub. It briefs each goal, asks each question with a recommendation (and your earlier answer, when one is reopened), researches anything you ask back, then writes the decisions into the ticket on your yes. No cloud session is spent. | `/workflow:settle-roadmap` or `/workflow:settle-roadmap sydevs/SahajCloud#902` |
 | `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh a draft PR. It never merges. | `/workflow:finalize-pr` |
 | `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
@@ -146,14 +146,14 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `address-review` | a review, thread reply or mention on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
-| `resolve-conflicts` | an approved bot PR that conflicts | `main` merged in, conflicts resolved |
+| `resolve-conflicts` | a bot PR that conflicts, draft or ready, once per head | `main` merged in, conflicts resolved |
 
 Run by the nightly routine through `run-audit`:
 
 | Skill | Produces |
 | --- | --- |
 | `audit-deps` | alternate Mondays: routine minor and patch updates, one PR per repo |
-| `audit-code` | one angle a night from that day's family. Risk and experience file tickets. Hygiene opens ticketless PRs it can prove safe (comment sweep, dead code). Any family sends a docs-only fix straight to a PR. |
+| `audit-code` | one angle a night from that day's family. Risk and experience file tickets. Hygiene opens ticketless PRs it can prove safe (comment sweep, dead code). Any family sends a docs- or test-only fix straight to a PR. |
 | `audit-sentry` | Bug tickets for production errors worth fixing |
 | `cut-release` | the changelog and version-bump PR; merging it publishes the release |
 | `audit-contracts` | alternate Mondays: checks the cross-repo contracts, and opens PRs where the source is plainly right |
@@ -180,7 +180,8 @@ metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
 
 **Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
 `leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,
-`prAllowlistGlobs` (where a ticketless PR may open), `worktreeSetup` and `devServer`. Loop-wide
+`prAllowlistGlobs` (where any run's small ticketless fix may open; docs- and test-only fixes have their own route), `previewUrl`, `worktreeSetup`,
+`worktreeNotes`, `deployTarget` and `devServer`. Loop-wide
 values live in [`loop-config.json`](loop-config.json).
 
 **Installing in a repo.** Each repo declares the marketplace in `.claude/settings.json`.

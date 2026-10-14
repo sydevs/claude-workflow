@@ -39,9 +39,13 @@ export function dueAlerts(alerts, config, now) {
     .map((a) => a.number)
 }
 
-/** The open bot PR already carrying a dependency fix, if any. Pure. */
+/**
+ * The open bot PR already carrying a vulnerability fix, if any. Pure.
+ * `deps.branchPrefix` is the vulnerability job's alone: a routine-updates PR
+ * (`deps.routineBranchPrefix`) awaiting review must not hold back a CVE fix.
+ */
 export function depsPrInFlight(pulls, config) {
-  const prefix = config.deps?.branchPrefix || 'claude/chore-deps-'
+  const prefix = config.deps?.branchPrefix || 'claude/fix-deps-'
   return (pulls || []).find((p) => isBot(p.user?.login, config) && String(p.head?.ref || '').startsWith(prefix)) || null
 }
 

@@ -31,8 +31,8 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 
 ## Do
 
-1. `git fetch origin <branch>` and check it out in a worktree
-   (`/workflow:implement-ticket` step 6).
+1. `git fetch origin <branch>`, then `git worktree add .claude/worktrees/<slug> origin/<branch>
+   -B <branch>`. This is the PR's existing branch: never `-b` off the default branch.
 2. Reproduce locally when the log is not enough: `leanGate.full` from `.claude/workflow.json`.
 3. Fix in one commit, `fix(ci): <what, in five words>`.
 4. Lean gate. A failure that also exists on `main` is still yours to fix here — say so in the
@@ -74,4 +74,4 @@ dispatcher cannot re-run it. The stale-head check still applies.
 - **Never mark the PR ready, re-run CI, or wait for it.** (why: docs/why.md#push-and-end)
 - **Never redeploy, restart, or change anything on Railway.** The token can. Each is a write to a
   vendor account.
-- **Never touch a label other than the lock, the draft flag, or an assignee.**
+- **Never write state** (start-run's list). Touch no label but the lock.

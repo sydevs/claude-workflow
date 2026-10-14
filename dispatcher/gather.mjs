@@ -290,8 +290,9 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
       s.linkedIssueDetails.push({ number: n, sentry: parseSentry(li.body) })
     }
+    // Drafts too: a conflicted draft runs no CI, so nothing else would see it.
     const open = await gh.paginate(gh.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 })
-    s.otherOpenBotPrs = open.filter((p) => p.number !== number && !p.draft && isBot(p.user?.login, config)).map((p) => p.number)
+    s.otherOpenBotPrs = open.filter((p) => p.number !== number && isBot(p.user?.login, config)).map((p) => p.number)
   } else {
     s.otherOpenBotPrs = []
   }

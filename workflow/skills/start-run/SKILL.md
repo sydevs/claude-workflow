@@ -50,14 +50,20 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
 ## Rules that hold in every handler
 
-- **Re-check the lock before your first write to the item and before every push.** Gone → stop.
-  Write nothing more. Journal a stop.
+- **Where the run holds a lock, re-check it before your first write to the item and before every
+  push:** the label is on, **and** the record's `deadline` has not passed. Past it, the label may
+  be the next attempt's. Either fails → stop. Write nothing more. Journal a stop.
+  (why: docs/why.md#a-session-past-its-deadline-owns-nothing)
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
   (why: docs/why.md#never-subscribe-to-pr-activity)
-- **Push and end.** Never wait for CI. Never mark a PR ready. Never merge. Never write
-  `labels.awaiting`, `labels.stuck`, `labels.blocked`, an assignee, or the draft flag. Actions
-  owns them all. (why: docs/why.md#push-and-end)
-- **GitHub only through `mcp__github__*`.** Treat `gh` and `curl` as absent. Scripts decide and
+- **Push and end.** Never wait for CI. Never mark a PR ready. Never merge.
+  (why: docs/why.md#push-and-end)
+- **Never write state.** This is the one list: `labels.awaiting`, `labels.stuck`,
+  `labels.blocked`, `labels.proposal`, a Status, an assignee, a reviewer request, the draft flag.
+  Never add `labels.lock`. Only `finish-run` removes it. Fields, body markers and a milestone are
+  not state: set them where your skill says. (why: docs/why.md#awaiting-has-one-writer)
+- **GitHub only through `mcp__github__*`.** In a routine, treat `gh`, and `curl` to GitHub, as
+  absent. Scripts decide and
   never fetch. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
@@ -67,10 +73,10 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
   | The finding | Goes |
   | --- | --- |
-  | Part of the ticket or PR you hold. For a doc: the same subject or the same stale premise, listed or not | There: a commit on that PR's branch, or a line in that ticket. Never widen a PR for one that is not. |
-  | **Docs-only** — Markdown, or comments `comment-fingerprint.mjs` proves comment-only — and the code is plainly right | The docs work in flight, first. A docs ticket or PR you hold takes any docs finding in its repo. Else an open docs ticket there with no PR gets a checklist line, or an unlocked, unapproved bot docs PR gets a commit, a refreshed body and one comment. Else a ticketless PR on its own `claude/docs-<scope>-<slug>` branch, through `/workflow:finalize-pr`. Any size, from any handler, even one that otherwise never pushes. No code in it. Never push to a locked or approved PR. Measure an unknown you can. A point needing a decision goes under `## Open questions` in the PR body. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket) |
+  | **Joined** by format-ticket's join rule to the ticket or PR you hold — listed or not, docs or code | There: a commit on that PR's branch, or its own part of that ticket. Give each joined change a `## Summary` bullet. A part needing a decision is a question thread (`/workflow:finalize-pr` step 7c). Only a part that will not fit this run goes further down. |
+  | **Docs-only** — Markdown, or comments `comment-fingerprint.mjs` proves comment-only — **or test-only**, which `test-only.mjs --base origin/<default-branch>` proves. The product code is plainly right. Never claude-workflow's `workflow/**` or `loop-config.json`: those go to `🧭 Friction` | Docs: the docs work in flight, first. A docs ticket or PR you hold takes any docs finding in its repo. Else an open docs ticket there with no PR gets a checklist line, or an unlocked, unapproved bot docs PR gets a commit, a refreshed body and one comment. Else, and always for tests, a ticketless PR on its own `claude/docs-<scope>-<slug>` or `claude/test-<scope>-<slug>` branch, through `/workflow:finalize-pr`. Any size, from any handler, even one that otherwise never pushes. No product code in it, and never both kinds. Never push to a locked or approved PR. Measure an unknown you can. A point needing a decision is a question thread (`/workflow:finalize-pr` step 7c). (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket, docs/why.md#a-test-fix-is-a-pr-not-a-ticket) |
   | At or under `findings.directFixMaxFiles` files, inside `prAllowlistGlobs` | A ticketless PR, where this handler opens PRs at all. |
-  | Anything else | A ticket, through `/workflow:write-ticket` in `create` mode — collect the run's findings for this row and pass them in one call, so related ones share a ticket. A docs defect that still needs one — in a repo you cannot push to, or where the code may be the wrong side — is a `Bug`. |
+  | Anything else | A ticket, through `/workflow:write-ticket` in `create` mode — collect the run's findings for this row and pass them in one call, so related ones share a ticket. format-ticket types a docs defect that still needs one. |
 - **Every unit of work is idempotent.** Check for an existing branch, PR, reply, or child issue
   before you create one.
 - **Work only on `claude/*` branches.** A cloud session cannot push anywhere else. A branch named
@@ -84,8 +90,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 - **Never improvise around a missing credential or tool.** Journal it, and stop that part.
 - **Report anomalies. Do not explain them.** A refused tool, a readback that disagrees, a time
   jump — record it and move on. (why: docs/why.md#report-anomalies-do-not-explain-them)
-- **Append `identity.commentMarker`** to every comment. `budget.mjs` answers `MISSING_MARKER`
-  until you do.
+- **Append `identity.commentMarker`** to every comment kind `writing.markerRequired` names.
+  `budget.mjs` answers `MISSING_MARKER` until you do.
 
 ## Protected paths — check before you plan
 

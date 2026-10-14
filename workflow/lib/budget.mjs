@@ -106,7 +106,11 @@ export function detailsShare(text = '') {
 // `##` in the day's journal body, `###` in a run's journal comment. Both are the Did section.
 const DID_HEADING = /^#{2,3}\s+(?:\u{1F4C4}\s*)?Did\s*$/u
 const SECTION_HEADING = /^#{2,3}\s/
+// improve-loop's weekly usage report. It ends Did at any depth, so even nested
+// under Did it is a section of its own, and fit() cuts only Did.
+const USAGE_HEADING = /^#{2,4}\s+(?:\u{1F4CA}\s*)?Usage\s*$/u
 const DROPPABLE = /^-\s/
+const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
 
 /**
  * Cut an over-budget journal body to fit, instead of asking a run to guess.
@@ -137,6 +141,11 @@ const DROPPABLE = /^-\s/
  * The run table survives too — it is not a list item. When the section empties,
  * the heading goes with it, which is what the skill already requires of an
  * empty section.
+ *
+ * **A `\u{1F4CA} Usage` section is never cut**, even nested under Did with a
+ * `####` heading. improve-loop writes its weekly report there when no
+ * reflection PR opens, and cutting from the end of Did took it first. It still
+ * counts: an entry that is over once Did is gone is OVER, as any other is.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
   const limit = budgets?.[kind]
@@ -152,7 +161,7 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
 
     let end = lines.length
     for (let i = head + 1; i < lines.length; i += 1) {
-      if (SECTION_HEADING.test(lines[i])) { end = i; break }
+      if (endsDid(lines[i])) { end = i; break }
     }
 
     const victim = lines.slice(head + 1, end).findLastIndex((l) => DROPPABLE.test(l))
@@ -173,7 +182,7 @@ export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
     if (head !== -1) {
       let end = lines.length
       for (let i = head + 1; i < lines.length; i += 1) {
-        if (SECTION_HEADING.test(lines[i])) { end = i; break }
+        if (endsDid(lines[i])) { end = i; break }
       }
       if (!lines.slice(head + 1, end).some((l) => DROPPABLE.test(l))) {
         const cutTo = lines[head + 1] === '' ? head + 2 : head + 1

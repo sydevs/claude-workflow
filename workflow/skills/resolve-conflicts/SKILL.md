@@ -1,6 +1,6 @@
 ---
 name: resolve-conflicts
-description: Resolve one loop-authored PR that GitHub reports as conflicting, from both sides' intent, then push and end. Fired only when the branch genuinely no longer merges. Runnable locally against a PR number.
+description: Resolve one loop-authored PR, draft or ready, that GitHub reports as conflicting, from both sides' intent, then push and end. Fired only when the branch genuinely no longer merges, once per head. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
@@ -25,8 +25,9 @@ that is merely behind. The base ref belongs to that trigger, not to a session's 
 
 ## Do
 
-1. Worktree on the PR branch (`/workflow:implement-ticket` step 6):
-   `git fetch origin <base> <branch>`, then `git merge origin/<base>`.
+1. Worktree on the PR's existing branch: `git fetch origin <base> <branch>`, then
+   `git worktree add .claude/worktrees/<slug> origin/<branch> -B <branch>`, then
+   `git merge origin/<base>`.
 2. Resolve every hunk from both sides' intent. **Keep both behaviours where both are wanted.**
    Never take one side wholesale to make the merge go away.
 3. Lean gate, from `.claude/workflow.json`. Run the specs that cover the conflicted files.
@@ -40,8 +41,9 @@ the choice was not obvious. A conflict resolved the only way it could be resolve
 sentence, not a section.
 
 **A semantic conflict** — `main` removed what this PR extends, or changed a contract it relies on
-— is not yours to guess. Comment the question with `identity.commentMarker`, push nothing, and
-stop.
+— is not yours to guess. Comment the question in format-ticket's options shape, with
+`identity.commentMarker`, push nothing, and stop. The dispatcher fires nothing more on this head:
+the PR becomes the person's turn until a push. (why: docs/why.md#a-conflicted-draft-is-resolved-too)
 
 **A human's PR** (`flags.delegated`, or the author is not the own login): you cannot push to it.
 Comment the resolution as a patch or a description, and stop.
@@ -53,4 +55,4 @@ Comment the resolution as a patch or a description, and stop.
 - **Never `rebase`, `--force`, or `--force-with-lease`.** A merge commit only.
 - **Never squash or rewrite history.**
 - **Never mark the PR ready, or wait for CI.** (why: docs/why.md#push-and-end)
-- **Never touch a label other than the lock, the draft flag, or an assignee.**
+- **Never write state** (start-run's list). Touch no label but the lock.

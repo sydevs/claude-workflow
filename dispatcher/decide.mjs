@@ -154,11 +154,31 @@ export function pendingVerb(snapshot, config, surface) {
   return best
 }
 
-function ownReview(snapshot, config) {
+/**
+ * When each critic review was posted. review-pr falls back to one PR comment
+ * led by the header when its pending-review tools fail, and that comment is
+ * the review as much as a submitted one is.
+ */
+function criticReviewTimes(snapshot, config) {
   const header = config.review?.bodyHeader || '## 🧐 Adversarial review'
-  return (snapshot.reviews || []).some(
-    (r) => isBot(r.user?.login, config) && String(r.body || '').trimStart().startsWith(header),
-  )
+  const led = (body) => String(body || '').trimStart().startsWith(header)
+  return [
+    ...(snapshot.reviews || []).filter((r) => isBot(r.user?.login, config) && led(r.body)).map((r) => r.submitted_at),
+    ...(snapshot.comments || []).filter((c) => isBot(c.author, config) && led(c.body)).map((c) => c.createdAt),
+  ]
+}
+
+function ownReview(snapshot, config) {
+  return criticReviewTimes(snapshot, config).length > 0
+}
+
+/**
+ * A thread the bot rooted to ask a human something. It waits on that human:
+ * only their reply, caught by the rule before it, makes it the bot's turn.
+ */
+function isQuestion(root, config) {
+  const marker = config.review?.questionMarker || '<!-- sydevs-question -->'
+  return isBot(root.author, config) && String(root.body || '').includes(marker)
 }
 
 function needsAddressReview(snapshot, config) {
@@ -170,6 +190,7 @@ function needsAddressReview(snapshot, config) {
     const root = cs[0]
     const last = cs[cs.length - 1]
     if (respondTo(last.author, config) && !isBot(last.author, config)) return 'a thread waits on a reply'
+    if (isQuestion(root, config)) continue
     if (isBot(root.author, config) && !cs.slice(1).some((c) => isBot(c.author, config))) return 'own-rooted thread unanswered'
   }
   for (const r of snapshot.reviews || []) {
@@ -193,9 +214,10 @@ function isAddressMention(body, config) {
 }
 
 function pendingReviewVerb(snapshot, config) {
-  const newestBotReview = (snapshot.reviews || [])
-    .filter((r) => isBot(r.user?.login, config))
-    .map((r) => r.submitted_at)
+  // Only the critic's review answers the verb. A question review is the
+  // bot's too, and must not swallow a review someone asked for.
+  const newestBotReview = criticReviewTimes(snapshot, config)
+    .filter(Boolean)
     .sort()
     .pop()
   for (const c of snapshot.comments || []) {
@@ -286,6 +308,25 @@ function deployPassFor(record, sha) {
   return [record?.current, ...(record?.dispatches || [])].find(isDeploy) || null
 }
 
+/**
+ * A conflicted PR, draft or ready. A conflicted branch schedules no CI, so
+ * nothing downstream of this — fix-ci, the critic, the next phase — can ever
+ * move it: the conflict goes first. Two exceptions. A stalled phased draft
+ * labelled awaiting stays your turn. A resolve-conflicts session that already
+ * ended on this head, or is ending now, stopped on a conflict it would not
+ * guess, so that is your turn too, until a push gives it a new head.
+ */
+function conflictPlan(s, config) {
+  const awaiting = config.labels.awaiting
+  const phases = phasesLeft(s)
+  if (phases && (s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you, conflicted`)]
+  const sha = s.pr.head?.sha
+  const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
+  const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
+  if (ended) return [label([awaiting], []), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
+  return [fire('resolve-conflicts')]
+}
+
 /** A phased draft whose ticket still has phases to build, or null. */
 function phasesLeft(s) {
   const phases = parsePhases(s.item?.body)
@@ -354,7 +395,7 @@ export function evaluatePr(s, config) {
   const why = needsAddressReview(s, config)
   if (why) return [note(why), fire('address-review')]
 
-  if (!pr.draft && s.mergeable === 'CONFLICTING') return [fire('resolve-conflicts')]
+  if (s.mergeable === 'CONFLICTING') return conflictPlan(s, config)
 
   if (s.ci.failing.length) {
     // Red only on infrastructure: re-run it, never spend a repair on it.
@@ -802,13 +843,16 @@ function derive(target, s, config) {
     case 'phases-stalled':
       return [
         label([L.awaiting], []),
-        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. Comment here and I will pick it up again.`),
+        // A push is not a word: only a mention or a review re-arms the
+        // continuation (phase-continue reads `humanAt`).
+        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. A mention (\`${config.dispatch.commandPrefix}\`) or a review from you starts me again.`),
         anomaly('phases-stalled', `${s.repo.full}#${s.pr?.number} phase ${facts.done + 1}/${facts.total} stalled`),
       ]
     case 'linked-abandoned':
       return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
+    // Drafts too: evaluatePr already leaves a branch a session holds alone.
     case 'conflict-scan':
-      return s.pr?.draft ? [note('draft — another session owns it')] : evaluatePr(s, config)
+      return evaluatePr(s, config)
     case 'unlock': {
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })
@@ -893,7 +937,7 @@ function derive(target, s, config) {
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
       if (p.some((a) => ['fire', 'armAutoMerge', 'markReady', 'targets'].includes(a.type))) return [note('still moving — not an orphan')]
-      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, 'This draft has had no CI activity for hours and no session holds it. Comment or push to wake me.'), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
+      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, `This draft has had no CI activity for hours and no session holds it. A mention (\`${config.dispatch.commandPrefix}\`) or a push from you starts me again.`), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
     case 'sweep-awaiting': {
       if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]

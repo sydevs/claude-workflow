@@ -18,7 +18,7 @@ and the run ends. **Start with `/workflow:start-run` and end with
 - `mcp__github__pull_request_read method:get` — open, head branch, base, author, `mergeable`.
 - `method:get_review_comments` — every thread, its root author, `is_resolved`.
 - `method:get_reviews` — every review's **body** as well as its state. Derive the decision with
-  `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT}/lib/merge-verdict.mjs`, never from memory.
+  `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/merge-verdict.mjs`, never from memory.
 - `method:get_comments` — **the newest page only**, `perPage` small, the page computed from the
   `comments` count on `get`.
 - The linked ticket's body, for scope. Then `git fetch origin <branch>` and the touched files.
@@ -28,13 +28,17 @@ and the run ends. **Start with `/workflow:start-run` and end with
 Any one of these, and nothing else:
 
 - an unresolved thread whose last comment comes from a login in `assignment.respondTo`,
-- an unresolved thread the own login rooted, with no reply — the adversarial review,
+- an unresolved thread the own login rooted, with no reply — the adversarial review. A root
+  carrying `review.questionMarker` is a question thread instead: it waits on the person, and
+  becomes work only once they reply,
 - **a review body** from a login in `assignment.respondTo`, non-empty, submitted after the own
   login's last comment. Each distinct point in it is one item. General feedback lives here as
   often as in file threads — a review whose body you skip is a review you ignored.
   (why: docs/why.md#a-review-body-is-feedback)
-- the newest conversation comment comes from a login in `assignment.respondTo`, and is newer
-  than the own login's last comment.
+- the newest conversation comment comes from a login in `assignment.respondTo`, is newer than
+  the own login's last comment, and mentions `dispatch.commandPrefix` with any verb but
+  `review` or its alias. An unmentioned comment is the reviewer talking to the PR, not to you.
+  (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
 
 A preview-URL, coverage, or CI bot sits off the allowlist. None of them starts a revision.
 (why: docs/why.md#respondto-is-an-allowlist) **Actions filtered the trigger. You still filter
@@ -48,34 +52,35 @@ they are work. Comment type and thread root together are the key.
 | --- | --- |
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
 | **Rebut** | Reply in the thread with evidence — a file and line, or the ticket line it satisfies. **On the critic's thread — one the own login rooted — resolve it:** your evidence settles a bot's point. **On a human's thread, leave it open.** Only they settle it. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
-| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
+| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
+| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
 
-**Never rebut a docs point on scope.** A doc on this PR's subject, or carrying the stale premise it
-fixes, is this PR's, whatever the ticket listed. On a docs PR, every docs point in its repo is.
-Adopt it. (why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+**Never rebut a point on scope that format-ticket's join rule joins to this PR**, whatever the
+ticket listed. A reviewer's ask to apply a fix across the same system is one. On a docs PR, every
+docs point in its repo is this PR's. Adopt it.
+(why: docs/why.md#the-work-you-hold-takes-what-joins-it, docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 A thread with a reply from the own login newer than its last human comment is already handled.
 Skip it. A review body is handled once a summary comment from the own login is newer than its
 `submitted_at`. Those two rules are what make a resumed run safe.
 
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
-commit per adopted point, and answer every point in step 5's summary comment: quote it, then give
-the SHA or the evidence. A point that generalises beyond this PR is routed as preflight's
-incidental-finding rule says: a docs-only fix to the docs work in flight, anything else a
-follow-up ticket filed through `/workflow:write-ticket`.
+commit per adopted point, and answer every point in step 6's summary comment: quote it, then give
+the SHA or the evidence. An ask becomes a question thread on the line it concerns
+(`/workflow:finalize-pr` step 7c), and the summary links it. A point the join rule does not join is routed as
+preflight's incidental-finding rule says.
 
 ## Then
 
-1. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
-2. Docs sync (`/workflow:finalize-pr` step 5).
-3. `git push`. Never force-push. Never rebase.
-4. Refresh the PR title and body from `origin/main...HEAD` **where this push made either one
-   false** — a `## Change outline` view the new commits contradict is false, and
-   `review-pr` step 2 reads it first (`/workflow:finalize-pr` step 7). Re-send the body
-   preflight step 4 already read, with the delta applied; `update_pull_request` replaces the
-   whole body, so never retype one from nothing. A body merely incomplete stays, and step 5's
-   comment carries that delta.
-5. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
+1. Security review, when the push touches `securityReview.triggerPattern`
+   (`/workflow:finalize-pr` step 3). A reviewer's ask can widen `allowed-tools` too.
+2. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
+3. Docs sync (`/workflow:finalize-pr` step 5).
+4. `git push`. Never force-push. Never rebase.
+5. Refresh the PR title and body **where this push made either one false**, as `pr-template.md`'s
+   *Refresh* says — a `## Change outline` view the new commits contradict is false, and
+   `review-pr` step 2 reads it first.
+6. **One summary comment**, inside `writing.budgets.comment`: adopted, rebutted, asked — each
    linking its thread, or quoting its review-body point — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 
@@ -93,17 +98,17 @@ session pushes only to `claude/*`. In order:
    this even when nothing else happens.
 2. **Open a stacked PR** from `claude/<type>-<number>-<slug>` targeting **their branch**, not
    `main`, through `/workflow:finalize-pr` with `base:<their branch>`. Name it in the summary.
-3. **File a follow-up ticket** for anything that generalises beyond this PR.
+3. **Route what the stacked PR does not take** as preflight's incidental-finding rule says.
 
 ⚠ **Check the stacked PR's base is their branch before you open it.**
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)
 
 ## Hard rules
 
-- **Never start a new review thread.** That channel belongs to `review-pr` alone. Reply
-  inside existing threads only. (why: docs/why.md#the-author-filters-one-exception)
+- **Never start a new review thread**, except a question thread. That channel belongs to
+  `review-pr` alone. Reply inside existing threads only.
+  (why: docs/why.md#the-author-filters-one-exception, docs/why.md#a-pr-question-is-a-thread-on-the-line)
 - **Never `APPROVE` or `REQUEST_CHANGES`.** (why: docs/why.md#reviews-are-comment-only)
 - **Never force-push, rebase, or squash history.**
-- **Never touch the draft flag, an assignee, a reviewer request, or a label other than the
-  lock.** Actions owns them.
+- **Never write state** (start-run's list). Actions owns it.
 - **Never wait for CI.** Push and end.

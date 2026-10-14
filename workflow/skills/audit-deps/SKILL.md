@@ -7,6 +7,9 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob
 
 # Audit dependencies
 
+**The vulnerability job is a dispatched run: start with `/workflow:start-run` (repo mode) and end
+with `/workflow:finish-run`.** Routine updates run inside `run-audit`, which journals them.
+
 **Raise PRs, not tickets.** A version bump carries its own description. A ticket that says
 "bump X" only adds a round trip. Two jobs:
 
@@ -49,7 +52,9 @@ pinned at `2.36.0` in SahajAtlasWeb, and `patches/` exists for a reason.
 
 ## Shipping
 
-Branch `deps.branchPrefix` + `<scope>`, then run `/workflow:finalize-pr`. These PRs are ticketless —
+Branch `deps.branchPrefix` + `<scope>` for a vulnerability fix, or `deps.routineBranchPrefix` +
+`<scope>` for routine updates — never one for the other, because the dispatcher holds back a
+vulnerability fire while a `deps.branchPrefix` PR is open. Then run `/workflow:finalize-pr`. These PRs are ticketless —
 `prAllowlistGlobs` covers them because review is mechanical. They open as drafts. The dispatcher
 runs CI and marks them ready. Push and end.
 

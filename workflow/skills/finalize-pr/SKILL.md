@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of implement-ticket, address-review, audit-deps, and reflect.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -55,11 +55,13 @@ nobody has looked at.
 ## Invocation
 
 ```
-/finalize-pr
+/finalize-pr [base:<branch>]
 ```
 
-Operates on the current branch, no arguments. The diff under review is always the **whole
-branch** — `origin/main...HEAD`, not the last commit. Reuse that range throughout.
+Operates on the current branch. `<base>` is the repo's default branch unless the caller passes
+one — a stacked PR passes the branch it targets. The diff under review is always the **whole
+branch** — `origin/<base>...HEAD`, not the last commit. Reuse that range, and that base,
+throughout.
 
 ## Pipeline
 
@@ -68,14 +70,14 @@ branch** — `origin/main...HEAD`, not the last commit. Reuse that range through
 ```bash
 git branch --show-current                 # must NOT be main or a shared branch
 git status --short
-git rev-list --count origin/main..HEAD
+git rev-list --count origin/<base>..HEAD
 ```
 
 - **Abort if on `main`** or any shared branch.
 - **Commit pending working-tree changes** — the Adjust phase ends here, so those edits ship too.
   If anything looks unrelated, stop and ask (or abort, non-interactively). Never commit secrets or
   `.env`.
-- **Nothing ahead of `origin/main`**, and the PR exists → say so and exit.
+- **Nothing ahead of `origin/<base>`**, and the PR exists → say so and exit.
 
 ### 1. Simplify
 
@@ -122,7 +124,7 @@ Then run the deterministic comment check, which the six lenses do not cover — 
 comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/lib/comment-lint.mjs" --base origin/main
+node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/comment-lint.mjs" --base origin/<base>
 ```
 
 **Advisory. It never fails the gate.** It catches phrasings that are wrong whatever they describe —
@@ -136,14 +138,14 @@ Gate on `securityReview` from `workflow.json`:
 
 ```bash
 PATTERN=$(jq -r '.securityReview.triggerPattern' .claude/workflow.json)
-git diff --name-only origin/main...HEAD | grep -E "$PATTERN"
+git diff --name-only origin/<base>...HEAD | grep -E "$PATTERN"
 ```
 
 Where the repo also sets `contentPattern`, check for newly-introduced sinks regardless of path:
 
 ```bash
 CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
-[ -n "$CONTENT" ] && git diff origin/main...HEAD -- $(jq -r '.securityReview.contentPaths[]?' .claude/workflow.json) \
+[ -n "$CONTENT" ] && git diff origin/<base>...HEAD -- $(jq -r '.securityReview.contentPaths[]?' .claude/workflow.json) \
   | grep -E "^\+" | grep -E "$CONTENT"
 ```
 
@@ -167,7 +169,7 @@ Documentation ships in the same push as the code it describes. Sweep the branch 
 impact **before** pushing:
 
 ```bash
-git diff --name-only origin/main...HEAD
+git diff --name-only origin/<base>...HEAD
 grep -rn "<changed setting / env var / command / behaviour>" \
   docs/ AGENTS.md .env.example $(git ls-files '**/AGENTS.md')
 ```
@@ -247,7 +249,7 @@ derived:
 #   mcp__github__get_comments   → the Cloudflare bot's comment bodies
 #   the PR's Cloudflare check runs → each output.summary
 echo '{"branch":"<branch>","bodies":["<comment body>","<check summary>"]}' \
-  | ${CLAUDE_PLUGIN_ROOT}/skills/finalize-pr/branch-preview-url.mjs
+  | ${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/finalize-pr/branch-preview-url.mjs
 ```
 
 It prints one `project status url` line per preview, and **always the branch alias, never a
@@ -285,7 +287,7 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
   so on that link's line.
 - **No preview yet** means the PR is new, or this push has not deployed. Wait for it in step 7b,
   then seed and verify. If step 7b times out, write the links anyway, plus one line:
-  `Data: not seeded yet`. The next run that refreshes this body seeds the preview.
+  `Data: not seeded yet`. No later run is promised to seed it, so the line stays as a disclosure.
 - **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
   Write one line naming what is missing. Never leave a link that lands on nothing without saying
   so.
@@ -294,7 +296,7 @@ Create or refresh with MCP, which takes the body directly — no temp file, and 
 markdown-mangling that made `gh --body` unusable:
 
 ```
-mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:main draft:true title:"…" body:"…"
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:true title:"…" body:"…"
 mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
 ```
 
@@ -306,10 +308,9 @@ mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  b
   this*. The dispatcher clears the flag once CI is green and the critic has run, or at once for a
   PR under `review.skipWhen`. (why: docs/why.md#draft-is-the-prs-baton,
   docs/why.md#the-critic-skips-small-prs)
-- **PR exists** → refresh **title and body**, both re-derived from the current
-  `origin/main...HEAD`. **Leave the assignee alone**, and **never put a ready PR back into
-  draft** — `draft:false` means "has been ready at least once", and the once-ever review depends
-  on that staying true.
+- **PR exists** → refresh **title and body** as `pr-template.md`'s *Refresh* says. **Leave the
+  assignee alone**, and **never put a ready PR back into draft** — the dispatcher reads draft as
+  "the loop is still working", so a ready PR would drop out of the reviewer's queue.
 
 ### 7b. Wait for the preview, only when step 7 needs it
 
@@ -328,6 +329,34 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
    `fix-ci` deploy pass — never this step's.
 
+### 7c. Ask the reviewer, on the line
+
+**A decision this branch could not settle is a question thread, never a section of the body.** The
+reviewer reads threads inside the diff they judge, and the ruleset merges nothing while one is
+open. (why: docs/why.md#a-pr-question-is-a-thread-on-the-line)
+
+1. **Ask only a decision a person owns.** Settle every fact yourself first
+   (format-ticket's *Decisions, facts, and open questions*).
+2. **Build the recommended option.** The branch is then complete whatever the answer, and any
+   other answer costs one commit.
+3. **Never ask twice.** A thread whose root carries `review.questionMarker` and asks the same
+   thing already asks it.
+4. **Post every new question in one review.** `pull_request_review_write method:create`, then
+   one `add_comment_to_pending_review` per question, on the diff line the decision lands on.
+   With no line inside a hunk, use the first changed line of the file it most concerns. Submit
+   with `method:"submit_pending"` and `event:"COMMENT"`. The body is one line, `<n> question(s)
+   for the reviewer, one per thread.`, plus `identity.commentMarker`. Never open it with
+   `review.bodyHeader`, which marks the critic's review.
+5. **Shape each question as format-ticket's options:** the question in bold, then options A, B…,
+   each with what it implies, the recommended one first and marked as built. End with `Reply
+   with a letter, or your own answer.`, then `review.questionMarker`, then
+   `identity.commentMarker`. Measure it with `--kind comment`.
+6. **If the pending-review tools do not resolve**, post the questions as one PR comment in the
+   same shape. The reviewer answers it with a mention.
+
+The dispatcher never counts a question thread as the bot's turn. It waits on the person, and
+their reply fires `address-review`. Name each question in the report.
+
 ### 8. Push and end
 
 **This skill never watches CI, never marks a PR ready, and never merges.** Its one wait is the
@@ -338,10 +367,10 @@ CI completion is an event. The dispatcher reads it through `workflow/lib/merge-g
 box, else the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
-- **A conflicted PR schedules zero CI runs.** Merge `origin/main` in and resolve before you push,
+- **A conflicted PR schedules zero CI runs.** Merge `origin/<base>` in and resolve before you push,
   so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
-- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Mark it ready yourself
-  when CI is green.
+- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Tell the person to mark
+  it ready once CI is green. Never wait for CI yourself.
 
 Then report: PR URL, dismissed findings with reasons, and the acceptance criteria a human should
 verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the user to save it
@@ -354,6 +383,7 @@ to memory.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
 - **Never** link a preview page that shows no data, unless a line in the body says why.
+- **Never** put a decision in the PR body. It is a question thread (step 7c).
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
   the critic agree.
@@ -371,4 +401,4 @@ to memory.
 - Change outline views: `change-outline.md`
 - Per-repo settings: `<worktree>/.claude/workflow.json`
 - Why each rule exists: `docs/why.md` in `sydevs/claude-workflow`
-- Lean gate implementation: `<repo>/.claude/skills/pr-prep/check.sh`
+- Lean gate: `leanGate.command` in `<worktree>/.claude/workflow.json`
