@@ -21,7 +21,18 @@ and the run ends. **Start with `/workflow:start-run` and end with
   `reviewDecisionFrom` through `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/merge-verdict.mjs`, never from memory.
 - `method:get_comments` — **the newest page only**, `perPage` small, the page computed from the
   `comments` count on `get`.
-- The linked ticket's body, for scope. Then `git fetch origin <branch>` and the touched files.
+- The linked ticket's body, for scope. Then `git fetch origin <base> <branch>` and the touched files.
+
+## Merge the base first
+
+**Before any thread, merge `origin/<base>` into the branch when the branch is behind it.** Every
+run on a PR you can push to, asked or not, so each fix is built on the current base and the lean gate tests the merged
+result. A merge commit only, resolved as `resolve-conflicts` steps 2-4 say: both sides' intent,
+both behaviours kept. Push it even when no thread is adopted. In the summary comment a clean merge
+gets one line, and a resolved conflict gets a line per hunk whose choice was not obvious.
+**On a semantic conflict, `git merge --abort`**, ask in format-ticket's options shape, and address
+the threads on the unmerged branch.
+(why: docs/why.md#every-revision-starts-from-the-current-base)
 
 ## What counts as a thread to address
 
@@ -84,10 +95,7 @@ preflight's incidental-finding rule says.
    linking its thread, or quoting its review-body point — with `identity.commentMarker`. **A revision that pushes and says nothing
    is invisible.** The comment is what Actions and the reviewer read.
 
-**Push and stop.** Actions reads CI when it completes. **Never merge `main` in to bring the branch
-up to date, even when a reviewer asks.** A base merge belongs only to a PR GitHub reports
-`CONFLICTING`. Reply on the thread instead.
-(why: docs/why.md#push-and-end, docs/why.md#staleness-is-not-yours-conflicts-are)
+**Push and stop.** Actions reads CI when it completes. (why: docs/why.md#push-and-end)
 
 ## A human's PR
 
