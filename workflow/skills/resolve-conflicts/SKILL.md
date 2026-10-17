@@ -12,9 +12,9 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 One PR that GitHub reports as `CONFLICTING`. **Start with `/workflow:start-run` and end
 with `/workflow:finish-run`.**
 
-**Merge the base branch in only when GitHub reports the PR `CONFLICTING`.** Never to freshen a PR
-that is merely behind. The base ref belongs to that trigger, not to a session's judgement.
-(why: docs/why.md#staleness-is-not-yours-conflicts-are)
+**Merge the base branch in only when GitHub reports the PR `CONFLICTING`.** A PR that is merely
+behind is not this handler's work.
+(why: docs/why.md#every-revision-starts-from-the-current-base)
 
 ## Reads
 

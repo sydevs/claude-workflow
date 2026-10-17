@@ -912,27 +912,35 @@ stuck scheduler. Waiting is futile.
 A run that predates the base moving is stale, and it makes a conflicted PR look tested when it is
 not.
 
-## Staleness is not yours, conflicts are
+## Every revision starts from the current base
 
-Three conflict essays landed on SahajCloud#769 inside twenty-five minutes. Each session merged
-`main` in to keep the branch fresh, met the same hunks, and wrote the same comment. The branch was
-never conflicting, so nothing had asked any of them to touch the base ref.
+`address-review` used to be forbidden from merging the base, even when a reviewer asked, and
+`dispatcher/decide.mjs` fires `resolve-conflicts` on `CONFLICTING` alone. So no handler could
+merge a PR that was merely behind. It cost SahajCloud#912 a round trip on 2026-10-16. The
+reviewer's ask needed `JobStageView`, merged to `main` in #972 an hour earlier. The session could
+not import it (TS2307), was not allowed to merge, pushed nothing, and asked a human to click
+*Update branch* and mention the bot again. The merge it refused was clean.
 
-**The base ref belongs to a trigger, not to a session's judgement.** `dispatcher/decide.mjs` fires
-`resolve-conflicts` only on a non-draft PR GitHub reports `CONFLICTING`, and that is the one state
-in which merging a base is anyone's job. `address-review` also reaches a behind-but-mergeable PR,
-and it was merging anyway — a handler acting outside its trigger. Three of them could do it at once
-precisely because none of them owned the decision.
+Now every `address-review` run merges the base first, asked or not. A fix built on the current
+base cannot miss what the base added, the lean gate tests the code that would land, and a conflict
+surfaces while a session is already on the branch instead of waiting for a `CONFLICTING` event.
+This also answers the question sydevs/claude-workflow#160 left open: a request through the
+`@sydevs-bot` channel needs no special authorisation, because the merge happens anyway.
 
-That reason needs no per-repo knowledge, which is why it replaced the first one written down. The
-queue was that first reason, and it is narrower than it looks: `claude-workflow` has no queue and no
-CI at all (`ci.noCi`). *"Being behind costs nothing"* was also too strong, since a preview builds the
-branch head ([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
+The ban came from SahajCloud#769, where three conflict essays landed inside twenty-five minutes.
+Each session merged `main` in, met the same hunks, and wrote the same comment. The cost there was
+the three essays, not the three merges. The rule keeps that cost small rather than claiming it
+cannot recur: a clean merge earns one line, only a non-obvious hunk earns more, and a pushed merge
+leaves the next run nothing to merge. A semantic conflict aborts the merge rather than the run, so
+the review is still answered while the person decides.
 
-So a reviewer can want the base merged in and be right, and they can merge it themselves. **Whether
-a request through the `@sydevs-bot` channel authorises a session to do it is undecided** — both
-skills forbid it today, and sydevs/claude-workflow#160 left the question open. Read this entry as
-why the default is no, never as a reason to make an exception.
+One cost is accepted, not solved. A reviewer's *changes since your last review* view now includes
+whatever the base gained since then, not only the session's own commits.
+
+Two older reasons are gone, and must not come back. The merge queue never covered
+`claude-workflow`, which has no queue and no CI (`ci.noCi`). *"Being behind costs nothing"* was
+false too, since a preview builds the branch head
+([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs)).
 
 One cost this rule used to claim is retired. Merging `main` in once re-flagged an approved PR,
 because the `synchronize` handler re-added `awaiting` from a stale review page
