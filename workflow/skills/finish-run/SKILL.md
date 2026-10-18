@@ -71,7 +71,8 @@ and the label on the item now belongs to the next attempt. Post the journal entr
 ## Stop
 
 No polling. No timers. Do not try to end the session — a run cannot. Leave nothing that could
-wake you. Cron mode and repo mode have no lock to release. (why: docs/why.md#sessions-linger)
+wake you: call `unsubscribe_pr_activity`, then stop. Cron mode and repo mode have no lock to
+release. (why: docs/why.md#sessions-linger, docs/why.md#never-subscribe-to-pr-activity)
 
 ## Local mode
 
