@@ -55,7 +55,8 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   passed. `get_labels` refuses a PR number. Past it, the label may
   be the next attempt's. Either fails → stop. Write nothing more. Journal a stop.
   (why: docs/why.md#a-session-past-its-deadline-owns-nothing)
-- **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
+- **Woken later?** Re-read the lock. You removed it. Call `unsubscribe_pr_activity`, then stop.
+  The platform subscribes you to the PR you opened; never call `subscribe_pr_activity` yourself.
   (why: docs/why.md#never-subscribe-to-pr-activity)
 - **Push and end.** Never wait for CI. Never mark a PR ready. Never merge.
   (why: docs/why.md#push-and-end)

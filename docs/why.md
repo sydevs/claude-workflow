@@ -120,11 +120,17 @@ The subscription is not the only way GitHub can reach a finished run, and a run 
 session. Sessions stayed `active` a full day after their work finished, including ones that
 unsubscribed exactly as instructed. So the subscription, not the session, is the part we control.
 
-**The baton is the backstop, and it is why this stays safe.** A woken session's first act re-derives
-the worklist from `assignee:sydevs-bot`. The item it was working on has already gone back to the
-reviewer, so it finds nothing and exits. Under the old timestamp census, a woken session would have
-seen fresh `updated_at` values and found real work. Handing back the baton is what makes re-entry a
-no-op.
+**The released lock is the backstop, and it is why this stays safe.** A woken session's first act
+re-reads the lock label it removed, finds it gone, and stops — so re-entry is a no-op whatever the
+wake carried. That matters because the wake carries the harness's own drive-to-green posture: fix
+CI, answer reviews, stay on the PR until it merges. A session that took it would push to an item
+the next dispatch holds, and race `fix-ci` for the same PR with no lease of its own.
+
+**So unsubscribe on the way out.** Each further wake spends a turn re-reading a lock the run no
+longer owns. 8 sessions across 6 days of 2026-10-04..17 were woken this way; two of the last three
+unsubscribed on their own judgement and one did not, which is the divergence the rule removes.
+Unsubscribing cannot stop the first subscription — the platform creates it, and a session cannot
+end itself — so this bounds the wakes rather than preventing them.
 
 ## You cannot push to a human's PR
 
