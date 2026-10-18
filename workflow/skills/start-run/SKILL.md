@@ -50,8 +50,9 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 
 ## Rules that hold in every handler
 
-- **Where the run holds a lock, re-check it before your first write to the item and before every
-  push:** the label is on, **and** the record's `deadline` has not passed. Past it, the label may
+- **Where the run holds a lock, re-check it with `issue_read method:get` before your first write
+  to the item and before every push:** the label is on, **and** the record's `deadline` has not
+  passed. `get_labels` refuses a PR number. Past it, the label may
   be the next attempt's. Either fails → stop. Write nothing more. Journal a stop.
   (why: docs/why.md#a-session-past-its-deadline-owns-nothing)
 - **Woken later?** Re-read the lock. You removed it. Stop. Never call `subscribe_pr_activity`.
