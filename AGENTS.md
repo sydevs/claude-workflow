@@ -164,9 +164,10 @@ inside that worktree, are ordinary writes. `implement-ticket` step 6 is correct 
 and journalled the belief as fact.
 
 Documentation still lives **outside** `.claude/` in all five repos — this file, the nested
-`AGENTS.md` guides in the product repos, and `docs/` — because the rest of `.claude/` really is
-protected. Here the only protected file is `.claude/workflow.json`. Note that `.claude-plugin/` and
-`workflow/.claude-plugin/` are *not* under `.claude/`, and stay freely writable.
+`AGENTS.md` guides, and `docs/` — because the rest of `.claude/` really is protected. Here that
+means two tracked files: `.claude/workflow.json` and `.claude/settings.json`. Note that
+`.claude-plugin/` and `workflow/.claude-plugin/` are *not* under `.claude/`, and stay freely
+writable.
 
 When a change genuinely needs a protected path edited, expect the prompt and do the edit attended.
 A handler that finds one in its way hands the ticket back rather than attempting the write — see
