@@ -1,11 +1,5 @@
 # claude-workflow — contributor guide
 
-Guidance for AI coding agents — Claude Code, OpenAI Codex, Cursor, and other AGENTS.md tools —
-working in this repository.
-
-> `CLAUDE.md` is a symlink to this file, so both tool ecosystems read one guide that cannot drift
-> — the same pattern SahajCloud, WeMeditateWeb, and SahajAtlasWordpress use.
-
 [`README.md`](README.md) explains what the plugin *is* and what each skill does. Read it first.
 This file covers only what is dangerous or surprising about **editing** this repo.
 
@@ -32,6 +26,8 @@ records a `gitCommitSha` and never revisits it. The cache directory is named aft
 unchanged version string keeps the old cache, however far `main` has moved. `version` is **not**
 decorative here: it is the one thing a skill change must always update.
 (why: docs/why.md#an-installed-plugin-does-not-track-main)
+`.claude-plugin/marketplace.json`, one level above `workflow/`, must stay valid alongside
+`plugin.json`, or an install fails.
 
 ### ⚠ You cannot test a change by running it
 
@@ -57,17 +53,12 @@ own entries as tickets. Check this exclusion in every query you add to a skill.
 
 ## The gate
 
-```bash
-claude plugin validate ./workflow --strict     # leanGate.command, first half
-node --test workflow/lib/*.test.mjs            # leanGate.command, second half
-claude --plugin-dir ./workflow                 # load the plugin without installing it
-```
-
-**That validator is the entire automated gate for the plugin's prose** — there is no CI here. It
-checks only the plugin manifest and skill frontmatter, never whether the prose is *right*, because
-the skills are prose. The lib suite tests the `workflow/lib/` scripts that own mechanical rules.
-It must pass from the checkout **and** from a `.claude/worktrees/<slug>` worktree, because
-`implement-ticket` runs the gate from one.
+**`claude plugin validate`, the first half of `leanGate.command`, is the entire automated gate
+for the plugin's prose** — there is no CI here. It checks only the plugin manifest and skill
+frontmatter, never whether the prose is *right*, because the skills are prose. The lib suite, its
+second half, tests the `workflow/lib/` scripts that own mechanical rules. It must pass from the
+checkout **and** from a `.claude/worktrees/<slug>` worktree, because `implement-ticket` runs the
+gate from one.
 
 ⚠ **`.github/workflows/` exists, and it is not CI.** It holds `dispatcher.yml` — the reusable
 workflow that observes every GitHub event in all five repos, classifies it, locks the item, fires
@@ -90,31 +81,13 @@ in the session transcript and its journal comment.
 
 ## No package manager
 
-There is no `package.json`, lockfile, `node_modules`, or anything to install. The hooks are plain
-node `.mjs` files that Claude Code runs directly, so they may use **only** the node standard
-library. `packageManager` is `"none"` in `.claude/workflow.json` — the shared hooks read that key
-to name the right command, and here there is none to name.
+The hooks are plain node `.mjs` files that Claude Code runs directly, so they may use **only**
+the node standard library.
 
 Do not add a dependency. If a hook needs something outside `node:*`, that is a sign it does too
 much.
 
-## Layout
-
-| Path | Holds |
-| --- | --- |
-| `workflow/skills/<name>/SKILL.md` | One skill each — frontmatter plus prose. The README table lists them. |
-| `workflow/hooks/*.mjs` | The four hooks, wired in `workflow/hooks/hooks.json`, sharing `hooks/lib/workflow-config.mjs`. |
-| `workflow/lib/*.mjs` | Shared by the skills' scripts — `config.mjs` (config lookup, argv), `merge-gate.mjs` (the one definition of "green" and "mergeable"), `base-ref.mjs` (the one baseline a `--base` comparison is taken against), `test-only.mjs` (proves a branch changed only `findings.testGlobs` paths), and the comment tools: `comment-fingerprint.mjs` (proves a sweep changed comments only), `comment-lint.mjs` (banned phrasings a branch added), `comment-rule-sync.mjs` (the four rule copies still match), `comment-protect.json` (what is never deleted). Also `budget.mjs` (writing budgets and the journal fitter), `rule-delta.mjs` (rules a skill edit dropped), `payload.mjs` (checks a dispatch record), `merge-verdict.mjs` (the review decision), `railway.mjs` and `ste-lint.py`. |
-| `workflow/skills/<name>/*.mjs` | A skill's own scripts. Run with `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/<name>/<script>`: a routine has no `CLAUDE_PLUGIN_ROOT`, and reads the skills from the checkout. **None of them fetch** — see below. |
-| `workflow/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | The plugin manifest, and the **marketplace** manifest one level up. Both must be valid for an install to work. |
-| `loop-config.json` | Every **value** the loop reads: `handlers`, `dispatch`, `roadmap`, `ci`, `labels`, `assignment`, `ceilings`, `findings`, `review`, `projects`, `issueFields`, `mergePolicy`, `identity`, `auditCalendar`, `auditAngles`, `deps`, `sentry`, `journal`, `repos`, `org`, `journalRepo`, `writing`, `relationships`, `contractSync`, `preview`, `railway`, `mailpit`, `storybook`. Read fresh from `main` each dispatch. |
-| `.github/workflows/dispatcher.yml` + `dispatcher/*.mjs` | The event dispatcher, called by all five repos. **Not CI** — see the warning above. |
-| `.github/workflows/dependency-review.yml` | The one shared CI job: each product repo's CI calls it. |
-| `.claude/workflow.json` | This repo's own per-repo **values**, same shape as every product repo, same rule as `loop-config.json`. |
-| `docs/routine-setup.md` | Bootstrapping the loop on a new Claude account, in dependency order. |
-| `docs/why.md` | The failure behind each rule, one heading per rule. Skills cite it as `(why: docs/why.md#anchor)`. |
-
-### ⚠ A skill's length is a running cost
+## ⚠ A skill's length is a running cost
 
 `start-run`, `finish-run`, the handler's own skill, and `loop-config.json` are read
 on **every** dispatch — 25 to 40 times a day. A paragraph added to any of them is paid for on
@@ -155,39 +128,16 @@ only decides, on JSON piped to stdin. (why: docs/why.md#a-routine-cannot-reach-t
 computation re-derived nine times a day is nine chances to derive it differently. Evaluate a rule
 wherever a rule can be evaluated. (why: docs/why.md#a-script-here-never-fetches)
 
+A skill runs its own script as `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/<name>/<script>`:
+a routine has no `CLAUDE_PLUGIN_ROOT`, and reads the skills from the checkout.
+
 ## Writing a skill
 
-- **Frontmatter is a security surface.** `allowed-tools` on a `SKILL.md` instructs an agent with
-  write access to five repositories. An over-broad line here is this repo's equivalent of an RCE.
-  `securityReview.triggerPattern` covers every skill `.md`, every hook, `workflow/lib`, the dispatcher and its workflows for that reason. Grant the
-  narrowest set that works — compare `file-ticket` (`Bash(gh issue:*)`,
-  `Bash(gh api:*)`, …) against the pipeline skills that genuinely need `Bash(*)`.
-- **`disable-model-invocation: true` unless the skill is a helper.** Every user- or
-  routine-invoked skill carries it, so nothing fires on a stray phrase. Only the helpers —
-  `dev-server`, `format-ticket`, `start-run` and `finish-run`, all invoked *by* other skills — omit it.
-- **Write for one busy reader.** The loop's own writing rules (lead with the outcome, detail in
-  `<details>`, no throat-clearing) live in `start-run/SKILL.md` and apply to skill bodies
-  as much as to what they emit.
-- **The rule lives in the skill. The story lives in [`docs/why.md`](docs/why.md).**
-  `start-run` is re-read on every dispatch, so length there costs tokens each time and
-  dilutes the rules it carries. Move a retrospective justification one hop away: add a heading in
-  `docs/why.md` named after the rule, and cite it as `(why: docs/why.md#anchor)`.
-  **Never let a story be a rule's only statement.** Check that the instruction survives inline as
-  an imperative before you move the narrative.
+Read [`workflow/skills/AGENTS.md`](workflow/skills/AGENTS.md) before you edit a skill.
 
 ## Editing a hook
 
-Hooks run in a maintainer's own session with their credentials, on every matching tool call.
-
-- Resolve paths against the **git worktree root**, not `CLAUDE_PROJECT_DIR` — `/implement-ticket`
-  works in a worktree by default. Use `worktreeRoot()` in `hooks/lib/workflow-config.mjs`, the one
-  place that decides this.
-- **Never break a session on bad input.** `loadConfig()` returns `{}` for a missing or malformed
-  `workflow.json`. `readInput()` returns `null` on anything unparseable. An un-onboarded repo must
-  stay usable.
-- A blocking hook risks a false positive that costs someone a working session.
-  `block-wrong-bash` has already inverted once against the exact cross-repo shape it exists to
-  permit (#16). Test the session shapes, not just the happy path.
+Read [`workflow/hooks/AGENTS.md`](workflow/hooks/AGENTS.md) before you edit a hook.
 
 ## ⚠ Protected paths, and why the docs are where they are
 
@@ -214,9 +164,10 @@ inside that worktree, are ordinary writes. `implement-ticket` step 6 is correct 
 and journalled the belief as fact.
 
 Documentation still lives **outside** `.claude/` in all five repos — this file, the nested
-`AGENTS.md` guides in the product repos, and `docs/` — because the rest of `.claude/` really is
-protected. Here the only protected file is `.claude/workflow.json`. Note that `.claude-plugin/` and
-`workflow/.claude-plugin/` are *not* under `.claude/`, and stay freely writable.
+`AGENTS.md` guides, and `docs/` — because the rest of `.claude/` really is protected. Here that
+means two tracked files: `.claude/workflow.json` and `.claude/settings.json`. Note that
+`.claude-plugin/` and `workflow/.claude-plugin/` are *not* under `.claude/`, and stay freely
+writable.
 
 When a change genuinely needs a protected path edited, expect the prompt and do the edit attended.
 A handler that finds one in its way hands the ticket back rather than attempting the write — see
@@ -224,9 +175,8 @@ A handler that finds one in its way hands the ticket back rather than attempting
 
 ## Conventions
 
-- **Use conventional commits.** Derive the scopes in use from `git log --oneline -30` (`loop`,
-  `hooks`, `docs`, `fields`, …). The body carries the *reasoning*, on purpose — it is the only
-  record a prose change leaves behind.
+- **Use conventional commits.** Derive the scopes in use from `git log --oneline -30`. The body
+  carries the *reasoning*, on purpose — it is the only record a prose change leaves behind.
 - **Branches are `claude/*`.** Cloud sessions cannot push anywhere else.
 - **Open the PR. Never merge it.** This repo is `loopMayNotMerge`: merging it is the deploy, so
   no auto-merge is armed here and no queue runs. You merge it, deliberately.
