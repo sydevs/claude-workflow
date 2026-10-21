@@ -1051,7 +1051,7 @@ The strike ordering was fixed too, or a misread line would relate and delete evi
 The edit history keeps the `— <reason>` prose. Until a session can read relationships itself
 (sydevs/claude-workflow#3), the `blocked` label and the pre-fire check are the gate.
 
-## An unusable blocker line is reported
+## An unresolved blocker line is reported
 
 `sydevs/SahajCloud#987` said `Blocked by: …/pull/912`. `parseBlockedBy` returns `[]` for that line
 — GitHub's relationship takes an issue — so nothing was created, no `blocked` went on, and no word
@@ -1060,12 +1060,20 @@ The result is a ticket that reads as blocked to every human and as ready to the 
 `block on` verb has refused loudly in exactly this situation since it shipped; the body-marker path
 had no equivalent.
 
-So an unusable line gets one comment naming it and the two accepted spellings. Nothing else moves:
+So an unresolved line gets one comment naming it and the two accepted spellings. Nothing else moves:
 the item really is not blocked, and `blocked` follows the relationship.
 
-- **Keyed on the line's own text**, since there is no comment id here. A body edit elsewhere
-  re-derives the same key and `commentOnce` posts nothing; a corrected line yields a key that is
-  never reached.
+- **Report narrower than you read.** The matcher is loose by design, and that entry priced a false
+  positive as a run skipping a ticket. A comment on a live ticket is dearer, so only a line that
+  names a ref-shaped target and resolves none is reported. `Blocked by the lack of staging
+  credentials.` is prose, and the first draft of this would have nagged its author.
+- **Keyed on the targets, not the line.** There is no comment id on this path. The whole line
+  would make the reason prose part of the identity, so rewording after the em dash — the edit
+  people actually make — would re-post advice already read, and any later tidying of the matcher
+  would re-nag every open ticket. A corrected target still yields a key never reached.
+- **The line is quoted as written**, bullet off and nothing else. The matcher's intermediate
+  strips leading emphasis only, so quoting it returns `Blocked by #12.**` to its author and reads
+  as the dispatcher having mis-seen the line.
 - **A line that resolved one target stays silent.** That ticket is related and carries `blocked`,
   so the human and the machinery agree. A PR URL beside a resolved issue is as often reason prose
   — "until that PR merges" — as a second blocker, and reporting it would be a guess.

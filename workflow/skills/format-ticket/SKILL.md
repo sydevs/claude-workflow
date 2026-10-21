@@ -234,7 +234,7 @@ with or without a colon, through leading bold or a list bullet, and takes either
 issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as is a PR URL; the
 dispatcher comments once on a line that names neither.
 (why: docs/why.md#the-marker-reader-matches-words-not-punctuation,
-docs/why.md#an-unusable-blocker-line-is-reported) Never strike a line through to clear a blocker.
+docs/why.md#an-unresolved-blocker-line-is-reported) Never strike a line through to clear a blocker.
 A blocker clears when its issue closes or a person removes the relationship.
 
 A local session may also set the native relationship directly. Cross-repo needs the full URL:

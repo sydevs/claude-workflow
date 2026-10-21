@@ -643,20 +643,29 @@ function blockVerb(s, config, facts) {
 }
 
 /**
- * One comment per live `Blocked by` line naming no in-org issue. `stripBlockedBy`
- * leaves such a line in the body, rightly — it is the only record of the
- * author's intent — so unreported it reads as blocked to every human and as
- * ready to the machinery. No label, relationship or Status moves for it: the
- * item really is not blocked, and `blocked` follows the relationship.
- * (why: docs/why.md#an-unusable-blocker-line-is-reported)
+ * One comment per live `Blocked by` line that names a target and resolves no
+ * in-org issue. `stripBlockedBy` leaves such a line in the body, rightly — it
+ * is the only record of the author's intent — so unreported it reads as
+ * blocked to every human and as ready to the machinery. No label,
+ * relationship or Status moves for it: the item really is not blocked, and
+ * `blocked` follows the relationship.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  *
- * Keyed on the line's own text, because there is no comment id here. A body
- * edit elsewhere re-derives the same key and posts nothing; a corrected line
- * yields a key that is never reached.
+ * Keyed on the targets, not the whole line: there is no comment id on this
+ * path, and the author rewording the reason must not re-post the advice.
  */
-function refuseUnusableBlockers(s, config) {
-  return (s.markers?.unresolved || []).map((line) =>
-    commentOnce(`blocker-unusable ${line}`, `Not blocked: \`${line}\` names no issue, so no relationship was created. Name the blocker as a full issue URL or \`owner/repo#N\`, for example \`${config.org}/SahajCloud#632\`. A PR URL and a bare \`#N\` are ignored — block on the issue a PR closes.`))
+function refuseUnresolvedBlockers(s, config) {
+  // Guarded, unlike its `blockedBy` neighbour: a snapshot assembled by hand
+  // predates the field, and `decide` must stay total over one.
+  return (s.markers.unresolvedBlockers || []).map(({ line, targets }) =>
+    commentOnce(
+      `blocker-unresolved ${targets.join(' ')}`,
+      [
+        `Not blocked: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue, so no relationship was created.`,
+        `> ${line}`,
+        `Name the blocker as a full issue URL or \`owner/repo#N\`. A PR URL and a bare \`#N\` are ignored — block on the issue a PR closes.`,
+      ].join('\n\n'),
+    ))
 }
 
 // ---- per-event deciders ------------------------------------------------
@@ -718,7 +727,8 @@ function derive(target, s, config) {
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (blockers.length) plan.push(relationships(blockers, true))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
-      if (!outsider) plan.push(...refuseUnusableBlockers(s, config))
+      // An outsider's own markers are already text, so there is nothing to refuse.
+      if (!outsider) plan.push(...refuseUnresolvedBlockers(s, config))
       // Nothing the loop files is revised on arrival any more: every author
       // writes through write-ticket, so a proposal arrives fully specified.
       // (why: docs/why.md#one-author-writes-every-implementation-ticket)
@@ -739,7 +749,9 @@ function derive(target, s, config) {
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
       if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
-      plan.push(...refuseUnusableBlockers(s, config))
+      // No outsider guard here: the early return above already refused the one
+      // case where the editor cannot make state.
+      plan.push(...refuseUnresolvedBlockers(s, config))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':

@@ -735,7 +735,7 @@ the words `Blocked by`, with or without a colon, through bold or a bullet, and t
 `owner/repo#N`. A line naming neither — a PR URL, a bare `#N` — creates no relationship, and the
 dispatcher comments once to say so, keyed on the line's own text.
 (why: docs/why.md#the-marker-reader-matches-words-not-punctuation, docs/why.md#blocked-follows-the-relationship,
-docs/why.md#an-unusable-blocker-line-is-reported)
+docs/why.md#an-unresolved-blocker-line-is-reported)
 
 Issue **fields** have no such problem: `list_issue_fields`, `issue_read.field_values`,
 `list_issues(fields:["field_values"])` and `issue_write(issue_fields:[…])` all work from a routine.

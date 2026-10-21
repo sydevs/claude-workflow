@@ -211,6 +211,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   if (s.kind === 'issue') {
     const blockedBy = await dependencies(gh, base, 'blocked_by')
     const markerBlockers = parseBlockedBy(issue.body, config.org, config.relationships?.bodyMarker)
+    const unresolved = unresolvedBlockers(issue.body, config.org, config.relationships?.bodyMarker)
     // The `Hold Until` org field is where a park lives. The `Re-check:` line is
     // the older spelling, still read so a ticket written before the change
     // still parks. (why: docs/why.md#a-date-belongs-in-a-date-field)
@@ -218,7 +219,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     const held = (issue.issue_field_values || []).find((f) => f.issue_field_name === fieldName)
     const until = (held?.value && String(held.value).slice(0, 10)) || parseRecheck(issue.body, config.relationships?.recheckMarker)
     s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
-    s.markers = { blockedBy: markerBlockers, unresolved: unresolvedBlockers(issue.body, config.org, config.relationships?.bodyMarker), recheck: s.park.until, recheckPassed: s.park.passed }
+    s.markers = { blockedBy: markerBlockers, unresolvedBlockers: unresolved, recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
     // Every relationship, closed blockers too: a line naming one is already
     // converted, so it is stripped, never re-POSTed.

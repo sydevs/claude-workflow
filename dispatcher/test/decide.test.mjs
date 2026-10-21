@@ -225,7 +225,7 @@ function issueSnap(over = {}) {
     locked: false,
     record: {},
     comments: [],
-    markers: { blockedBy: [], unresolved: [], recheck: null, recheckPassed: false },
+    markers: { blockedBy: [], unresolvedBlockers: [], recheck: null, recheckPassed: false },
     park: { until: null, passed: false, source: null },
     blockedByOpen: [],
     openPrsClosingIt: [],
@@ -273,59 +273,64 @@ test('the bot-filed issue gets proposal + awaiting + Proposed and its markers be
   assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked')))
 })
 
-// ---- an unusable blocker line is reported (why: docs/why.md#an-unusable-blocker-line-is-reported)
+// ---- an unresolved blocker line is reported (why: docs/why.md#an-unresolved-blocker-line-is-reported)
 
 const PULL_LINE = 'Blocked by: https://github.com/sydevs/SahajCloud/pull/912 — until it merges'
-const unusable = (plan) => plan.filter((a) => a.type === 'comment' && a.key.startsWith('blocker-unusable'))
+const PULL_TARGET = 'https://github.com/sydevs/SahajCloud/pull/912'
+const unresolved = (plan) => plan.filter((a) => a.type === 'comment' && a.key.startsWith('blocker-unresolved'))
+/** An issue snapshot whose body markers are what the test is about. */
+const blockerSnap = (unresolvedBlockers, over = {}) =>
+  issueSnap({ markers: { blockedBy: [], unresolvedBlockers, recheck: null, recheckPassed: false }, ...over })
+const pullSnap = (over) => blockerSnap([{ line: PULL_LINE, targets: [PULL_TARGET] }], over)
 
 test('a blocker line naming a PR is refused on open, and nothing else moves for it', () => {
   // sydevs/SahajCloud#987 named the PR, not the issue that PR closes.
-  const s = issueSnap({ markers: { blockedBy: [], unresolved: [PULL_LINE], recheck: null, recheckPassed: false } })
-  const p = decide({ reason: 'issues.opened' }, s, config)
-  const said = unusable(p)
+  const p = decide({ reason: 'issues.opened' }, pullSnap(), config)
+  const said = unresolved(p)
   assert.equal(said.length, 1, 'one comment per line')
-  assert.match(said[0].body, /names no issue/)
+  assert.match(said[0].body, /names no sydevs issue/)
   assert.match(said[0].body, /owner\/repo#N/, 'and the two accepted spellings')
   assert.match(said[0].body, /full issue URL/)
+  assert.match(said[0].body, /\n> Blocked by: /, 'the line as written, quoted')
   assert.ok(!p.some((a) => a.type === 'relationships'), 'no relationship')
   assert.ok(!p.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('blocked'), 'no blocked label')
-  // The ticket is still nobody-but-you's turn, and still Proposed: the refusal moves no state.
+  // Still Proposed and still your turn: the refusal moves no state.
   assert.deepEqual(types(p).filter((t) => t.startsWith('status')), ['status:proposed'])
 })
 
-test('the refusal is keyed on the line, so a later edit does not repost it', () => {
-  const s = issueSnap({ markers: { blockedBy: [], unresolved: [PULL_LINE], recheck: null, recheckPassed: false } })
-  const onOpen = unusable(decide({ reason: 'issues.opened' }, s, config))[0]
-  const onEdit = unusable(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, s, config))[0]
-  assert.equal(onOpen.key, `blocker-unusable ${PULL_LINE}`, 'the line is the key — there is no comment id here')
+test('the refusal is keyed on the targets, so neither a later edit nor a reword reposts it', () => {
+  const onOpen = unresolved(decide({ reason: 'issues.opened' }, pullSnap(), config))[0]
+  const onEdit = unresolved(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, pullSnap(), config))[0]
+  assert.equal(onOpen.key, `blocker-unresolved ${PULL_TARGET}`, 'the targets are the key — there is no comment id here')
   assert.equal(onEdit.key, onOpen.key, 're-derived unchanged, so commentOnce posts nothing')
-  // A corrected line yields a key that is never reached.
-  const fixed = issueSnap({ markers: { blockedBy: [], unresolved: ['Blocked by #907'], recheck: null, recheckPassed: false } })
-  assert.notEqual(unusable(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, fixed, config))[0].key, onOpen.key)
+  // Rewording the reason after the em dash is the edit humans actually make.
+  const reworded = blockerSnap([{ line: 'Blocked by: ' + PULL_TARGET + ' — waiting on the backport', targets: [PULL_TARGET] }])
+  assert.equal(unresolved(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, reworded, config))[0].key, onOpen.key)
+  // A corrected target yields a key that is never reached.
+  const fixed = blockerSnap([{ line: 'Blocked by #907', targets: ['#907'] }])
+  assert.notEqual(unresolved(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, fixed, config))[0].key, onOpen.key)
 })
 
 test('a bare #N on edit is refused, and a resolvable line beside it still relates', () => {
-  const s = issueSnap({
-    markers: { blockedBy: [{ owner: 'sydevs', repo: 'SahajCloud', number: 907 }], unresolved: ['Blocked by #12'], recheck: null, recheckPassed: false },
+  const s = blockerSnap([{ line: 'Blocked by #12', targets: ['#12'] }], {
+    markers: { blockedBy: [{ owner: 'sydevs', repo: 'SahajCloud', number: 907 }], unresolvedBlockers: [{ line: 'Blocked by #12', targets: ['#12'] }], recheck: null, recheckPassed: false },
   })
   const p = decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, s, config)
-  assert.equal(unusable(p).length, 1)
+  assert.equal(unresolved(p).length, 1)
   assert.ok(p.some((a) => a.type === 'relationships'), 'the resolvable line is still converted')
   assert.ok(p.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('blocked'))
 })
 
 test('a non-member author\'s own line stays text — no refusal', () => {
   const stranger = { number: 9, state: 'open', labels: [], author: 'drive-by', authorAssociation: 'NONE', type: 'Bug' }
-  const markers = { blockedBy: [{ owner: 'sydevs', repo: 'SahajCloud', number: 907 }], unresolved: [PULL_LINE], recheck: null, recheckPassed: false }
-  const opened = decide({ reason: 'issues.opened' }, issueSnap({ item: stranger, markers }), config)
-  assert.equal(unusable(opened).length, 0)
-  const edited = decide({ reason: 'issues.edited', facts: { sender: 'drive-by' } }, issueSnap({ item: stranger, markers }), config)
-  assert.equal(unusable(edited).length, 0)
+  assert.equal(unresolved(decide({ reason: 'issues.opened' }, pullSnap({ item: stranger }), config)).length, 0)
+  const edited = decide({ reason: 'issues.edited', facts: { sender: 'drive-by' } }, pullSnap({ item: stranger }), config)
+  assert.equal(unresolved(edited).length, 0)
 })
 
-test('an edit carrying only an unusable line is no longer a silent no-op', () => {
-  const s = issueSnap({ markers: { blockedBy: [], unresolved: [PULL_LINE], recheck: null, recheckPassed: false } })
-  assert.deepEqual(types(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, s, config)), ['comment'])
+test('an edit carrying only an unresolved line is no longer a silent no-op', () => {
+  const p = decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, pullSnap(), config)
+  assert.deepEqual(types(p), ['comment'])
   const quiet = decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, issueSnap(), config)
   assert.deepEqual(types(quiet), ['note'], 'and an edit with no marker at all still is')
 })
