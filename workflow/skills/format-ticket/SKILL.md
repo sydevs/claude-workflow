@@ -213,7 +213,8 @@ what every gate reads.** The body line exists because a cloud session cannot wri
 dispatcher converts the line, then deletes it. Set the relationship where you can, and write the
 line always.
 
-Write it in exactly this form, one line per blocker, in `## Notes`:
+Write it in exactly this form, one line per blocker, in `## Notes`. The target is an issue, so
+block on the issue a PR closes, never the PR:
 
 ```markdown
 Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges
@@ -230,9 +231,11 @@ hands it back. A ticket approved while blocked starts on its own once the rechec
 
 **Write the format. Do not rely on it when reading.** The reader matches the words `Blocked by`,
 with or without a colon, through leading bold or a list bullet, and takes either a full in-org
-issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as is a PR URL.
-(why: docs/why.md#the-marker-reader-matches-words-not-punctuation) Never strike a line through
-to clear a blocker. A blocker clears when its issue closes or a person removes the relationship.
+issue URL or `owner/repo#N`. A bare `#N` names no repository and is ignored, as is a PR URL; the
+dispatcher comments once on a line that names neither.
+(why: docs/why.md#the-marker-reader-matches-words-not-punctuation,
+docs/why.md#an-unusable-blocker-line-is-reported) Never strike a line through to clear a blocker.
+A blocker clears when its issue closes or a person removes the relationship.
 
 A local session may also set the native relationship directly. Cross-repo needs the full URL:
 
