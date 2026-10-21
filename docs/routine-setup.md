@@ -733,7 +733,7 @@ relationship** and applies `blocked`. A local session can also set the relations
 sweeper reconciles them. The reader is deliberately generous about the line's shape — it matches
 the words `Blocked by`, with or without a colon, through bold or a bullet, and takes a URL or
 `owner/repo#N`. A line naming neither — a PR URL, a bare `#N` — creates no relationship, and the
-dispatcher comments once to say so, keyed on the line's own text.
+dispatcher comments once to say so, keyed on the targets it names.
 (why: docs/why.md#the-marker-reader-matches-words-not-punctuation, docs/why.md#blocked-follows-the-relationship,
 docs/why.md#an-unresolved-blocker-line-is-reported)
 
