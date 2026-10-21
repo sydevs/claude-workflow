@@ -58,7 +58,7 @@ nightly audit, work starts only on an event. Each session does one job, pushes, 
 - **One session per feature.** A build opens its PR only once every criterion is met. A session
   near its deadline pushes, says what remains, and asks for the next session, which starts at once.
 - **Your review is the spec.** A change you ask for on a PR is built on that PR and written into
-  the ticket's criteria. A split is only ever offered as your choice.
+  the ticket's criteria. A separate ticket is only ever proposed, with options, for you to choose.
 - **The completion check.** When a goal's last child closes, `revise-roadmap` compares what shipped
   with *What success looks like*. It closes the goal, or names the gap and sets `awaiting`.
 - **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
@@ -116,7 +116,7 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
 | Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link and `blocked`. Rechecked when that issue closes. |
 | Any issue | `@sydevs-bot block waiting on legal sign-off` | A short session picks what to watch and a recheck date. |
-| Bot PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and offers any split as your choice. |
+| Bot PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
 | Your own PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into your branch. |
 
@@ -148,7 +148,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a goal's approval; a recheck that frees an approved ticket; its own continue request | a draft PR once the ticket is built, or a goal's set of PRs |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
-| `address-review` | a review, thread reply or mention on a bot PR; its own continue request | a commit per ask, a rebuttal only of a fact, or a split offered as a choice — review-body points included |
+| `address-review` | a review, thread reply or mention on a bot PR; its own continue request | a commit per ask, a rebuttal only of a fact, or a ticket proposed as options — review-body points included |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
 | `resolve-conflicts` | a bot PR that conflicts, draft or ready, once per head | `main` merged in, conflicts resolved |

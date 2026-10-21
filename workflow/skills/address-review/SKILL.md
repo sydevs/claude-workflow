@@ -1,6 +1,6 @@
 ---
 name: address-review
-description: Answer every open thread on one PR after a review or comment. Build every reviewer ask on this PR, rebut only a fact, offer a split only as the reviewer's choice, then push and end. Fired by the dispatcher on review activity. Runnable locally against a PR number.
+description: Answer every open thread on one PR after a review or comment. Build every reviewer ask on this PR, rebut only a fact, and propose a separate ticket only as options for the reviewer to choose, then push and end. Fired by the dispatcher on review activity. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
@@ -67,11 +67,17 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 - **An ask that adds or changes a requirement** goes into the ticket's `## Acceptance criteria`
   as format-ticket's review line, in the same run. A small fix does not.
 - **A strong case that part of an ask belongs in its own ticket** — little connective tissue
-  with this PR, or a size that dwarfs it — is the reviewer's choice, never yours. Build it here
-  anyway. Then ask in the thread, in format-ticket's options shape: *A — keep it here (built)*,
-  *B — revert it, and file it as its own ticket*. Only their *B* files it.
-- **Ask before you build** only what cannot be built here: work in another repo, or a decision
-  the goal owns. Another repo's part of a goal belongs on that repo's sibling PR, or its child.
+  with this PR, a size that dwarfs it, work in another repo, or a decision the goal owns — is the
+  reviewer's call, never yours. Build nothing for that part yet. Propose the ticket in a review
+  comment: a reply in their thread, or a question thread (`/workflow:finalize-pr` step 7c) for a
+  review-body point. Say what the ticket would hold, then give format-ticket's options, your
+  recommendation first, each with its implications:
+  - *A — build it in this PR:* what it adds to the diff and the review, and what it delays.
+  - *B — file it as its own ticket:* what merges without it, what stays inconsistent until it
+    ships, and that it needs its own `implement`.
+
+  Leave the thread open, and build every other ask meanwhile. The open thread holds the merge.
+  In another repo, *A* means that repo's sibling PR on the same goal.
 - **Too much for this run** → push what is built, and reply only to the threads it finishes.
   End the summary comment with what remains, then `<!-- sydevs-request {"continue":true} -->`:
   the dispatcher starts the next run at once. Never answer a thread with a promise.
@@ -83,7 +89,8 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
 | **Rebut a fact** | Only when the ask rests on a premise the code disproves. Reply with the evidence — a file and line, or the ticket line it satisfies. **On a human's thread, leave it open.** Only they settle it. |
 | **Rebut the critic** | On a thread the own login rooted, any point may be rebutted with evidence. **Resolve it:** your evidence settles a bot's point. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
-| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. A split answered *B* → revert that part, and file it through `/workflow:write-ticket` in `create` mode. Reply with the SHA, the new ticket, or that the built option stands. **Resolve the thread.** |
+| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
+| **An answer to a ticket proposal** | *A* → build it here, and add it to the ticket's criteria as a review line. *B* → file it through `/workflow:write-ticket` in `create` mode, and link it under the PR's `## Notes for reviewer`. Reply with the SHA or the new ticket. **Resolve the thread.** |
 | **Ambiguous** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
 
 On a docs PR, every docs point in its repo is this PR's. Adopt it.
