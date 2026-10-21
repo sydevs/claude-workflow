@@ -424,3 +424,13 @@ test('the producer merging frees a built consumer without a session', () => {
   assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked')))
   assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.kind, x.number, x.reason]), [['pr', 55, 'ci']])
 })
+
+test('a set build that raised a decision on its own goal hands the goal back', () => {
+  const s = snap({ children: [{ ...producer, prs: 1 }, consumer], openQuestions: { total: 1, open: 1 }, request: { at: '2026-10-07T11:00:00Z', body: { escalated: true } }, record: { dispatches: [{ handler: 'revise-roadmap' }, { handler: 'implement-roadmap' }], current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set' } } } })
+  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config).some((a) => a.type === 'label' && a.add.includes('awaiting')))
+})
+
+test('a child a session already holds is never approved into a second build', () => {
+  const p = decide(verb('@sydevs-bot implement'), snap({ children: [{ ...producer, locked: true }, { ...consumer, blockedByOpen: [] }], record: plannedRec() }), config)
+  assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.number, x.reason]), [[12, 'approve']])
+})

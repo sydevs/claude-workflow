@@ -530,8 +530,8 @@ function implementTicket(s, config, facts) {
   return out.concat(fire('implement'))
 }
 
-/** Open children no PR answers yet: the ones an approval can still start. */
-const unstarted = (s) => (s.children || []).filter((c) => c.state === 'open' && !c.prs)
+/** Open children no PR answers and no session holds: the ones an approval can still start. */
+const unstarted = (s) => (s.children || []).filter((c) => c.state === 'open' && !c.prs && !c.locked)
 
 /**
  * Two unstarted children in one repo: a plan from before the one-per-repo
@@ -932,7 +932,7 @@ function derive(target, s, config) {
       if (blockedNow(s)) return plan.concat(label([L.blocked], [L.awaiting]))
       if ((s.item.labels || []).includes(L.blocked)) plan.push(label([], [L.blocked]))
       if (s.record?.rehold) plan.push(record({ rehold: 0 }))
-      if (req?.escalated) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
+      if (req?.escalated && s.parent) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
       // Approved while blocked, and the recheck found it free.
       // (why: docs/why.md#children-are-approved-together)
       if (s.record?.pendingImplement && !inFlight(s)) {

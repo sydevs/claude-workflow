@@ -74,10 +74,10 @@ function repoFromUrl(url, fallbackOwner) {
 }
 
 /** A roadmap ticket's implementation tickets, from GitHub's native sub-issues. */
-async function subIssues(gh, { owner, repo, number }) {
+async function subIssues(gh, { owner, repo, number }, lock) {
   try {
     const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
-    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null }))
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null, locked: (i.labels || []).some((l) => (l.name || l) === lock) }))
   } catch {
     return []
   }
@@ -212,7 +212,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.openQuestions = parseOpenQuestions(issue.body)
     s.parent = await parentOf(gh, base)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
-    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []
+    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock) : []
     // An approval starts only the open children no PR answers yet, and builds
     // together the ones whose only blockers are each other.
     // (why: docs/why.md#one-verb-plans-and-approves, docs/why.md#a-cross-repo-set-is-built-together)
