@@ -732,8 +732,10 @@ relationship** and applies `blocked`. A local session can also set the relations
 **The relationship is what every gate reads**, so the label follows it in both directions, and the
 sweeper reconciles them. The reader is deliberately generous about the line's shape — it matches
 the words `Blocked by`, with or without a colon, through bold or a bullet, and takes a URL or
-`owner/repo#N`.
-(why: docs/why.md#the-marker-reader-matches-words-not-punctuation, docs/why.md#blocked-follows-the-relationship)
+`owner/repo#N`. A line naming neither — a PR URL, a bare `#N` — creates no relationship, and the
+dispatcher comments once to say so, keyed on the line's own text.
+(why: docs/why.md#the-marker-reader-matches-words-not-punctuation, docs/why.md#blocked-follows-the-relationship,
+docs/why.md#an-unusable-blocker-line-is-reported)
 
 Issue **fields** have no such problem: `list_issue_fields`, `issue_read.field_values`,
 `list_issues(fields:["field_values"])` and `issue_write(issue_fields:[…])` all work from a routine.
