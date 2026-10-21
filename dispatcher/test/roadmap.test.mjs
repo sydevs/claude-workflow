@@ -327,3 +327,53 @@ test('children a review attached are planned first, never approved unplanned', (
   const replan = snap({ children: kids, request: { at: '2026-10-07T11:00:00Z', body: { replan: true } }, record: { current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' } } })
   assert.equal(fires(decide({ reason: 'unlock', facts: {} }, replan, config)).length, 0, 'nothing to re-plan before a plan')
 })
+
+// ---- one verb plans and approves (why: docs/why.md#one-verb-plans-and-approves)
+
+const plannedRec = (over = {}) => ({ dispatches: [{ handler: 'implement-roadmap', outcome: 'done' }], ...over })
+const endedPlan = (over = {}) => ({ dispatches: [{ handler: 'revise-roadmap', outcome: 'done' }], current: { handler: 'implement-roadmap', firedAt: '2026-10-07T10:00:00Z' }, approveOnPlan: { by: 'Ardnived' }, ...over })
+
+test('implement on an unplanned goal plans, and the approval waits for the plan to end', () => {
+  const p = decide(verb('@sydevs-bot implement'), snap(), config)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan?.by === 'Ardnived'))
+  assert.ok(!p.some((a) => a.type === 'targets'), 'nothing is approved before the plan exists')
+})
+
+test('the plan the verb asked for approves its children when it ends, with no second verb', () => {
+  const children = [{ repo: repo('SahajCloud'), number: 10, state: 'open', prs: 0 }, { repo: repo('SahajAtlasWeb'), number: 12, state: 'open', prs: 0 }]
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement-roadmap' } }, snap({ children, record: endedPlan() }), config)
+  const t = p.find((a) => a.type === 'targets').list
+  assert.deepEqual(t.map((x) => [x.number, x.reason, x.facts.by]), [[10, 'approve', 'Ardnived'], [12, 'approve', 'Ardnived']])
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan === null))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved === true))
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'the goal is not your turn')
+})
+
+test('a plan that raised a decision approves nothing and hands the goal back', () => {
+  const children = [{ repo: repo('SahajCloud'), number: 10, state: 'open', prs: 0 }]
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement-roadmap' } }, snap({ children, record: endedPlan(), openQuestions: { total: 1, open: 1 } }), config)
+  assert.ok(!p.some((a) => a.type === 'targets'))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan === null))
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+})
+
+test('a goal planned under the old split is re-planned before approval', () => {
+  const children = [{ repo: repo('SahajCloud'), number: 10, state: 'open', prs: 0 }, { repo: repo('SahajCloud'), number: 11, state: 'open', prs: 0 }]
+  const p = decide(verb('@sydevs-bot implement'), snap({ children, record: plannedRec() }), config)
+  assert.deepEqual(fires(p).map((a) => [a.handler, a.flags.mode]), [['implement-roadmap', 'replan']])
+  assert.ok(!p.some((a) => a.type === 'targets'))
+})
+
+test('two children in one repo are not doubled up when one already has a PR', () => {
+  const children = [{ repo: repo('SahajCloud'), number: 10, state: 'open', prs: 1 }, { repo: repo('SahajCloud'), number: 11, state: 'open', prs: 0 }]
+  const p = decide(verb('@sydevs-bot implement'), snap({ children, record: plannedRec() }), config)
+  assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => x.number), [11], 'the child with a PR is not approved again')
+})
+
+test('a re-plan of an approved goal approves what it files', () => {
+  const kids = [{ repo: repo(), number: 1, state: 'open', prs: 0 }]
+  const s = snap({ children: kids, request: { at: '2026-10-07T11:00:00Z', body: { replan: true } }, record: plannedRec({ approved: true, current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' } }) })
+  const p = decide({ reason: 'unlock', facts: {} }, s, config)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan))
+  assert.equal(fires(p)[0].flags.mode, 'replan')
+})

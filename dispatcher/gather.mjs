@@ -212,6 +212,12 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.parent = await parentOf(gh, base)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
     s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []
+    // An approval starts only the open children no PR answers yet.
+    // (why: docs/why.md#one-verb-plans-and-approves)
+    for (const c of s.children.filter((k) => k.state === 'open')) {
+      const ref = { owner: c.repo.owner, repo: c.repo.name, number: c.number }
+      c.prs = (await openPrsClosing(gh, ref)).length
+    }
     const blocking = target.reason === 'issues.closed' ? await dependencies(gh, base, 'blocking') : []
     s.dependents = Array.isArray(blocking)
       ? blocking.filter((d) => d.state === 'open').map((d) => ({ repo: { owner: d.owner, name: d.repo, full: `${d.owner}/${d.repo}` }, kind: 'issue', number: d.number, facts: { closedNumber: number } }))

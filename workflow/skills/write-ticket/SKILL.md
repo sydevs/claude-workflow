@@ -58,12 +58,11 @@ filing its plan: the split is binding, and adoption already placed the existing 
    `file:line` references naming the seam, the call sites and the tests to touch; criteria that
    are true or false; a checklist a run executes cold. A roadmap child also gets `## Goal context`
    and `## Interfaces`, and **zero open questions** — a decision goes to the parent instead (see
-   Escalate).
-3. **Phases only when the whole will not fit one run.** A small ticket has none.
-4. **File it** per format-ticket's "Filing from a cloud run": type, Priority, `Blocked by:` lines.
+   Escalate). Size never shapes the body: one repo's work is one ticket, built in one session.
+3. **File it** per format-ticket's "Filing from a cloud run": type, Priority, `Blocked by:` lines.
    Link it to its parent with `mcp__github__sub_issue_write`. Locally, run `file-ticket`'s
    **Ask** step on the draft first — its open questions, then the yes — and file on that yes.
-5. **Return** the numbers to the caller. File nothing else in this mode.
+4. **Return** the numbers to the caller. File nothing else in this mode.
 
 ## `update` — another skill reshapes a ticket
 
@@ -89,13 +88,13 @@ Keep every unconverted `Blocked by:` line, and every `Re-check:` and `Sentry:` l
 ticket has none; a Priority the reviewer set stands. **Update the ticket itself** — agreeing to a
 change in a reply while the body still states the old thing has not done the job.
 
-When the work turns out to be two deliverables, apply format-ticket's split rule. Coupled work
-stays one ticket, in phases. Separable work with no roadmap parent means the request was
-roadmap-sized: promote it.
+Work in one repo stays one ticket, however large it grows (format-ticket's *One ticket per repo*).
+Work that turns out to span repos, with no roadmap parent, means the request was roadmap-sized:
+promote it.
 
 ### Promote
 
-A `Feature` or `Task` that needs a product decision, or more than one reviewable PR, is a goal.
+A `Feature` or `Task` that needs a product decision, or spans more than one repo, is a goal.
 Never promote a `Bug`, and never promote a roadmap child — escalate instead.
 
 1. Put the technical draft in the Technical notes block at the end of the new body

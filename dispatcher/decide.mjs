@@ -527,11 +527,25 @@ function implementTicket(s, config, facts) {
   return out.concat(fire('implement'))
 }
 
+/** Open children no PR answers yet: the ones an approval can still start. */
+const unstarted = (s) => (s.children || []).filter((c) => c.state === 'open' && !c.prs)
+
 /**
- * `implement` on a roadmap ticket. Not yet planned, it plans — adopting the
- * children a review already attached. Planned, it approves every open child.
- * Planning again once every child has closed files only what the goal still
- * lacks. (why: docs/why.md#children-are-approved-together)
+ * Two unstarted children in one repo: a plan from before the one-per-repo
+ * rule. It is re-planned, and so consolidated, before anything is approved.
+ * (why: docs/why.md#a-goal-gets-one-ticket-per-repo)
+ */
+function doubledUp(s) {
+  const seen = new Set()
+  return unstarted(s).some((c) => (seen.has(c.repo.full) ? true : (seen.add(c.repo.full), false)))
+}
+
+/**
+ * `implement` on a roadmap ticket plans and approves in one verb. Not yet
+ * planned, or planned under the old split, it plans — the children approved
+ * when the plan ends. Planned, it approves every unstarted child. Planning
+ * again once every child has closed files only what the goal still lacks.
+ * (why: docs/why.md#one-verb-plans-and-approves)
  */
 function implementGoal(s, config, facts) {
   const L = config.labels
@@ -540,11 +554,22 @@ function implementGoal(s, config, facts) {
     return [label([L.blocked], [L.awaiting]), commentOnce('blocked', `Not started: ${whyBlocked(s, config)}. I will recheck it when that clears.`)]
   }
   const open = (s.children || []).filter((c) => c.state === 'open')
-  if (!planned(s) || !open.length) return s.locked ? [recheck()] : [fire('implement-roadmap', { mode: 'plan' })]
-  const list = open.map((c) => `${c.repo.full}#${c.number}`).join(', ')
+  if (planned(s) && open.length && !doubledUp(s)) return approveChildren(s, config, facts)
+  if (s.locked) return [recheck()]
+  return [record({ approveOnPlan: { by: facts.author || null } }), fire('implement-roadmap', { mode: planned(s) && open.length ? 'replan' : 'plan' })]
+}
+
+/** Approve every unstarted child. Each starts now, or once a recheck confirms its blocker cleared. */
+function approveChildren(s, config, facts) {
+  if (s.locked) return [recheck()]
+  const todo = unstarted(s)
+  if (!todo.length) return [record({ approved: true }), note('every open child already has a PR')]
+  const parent = `${s.repo.full}#${s.item.number}`
+  const list = todo.map((c) => `${c.repo.full}#${c.number}`).join(', ')
   return [
-    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${open.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
-    targets(open.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by: facts.author || null, parent: `${s.repo.full}#${s.item.number}` } }))),
+    record({ approved: true }),
+    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${todo.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
+    targets(todo.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by: facts.author || null, parent } }))),
   ]
 }
 
@@ -892,7 +917,14 @@ function derive(target, s, config) {
       }
       if (isRoadmap(s, config)) {
         const kids = s.children || []
-        if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
+        // The plan the implement verb asked for has ended: approve what it
+        // filed, unless it raised a decision first. (why: docs/why.md#one-verb-plans-and-approves)
+        if (finished === 'implement-roadmap' && s.record?.approveOnPlan) {
+          plan.push(record({ approveOnPlan: null }))
+          if (!s.openQuestions?.open && unstarted(s).length) return plan.concat(approveChildren(s, config, { author: s.record.approveOnPlan.by }))
+        }
+        // A re-plan keeps an approval the goal already has.
+        if (req?.replan && kids.length && planned(s)) return plan.concat(s.record?.approved ? [record({ approveOnPlan: { by: null } })] : [], fire('implement-roadmap', { mode: 'replan' }))
         if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) {
           if (!verifiedAlready(s, kids)) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
           // Then end as an unlock with nothing re-armed would.

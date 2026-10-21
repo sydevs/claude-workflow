@@ -1,6 +1,6 @@
 ---
 name: format-ticket
-description: The one definition of a well-formed sydevs ticket, for both tiers — the plain-language Roadmap ticket and the Claude-ready implementation ticket. Types, the Priority and Hold Until fields, Blocked by markers, decisions as options, the join and split rules, and the body templates. Loaded by every skill that files or edits a ticket.
+description: The one definition of a well-formed sydevs ticket, for both tiers — the plain-language Roadmap ticket and the Claude-ready implementation ticket. Types, the Priority and Hold Until fields, Blocked by markers, decisions as options, the join rule, one ticket per repo, and the body templates. Loaded by every skill that files or edits a ticket.
 allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 ---
 
@@ -30,10 +30,11 @@ divergence that produced three forks of the workflow started exactly this way.
 | **Roadmap ticket** | `Roadmap` | Anyone, including the public. Plain language. | `file-ticket`, the public form, `improve-loop`'s proposals and `write-ticket`'s Promote, then `revise-roadmap` |
 | **Implementation ticket** | `Bug` · `Feature` · `Task` | An automated run picking it up cold | `write-ticket` only, whoever asked for it |
 
-**Classify before you write.** A request is **Roadmap** when it needs a product decision, or more
-than one reviewable PR. Everything else is direct. **A Bug is always direct** — it never goes
-through the roadmap. (why: docs/why.md#the-roadmap-tier) A cross-repo change is split anyway
-(the split rule), so a cross-repo Bug is sibling direct Bugs, producer first.
+**Classify before you write.** A request is **Roadmap** when it needs a product decision, or
+spans more than one repo. Everything else is direct, however large: one repo's work is one ticket
+and one PR. **A Bug is always direct** — it never goes through the roadmap.
+(why: docs/why.md#the-roadmap-tier) No commit spans repos, so a cross-repo Bug is one direct Bug
+per repo, producer first.
 
 **A run that may not file a goal** — the audits — files roadmap-sized work as a direct ticket,
 says in `## Notes` that it is roadmap-sized, and leaves the promotion to `write-ticket`'s Promote on
@@ -87,8 +88,7 @@ a broken signup path is `High`. A month of pleasant refactoring is `Low`.
 
 **You set Priority, always**, on both tiers. Choose `Medium` when the consequence is not clear. A
 Priority the reviewer already set stands: the `issue_write` call below merges, so omitting it
-keeps their value. There is no Effort field any more. Size shows up as `## Phases`: in an
-implementation ticket that will not fit one run, and in the PR built from it.
+keeps their value. There is no Effort field any more, and size never shapes a ticket.
 (why: docs/why.md#effort-was-removed)
 
 ```
@@ -352,14 +352,12 @@ contributes to it.]
 where the fix is not yet known.]
 
 ## Interfaces
-[Roadmap children only. What this provides to, or consumes from, its siblings — so a
-reviewer can follow the PR on its own.]
-
-## Phases
-[Only when the whole will not fit one run. Ordered, each independently pushable.]
+[Roadmap children only. What this provides to, or consumes from, its siblings in other
+repos — so a reviewer can follow the PR on its own.]
 
 ## Acceptance criteria
 - [ ] [Testable condition]
+- [ ] [A requirement the reviewer added in PR review] (review, [who], [YYYY-MM-DD])
 
 ## Verification checklist
 - [ ] [A concrete command, route, or observation that confirms the criteria]
@@ -367,6 +365,10 @@ reviewer can follow the PR on its own.]
 ## Notes
 [Optional: alternatives rejected, prior art, links. Sentry links and `Blocked by:` lines go here.]
 ```
+
+**A requirement the reviewer adds in PR review becomes a criterion**, marked as above.
+`address-review` writes it, so every later session, the critic and the goal's completion check
+read one spec. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 
 **Acceptance criteria vs verification checklist**: criteria say what must be *true*. The checklist
 says what someone must *do* to confirm it. An automated run is judged against the checklist, so
@@ -385,31 +387,23 @@ review, so work a reviewer would judge together shares one, even when the change
 - the same area or files, or a shared verification step, or
 - one change that limits, measures or unblocks the other.
 
-Each joined change gets its own part of `## Approach` and its own acceptance criteria. Add
-`## Phases` only when the whole will not fit one run. Being separable is never a reason to file
-two tickets. (why: docs/why.md#related-findings-share-a-ticket)
+Each joined change gets its own part of `## Approach` and its own acceptance criteria. Being
+separable is never a reason to file two tickets. (why: docs/why.md#related-findings-share-a-ticket)
 
 **It binds work in flight too.** A finding it joins to the ticket or PR a run holds goes there,
-listed or not, through start-run's incidental-finding table. Only a part that will not fit the run
-is filed. (why: docs/why.md#the-work-you-hold-takes-what-joins-it)
+listed or not, whatever its size, through start-run's incidental-finding table.
+(why: docs/why.md#the-work-you-hold-takes-what-joins-it)
 
-## The split rule
+## One ticket per repo
 
-**Split only where joining would make review harder, and each PR stands on its own.** Two shapes
-qualify:
+**A ticket is never split** — not for size, not by layer, not at a seam. The one split is the
+repository, because no commit spans repos: a goal gets at most one implementation ticket per repo
+it touches, and that ticket carries all of the repo's work for the goal. A large ticket is built in
+one session, and continued if it runs long. (why: docs/why.md#a-goal-gets-one-ticket-per-repo)
 
-- parts with little connective tissue between them, too unrelated for one review, or
-- a general capability, built first, that the goal then uses.
-
-A cross-repo change is always split, and this wins over every rule below. No commit spans repos.
-
-**Never split tightly coupled work**: a reviewer who must hold two PRs in their head to judge
-either cannot review them. **Never split on size alone** — a large ticket is built in
-`## Phases` on one PR. A ticket that is large but coherent stays one ticket.
-(why: docs/why.md#split-at-reviewability-seams)
-
-Order the parts with `Blocked by:` — the producer first (SahajCloud schema, then the atlas widget,
-then consumers), and between any two parts likely to touch the same files.
+Order the repos with `Blocked by:` — the producer first (SahajCloud schema, then the atlas widget,
+then consumers). Between children of one goal, that line orders the merge, not the build: the set
+is built together. (why: docs/why.md#a-cross-repo-set-is-built-together)
 
 ## Referring to issues in other repositories
 

@@ -80,7 +80,8 @@ it. (why: docs/why.md#experiments-answer-facts)
    (why: docs/why.md#decisions-come-with-options)
 2. **The Technical notes block**, at the end of the body, edited in place, in format-ticket's
    notes style: what exists, the packages weighed, experiment results, adoptable tickets, risks,
-   and the sketch of a split. Technical detail lives there and nowhere else in the body. Never
+   and the build plan: one line per repo the goal touches, saying what lands there. A reviewer
+   reads it before saying `implement`, because that one verb plans and starts the build. Technical detail lives there and nowhere else in the body. Never
    post a notes comment. (why: docs/why.md#technical-notes-live-in-the-body)
 3. **Priority**, where none is set. A Priority the reviewer set stands.
 4. **Milestone.** Assign an existing open milestone only when the goal plainly belongs to that
@@ -96,8 +97,8 @@ it. (why: docs/why.md#experiments-answer-facts)
    goal becomes a sub-issue (`mcp__github__sub_issue_write`), unless it already has a parent —
    name that overlap instead. Attach closed tickets that delivered part of it too, so the
    progress bar tells the truth. Do not rewrite them: `implement-roadmap` brings each to the child
-   standard when it plans. Attaching is not approval — the first `implement` still plans. If you
-   ask for a transfer, attach nothing this run.
+   standard when it plans, absorbing two in one repo into one. Attaching is not approval — the
+   first `implement` still plans. If you ask for a transfer, attach nothing this run.
 6. **A duplicate, an already-shipped goal, or one a decision rules out**: recommend closing it,
    with the evidence. Do not close it yourself.
 
@@ -105,7 +106,8 @@ it. (why: docs/why.md#experiments-answer-facts)
 
 If `implement-roadmap` has already planned the children, and what changed alters what they must
 deliver, end your reply with `<!-- sydevs-request {"replan":true} -->`. The dispatcher then runs
-`implement-roadmap` to adjust them. Before a plan, there is nothing to re-plan.
+`implement-roadmap` to adjust them, and an approved goal's new children start without another
+verb. Before a plan, there is nothing to re-plan.
 
 ## Verify (`verify`)
 
@@ -130,8 +132,8 @@ One comment, inside `writing.budgets.comment`, with `identity.commentMarker`:
 - what changed;
 - what you need from people — point at `## Open questions` and show the reply shape,
   `@sydevs-bot revise 1A`;
-- the next step: *once nothing is open, `@sydevs-bot implement` plans the implementation
-  tickets.*
+- the next step: *once nothing is open, `@sydevs-bot implement` files one ticket per repo and
+  starts building them.*
 
 ## Hard rules
 
