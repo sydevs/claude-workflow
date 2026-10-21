@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { affectedConsumers, isContractSyncOnly, planContractSync } from '../contracts.mjs'
+import { affectedConsumers, isContractSyncOnly, planContractSync, pickFeaturePr } from '../contracts.mjs'
 import { evaluatePr } from '../decide.mjs'
 
 const config = {
@@ -57,6 +57,29 @@ test('the plan reads the merged PR files, a rename included, and names the sourc
   const out = await planContractSync({ github: github([{ filename: 'src/types.ts', previous_filename: 'src/payload-types.ts' }]), context: ctx(), core, config })
   assert.deepEqual(out.map((c) => c.name), ['WeMeditateWeb', 'SahajAtlasWeb'])
   assert.equal(out[0].sourcePr, 'https://github.com/sydevs/SahajCloud/pull/850')
+})
+
+test('with no readable goal sibling, the plan keeps the standalone sync PR', async () => {
+  const out = await planContractSync({ github: github([{ filename: 'src/payload-types.ts' }]), context: ctx(), core, config })
+  assert.ok(out.every((c) => c.featurePr === null && c.featureBranch === ''))
+})
+
+test('a goal sibling built beside the producer takes the re-sync on its branch', async () => {
+  const gh = {
+    ...github([{ filename: 'src/payload-types.ts' }]),
+    graphql: async (q, v) => (q.includes('closingIssuesReferences')
+      ? { repository: { pullRequest: { closingIssuesReferences: { nodes: [{ number: 10 }] } } } }
+      : { repository: { issue: { closedByPullRequestsReferences: { nodes: v.r === 'SahajAtlasWeb' ? [{ number: 77, state: 'OPEN', headRefName: 'claude/feat-12-map', author: { login: 'sydevs-bot' } }] : [] } } } }),
+    request: async () => ({ data: [{ number: 12, state: 'open', repository: { name: 'SahajAtlasWeb' } }] }),
+  }
+  const out = await planContractSync({ github: gh, context: ctx(), core, config })
+  assert.deepEqual(out.map((c) => [c.name, c.featurePr, c.featureBranch]), [['WeMeditateWeb', null, ''], ['SahajAtlasWeb', 77, 'claude/feat-12-map']])
+})
+
+test('only an open bot PR on a claude branch is a feature PR', () => {
+  const pr = (over) => ({ number: 1, state: 'OPEN', headRefName: 'claude/feat-1-x', author: { login: 'sydevs-bot' }, ...over })
+  assert.deepEqual(pickFeaturePr([pr()], 'sydevs-bot'), { number: 1, branch: 'claude/feat-1-x' })
+  for (const bad of [pr({ state: 'MERGED' }), pr({ author: { login: 'Ardnived' } }), pr({ headRefName: 'feature/x' })]) assert.equal(pickFeaturePr([bad], 'sydevs-bot'), null)
 })
 
 test('the plan skips an unmerged PR and a merge into another branch', async () => {
