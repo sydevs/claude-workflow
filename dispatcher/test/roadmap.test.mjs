@@ -33,7 +33,7 @@ function snap(over = {}) {
     locked: false,
     record: {},
     comments: [],
-    markers: { blockedBy: [], recheck: null, recheckPassed: false },
+    markers: { blockedBy: [], unresolvedBlockers: [], recheck: null, recheckPassed: false },
     park: { until: null, passed: false, source: null },
     blockedByOpen: [],
     openPrsClosingIt: [],

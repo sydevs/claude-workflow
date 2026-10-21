@@ -642,8 +642,36 @@ function blockVerb(s, config, facts) {
   return [fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'block' })]
 }
 
+/**
+ * One comment per live `Blocked by` line that names a target and resolves no
+ * in-org issue. `stripBlockedBy` leaves such a line in the body, rightly — it
+ * is the only record of the author's intent — so unreported it reads as
+ * blocked to every human and as ready to the machinery. No label,
+ * relationship or Status moves for it, because `blocked` follows the
+ * relationship and this line made none. The message says that, rather than
+ * "not blocked": a sibling line that did resolve can be applying `blocked`
+ * in the same plan.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
+ *
+ * Keyed on the targets, not the whole line: there is no comment id on this
+ * path, and the author rewording the reason must not re-post the advice.
+ * Sorted, so reordering the targets does not either.
+ */
+function refuseUnresolvedBlockers(s, config) {
+  // Guarded, unlike its `blockedBy` neighbour: a snapshot assembled by hand
+  // predates the field, and `decide` must stay total over one.
+  return (s.markers.unresolvedBlockers || []).map(({ line, targets }) =>
+    commentOnce(
+      `blocker-unresolved ${[...targets].sort().join(' ')}`,
+      [
+        `No relationship created: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue.`,
+        `> ${line}`,
+        `Name the blocker as a full issue URL or \`owner/repo#N\`. A PR URL and a bare \`#N\` are ignored — block on the issue a PR closes.`,
+      ].join('\n\n'),
+    ))
+}
+
 // ---- per-event deciders ------------------------------------------------
-const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'label']
 
 /**
  * `decide(target, snapshot, config)` → plan[].
@@ -702,6 +730,8 @@ function derive(target, s, config) {
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (blockers.length) plan.push(relationships(blockers, true))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
+      // An outsider's own markers are already text, so there is nothing to refuse.
+      if (!outsider) plan.push(...refuseUnresolvedBlockers(s, config))
       // Nothing the loop files is revised on arrival any more: every author
       // writes through write-ticket, so a proposal arrives fully specified.
       // (why: docs/why.md#one-author-writes-every-implementation-ticket)
@@ -722,6 +752,9 @@ function derive(target, s, config) {
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
       if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
+      // No outsider guard here: the early return above already refused the one
+      // case where the editor cannot make state.
+      plan.push(...refuseUnresolvedBlockers(s, config))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':
@@ -1024,4 +1057,4 @@ function derive(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor }
