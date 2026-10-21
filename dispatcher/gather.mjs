@@ -7,7 +7,7 @@
 
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
-import { parseBlockedBy, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
+import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
 import { isContractSyncOnly } from './contracts.mjs'
 
@@ -218,7 +218,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     const held = (issue.issue_field_values || []).find((f) => f.issue_field_name === fieldName)
     const until = (held?.value && String(held.value).slice(0, 10)) || parseRecheck(issue.body, config.relationships?.recheckMarker)
     s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
-    s.markers = { blockedBy: markerBlockers, recheck: s.park.until, recheckPassed: s.park.passed }
+    s.markers = { blockedBy: markerBlockers, unresolved: unresolvedBlockers(issue.body, config.org, config.relationships?.bodyMarker), recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
     // Every relationship, closed blockers too: a line naming one is already
     // converted, so it is stripped, never re-POSTed.

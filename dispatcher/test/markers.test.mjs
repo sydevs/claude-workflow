@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, stripBlockedBy, parseRecheck, parseSentry, datePassed, parseOpenQuestions, parseRequest } from '../markers.mjs'
+import { parseBlockedBy, unresolvedBlockers, stripBlockedBy, parseRecheck, parseSentry, datePassed, parseOpenQuestions, parseRequest } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -62,6 +62,41 @@ test('loose matching stays closed to everything it should ignore', () => {
   assert.deepEqual(parseBlockedBy('This is blocked by sydevs/SahajCloud#5', 'sydevs'), [], 'mid-sentence prose')
   assert.deepEqual(parseBlockedBy('Blocked by: https://github.com/other/Repo/issues/3', 'sydevs'), [], 'another org')
   assert.deepEqual(parseBlockedBy('Blocked by #12', 'sydevs'), [], 'a bare number names no repository')
+})
+
+// ---- an unusable blocker line is reported (why: docs/why.md#an-unusable-blocker-line-is-reported)
+
+test('a live blocker line naming no in-org issue is reported as its bare text', () => {
+  // sydevs/SahajCloud#987 named the PR, not the issue that PR closes.
+  assert.deepEqual(unresolvedBlockers('Blocked by: https://github.com/sydevs/SahajCloud/pull/912 — until it merges', 'sydevs'), [
+    'Blocked by: https://github.com/sydevs/SahajCloud/pull/912 — until it merges',
+  ])
+  // The bare text is what the reader saw: bullet and leading emphasis off, the rest as written.
+  assert.deepEqual(unresolvedBlockers('- **Blocked by #12.**', 'sydevs'), ['Blocked by #12.**'], 'a bare number, through a bullet and bold')
+  assert.deepEqual(unresolvedBlockers('Blocked by: https://github.com/other-org/repo/issues/9', 'sydevs'), [
+    'Blocked by: https://github.com/other-org/repo/issues/9',
+  ], 'another org names no issue of ours')
+})
+
+test('nothing else is reported: a resolved line, a struck line, no line at all', () => {
+  assert.deepEqual(unresolvedBlockers('Blocked by: https://github.com/sydevs/SahajCloud/issues/907', 'sydevs'), [])
+  assert.deepEqual(
+    unresolvedBlockers('Blocked by: https://github.com/sydevs/SahajCloud/issues/907 and https://github.com/sydevs/SahajCloud/pull/912', 'sydevs'),
+    [],
+    'one resolvable target on the line is enough',
+  )
+  assert.deepEqual(unresolvedBlockers('- ~~Blocked by: https://github.com/sydevs/SahajCloud/pull/912~~', 'sydevs'), [], 'struck through')
+  assert.deepEqual(unresolvedBlockers('This is blocked by a PR somewhere', 'sydevs'), [], 'mid-sentence prose is no line')
+  assert.deepEqual(unresolvedBlockers('no markers', 'sydevs'), [])
+  assert.deepEqual(unresolvedBlockers('', 'sydevs'), [])
+})
+
+test('the shared body reports its two unusable lines, each once', () => {
+  assert.deepEqual(unresolvedBlockers(body, 'sydevs'), [
+    'Blocked by: https://github.com/other-org/repo/issues/9',
+    'Blocked by: https://github.com/sydevs/SahajCloud/pull/99',
+  ])
+  assert.deepEqual(unresolvedBlockers('Blocked by #12\nBlocked by #12', 'sydevs'), ['Blocked by #12'], 'the same line twice is one report')
 })
 
 // ---- a converted blocker line is deleted (why: docs/why.md#a-converted-blocker-line-is-deleted)

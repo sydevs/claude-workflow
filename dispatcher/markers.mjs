@@ -71,6 +71,28 @@ export function parseBlockedBy(body, org, marker = 'Blocked by') {
   return out
 }
 
+/**
+ * The bare text of each live `Blocked by` line naming no in-org issue — a PR
+ * URL, a bare `#N`, another org's issue. `parseBlockedBy` drops such a line
+ * silently, so without this no caller can tell "no blocker line" from "a
+ * blocker line naming nothing", and the body keeps advertising a blocker
+ * nothing enforces. A line that resolved at least one target is not reported:
+ * the ticket is related and carries `blocked`, so nothing diverges.
+ * (why: docs/why.md#an-unusable-blocker-line-is-reported)
+ */
+export function unresolvedBlockers(body, org, marker = 'Blocked by') {
+  const out = []
+  const words = markerWords(marker)
+  const seen = new Set()
+  for (const l of lines(body)) {
+    const bare = blockerText(l, words)
+    if (bare === null || parseRefs(bare, org).length || seen.has(bare)) continue
+    seen.add(bare)
+    out.push(bare)
+  }
+  return out
+}
+
 /** In-org issues named in `text`, as full issue URLs or `owner/repo#N`. A bare `#N` names no repository. */
 export function parseRefs(text, org) {
   const out = []

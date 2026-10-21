@@ -1051,6 +1051,25 @@ The strike ordering was fixed too, or a misread line would relate and delete evi
 The edit history keeps the `— <reason>` prose. Until a session can read relationships itself
 (sydevs/claude-workflow#3), the `blocked` label and the pre-fire check are the gate.
 
+## An unusable blocker line is reported
+
+`sydevs/SahajCloud#987` said `Blocked by: …/pull/912`. `parseBlockedBy` returns `[]` for that line
+— GitHub's relationship takes an issue — so nothing was created, no `blocked` went on, and no word
+was said. `stripBlockedBy` leaves the line, rightly: it is the only record of the author's intent.
+The result is a ticket that reads as blocked to every human and as ready to the machinery. The
+`block on` verb has refused loudly in exactly this situation since it shipped; the body-marker path
+had no equivalent.
+
+So an unusable line gets one comment naming it and the two accepted spellings. Nothing else moves:
+the item really is not blocked, and `blocked` follows the relationship.
+
+- **Keyed on the line's own text**, since there is no comment id here. A body edit elsewhere
+  re-derives the same key and `commentOnce` posts nothing; a corrected line yields a key that is
+  never reached.
+- **A line that resolved one target stays silent.** That ticket is related and carries `blocked`,
+  so the human and the machinery agree. A PR URL beside a resolved issue is as often reason prose
+  — "until that PR merges" — as a second blocker, and reporting it would be a guess.
+
 ## A date belongs in a date field
 
 A park used to be `Re-check: 2026-10-01` in `## Notes`, parsed by regex — a shape inherited from
