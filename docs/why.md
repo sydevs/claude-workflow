@@ -1748,6 +1748,8 @@ The heading above is the same class with a different missing thing — a clone's
 
 ## A ticket is built in phases, never split
 
+**Superseded by [A feature is built in one session](#a-feature-is-built-in-one-session).** One ticket is still one PR. It is no longer a series of sessions.
+
 `implement-ticket` used to meet an `Effort: Hard` ticket it could not finish in one run by calling
 `split-ticket`: up to five child tickets, each with a `Blocked by:` line on the one before. Every
 child then cost what a ticket costs — a `revise` session on filing, a human `implement` verb, its
@@ -1786,6 +1788,8 @@ for one reason only: a seam where each part can be reviewed alone. A split on si
 retired, and a large implementation ticket is still built in phases on one PR.
 
 ## A contract sync is a PR, not a ticket
+
+**Amended by [Docs fixes and re-syncs ride the feature](#docs-fixes-and-re-syncs-ride-the-feature).** A goal's consumer PR takes the re-sync as a commit.
 
 A consumer's copy of a producer's file — SahajCloud's generated types in WeMeditateWeb and
 SahajAtlasWeb, the atlas URL contract in the WordPress plugin — has exactly one correct content:
@@ -2088,6 +2092,8 @@ rechecks, each one a chance to notice that the world moved.
 
 ## Children are approved together
 
+**Amended by [One verb plans and approves](#one-verb-plans-and-approves).** The first `implement` now plans and approves.
+
 `implement-roadmap` turns one goal into several implementation tickets, in order. Approving them
 one verb at a time costs a human round trip per child. The blocked ones cost more: someone has to
 remember to come back when the blocker merges, which is exactly the memory a person does not keep
@@ -2153,6 +2159,8 @@ as fully specified as anything a human verb would produce, and the automatic rev
 `proposal` label still marks it until a human gives a verdict.
 
 ## Split at reviewability seams
+
+**Superseded by [A goal gets one ticket per repo](#a-goal-gets-one-ticket-per-repo).** The repository is now the only split.
 
 **This amends [A ticket is built in phases, never split](#a-ticket-is-built-in-phases-never-split).**
 That rule retired splitting because the splits of the time were made on size. SahajCloud#664's
@@ -2876,6 +2884,8 @@ start threads.
 
 ## The work you hold takes what joins it
 
+**Amended by [The reviewer's ask is the spec](#the-reviewers-ask-is-the-spec).** Size no longer sends a joined part to a new ticket.
+
 **This amends [Related findings share a ticket](#related-findings-share-a-ticket)**, which joined
 findings into one ticket but never applied to the ticket a run was building.
 
@@ -2943,8 +2953,138 @@ cron, repo and local runs have none, and read literally the rule stopped them at
 The dispatcher fired `resolve-conflicts` only on a ready PR. Almost every loop PR is a draft until
 the critic has run, and a conflicted PR schedules no CI. So a conflicted draft never went green,
 `fix-ci` told itself "Actions dispatches resolve-conflicts" and stopped, and the PR sat until the
-orphan sweep. Drafts are resolved now, before any phase continues, since a phase continues only on
-green CI that a conflict prevents. Because `resolve-conflicts` pushes nothing on a semantic
+orphan sweep. Drafts are resolved now, since a conflict prevents the green CI that the critic waits
+on. Because `resolve-conflicts` pushes nothing on a semantic
 conflict, a second fire on the same head is refused, as `fix-ci`'s is: the PR waits on a person,
 and a push asks again.
 
+
+## A goal gets one ticket per repo
+
+**This supersedes [Split at reviewability seams](#split-at-reviewability-seams)**, and the split
+rule it introduced. That rule allowed a split at any seam where each part "can be reviewed
+alone", or for "a general capability, built first". `implement-roadmap`'s job was to design the
+split, so it found seams every time:
+
+- SahajAtlasWeb#259, one safe intake, became 15 tickets across three repos and at least nine PRs,
+  split by layer: schema, then screening and delivery, then cutover. Five tickets (#796–800) were
+  filed and closed the same day by one PR, SahajCloud#801.
+- SahajCloud#664, passwordless sign-in, became five sequential PRs: session refactor, plugin and
+  endpoints, sign-in pages, invite email, cutover.
+- SahajCloud#897, transcripts, became four children and six PRs, one of them a docs cleanup for
+  claims its siblings had made stale.
+
+The rule had already been tightened twice — at seams, then "related findings share a ticket" — and
+the reviewer still read every child, sent a second verb, and reviewed each PR against a feature
+that did not exist yet. A third rewording would have left the step that produced the splits in
+place. So the step is gone. A goal gets at most one implementation ticket per repo it touches,
+carrying all of that repo's work, because the repository is the one split no commit can cross. A
+large ticket is built in one session (see [A feature is built in one session](#a-feature-is-built-in-one-session)).
+
+Existing tickets are absorbed, not adopted as siblings: two unstarted tickets in one repo become one,
+and the other closes as a duplicate. A goal planned under the old rule is consolidated the same
+way: when `implement` finds two unstarted children in one repo, it re-plans before it approves.
+
+## One verb plans and approves
+
+**This amends [Children are approved together](#children-are-approved-together)**, which kept two
+verbs on a goal: the first planned, the reviewer read the children, and the second approved them.
+With one child per repo, reading the children repeats what the goal's Technical notes already say,
+and `revise-roadmap` now writes the build plan there — one line per repo — before anyone says
+`implement`.
+
+So the first `implement` does both. The dispatcher records `approveOnPlan` and fires
+`implement-roadmap`. When the plan ends with no open question, it approves every unstarted child.
+A plan that raises a decision approves nothing, and the goal comes back to the reviewer. A re-plan
+of an approved goal keeps the approval. The approval is still the human's verb, carried forward,
+never invented (why: docs/why.md#the-loop-may-never-write-implement).
+
+## A feature is built in one session
+
+**This supersedes [A ticket is built in phases, never split](#a-ticket-is-built-in-phases-never-split).**
+Phases kept one ticket on one PR, which still holds. But each phase was a session. Tickets
+pre-planned `## Phases`, each phase got its own review pass, a session stopped early whenever the
+next phase might not fit its 150-minute lease, and the next session waited for green CI on a
+half-built draft:
+
+- SahajCloud#874 took ten implement sessions over about ten hours. It went ready after 17 hours and
+  67 commits, then needed a hardening pass for duplicate classes and lost data.
+- SahajCloud#968 grew its Phases list from four to ten. The extra six were review rounds, including
+  a data-model rewrite after review had been requested.
+- 29 items carry "did not finish after N attempts".
+
+Every session re-read the ticket, the branch and the thread to rebuild what the last one knew. So a
+session now builds the whole ticket, with a lease long enough to do it (360 minutes), and pushes
+checkpoint commits only as insurance against a dead session. The draft PR opens once every
+criterion is met, so the critic and the reviewer meet the whole feature, once. Only when the
+deadline leaves no room does a session push, say what remains, and end with a `continue` request.
+The dispatcher starts the next one at once, with the same flags, up to `dispatch.maxAttempts` in a
+row. `address-review` uses the same request for a review too big for one run.
+
+## A cross-repo set is built together
+
+A goal across repos had one child per repo, and each consumer waited for its producer to merge
+before it was even built. The reviewer judged the feature in pieces days apart, and a consumer
+could ship against a shape that had already moved on: after SahajAtlasWeb#259's cutover, both of
+the atlas's write paths still POSTed to SahajCloud endpoints the cutover had deleted
+(SahajAtlasWeb#214).
+
+So the children whose only blockers are each other build as one set. One `implement` session in
+`set` mode runs on the goal's lock and builds the producer and its consumers together. A consumer
+builds against the producer's branch, with the generated types copied by hand, since `types:cms`
+reads `main`. Every PR opens once the set is built, and each names its siblings. The lock on the
+goal holds every set PR, as an issue lock holds its own
+(see [The lease covers the branch, not the item](#the-lease-covers-the-branch-not-the-item)).
+
+The `Blocked by:` line from consumer to producer now orders the merge, not the build. A consumer PR
+is marked ready and reviewed beside its producer, but auto-merge is armed only once its ticket has
+no open blocker. The producer merging closes its ticket. That frees the consumer through
+`unblock-check`, with no recheck session, and the contract re-sync lands on the consumer's PR
+(see [Docs fixes and re-syncs ride the feature](#docs-fixes-and-re-syncs-ride-the-feature)). A
+child blocked by anything outside the set still waits, and starts alone once its blocker clears.
+
+## The reviewer's ask is the spec
+
+**This amends [The work you hold takes what joins it](#the-work-you-hold-takes-what-joins-it)**,
+which joined findings to the PR in flight but still let "a part that will not fit this run" go to
+a new ticket, and let `address-review` rebut a human's point on scope. Both leaks were used against
+the reviewer's own asks:
+
+- **SahajCloud#912:** the reviewer left eleven simplification threads and answered "All of it". The
+  reply was "Filed as #960 … not another 2k lines on a 153-file PR". The reviewer said "integrate",
+  then "Implement the rest of the work now", then "Complete the work now". The PR was still open
+  after ten days, with 67 human comments.
+- **SahajCloud#849:** a restyle request got "Not in this PR", and needed two more comments.
+- **SahajCloud#861:** an unmet criterion became "a follow-up ticket". The reviewer answered: "Make
+  the necessary changes in this PR, not in a follow-up."
+- **SahajCloud#845 and #919:** better designs were deferred as out of scope, and "I would land this
+  first". Each came back with "expand the ticket … implement in this PR".
+
+The bot treated a PR whose code worked as proven, and the reviewer's design as optional. The PR is
+not done until it meets the reviewer's requirements, so a human reviewer's ask is built on the PR
+it was asked on, whatever its size, across sessions if need be. Only a fact may be rebutted. An
+ask that adds a requirement is written into the ticket's acceptance criteria, marked
+`(review, <who>, <date>)`, so a later session, the critic and the completion check all read one
+spec, and nothing lives only in a thread.
+
+A strong case for a separate ticket is still the reviewer's to weigh, so it is offered, never acted
+on: the run builds the change anyway, then asks *A — keep it here (built)*, *B — revert it and file
+it*. Building first costs one revert when the answer is B, and nothing when it is A, which the
+record says is the usual answer — SahajCloud#714 asked "fold it in or follow up?" on six threads,
+and got "Fold into this PR" six times. Only what cannot be built here — another repo, or a
+decision the goal owns — is asked before it is built.
+
+## Docs fixes and re-syncs ride the feature
+
+**This amends [A docs fix is a PR, not a ticket](#a-docs-fix-is-a-pr-not-a-ticket), [A test fix is
+a PR, not a ticket](#a-test-fix-is-a-pr-not-a-ticket) and [A contract sync is a PR, not a
+ticket](#a-contract-sync-is-a-pr-not-a-ticket).** Those routes kept small fixes out of tickets, and
+put each in a PR of its own. Of 255 bot PRs in the eight weeks to 2026-10-20, 32 merged at 30 lines
+or fewer: 17 copied-contract re-syncs and 20 docs-only PRs, each with its own review.
+
+So a docs or test fix a run trips over goes first into the PR it holds in that repo, whatever area
+it touches, with its own Summary bullet. The ticketless PR remains for a run that holds none. A
+contract re-sync is a commit on the consumer PR its goal built beside the producer: `contracts-plan`
+finds it through the producer ticket's `blocking` relationship, and `contracts-sync` pushes there.
+The standalone sync PR remains for a merge no goal is building against, or a push the feature
+branch refuses.
