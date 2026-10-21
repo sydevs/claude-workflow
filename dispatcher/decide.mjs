@@ -647,8 +647,10 @@ function blockVerb(s, config, facts) {
  * in-org issue. `stripBlockedBy` leaves such a line in the body, rightly — it
  * is the only record of the author's intent — so unreported it reads as
  * blocked to every human and as ready to the machinery. No label,
- * relationship or Status moves for it: the item really is not blocked, and
- * `blocked` follows the relationship.
+ * relationship or Status moves for it, because `blocked` follows the
+ * relationship and this line made none. The message says that, rather than
+ * "not blocked": a sibling line that did resolve can be applying `blocked`
+ * in the same plan.
  * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  *
  * Keyed on the targets, not the whole line: there is no comment id on this
@@ -661,7 +663,7 @@ function refuseUnresolvedBlockers(s, config) {
     commentOnce(
       `blocker-unresolved ${targets.join(' ')}`,
       [
-        `Not blocked: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue, so no relationship was created.`,
+        `No relationship created: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue.`,
         `> ${line}`,
         `Name the blocker as a full issue URL or \`owner/repo#N\`. A PR URL and a bare \`#N\` are ignored — block on the issue a PR closes.`,
       ].join('\n\n'),

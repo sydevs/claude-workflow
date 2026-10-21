@@ -321,6 +321,8 @@ test('a bare #N on edit is refused, and a resolvable line beside it still relate
   assert.equal(unresolved(p).length, 1)
   assert.ok(p.some((a) => a.type === 'relationships'), 'the resolvable line is still converted')
   assert.ok(p.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('blocked'))
+  // So the refusal cannot claim the item is not blocked: this plan is blocking it.
+  assert.doesNotMatch(unresolved(p)[0].body, /not blocked/i, 'it reports the relationship, not the state')
 })
 
 test('a non-member author\'s own line stays text — no refusal', () => {
