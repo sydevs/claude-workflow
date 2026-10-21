@@ -72,7 +72,8 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
     for (const { number } of d.repository.pullRequest.closingIssuesReferences.nodes || []) {
       const { data } = await github.request('GET /repos/{owner}/{repo}/issues/{n}/dependencies/blocking', { owner, repo, n: number, per_page: 100 })
       for (const dep of data || []) {
-        if (dep.state !== 'open' || dep.repository?.name !== consumer) continue
+        const depRepo = dep.repository?.name || /\/repos\/[^/]+\/([^/]+)$/.exec(String(dep.repository_url || ''))?.[1] || repo
+        if (dep.state !== 'open' || depRepo !== consumer) continue
         const p = await github.graphql(prs, { o: owner, r: consumer, n: dep.number })
         const found = pickFeaturePr(p.repository.issue.closedByPullRequestsReferences.nodes, config.identity?.expectedLogin)
         if (found) return found

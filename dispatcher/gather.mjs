@@ -95,6 +95,22 @@ async function parentOf(gh, { owner, repo, number }) {
 }
 
 /**
+ * True when the goal's lock is a set build that includes this child, read
+ * from the goal's record. Any other goal session leaves its children alone.
+ * (why: docs/why.md#a-cross-repo-set-is-built-together)
+ */
+async function inSetBuild(gh, goal, childRef, lock) {
+  if (!goal?.labels?.includes(lock)) return false
+  try {
+    const { rec } = await loadRecord(gh, { owner: goal.repo.owner, repo: goal.repo.name, number: goal.number })
+    const cur = rec?.current
+    return cur?.handler === 'implement' && cur.flags?.mode === 'set' && (cur.flags.children || []).includes(childRef)
+  } catch {
+    return false
+  }
+}
+
+/**
  * The newest `sydevs-request` a bot comment carries, with when it was made.
  * Only the newest comments are read, which is where a session that just
  * ended left its own. (why: docs/why.md#a-session-asks-actions-acts)
@@ -211,6 +227,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)
     s.parent = await parentOf(gh, base)
+    if (s.parent) s.parent.setBuild = await inSetBuild(gh, s.parent, `${owner}/${repo}#${number}`, config.labels.lock)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
     s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock) : []
     // An approval starts only the open children no PR answers yet, and builds
@@ -218,7 +235,8 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     // (why: docs/why.md#one-verb-plans-and-approves, docs/why.md#a-cross-repo-set-is-built-together)
     for (const c of s.children.filter((k) => k.state === 'open')) {
       const ref = { owner: c.repo.owner, repo: c.repo.name, number: c.number }
-      c.prs = (await openPrsClosing(gh, ref)).length
+      c.prNumbers = await openPrsClosing(gh, ref)
+      c.prs = c.prNumbers.length
       const deps = await dependencies(gh, ref, 'blocked_by')
       c.blockedByOpen = Array.isArray(deps) ? deps.filter((b) => b.state === 'open') : []
     }
@@ -297,7 +315,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
       if ((li.labels || []).some((l) => (l.name || l) === config.labels.lock)) s.linkedLocked.push(n)
       const goal = await parentOf(gh, ref)
-      if (goal?.labels?.includes(config.labels.lock)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
+      if (await inSetBuild(gh, goal, `${owner}/${repo}#${n}`, config.labels.lock)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
       const deps = await dependencies(gh, ref, 'blocked_by')
       if (Array.isArray(deps)) s.linkedBlockedOpen.push(...deps.filter((b) => b.state === 'open').map((b) => `${b.owner}/${b.repo}#${b.number}`))
     }

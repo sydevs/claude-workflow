@@ -527,6 +527,7 @@ function implementTicket(s, config, facts) {
   const out = [status('approved')]
   if (s.record?.pendingImplement) out.push(record({ pendingImplement: null }))
   if (s.locked) return out.concat(recheck())
+  if (s.parent?.setBuild) return out.concat(note(`its goal's set build is building it — ${s.parent.repo.full}#${s.parent.number}`))
   return out.concat(fire('implement'))
 }
 
@@ -597,7 +598,7 @@ function approveChildren(s, config, facts) {
   const rest = alone.length ? `${alone.map(refOf).join(', ')} ${alone.length === 1 ? 'starts' : 'each start'} now, or once a recheck confirms its blocker has cleared.` : ''
   const plan = [
     record({ approved: true }),
-    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${todo.length} implementation ticket(s). ${[how, rest].filter(Boolean).join(' ')}`),
+    commentOnce(`approve-all ${facts.commentId || todo.map(refOf).join(' ')}`, `Approved ${todo.length} implementation ticket(s). ${[how, rest].filter(Boolean).join(' ')}`),
     targets([
       ...together.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve-set', facts: { by, parent } })),
       ...alone.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by, parent } })),
@@ -655,6 +656,8 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  */
 export function decide(target, s, config) {
   let plan = derive(target, s, config)
+  // A fresh implement or address-review starts its own count of continuations.
+  if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   // A locked item is the session's turn, never yours. One event can arrive
   // as two — a ticket created with its type fires `opened` and `typed` — and
   // the second leg runs after the first took the lock. Unlock re-derives
@@ -743,7 +746,13 @@ function derive(target, s, config) {
       if (s.kind !== 'issue') return [label([L.awaiting], [L.blocked])]
       // Built in a set while its producer was open: the blocker merging lets
       // its PR merge too. No session is needed. (why: docs/why.md#a-cross-repo-set-is-built-together)
-      if (inFlight(s)) return [label([], [L.blocked]), targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
+      // A contract consumer is armed by the event its re-sync push raises,
+      // never before it lands; the sweep catches one that needs none.
+      if (inFlight(s)) {
+        if (config.contractSync?.consumers?.[s.repo.name]) return [label([], [L.blocked]), note('free — its PR arms after the contract re-sync lands')]
+        return [label([], [L.blocked]), targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
+      }
+      if (s.parent?.setBuild) return [label([], [L.blocked]), note('free — its goal\'s set build is building it')]
       if (s.locked) return [recheck()]
       // The date passing or the blocker closing is a cue to look, not proof
       // the ticket is free. A recheck session reads why it was held, and
@@ -955,7 +964,11 @@ function derive(target, s, config) {
           plan.push(record({ verifyDue: false }), note('the verify that just ended already read every child'))
         }
         // A set build answers with its PRs, which carry the turn from here.
-        if (finished === 'implement' && kids.some((c) => c.state === 'open') && !unstarted(s).length) return plan.concat(label([], [L.awaiting]), note('the set build answered with its PRs'))
+        if (finished === 'implement' && kids.some((c) => c.state === 'open') && !unstarted(s).length) {
+          // Every PR event during the build was held, so each PR is read now.
+          const prs = kids.flatMap((c) => (c.prNumbers || []).map((n) => ({ repo: c.repo, kind: 'pr', number: n, reason: 'ci' })))
+          return plan.concat(label([], [L.awaiting]), prs.length ? [targets(prs)] : [], note('the set build answered with its PRs'))
+        }
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }

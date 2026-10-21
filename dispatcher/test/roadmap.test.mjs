@@ -434,3 +434,28 @@ test('a child a session already holds is never approved into a second build', ()
   const p = decide(verb('@sydevs-bot implement'), snap({ children: [{ ...producer, locked: true }, { ...consumer, blockedByOpen: [] }], record: plannedRec() }), config)
   assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.number, x.reason]), [[12, 'approve']])
 })
+
+test('a contract consumer freed by its producer waits for the re-sync push to arm', () => {
+  const cfg = { ...config, contractSync: { producer: 'SahajCloud', consumers: { SahajAtlasWeb: { sources: [], paths: [] } } } }
+  const p = decide({ reason: 'unblock-check', facts: {} }, ticket({ item: { labels: ['blocked'] }, openPrsClosingIt: [55] }), cfg)
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked')))
+  assert.ok(!p.some((a) => a.type === 'targets'), 'arming now could merge it before the re-sync lands')
+})
+
+test('a child its goal is building in a set starts no session of its own', () => {
+  const parent = { repo: repo(), number: 300, state: 'open', type: 'Roadmap', labels: ['bot:working'], setBuild: true }
+  assert.equal(fires(decide(verb('@sydevs-bot implement'), ticket({ parent }), config)).length, 0)
+  const freed = decide({ reason: 'unblock-check', facts: {} }, ticket({ item: { labels: ['blocked'] }, parent }), config)
+  assert.equal(fires(freed).length, 0)
+})
+
+test('a set build that ends re-reads every child PR it held', () => {
+  const s = snap({ children: [{ ...producer, prs: 1, prNumbers: [901] }, { ...consumer, prs: 1, prNumbers: [77] }], record: { dispatches: [{ handler: 'revise-roadmap' }, { handler: 'implement-roadmap' }], current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set' } } } })
+  const t = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config).find((a) => a.type === 'targets').list
+  assert.deepEqual(t.map((x) => [x.repo.name, x.kind, x.number, x.reason]), [['SahajCloud', 'pr', 901, 'ci'], ['SahajAtlasWeb', 'pr', 77, 'ci']])
+})
+
+test('a fresh implement resets the continuation count', () => {
+  const p = decide(verb('@sydevs-bot implement'), ticket({ record: { continues: 2 } }), config)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 0))
+})

@@ -139,8 +139,12 @@ children the set builds — one per repo, a producer and the consumers whose `Bl
 it. Build them all in this session, through the steps above, each in its own repo's checkout,
 worktree and branch. (why: docs/why.md#a-cross-repo-set-is-built-together)
 
+- **The steps read each child, not the goal.** Step 1's criteria are the child's. The
+  authorisation is the `implement` on the goal, which the dispatcher carried to every child.
+
 - **Producer first.** A consumer builds against the producer's branch: copy the producer's
-  generated files into the consumer's `contractSync` paths by hand. Never run `types:cms` here —
+  generated files into the consumer's `contractSync` paths by hand, in place of step 8's
+  `types:cms`. Never run `types:cms` here —
   it reads `main`, which does not have them yet. The dispatcher re-syncs the copy on the
   consumer's PR once the producer merges.
 - **Ship once the whole set is built**, producer first, each PR through `/workflow:finalize-pr`.
