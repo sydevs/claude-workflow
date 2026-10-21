@@ -519,94 +519,83 @@ test('no implementation ticket is revised on arrival — write-ticket already wr
   assert.ok(!decide({ reason: 'issues.opened' }, mine, config).some((a) => a.type === 'fire'))
 })
 
-// ---- a ticket built in phases (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
+// ---- a consumer merges after its producer (why: docs/why.md#a-cross-repo-set-is-built-together)
 
-const phased = (done, total, over = {}) => {
-  const lines = Array.from({ length: total }, (_, i) => `- [${i < done ? 'x' : ' '}] phase ${i + 1}`)
-  return prSnap({ item: { number: 5, labels: [], body: `## Summary\n- x\n\n## Phases\n${lines.join('\n')}\n\nCloses #9` }, linkedIssues: [9], ...over })
-}
-
-test('a draft with an unticked phase continues its ticket instead of firing the critic', () => {
-  const p = evaluatePr(phased(1, 3), config)
-  assert.deepEqual(types(p), ['targets'])
-  const [t] = p[0].list
-  assert.equal(t.kind, 'issue')
-  assert.equal(t.number, 9)
-  assert.equal(t.reason, 'phase-continue')
-  assert.deepEqual({ pr: t.facts.pr, done: t.facts.done, total: t.facts.total }, { pr: 5, done: 1, total: 3 })
+test('a green consumer draft is marked ready for review with its producer, but not armed', () => {
+  const s = prSnap({ reviews: [criticReview], linkedBlockedOpen: ['sydevs/SahajCloud#10'] })
+  const p = evaluatePr(s, config)
+  assert.deepEqual(types(p).slice(0, 3), ['markReady', 'requestReviewer', 'label'])
+  assert.ok(!p.some((a) => a.type === 'armAutoMerge'))
+  assert.match(p.find((a) => a.type === 'comment' && a.key.startsWith('waits-on')).body, /merges after sydevs\/SahajCloud#10/)
 })
 
-test('the continuation waits for green CI, like the critic would', () => {
-  assert.deepEqual(types(evaluatePr(phased(1, 3, { ci: running }), config)), ['note'])
+test('a ready consumer is armed only once its producer has closed', () => {
+  const ready = { pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, reviews: [criticReview] }
+  assert.ok(!evaluatePr(prSnap({ ...ready, linkedBlockedOpen: ['sydevs/SahajCloud#10'] }), config).some((a) => a.type === 'armAutoMerge'))
+  assert.deepEqual(types(evaluatePr(prSnap({ ...ready, linkedBlockedOpen: [] }), config)), ['armAutoMerge'])
 })
 
-test('every phase ticked hands the whole PR to the critic, once', () => {
-  assert.deepEqual(types(evaluatePr(phased(3, 3), config)), ['fire:review-pr'])
+test('a PR whose goal holds the set build lock is left to that session', () => {
+  assert.deepEqual(types(evaluatePr(prSnap({ linkedLocked: ['sydevs/SahajAtlasWeb#300'] }), config)), ['note'])
+  assert.match(evaluatePr(prSnap({ linkedLocked: ['sydevs/SahajAtlasWeb#300'] }), config)[0].text, /^sydevs\/SahajAtlasWeb#300 is still locked/)
 })
 
-test('a phased draft with no linked ticket falls through to the critic', () => {
-  assert.deepEqual(types(evaluatePr(phased(1, 3, { linkedIssues: [] }), config)), ['fire:review-pr'])
+// ---- a feature is built in one session (why: docs/why.md#a-feature-is-built-in-one-session)
+
+const cfgAttempts = { ...config, dispatch: { ...config.dispatch, maxAttempts: 3 } }
+const asked = (over = {}) => issueSnap({
+  item: { number: 9, state: 'open', labels: [] },
+  botSpokeLast: true,
+  request: { at: '2026-10-07T11:00:00Z', body: { continue: true } },
+  record: { current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: null } } },
+  ...over,
 })
 
-test('a stalled phased draft that carries awaiting stays your turn', () => {
-  const s = phased(1, 3)
-  s.item.labels = ['awaiting']
-  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+test('a draft with a body checklist goes to the critic: a PR opens only once its ticket is built', () => {
+  const s = prSnap({ item: { number: 5, labels: [], body: '## Summary\n- x\n\n## Phases\n- [x] one\n- [ ] two\n\nCloses #9' }, linkedIssues: [9] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['fire:review-pr'])
 })
 
-test('the continuation carries the newest human word on the PR', () => {
-  const s = phased(1, 3, {
-    comments: [{ author: 'Ardnived', createdAt: '2026-09-28T09:00:00Z', body: 'carry on' }, { author: 'sydevs-bot', createdAt: '2026-09-28T09:05:00Z', body: 'ok' }],
-    reviews: [{ user: { login: 'Ardnived' }, state: 'COMMENTED', body: '', submitted_at: '2026-09-28T08:00:00Z' }],
-  })
-  assert.equal(evaluatePr(s, config)[0].list[0].facts.humanAt, '2026-09-28T09:00:00Z')
+test('an implement session that asks to continue gets the next session at once, with its flags', () => {
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, asked(), cfgAttempts)
+  const f = p.find((a) => a.type === 'fire')
+  assert.equal(f.handler, 'implement')
+  assert.equal(f.flags.continuation, 1)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 1))
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
 })
 
-test('a sweep does not call a phased draft moving to its next session an orphan', () => {
-  assert.deepEqual(types(decide({ reason: 'sweep-orphan', facts: {} }, phased(1, 3), config)), ['note'])
+test('a set build that asks to continue keeps its children', () => {
+  const s = asked({ record: { current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set', children: ['sydevs/SahajCloud#10', 'sydevs/SahajAtlasWeb#12'] } } } })
+  const f = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, cfgAttempts).find((a) => a.type === 'fire')
+  assert.deepEqual(f.flags.children, ['sydevs/SahajCloud#10', 'sydevs/SahajAtlasWeb#12'])
 })
 
-const cont = (facts = {}) => ({ reason: 'phase-continue', facts: { pr: 5, done: 1, total: 3, humanAt: null, ...facts } })
-const ended = (over) => ({ dispatches: [{ id: 'a', handler: 'implement', attempt: 1, firedAt: '2026-09-28T10:00:00.000Z' }, { id: 'a', handler: 'implement', attempt: 1, firedAt: '2026-09-28T10:00:00.000Z', flags: {}, outcome: 'done', ...over }] })
-
-test('the first continuation fires implement on the ticket, recording where it starts', () => {
-  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended() }), config)
-  assert.deepEqual(types(p), ['fire:implement'])
-  assert.deepEqual(p[0].flags, { phasesDone: 1 })
+test('continuations stop at maxAttempts in a row, and the ticket becomes your turn', () => {
+  const s = asked({ record: { continues: 3, current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, cfgAttempts)
+  assert.ok(!p.some((a) => a.type === 'fire'))
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.match(p.find((a) => a.type === 'comment').body, /Not finished after 4 sessions/)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 0))
 })
 
-test('a session that ticked a phase earns the next one', () => {
-  const p = decide(cont({ done: 2 }), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
-  assert.deepEqual(types(p), ['fire:implement'])
+test('an old continue request is not read again, and an implement that ends without one resets the count', () => {
+  const stale = asked({ request: { at: '2026-10-06T11:00:00Z', body: { continue: true } }, record: { continues: 2, current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, stale, cfgAttempts)
+  assert.ok(!p.some((a) => a.type === 'fire'))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 0))
 })
 
-test('a session that ticked nothing stalls the PR instead of looping', () => {
-  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
-  assert.deepEqual(types(p), ['targets'])
-  assert.equal(p[0].list[0].reason, 'phases-stalled')
-  assert.equal(p[0].list[0].number, 5)
+test('an address-review that asks to continue gets the next session on the PR', () => {
+  const s = prSnap({ request: { at: '2026-10-07T11:00:00Z', body: { continue: true } }, record: { current: { handler: 'address-review', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'address-review' } }, s, cfgAttempts)
+  assert.deepEqual(p.filter((a) => a.type === 'fire').map((a) => [a.handler, a.flags.continuation]), [['address-review', 1]])
 })
 
-test('a session out of attempts stalls the PR too', () => {
-  const p = decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ outcome: 'timed out', attempt: 3 }) }), config)
-  assert.equal(p[0].list[0].reason, 'phases-stalled')
-})
-
-test('a human word after a stalled session re-arms the continuation', () => {
-  const p = decide(cont({ humanAt: '2026-09-28T11:00:00Z' }), issueSnap({ item: { number: 9, state: 'open', labels: [] }, record: ended({ flags: { phasesDone: 1 } }) }), config)
-  assert.deepEqual(types(p), ['fire:implement'])
-})
-
-test('a locked or closed ticket is never continued', () => {
-  assert.deepEqual(types(decide(cont(), issueSnap({ item: { number: 9, state: 'open', labels: [] }, locked: true }), config)), ['note'])
-  assert.deepEqual(types(decide(cont(), issueSnap({ item: { number: 9, state: 'closed', labels: [] } }), config)), ['note'])
-})
-
-test('a stalled phased PR becomes your turn, said once', () => {
-  const p = decide({ reason: 'phases-stalled', facts: { done: 1, total: 3 } }, phased(1, 3), config)
-  assert.deepEqual(types(p), ['label', 'comment', 'anomaly'])
-  assert.deepEqual(p[0].add, ['awaiting'])
-  assert.match(p[1].body, /Phase 2 of 3/)
+test('only implement and address-review continue: another handler asking is ignored', () => {
+  const s = asked({ record: { current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
+  assert.ok(!decide({ reason: 'unlock', facts: { handler: 'revise' } }, s, cfgAttempts).some((a) => a.type === 'fire'))
 })
 
 // ---- a bot PR answers a mention, a review or a thread reply --------------
@@ -743,10 +732,8 @@ test('no deploy pass without a railway key, an unlisted context, or a link that 
   assert.deepEqual(quiet(railwayCfg, [{ ...PREVIEW, targetUrl: null }]), [])
 })
 
-test('no deploy pass while required CI runs, or while the ticket still has phases to build', () => {
+test('no deploy pass while required CI runs', () => {
   assert.deepEqual(types(evaluatePr(prSnap({ ci: { ...running, advisory: [PREVIEW] } }), railwayCfg)), ['note'])
-  const plan = evaluatePr(phased(1, 3, { ci: { ...green, advisory: [PREVIEW] } }), railwayCfg)
-  assert.deepEqual(types(plan), ['targets', 'comment'], 'the next phase may be what fixes the build, so only the note')
 })
 
 // ---- a push from a person resets the repair count (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
@@ -882,16 +869,6 @@ test('a conflicted draft whose branch a session holds is left to it', () => {
   assert.deepEqual(types(evaluatePr(conflicted({ linkedLocked: [9] }), config)), ['note'])
 })
 
-test('a conflict is resolved before the next phase continues', () => {
-  const s = phased(1, 3, { mergeable: 'CONFLICTING', ci: red })
-  assert.deepEqual(types(evaluatePr(s, config)), ['fire:resolve-conflicts'])
-  const stalled = phased(1, 3, { mergeable: 'CONFLICTING' })
-  stalled.item.labels = ['awaiting']
-  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'a stalled phased draft stays your turn')
-  stalled.ci = red
-  assert.deepEqual(types(evaluatePr(stalled, config)), ['note'], 'and a stale red check does not fire fix-ci on it')
-})
-
 test('a conflict-scan after a merge re-derives a draft too', () => {
   assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, conflicted(), config)), ['fire:resolve-conflicts'])
 })
@@ -916,13 +893,6 @@ test('the orphan notice asks for a mention or a push, never a plain comment', ()
   assert.match(c.key, /^orphan abc$/, 'the key is unchanged, so no item is told twice')
   assert.match(c.body, /A mention \(`@sydevs-bot`\) or a push from you starts me again\./)
   assert.doesNotMatch(c.body, /Comment or push/)
-})
-
-test('the phases-stalled notice asks for a mention or a review, never a plain comment', () => {
-  const c = wakeComment(decide({ reason: 'phases-stalled', facts: { done: 1, total: 3 } }, phased(1, 3), config))
-  assert.equal(c.key, 'phases-stalled abc')
-  assert.match(c.body, /A mention \(`@sydevs-bot`\) or a review from you starts me again\./)
-  assert.doesNotMatch(c.body, /Comment here/)
 })
 
 // ---- a question review is not the critic's -------------------------------

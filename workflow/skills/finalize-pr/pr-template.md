@@ -44,17 +44,6 @@ opens on seeded data. Any file the reviewer must supply goes here in
 
 [The `improve-loop` PR only. Write it per `improve-loop/SKILL.md`. Otherwise delete.]
 
-## Phases
-
-[ONLY when implement-ticket builds the ticket across sessions. One box per
-phase, in build order, ticked once the phase is pushed with its review done.
-The dispatcher reads this list: while a box is unticked it starts the next
-implement session instead of the critic. Carry it forward on every refresh,
-ticks included. Otherwise delete this section.]
-
-- [x] [phase 1 — what it leaves working]
-- [ ] [phase 2]
-
 ## Email previews
 
 [ONLY when the diff touches `src/plugins/email/` or `src/emails/`. Mailpit links
@@ -94,9 +83,10 @@ automated tests do not reach. Omit when genuinely nothing applies.]
 
 ## Notes for reviewer
 
-[Only what changes how they review: a judgement call you want checked, a known
-follow-up linked where it was routed, an area wanting extra scrutiny. Dismissed
-review findings and why. A decision is never here: it is a question thread.]
+[Only what changes how they review: a judgement call you want checked, the
+sibling PRs of a set and the order they merge in, a follow-up the reviewer chose,
+an area wanting extra scrutiny. Dismissed review findings and why. A decision is
+never here: it is a question thread.]
 
 <details>
 <summary>Detail</summary>
@@ -114,8 +104,8 @@ Closes #NNN
 One rule for every run that refreshes a body, `finalize-pr` and `address-review` alike. Start from
 the body you read, never from nothing: `pull_request_write method:update` replaces it whole.
 Re-derive what the new commits made false — the Change outline from the full
-`origin/<base>...HEAD` diff, the Summary, Test results — and keep everything still true: `## Phases`
-ticks, preview lines, links another run added. A body merely incomplete stays; the run's comment
+`origin/<base>...HEAD` diff, the Summary, Test results — and keep everything still true: preview
+lines, links another run added. A body merely incomplete stays; the run's comment
 carries that delta.
 
 ## Title

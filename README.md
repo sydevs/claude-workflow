@@ -17,29 +17,30 @@ cloud session that GitHub Actions started because a member asked for something. 
 nightly audit, work starts only on an event. Each session does one job, pushes, and ends.
 
 ```
- ROADMAP — needs a decision, or more than one PR      DIRECT — a bug or a small ticket
+ ROADMAP — needs a decision, or spans repos           DIRECT — a bug or one repo's change
 
  a goal is filed: file-ticket, the public             file-ticket
  "Suggest a goal" form, or an improve-loop proposal        │
       │                                                    ▼
       ▼                                               write-ticket writes the spec
  revise-roadmap ⇄ you answer: @sydevs-bot revise 1A        │
-      │                                                    │
-      ▼                                                    │
- you: @sydevs-bot implement                                │
-      │                                                    │
-      ▼                                                    │
- implement-roadmap files the implementation tickets        │
+ (the build plan, one line per repo, is in its notes)      │
       │                                                    │
       ▼                                                    ▼
- you: @sydevs-bot implement  (approves every child)   you: @sydevs-bot implement
+ you: @sydevs-bot implement                           you: @sydevs-bot implement
       │                                                    │
-      └────────────────► implement-ticket ◄────────────────┘
-                               │
-                               ▼
-     draft PR ─► CI ─► review-pr ─► address-review ─► ready ─► you approve ─► GitHub merges
-                               │
-                               ▼
+      ▼                                                    │
+ implement-roadmap files one ticket per repo,              │
+ approved by that same verb                                │
+      │                                                    │
+      ▼                                                    ▼
+ implement-ticket builds the set in one session       implement-ticket builds it in one session
+      │                                                    │
+      └──────────────────────────┬─────────────────────────┘
+                                 ▼
+     draft PR(s) ─► CI ─► review-pr ─► address-review ─► ready ─► you approve ─► GitHub merges
+                                 │                         (a consumer merges after its producer)
+                                 ▼
      a goal's last child closes ─► revise-roadmap verifies it ─► goal closed, or awaiting
 ```
 
@@ -51,9 +52,13 @@ nightly audit, work starts only on an event. Each session does one job, pushes, 
 - **Holds and rechecks.** When a hold's date passes or its blocker closes, a short recheck reads why
   it was held. Still blocked: it is quietly re-held, with no ping. You get `awaiting` only when the
   ticket is ready, needs a decision, or has been re-held 3 times in a row.
-- **Bulk approval.** `implement` on a goal approves every open child. Free children start at once.
-  Blocked ones record `pending: implement` and start when a recheck confirms they are free, with
-  no second verb.
+- **One verb.** `implement` on a goal files at most one ticket per repo and approves them. The
+  children free together build as one set, in one session. A child blocked outside the set
+  records `pending: implement` and starts when a recheck confirms it is free, with no second verb.
+- **One session per feature.** A build opens its PR only once every criterion is met. A session
+  near its deadline pushes, says what remains, and asks for the next session, which starts at once.
+- **Your review is the spec.** A change you ask for on a PR is built on that PR and written into
+  the ticket's criteria. A separate ticket is only ever proposed, with options, for you to choose.
 - **The completion check.** When a goal's last child closes, `revise-roadmap` compares what shipped
   with *What success looks like*. It closes the goal, or names the gap and sets `awaiting`.
 - **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
@@ -105,13 +110,13 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | On | Say | What happens |
 | --- | --- | --- |
 | Roadmap ticket | `@sydevs-bot revise` (or `review`, or a bare mention) | `revise-roadmap` reviews the goal or reads your answers. On a non-member's suggestion, this accepts it. |
-| Roadmap ticket | `@sydevs-bot implement` | Not planned yet: `implement-roadmap` plans the children, adopting the ones the review attached. Planned: every open child is approved. |
+| Roadmap ticket | `@sydevs-bot implement` | `implement-roadmap` files one ticket per repo, absorbing the ones the review attached, and the build starts when it ends. Already planned: every unstarted child is approved. |
 | Implementation ticket | `@sydevs-bot revise <what to change>` | `write-ticket` updates the ticket, or answers your question from the code. |
 | Implementation ticket | `@sydevs-bot implement` | `implement-ticket` builds it into a draft PR. On a blocked ticket the approval waits. |
 | Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
 | Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link and `blocked`. Rechecked when that issue closes. |
 | Any issue | `@sydevs-bot block waiting on legal sign-off` | A short session picks what to watch and a recheck date. |
-| Bot PR | a review or thread reply; a comment only with a mention | `address-review` adopts or rebuts each point. |
+| Bot PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
 | Your own PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into your branch. |
 
@@ -139,11 +144,11 @@ Fired by the dispatcher (GitHub Actions) on events:
 | Skill | Fired by | Produces |
 | --- | --- | --- |
 | `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, technical notes in the body; or the completion verdict |
-| `implement-roadmap` | the first `implement` on a goal; a re-plan request | implementation tickets as ordered sub-issues, adopting existing tickets |
+| `implement-roadmap` | the first `implement` on a goal; a re-plan request | one implementation ticket per repo, as sub-issues in merge order, absorbing existing tickets |
 | `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
-| `implement-ticket` | `implement`; a bulk approval; a recheck that frees an approved ticket | a draft PR, continued phase by phase |
+| `implement-ticket` | `implement`; a goal's approval; a recheck that frees an approved ticket; its own continue request | a draft PR once the ticket is built, or a goal's set of PRs |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
-| `address-review` | a review, thread reply or mention on a bot PR | a commit or a rebuttal per point, including points in a review's main body, not only file threads |
+| `address-review` | a review, thread reply or mention on a bot PR; its own continue request | a commit per ask, a rebuttal only of a fact, or a ticket proposed as options — review-body points included |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
 | `resolve-conflicts` | a bot PR that conflicts, draft or ready, once per head | `main` merged in, conflicts resolved |
@@ -161,7 +166,8 @@ Run by the nightly routine through `run-audit`:
 
 Every run begins with `start-run` and ends with `finish-run`, which writes one comment on the day's
 `ops-journal` issue in this repo. Every ticket follows `format-ticket`. A merged SahajCloud PR that
-changes a file a consumer copies opens a sync PR in that consumer, with no ticket.
+changes a file a consumer copies re-syncs that consumer, with no ticket: a commit on the consumer PR
+its goal built beside it, or else a sync PR.
 
 ## Setup and safety
 

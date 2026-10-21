@@ -12,7 +12,6 @@
  */
 
 import { parseVerb, parseBlock } from './verbs.mjs'
-import { parsePhases } from './markers.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -127,6 +126,27 @@ function freshRequest(s) {
   return !since || s.request.at >= since ? s.request.body : null
 }
 
+/** The handlers that may ask for another session to finish their work. */
+const CONTINUES = new Set(['implement', 'address-review'])
+
+/**
+ * A session near its deadline pushed what it built and asked for another.
+ * It starts at once, with the same flags, up to `dispatch.maxAttempts` in a
+ * row, then the item is your turn. (why: docs/why.md#a-feature-is-built-in-one-session)
+ */
+function continueNext(s, config, handler) {
+  const n = (s.record?.continues || 0) + 1
+  if (n <= (config.dispatch.maxAttempts ?? 3)) return [record({ continues: n }), fire(handler, { ...(s.record?.current?.flags || {}), continuation: n })]
+  const p = config.dispatch.commandPrefix
+  const number = s.kind === 'pr' ? s.pr?.number : s.item.number
+  return [
+    record({ continues: 0 }),
+    label([config.labels.awaiting], []),
+    commentOnce(`continue-cap ${s.record?.current?.firedAt || ''}`, `Not finished after ${n} sessions in a row. The branch holds what is built, and the comment above says what remains. A mention (\`${p}\`) starts me again.`),
+    anomaly('continue-cap', `${s.repo.full}#${number} not finished after ${n} sessions`),
+  ]
+}
+
 /** The bot's newest comment that is not a dispatcher comment. */
 export function botLastWordAt(comments, config) {
   let at = null
@@ -239,11 +259,6 @@ function lastHumanWordAt(snapshot, config) {
   return at.filter(Boolean).sort().pop() || null
 }
 
-/** The newest implement dispatch that ended, finished or timed out, from an issue's record. */
-function lastEndedImplement(record) {
-  return (record?.dispatches || []).filter((d) => d.handler === 'implement' && d.outcome).pop() || null
-}
-
 /**
  * A `fix-ci` session that already ran against this exact head and ended.
  *
@@ -310,16 +325,13 @@ function deployPassFor(record, sha) {
 
 /**
  * A conflicted PR, draft or ready. A conflicted branch schedules no CI, so
- * nothing downstream of this — fix-ci, the critic, the next phase — can ever
- * move it: the conflict goes first. Two exceptions. A stalled phased draft
- * labelled awaiting stays your turn. A resolve-conflicts session that already
- * ended on this head, or is ending now, stopped on a conflict it would not
- * guess, so that is your turn too, until a push gives it a new head.
+ * nothing downstream of this — fix-ci, the critic — can ever move it: the
+ * conflict goes first. One exception: a resolve-conflicts session that
+ * already ended on this head, or is ending now, stopped on a conflict it
+ * would not guess, so that is your turn, until a push gives it a new head.
  */
 function conflictPlan(s, config) {
   const awaiting = config.labels.awaiting
-  const phases = phasesLeft(s)
-  if (phases && (s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you, conflicted`)]
   const sha = s.pr.head?.sha
   const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
   const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
@@ -327,21 +339,14 @@ function conflictPlan(s, config) {
   return [fire('resolve-conflicts')]
 }
 
-/** A phased draft whose ticket still has phases to build, or null. */
-function phasesLeft(s) {
-  const phases = parsePhases(s.item?.body)
-  return s.pr?.draft && phases && phases.done < phases.total && s.linkedIssues?.length ? phases : null
-}
-
 /**
  * Required CI is green, and a Railway preview `railway.statusContexts` lists
  * failed. One `fix-ci` pass in `deploy` mode reads its log, once per head,
- * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass. Not
- * mid-phases, where the next phase may be what fixes the build.
+ * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass.
  * (why: docs/why.md#a-failed-preview-is-read-from-its-log)
  */
 function deployPass(s, config) {
-  if (!failedDeploys(s.ci?.advisory, config).length || phasesLeft(s)) return null
+  if (!failedDeploys(s.ci?.advisory, config).length) return null
   if (deployPassFor(s.record, s.pr.head?.sha)) return null
   return advisoryNote(s).concat(fire('fix-ci', { mode: 'deploy' }))
 }
@@ -388,7 +393,7 @@ export function evaluatePr(s, config) {
   // with no CI is green the moment the PR opens, so without this the critic
   // fires while implement is still pushing.
   // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
-  if (s.linkedLocked?.length) return [note(`#${s.linkedLocked[0]} is still locked — its session owns this branch`)]
+  if (s.linkedLocked?.length) return [note(`${String(s.linkedLocked[0]).includes('#') ? '' : '#'}${s.linkedLocked[0]} is still locked — its session owns this branch`)]
 
   if (pendingReviewVerb(s, config)) return [fire('review-pr', { onDemand: true })]
 
@@ -450,24 +455,22 @@ function linkTarget(url) {
 function evaluateGreenPr(s, config) {
   const pr = s.pr
   const awaiting = config.labels.awaiting
+  // A consumer built beside its producer is reviewed with it, and merges
+  // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
+  const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn
 
   if (pr.draft) {
-    // One ticket, one PR, built across as many implement sessions as it
-    // takes. While a phase is unticked the next session continues it, on the
-    // ticket's lock, and the critic reads the whole PR once, at the end.
-    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    const phases = phasesLeft(s)
-    if (phases) {
-      if ((s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you`)]
-      return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
-    }
+    // implement opens the PR only once the ticket is built, so the critic
+    // reads the whole of it, once. (why: docs/why.md#a-feature-is-built-in-one-session)
     const small = underThreshold(pr, config)
     if (!ownReview(s, config) && !small) return [fire('review-pr')]
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     const plan = [markReady(), requestReviewer(), label([awaiting], [])]
-    if (!loopMayNotMerge(s, config)) plan.push(armAutoMerge())
+    if (mayArm) plan.push(armAutoMerge())
+    if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) {
       const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
       plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
@@ -479,7 +482,7 @@ function evaluateGreenPr(s, config) {
   // satisfied — one approval, every thread resolved, CI green — and the queue
   // rebases and tests before it lands. All that is left here is arming a PR
   // that reached ready without it. (why: docs/why.md#github-owns-the-merge)
-  if (!loopMayNotMerge(s, config) && !s.pr?.autoMergeArmed) return [armAutoMerge()]
+  if (mayArm && !s.pr?.autoMergeArmed) return [armAutoMerge()]
   if (s.normalized?.reviewDecision !== 'APPROVED') return [status('revising')]
   const plan = [status('approved')]
   if (loopMayNotMerge(s, config)) plan.push(label([awaiting], []))
@@ -524,14 +527,29 @@ function implementTicket(s, config, facts) {
   const out = [status('approved')]
   if (s.record?.pendingImplement) out.push(record({ pendingImplement: null }))
   if (s.locked) return out.concat(recheck())
+  if (s.parent?.setBuild) return out.concat(note(`its goal's set build is building it — ${s.parent.repo.full}#${s.parent.number}`))
   return out.concat(fire('implement'))
 }
 
+/** Open children no PR answers and no session holds: the ones an approval can still start. */
+const unstarted = (s) => (s.children || []).filter((c) => c.state === 'open' && !c.prs && !c.locked)
+
 /**
- * `implement` on a roadmap ticket. Not yet planned, it plans — adopting the
- * children a review already attached. Planned, it approves every open child.
- * Planning again once every child has closed files only what the goal still
- * lacks. (why: docs/why.md#children-are-approved-together)
+ * Two unstarted children in one repo: a plan from before the one-per-repo
+ * rule. It is re-planned, and so consolidated, before anything is approved.
+ * (why: docs/why.md#a-goal-gets-one-ticket-per-repo)
+ */
+function doubledUp(s) {
+  const seen = new Set()
+  return unstarted(s).some((c) => (seen.has(c.repo.full) ? true : (seen.add(c.repo.full), false)))
+}
+
+/**
+ * `implement` on a roadmap ticket plans and approves in one verb. Not yet
+ * planned, or planned under the old split, it plans — the children approved
+ * when the plan ends. Planned, it approves every unstarted child. Planning
+ * again once every child has closed files only what the goal still lacks.
+ * (why: docs/why.md#one-verb-plans-and-approves)
  */
 function implementGoal(s, config, facts) {
   const L = config.labels
@@ -540,12 +558,54 @@ function implementGoal(s, config, facts) {
     return [label([L.blocked], [L.awaiting]), commentOnce('blocked', `Not started: ${whyBlocked(s, config)}. I will recheck it when that clears.`)]
   }
   const open = (s.children || []).filter((c) => c.state === 'open')
-  if (!planned(s) || !open.length) return s.locked ? [recheck()] : [fire('implement-roadmap', { mode: 'plan' })]
-  const list = open.map((c) => `${c.repo.full}#${c.number}`).join(', ')
-  return [
-    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${open.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
-    targets(open.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by: facts.author || null, parent: `${s.repo.full}#${s.item.number}` } }))),
+  if (planned(s) && open.length && !doubledUp(s)) return approveChildren(s, config, facts)
+  if (s.locked) return [recheck()]
+  return [record({ approveOnPlan: { by: facts.author || null } }), fire('implement-roadmap', { mode: planned(s) && open.length ? 'replan' : 'plan' })]
+}
+
+const refOf = (c) => `${c.repo?.full || `${c.owner}/${c.repo}`}#${c.number}`
+
+/**
+ * The unstarted children one session can build together: each blocked only
+ * by others in the set, so the producer and its consumers share a build and
+ * a review, and only the merge waits. (why: docs/why.md#a-cross-repo-set-is-built-together)
+ */
+function buildSet(todo) {
+  let set = todo
+  for (;;) {
+    const keys = new Set(set.map(refOf))
+    const next = set.filter((c) => (c.blockedByOpen || []).every((b) => keys.has(refOf(b))))
+    if (next.length === set.length) return set
+    set = next
+  }
+}
+
+/**
+ * Approve every unstarted child. Two or more that are free together build as
+ * one set, on the goal's lock. The rest start alone, now or once a recheck
+ * confirms their blocker cleared.
+ */
+function approveChildren(s, config, facts) {
+  if (s.locked) return [recheck()]
+  const todo = unstarted(s)
+  if (!todo.length) return [record({ approved: true }), note('every open child already has a PR')]
+  const parent = `${s.repo.full}#${s.item.number}`
+  const by = facts.author || null
+  const set = buildSet(todo)
+  const together = set.length > 1 ? set : []
+  const alone = todo.filter((c) => !together.includes(c))
+  const how = together.length ? `${together.map(refOf).join(', ')} build together now, and merge in order.` : ''
+  const rest = alone.length ? `${alone.map(refOf).join(', ')} ${alone.length === 1 ? 'starts' : 'each start'} now, or once a recheck confirms its blocker has cleared.` : ''
+  const plan = [
+    record({ approved: true }),
+    commentOnce(`approve-all ${facts.commentId || todo.map(refOf).join(' ')}`, `Approved ${todo.length} implementation ticket(s). ${[how, rest].filter(Boolean).join(' ')}`),
+    targets([
+      ...together.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve-set', facts: { by, parent } })),
+      ...alone.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by, parent } })),
+    ]),
   ]
+  if (together.length) plan.push(fire('implement', { mode: 'set', children: together.map(refOf) }))
+  return plan
 }
 
 /**
@@ -596,6 +656,8 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  */
 export function decide(target, s, config) {
   let plan = derive(target, s, config)
+  // A fresh implement or address-review starts its own count of continuations.
+  if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   // A locked item is the session's turn, never yours. One event can arrive
   // as two — a ticket created with its type fires `opened` and `typed` — and
   // the second leg runs after the first took the lock. Unlock re-derives
@@ -682,6 +744,15 @@ function derive(target, s, config) {
       if (parked(s)) return applyIfMissing(`parked until ${s.park.until}`)
       if (!labelled) return [note('not blocked')]
       if (s.kind !== 'issue') return [label([L.awaiting], [L.blocked])]
+      // Built in a set while its producer was open: the blocker merging lets
+      // its PR merge too. No session is needed. (why: docs/why.md#a-cross-repo-set-is-built-together)
+      // A contract consumer is armed by the event its re-sync push raises,
+      // never before it lands; the sweep catches one that needs none.
+      if (inFlight(s)) {
+        if (config.contractSync?.consumers?.[s.repo.name]) return [label([], [L.blocked]), note('free — its PR arms after the contract re-sync lands')]
+        return [label([], [L.blocked]), targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
+      }
+      if (s.parent?.setBuild) return [label([], [L.blocked]), note('free — its goal\'s set build is building it')]
       if (s.locked) return [recheck()]
       // The date passing or the blocker closing is a cue to look, not proof
       // the ticket is free. A recheck session reads why it was held, and
@@ -758,6 +829,11 @@ function derive(target, s, config) {
       if (s.locked) return plan.concat(pending, recheck())
       return plan.concat(fire('implement'))
     }
+    // A child built in its goal's set: approved here, built by the session
+    // that holds the goal. (why: docs/why.md#a-cross-repo-set-is-built-together)
+    case 'approve-set':
+      if (s.item.state !== 'open') return [note('closed — nothing to approve')]
+      return [label([], [L.proposal, L.awaiting, L.stuck]), status('approved'), note(`approved — built in the set on ${facts.parent}`)]
     case 'child-closed': {
       if (!isRoadmap(s, config)) return [note('parent is not a roadmap ticket')]
       if (s.item.state !== 'open') return [note('roadmap ticket already closed')]
@@ -825,29 +901,6 @@ function derive(target, s, config) {
       }
       return plan
     }
-    // A phased PR asked for its next session. It runs as implement, on the
-    // ticket's lock, as the first one did, so the branch keeps one owner. The
-    // bound is progress: a session that ended — done or out of attempts —
-    // without ticking a phase, and with no human word since it started, has
-    // stalled, and the PR becomes your turn instead of a loop.
-    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    case 'phase-continue': {
-      if (s.item.state !== 'open') return [note('ticket closed — no phase to continue')]
-      if (s.locked) return [note('a session holds the ticket — it owns the branch')]
-      const last = lastEndedImplement(s.record)
-      const heardSince = facts.humanAt && last && facts.humanAt > last.firedAt
-      const stalled = last && !heardSince && (last.outcome !== 'done' || last.flags?.phasesDone === facts.done)
-      if (stalled) return [targets([{ repo: s.repo, kind: 'pr', number: facts.pr, reason: 'phases-stalled', facts: { done: facts.done, total: facts.total } }])]
-      return [fire('implement', { phasesDone: facts.done })]
-    }
-    case 'phases-stalled':
-      return [
-        label([L.awaiting], []),
-        // A push is not a word: only a mention or a review re-arms the
-        // continuation (phase-continue reads `humanAt`).
-        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. A mention (\`${config.dispatch.commandPrefix}\`) or a review from you starts me again.`),
-        anomaly('phases-stalled', `${s.repo.full}#${s.pr?.number} phase ${facts.done + 1}/${facts.total} stalled`),
-      ]
     case 'linked-abandoned':
       return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
     // Drafts too: evaluatePr already leaves a branch a session holds alone.
@@ -856,6 +909,11 @@ function derive(target, s, config) {
     case 'unlock': {
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })
+      if (CONTINUES.has(finished)) {
+        const live = s.kind === 'pr' ? s.pr?.state === 'open' : s.item.state === 'open'
+        if (live && freshRequest(s)?.continue) return plan.concat(continueNext(s, config, finished))
+        if (s.record?.continues) plan.push(record({ continues: 0 }))
+      }
       if (s.kind === 'pr') {
         const p = evaluatePr(s, config)
         // A closed PR is nobody's turn. Without this, a session that was
@@ -883,7 +941,7 @@ function derive(target, s, config) {
       if (blockedNow(s)) return plan.concat(label([L.blocked], [L.awaiting]))
       if ((s.item.labels || []).includes(L.blocked)) plan.push(label([], [L.blocked]))
       if (s.record?.rehold) plan.push(record({ rehold: 0 }))
-      if (req?.escalated) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
+      if (req?.escalated && s.parent) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
       // Approved while blocked, and the recheck found it free.
       // (why: docs/why.md#children-are-approved-together)
       if (s.record?.pendingImplement && !inFlight(s)) {
@@ -892,11 +950,24 @@ function derive(target, s, config) {
       }
       if (isRoadmap(s, config)) {
         const kids = s.children || []
-        if (req?.replan && kids.length && planned(s)) return plan.concat(fire('implement-roadmap', { mode: 'replan' }))
+        // The plan the implement verb asked for has ended: approve what it
+        // filed, unless it raised a decision first. (why: docs/why.md#one-verb-plans-and-approves)
+        if (finished === 'implement-roadmap' && s.record?.approveOnPlan) {
+          plan.push(record({ approveOnPlan: null }))
+          if (!s.openQuestions?.open && unstarted(s).length) return plan.concat(approveChildren(s, config, { author: s.record.approveOnPlan.by }))
+        }
+        // A re-plan keeps an approval the goal already has.
+        if (req?.replan && kids.length && planned(s)) return plan.concat(s.record?.approved ? [record({ approveOnPlan: { by: null } })] : [], fire('implement-roadmap', { mode: 'replan' }))
         if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) {
           if (!verifiedAlready(s, kids)) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
           // Then end as an unlock with nothing re-armed would.
           plan.push(record({ verifyDue: false }), note('the verify that just ended already read every child'))
+        }
+        // A set build answers with its PRs, which carry the turn from here.
+        if (finished === 'implement' && kids.some((c) => c.state === 'open') && !unstarted(s).length) {
+          // Every PR event during the build was held, so each PR is read now.
+          const prs = kids.flatMap((c) => (c.prNumbers || []).map((n) => ({ repo: c.repo, kind: 'pr', number: n, reason: 'ci' })))
+          return plan.concat(label([], [L.awaiting]), prs.length ? [targets(prs)] : [], note('the set build answered with its PRs'))
         }
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
@@ -953,4 +1024,4 @@ function derive(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, endedFixCiFor, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, LOCK_FREE_STATUS_ONLY }

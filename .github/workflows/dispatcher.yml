@@ -208,11 +208,13 @@ jobs:
 
   # A consumer's committed copy of a producer's file — the generated Payload
   # types, the atlas URL contract — re-synced as soon as the producer's PR
-  # merges. One bot PR per consumer, which the loop then carries like any
-  # other: CI, `fix-ci` if the new shape breaks the consumer, your approval.
-  # No ticket: a sync is the fix, not a proposal. The values, and the
-  # commands, are `contractSync` in loop-config.json on main.
+  # merges. A consumer PR its goal built beside that producer takes the
+  # re-sync as a commit. Otherwise one bot PR per consumer, which the loop
+  # then carries like any other: CI, `fix-ci` if the new shape breaks the
+  # consumer, your approval. No ticket: a sync is the fix, not a proposal.
+  # The values, and the commands, are `contractSync` in loop-config.json on main.
   # why: sydevs/claude-workflow/docs/why.md#a-contract-sync-is-a-pr-not-a-ticket
+  # why: sydevs/claude-workflow/docs/why.md#docs-fixes-and-re-syncs-ride-the-feature
   contracts-plan:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged
     runs-on: ubuntu-latest
@@ -260,6 +262,8 @@ jobs:
       SYNC_COMMAND: ${{ matrix.consumer.command }}
       SYNC_PATHS: ${{ join(matrix.consumer.paths, ' ') }}
       SOURCE_PR: ${{ matrix.consumer.sourcePr }}
+      FEATURE_PR: ${{ matrix.consumer.featurePr }}
+      FEATURE_BRANCH: ${{ matrix.consumer.featureBranch }}
     steps:
       # The consumer's own main, never a PR head, and its own sync script.
       - uses: actions/checkout@v7
@@ -283,6 +287,30 @@ jobs:
           set -euo pipefail
           git config user.name sydevs-bot
           git config user.email 322523691+sydevs-bot@users.noreply.github.com
+          # The goal's consumer PR first, so the re-sync merges with the
+          # feature. A push it refuses falls through to the sync PR.
+          # Any failure here — the branch gone, the PR merged while this job
+          # queued, a sync script that fails on it — falls through too.
+          feature_open() { [ "$(gh pr view "$FEATURE_PR" --repo "$REPO" --json state --jq .state 2>/dev/null)" = "OPEN" ]; }
+          if [ -n "${FEATURE_BRANCH:-}" ] && feature_open \
+            && git fetch -q origin "$FEATURE_BRANCH" \
+            && git checkout -q -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH" \
+            && bash -c "$SYNC_COMMAND"; then
+            # shellcheck disable=SC2086
+            if [ -z "$(git status --porcelain -- $SYNC_PATHS)" ]; then
+              echo "#$FEATURE_PR is already current."
+              exit 0
+            fi
+            # shellcheck disable=SC2086
+            git add -- $SYNC_PATHS
+            git commit -q -m "chore(contracts): re-sync from $SOURCE_PR"
+            if feature_open && git push -q origin "HEAD:$FEATURE_BRANCH"; then
+              echo "Re-synced on #$FEATURE_PR."
+              exit 0
+            fi
+            echo "Could not re-sync on #$FEATURE_PR. Falling back to the sync PR."
+          fi
+          git checkout -q -f origin/main
           open=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [ -n "$open" ]; then
             # Build on the open PR, so a fix-ci commit already on it survives.

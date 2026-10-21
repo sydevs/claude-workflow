@@ -59,7 +59,7 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
     lock: itemless ? null : config.labels.lock,
     // `withdrawn` and `cleared` ride only when set, so every other record keeps its shape.
-    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}) },
+    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}), ...(Number.isInteger(flags?.continuation) && flags.continuation > 0 ? { continuation: flags.continuation } : {}), ...(Array.isArray(flags?.children) && flags.children.length ? { children: flags.children } : {}) },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
     // `advisory` carries each red non-required check's link, so a deploy

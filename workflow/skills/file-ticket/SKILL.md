@@ -62,8 +62,8 @@ override any of these. Record their reason in the ticket. (why: docs/why.md#push
 
 ## 3. Classify
 
-Use format-ticket's rule. A request that needs a product decision, or more than one reviewable
-PR, is a **Roadmap** ticket. A Bug is always direct.
+Use format-ticket's rule. A request that needs a product decision, or spans more than one repo, is
+a **Roadmap** ticket. One repo's change is direct, however large. A Bug is always direct.
 
 **A docs-only fix needs no ticket** — a doc says one thing, and the code plainly does the right
 other thing. Ask `Fix it in a PR now (Recommended)` or `File a Bug anyway`. An open docs ticket

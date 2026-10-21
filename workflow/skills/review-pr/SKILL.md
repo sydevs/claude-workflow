@@ -42,7 +42,10 @@ Two lenses carry the most weight, in this order:
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
    strongest finding this review can produce is "half of this PR should not exist." A change the
    `## Summary` names as joined is not smuggled. Judge it by format-ticket's join rule, and flag
-   only one the rule does not join.
+   only one the rule does not join. A criterion marked `(review, …)` is the reviewer's own ask:
+   never flag its change as scope. **Never recommend moving part of this PR to a follow-up or a
+   second PR.** A part that does not belong is a finding to remove it; a part missing is a
+   finding to build it here.
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
    `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access

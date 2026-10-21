@@ -74,10 +74,10 @@ function repoFromUrl(url, fallbackOwner) {
 }
 
 /** A roadmap ticket's implementation tickets, from GitHub's native sub-issues. */
-async function subIssues(gh, { owner, repo, number }) {
+async function subIssues(gh, { owner, repo, number }, lock) {
   try {
     const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
-    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null }))
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null, locked: (i.labels || []).some((l) => (l.name || l) === lock) }))
   } catch {
     return []
   }
@@ -88,9 +88,25 @@ async function parentOf(gh, { owner, repo, number }) {
   try {
     const { data } = await gh.request(`GET /repos/{owner}/{repo}/issues/{n}/parent`, { owner, repo, n: number })
     const r = repoFromUrl(data.repository_url, owner)
-    return r ? { repo: r, number: data.number, state: data.state, type: data.type?.name || null } : null
+    return r ? { repo: r, number: data.number, state: data.state, type: data.type?.name || null, labels: (data.labels || []).map((l) => l.name || l) } : null
   } catch {
     return null
+  }
+}
+
+/**
+ * True when the goal's lock is a set build that includes this child, read
+ * from the goal's record. Any other goal session leaves its children alone.
+ * (why: docs/why.md#a-cross-repo-set-is-built-together)
+ */
+async function inSetBuild(gh, goal, childRef, lock) {
+  if (!goal?.labels?.includes(lock)) return false
+  try {
+    const { rec } = await loadRecord(gh, { owner: goal.repo.owner, repo: goal.repo.name, number: goal.number })
+    const cur = rec?.current
+    return cur?.handler === 'implement' && cur.flags?.mode === 'set' && (cur.flags.children || []).includes(childRef)
+  } catch {
+    return false
   }
 }
 
@@ -179,6 +195,8 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const newestHuman = comments.filter((c) => !isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
 
   const s = {
+    // A session asks the dispatcher through a marker in its newest comment.
+    request: latestRequest(comments, config),
     kind: issue.pull_request ? 'pr' : 'issue',
     repo: { owner, name: repo, full: `${owner}/${repo}` },
     item: { number, nodeId: issue.node_id, state: issue.state, title: issue.title, body: issue.body || '', labels, author: issue.user?.login || '', authorAssociation: issue.author_association || null, type: issue.type?.name || null, milestone: issue.milestone?.title || null, htmlUrl: issue.html_url, updatedAt: issue.updated_at },
@@ -208,10 +226,20 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.blockedByError = Array.isArray(blockedBy) ? null : blockedBy.error
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)
-    s.request = latestRequest(comments, config)
     s.parent = await parentOf(gh, base)
+    if (s.parent) s.parent.setBuild = await inSetBuild(gh, s.parent, `${owner}/${repo}#${number}`, config.labels.lock)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
-    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []
+    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock) : []
+    // An approval starts only the open children no PR answers yet, and builds
+    // together the ones whose only blockers are each other.
+    // (why: docs/why.md#one-verb-plans-and-approves, docs/why.md#a-cross-repo-set-is-built-together)
+    for (const c of s.children.filter((k) => k.state === 'open')) {
+      const ref = { owner: c.repo.owner, repo: c.repo.name, number: c.number }
+      c.prNumbers = await openPrsClosing(gh, ref)
+      c.prs = c.prNumbers.length
+      const deps = await dependencies(gh, ref, 'blocked_by')
+      c.blockedByOpen = Array.isArray(deps) ? deps.filter((b) => b.state === 'open') : []
+    }
     const blocking = target.reason === 'issues.closed' ? await dependencies(gh, base, 'blocking') : []
     s.dependents = Array.isArray(blocking)
       ? blocking.filter((d) => d.state === 'open').map((d) => ({ repo: { owner: d.owner, name: d.repo, full: `${d.owner}/${d.repo}` }, kind: 'issue', number: d.number, facts: { closedNumber: number } }))
@@ -274,14 +302,22 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)
-  // The lock sits on the issue, and the session it locked owns this branch.
-  // Until it unlocks, nothing else may touch the PR.
-  // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  // The lock sits on the issue, or on its goal during a set build, and the
+  // session it locked owns this branch. Until it unlocks, nothing else may
+  // touch the PR. (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  // A linked issue still blocked waits for its blocker to merge first.
+  // (why: docs/why.md#a-cross-repo-set-is-built-together)
   s.linkedLocked = []
+  s.linkedBlockedOpen = []
   if (isBot(pr.user?.login, config)) {
     for (const n of s.linkedIssues) {
+      const ref = { owner, repo, number: n }
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
       if ((li.labels || []).some((l) => (l.name || l) === config.labels.lock)) s.linkedLocked.push(n)
+      const goal = await parentOf(gh, ref)
+      if (await inSetBuild(gh, goal, `${owner}/${repo}#${n}`, config.labels.lock)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
+      const deps = await dependencies(gh, ref, 'blocked_by')
+      if (Array.isArray(deps)) s.linkedBlockedOpen.push(...deps.filter((b) => b.state === 'open').map((b) => `${b.owner}/${b.repo}#${b.number}`))
     }
   }
   if (target.reason === 'pull_request.closed' && target.facts?.merged) {

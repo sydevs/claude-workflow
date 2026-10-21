@@ -59,7 +59,7 @@ const KINDS = new Set(['issue', 'pr'])
 // (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
 const REPO_KIND = 'repo'
 // Which job a multi-mode handler is on: `intake`, `revise`, `recheck`,
-// `block`, `verify`, `plan`, `replan`. A word, never instructions.
+// `block`, `verify`, `plan`, `replan`, `set`. A word, never instructions.
 const MODE = /^[a-z][a-z-]{0,19}$/
 // `cleared`: the closed blockers a recheck waited on, as `owner/repo#N`.
 const REF = /^[A-Za-z0-9_.-]{1,39}\/[A-Za-z0-9_.-]{1,100}#\d{1,7}$/
@@ -67,6 +67,15 @@ const REF = /^[A-Za-z0-9_.-]{1,39}\/[A-Za-z0-9_.-]{1,100}#\d{1,7}$/
 function cleared(list) {
   const refs = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && REF.test(x)) : []
   return refs.length ? { cleared: refs } : {}
+}
+/** `{ children }`: the approved tickets a set build makes, as `owner/repo#N`. Refs, never instructions. */
+function children(list) {
+  const refs = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && REF.test(x)) : []
+  return refs.length ? { children: refs } : {}
+}
+/** `{ continuation: n }`: the nth session an implement asked for in a row. A count, never instructions. */
+function continuation(n, max) {
+  return Number.isInteger(n) && n > 0 && n <= max ? { continuation: n } : {}
 }
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
 
@@ -145,7 +154,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     record: {
       ...r,
       // `withdrawn`: a verify whose children all closed as not planned. True or absent.
-      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}), ...cleared(r.flags?.cleared) },
+      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}), ...cleared(r.flags?.cleared), ...children(r.flags?.children), ...continuation(r.flags?.continuation, maxAttempts) },
       owner,
       name,
       lock: r.kind === REPO_KIND ? null : lock,

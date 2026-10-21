@@ -8,7 +8,9 @@
  * stale on the consumer's `main`. The `contracts-sync` job in dispatcher.yml
  * then runs the consumer's own sync command and opens one bot PR, which the
  * loop carries like any other. No ticket: a sync is the fix, not a proposal.
- * (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
+ * (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket) When a goal built a
+ * consumer PR beside the merged producer, the re-sync is a commit on that PR
+ * instead. (why: docs/why.md#docs-fixes-and-re-syncs-ride-the-feature)
  */
 
 /** The consumers whose copy one of `changedFiles` feeds. Pure. */
@@ -42,7 +44,45 @@ export async function planContractSync({ github, context, core, config }) {
   const names = files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean))
   const out = affectedConsumers(config, repo, names)
   core.info(`#${pr.number} → ${out.length ? out.map((c) => c.name).join(', ') : 'no consumer'} to re-sync`)
-  return out.map((c) => ({ ...c, sourcePr: `https://github.com/${owner}/${repo}/pull/${pr.number}` }))
+  const plan = []
+  for (const c of out) {
+    const feature = await featurePrFor({ github, config, owner, repo, prNumber: pr.number, consumer: c.name })
+    if (feature) core.info(`${c.name}: the re-sync rides #${feature.number}`)
+    plan.push({ ...c, sourcePr: `https://github.com/${owner}/${repo}/pull/${pr.number}`, featurePr: feature?.number || null, featureBranch: feature?.branch || '' })
+  }
+  return plan
+}
+
+/** The open bot PR on a `claude/*` branch among `nodes`, as `{ number, branch }`, or null. Pure. */
+export function pickFeaturePr(nodes, bot) {
+  const p = (nodes || []).find((n) => n.state === 'OPEN' && String(n.author?.login || '').toLowerCase() === String(bot || '').toLowerCase() && String(n.headRefName || '').startsWith('claude/'))
+  return p ? { number: p.number, branch: p.headRefName } : null
+}
+
+/**
+ * The consumer PR a goal built beside this producer, or null: the open bot PR
+ * closing a ticket that a ticket the merged PR closes blocks. Unreadable
+ * relationships mean null, and the standalone sync PR, as before.
+ */
+export async function featurePrFor({ github, config, owner, repo, prNumber, consumer }) {
+  const closing = `query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ closingIssuesReferences(first:10){ nodes { number } } } } }`
+  const prs = `query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ issue(number:$n){ closedByPullRequestsReferences(first:10){ nodes { number state headRefName author { login } } } } } }`
+  try {
+    const d = await github.graphql(closing, { o: owner, r: repo, n: prNumber })
+    for (const { number } of d.repository.pullRequest.closingIssuesReferences.nodes || []) {
+      const { data } = await github.request('GET /repos/{owner}/{repo}/issues/{n}/dependencies/blocking', { owner, repo, n: number, per_page: 100 })
+      for (const dep of data || []) {
+        const depRepo = dep.repository?.name || /\/repos\/[^/]+\/([^/]+)$/.exec(String(dep.repository_url || ''))?.[1] || repo
+        if (dep.state !== 'open' || depRepo !== consumer) continue
+        const p = await github.graphql(prs, { o: owner, r: consumer, n: dep.number })
+        const found = pickFeaturePr(p.repository.issue.closedByPullRequestsReferences.nodes, config.identity?.expectedLogin)
+        if (found) return found
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 /**
