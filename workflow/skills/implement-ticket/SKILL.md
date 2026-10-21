@@ -1,6 +1,6 @@
 ---
 name: implement-ticket
-description: Implement one authorised ticket in an isolated worktree, open a draft PR through /finalize-pr, push, and end. Fired by the dispatcher on `@sydevs-bot implement`. Runnable locally with an issue number.
+description: Implement one authorised ticket, whole, in one session, in an isolated worktree. Open a draft PR through /finalize-pr only once every criterion is met, push, and end. Fired by the dispatcher on `@sydevs-bot implement`, and on its own continue request. Runnable locally with an issue number.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -33,9 +33,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    continued. An existing PR is refreshed. Never open a second one.
    (why: docs/why.md#push-and-end)
 
-   **A draft PR whose `## Phases` has an unticked box is your plan.** The dispatcher fired you to
-   continue it. Read the branch diff first, then work from the first unticked phase. Never
-   re-plan a ticked phase.
+   **`flags.continuation`, or `attempt > 1`, means an earlier session left work.** Read the
+   branch diff and your newest comment on the ticket — it says what is built and what remains —
+   then carry on from there. Never start over.
 
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
    ticket, the `blocked` label and the open native blockers. You still read the body: a
@@ -57,14 +57,11 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    **A decision only part of the work turns on does not stop the build.** Build the recommended
    option, and ask the decision as a question thread (`/workflow:finalize-pr` step 7c).
 
-   **A ticket that will not fit one run is built in phases, on this one branch and one PR.**
-   Never split it into child tickets or several PRs here: splitting is planning, done before
-   approval by `implement-roadmap` at reviewability seams, never by a build run on size. Order the
-   phases so each leaves the branch green and the next builds on it — schema before endpoint
-   before UI. A ticket that carries `## Phases` is your plan: copy it, and change only what the
-   code disproves. Write them as the `## Phases` checklist in the PR body (`pr-template.md`). A
-   ticket that fits one run has no phases.
-   (why: docs/why.md#a-ticket-is-built-in-phases-never-split, docs/why.md#split-at-reviewability-seams)
+   **Build the whole ticket, in this session.** Never split it into child tickets, several PRs,
+   or phases, whatever its size. Order the work so the branch keeps building — schema before
+   endpoint before UI — and push a checkpoint commit to the branch after each coherent piece. A
+   checkpoint insures against a dead session. It is not a handoff, and it opens no PR.
+   (why: docs/why.md#a-feature-is-built-in-one-session)
 
    **File what you trip over**, as preflight's incidental-finding rule routes it. A finding the
    join rule joins to this ticket is this PR's, listed or not: fold it in, with its own
@@ -87,17 +84,15 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
    `Co-Authored-By` trailer.
 
-   **In phases, close each one before the next:** the lean gate, then `/code-review high` and
-   `/simplify` over that phase's commits, triaged as `/workflow:finalize-pr` step 2 says. Then
-   tick its box. Skip this for the phase that ends the session, because step 11 reviews the
-   whole branch.
+   **Watch the deadline. Never plan around it.** Work until the ticket is built. Only when the
+   record's `deadline` leaves no room to finish and still run step 11, hand off:
 
-   **Before you open a phase, check the record's `deadline`.** If the phase and step 11 will not
-   both fit, ship what is ticked and end. The dispatcher starts the next session once CI is
-   green. **Every session ends with at least one more box ticked.** A phase too big for one
-   session is split into smaller boxes, and you tick the part you finished. A session that ticks
-   nothing stalls the PR, and it becomes the reviewer's turn — so when a decision stops you, ask
-   it as a question thread (`/workflow:finalize-pr` step 7c) and end.
+   1. Push what is built to the branch. Open no PR.
+   2. Comment on the ticket: what is built, what remains, in order, and anything the next
+      session must know. End it with `<!-- sydevs-request {"continue":true} -->`.
+   3. End through `/workflow:finish-run`.
+
+   The dispatcher starts the next session at once, up to `dispatch.maxAttempts` in a row.
 
 8. **Contract step.** Run `contractStep.command` from `workflow.json` where the change needs
    it — Payload migrations in SahajCloud, `types:cms` in the consumers, the URL-contract diff in
@@ -118,8 +113,10 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     diff touches `src/plugins/email/` or `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
     `/view/<id>` links.
 
-11. **Ship.** Hand to `/workflow:finalize-pr`. It opens the PR **as a draft** and pushes. Never
-    hand-roll the push or the PR. **Re-check the lock before the push** (preflight).
+11. **Ship, once every acceptance criterion is met.** Hand to `/workflow:finalize-pr`. It
+    reviews the whole branch, opens the PR **as a draft** and pushes. Never hand-roll the push or
+    the PR, and never open it on a partial build: an open PR is what calls the critic and the
+    reviewer. **Re-check the lock before the push** (preflight).
 
 12. **Clean up, after the push.** `git rev-parse HEAD` equals `git rev-parse origin/<branch>` →
     `/workflow:dev-server teardown`, `ExitWorktree action:"keep"`, `git worktree remove <path>`.
@@ -127,8 +124,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     (why: docs/why.md#push-and-end)
 
 13. **Touch no state.** Opening the PR is the event. The dispatcher moves the ticket to Done and
-    the PR to Revising, reads CI, starts the next phase or fires the critic, marks the PR ready,
-    and requests the reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
+    the PR to Revising, reads CI, fires the critic, marks the PR ready, and requests the
+    reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
     (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on
@@ -147,7 +144,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 - **Never write a test fixture without verifying its shape against the real configuration.**
 - **Never open a second branch or PR for a ticket that has one.** A docs- or test-only finding
   the join rule does not join is not a second PR for it: preflight routes it.
-- **Never split a ticket** into child tickets or several PRs. A big ticket is built in phases.
+- **Never split a ticket** into child tickets, several PRs, or phases. A big ticket is built in
+  one session, and continued only when the deadline forces it.
+- **Never open a PR before every acceptance criterion is met.**
 - **Never resolve a product decision yourself.** It goes to `## Open questions` with options, or
   to a question thread with the recommended option built (step 4).
 

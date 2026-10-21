@@ -12,7 +12,6 @@
  */
 
 import { parseVerb, parseBlock } from './verbs.mjs'
-import { parsePhases } from './markers.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -239,11 +238,6 @@ function lastHumanWordAt(snapshot, config) {
   return at.filter(Boolean).sort().pop() || null
 }
 
-/** The newest implement dispatch that ended, finished or timed out, from an issue's record. */
-function lastEndedImplement(record) {
-  return (record?.dispatches || []).filter((d) => d.handler === 'implement' && d.outcome).pop() || null
-}
-
 /**
  * A `fix-ci` session that already ran against this exact head and ended.
  *
@@ -310,16 +304,13 @@ function deployPassFor(record, sha) {
 
 /**
  * A conflicted PR, draft or ready. A conflicted branch schedules no CI, so
- * nothing downstream of this — fix-ci, the critic, the next phase — can ever
- * move it: the conflict goes first. Two exceptions. A stalled phased draft
- * labelled awaiting stays your turn. A resolve-conflicts session that already
- * ended on this head, or is ending now, stopped on a conflict it would not
- * guess, so that is your turn too, until a push gives it a new head.
+ * nothing downstream of this — fix-ci, the critic — can ever move it: the
+ * conflict goes first. One exception: a resolve-conflicts session that
+ * already ended on this head, or is ending now, stopped on a conflict it
+ * would not guess, so that is your turn, until a push gives it a new head.
  */
 function conflictPlan(s, config) {
   const awaiting = config.labels.awaiting
-  const phases = phasesLeft(s)
-  if (phases && (s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you, conflicted`)]
   const sha = s.pr.head?.sha
   const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
   const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
@@ -327,21 +318,14 @@ function conflictPlan(s, config) {
   return [fire('resolve-conflicts')]
 }
 
-/** A phased draft whose ticket still has phases to build, or null. */
-function phasesLeft(s) {
-  const phases = parsePhases(s.item?.body)
-  return s.pr?.draft && phases && phases.done < phases.total && s.linkedIssues?.length ? phases : null
-}
-
 /**
  * Required CI is green, and a Railway preview `railway.statusContexts` lists
  * failed. One `fix-ci` pass in `deploy` mode reads its log, once per head,
- * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass. Not
- * mid-phases, where the next phase may be what fixes the build.
+ * with no `bumpFixCi`: it never spends a `ceilings.ciFixIterations` pass.
  * (why: docs/why.md#a-failed-preview-is-read-from-its-log)
  */
 function deployPass(s, config) {
-  if (!failedDeploys(s.ci?.advisory, config).length || phasesLeft(s)) return null
+  if (!failedDeploys(s.ci?.advisory, config).length) return null
   if (deployPassFor(s.record, s.pr.head?.sha)) return null
   return advisoryNote(s).concat(fire('fix-ci', { mode: 'deploy' }))
 }
@@ -452,15 +436,8 @@ function evaluateGreenPr(s, config) {
   const awaiting = config.labels.awaiting
 
   if (pr.draft) {
-    // One ticket, one PR, built across as many implement sessions as it
-    // takes. While a phase is unticked the next session continues it, on the
-    // ticket's lock, and the critic reads the whole PR once, at the end.
-    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    const phases = phasesLeft(s)
-    if (phases) {
-      if ((s.item?.labels || []).includes(awaiting)) return [note(`phase ${phases.done + 1} of ${phases.total} waits on you`)]
-      return [targets([{ repo: s.repo, kind: 'issue', number: s.linkedIssues[0], reason: 'phase-continue', facts: { pr: pr.number, done: phases.done, total: phases.total, humanAt: lastHumanWordAt(s, config) } }])]
-    }
+    // implement opens the PR only once the ticket is built, so the critic
+    // reads the whole of it, once. (why: docs/why.md#a-feature-is-built-in-one-session)
     const small = underThreshold(pr, config)
     if (!ownReview(s, config) && !small) return [fire('review-pr')]
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
@@ -850,29 +827,6 @@ function derive(target, s, config) {
       }
       return plan
     }
-    // A phased PR asked for its next session. It runs as implement, on the
-    // ticket's lock, as the first one did, so the branch keeps one owner. The
-    // bound is progress: a session that ended — done or out of attempts —
-    // without ticking a phase, and with no human word since it started, has
-    // stalled, and the PR becomes your turn instead of a loop.
-    // (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
-    case 'phase-continue': {
-      if (s.item.state !== 'open') return [note('ticket closed — no phase to continue')]
-      if (s.locked) return [note('a session holds the ticket — it owns the branch')]
-      const last = lastEndedImplement(s.record)
-      const heardSince = facts.humanAt && last && facts.humanAt > last.firedAt
-      const stalled = last && !heardSince && (last.outcome !== 'done' || last.flags?.phasesDone === facts.done)
-      if (stalled) return [targets([{ repo: s.repo, kind: 'pr', number: facts.pr, reason: 'phases-stalled', facts: { done: facts.done, total: facts.total } }])]
-      return [fire('implement', { phasesDone: facts.done })]
-    }
-    case 'phases-stalled':
-      return [
-        label([L.awaiting], []),
-        // A push is not a word: only a mention or a review re-arms the
-        // continuation (phase-continue reads `humanAt`).
-        commentOnce(`phases-stalled ${s.pr?.head?.sha}`, `Phase ${facts.done + 1} of ${facts.total} did not advance in the last session, so I have stopped continuing this PR. A mention (\`${config.dispatch.commandPrefix}\`) or a review from you starts me again.`),
-        anomaly('phases-stalled', `${s.repo.full}#${s.pr?.number} phase ${facts.done + 1}/${facts.total} stalled`),
-      ]
     case 'linked-abandoned':
       return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
     // Drafts too: evaluatePr already leaves a branch a session holds alone.
@@ -902,6 +856,17 @@ function derive(target, s, config) {
       if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
       if (s.item.state !== 'open') return plan.concat(label([], [L.awaiting, L.stuck]))
       const req = freshRequest(s)
+      // An implement session near its deadline pushed what it built and asked
+      // for another. It starts at once, with the same flags, up to
+      // `dispatch.maxAttempts` in a row. (why: docs/why.md#a-feature-is-built-in-one-session)
+      if (finished === 'implement') {
+        const n = (s.record?.continues || 0) + 1
+        if (req?.continue && n <= (config.dispatch.maxAttempts ?? 3)) return plan.concat(record({ continues: n }), fire('implement', { ...(s.record?.current?.flags || {}), continuation: n }))
+        if (req?.continue) {
+          return plan.concat(record({ continues: 0 }), label([L.awaiting], []), commentOnce(`continue-cap ${s.record?.current?.firedAt || ''}`, `Not finished after ${n} sessions in a row. The branch holds what is built, and the comment above says what remains. A mention (\`${config.dispatch.commandPrefix}\`) or \`${config.dispatch.commandPrefix} implement\` starts me again.`), anomaly('continue-cap', `${s.repo.full}#${s.item.number} not finished after ${n} sessions`))
+        }
+        if (s.record?.continues) plan.push(record({ continues: 0 }))
+      }
       if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
       // Still held — the recheck re-held it, or the session parked it. Quiet:
       // blocked is not your turn. (why: docs/why.md#recheck-before-awaiting)
@@ -985,4 +950,4 @@ function derive(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, lastEndedImplement, endedFixCiFor, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, LOCK_FREE_STATUS_ONLY }

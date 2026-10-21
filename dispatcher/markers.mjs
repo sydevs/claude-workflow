@@ -6,9 +6,8 @@
  * dispatcher turns the line into a relationship, then deletes it.
  * `Re-check: <date>` parks a ticket until a date. `Sentry: <url> (id: <n>)`
  * names the Sentry issue a merge resolves. All three formats come from
- * `format-ticket/SKILL.md`. A PR body's `## Phases` checklist, from
- * `implement-ticket`, is read here too, as are a ticket's `## Open questions`
- * and a session's `sydevs-request` marker.
+ * `format-ticket/SKILL.md`. A ticket's `## Open questions` and a session's
+ * `sydevs-request` marker are read here too.
  */
 
 /** Struck through, once the bullet is gone: `~~x~~`, or `**~~x~~**`. */
@@ -147,36 +146,6 @@ export function parseSentry(body) {
 }
 
 /**
- * `{ total, done }` from a PR body's `## Phases` checklist, or null when it
- * has none. `implement-ticket` writes the section when it builds one ticket
- * across sessions, and ticks a phase once it is pushed with its review done.
- * Only `- [ ]` and `- [x]` lines count, up to the next heading. A fenced
- * block is skipped, so a body quoting the template is not read as a plan.
- * (why: docs/why.md#a-ticket-is-built-in-phases-never-split)
- */
-export function parsePhases(body) {
-  let inside = false
-  let fenced = false
-  let total = 0
-  let done = 0
-  for (const l of lines(body)) {
-    if (l.startsWith('```')) { fenced = !fenced; continue }
-    if (fenced) continue
-    if (/^#{1,6}\s/.test(l)) {
-      if (inside) break
-      inside = /^##\s+phases\s*$/i.test(l)
-      continue
-    }
-    if (!inside) continue
-    const m = /^[-*+]\s+\[([ xX])\]/.exec(l)
-    if (!m) continue
-    total += 1
-    if (m[1] !== ' ') done += 1
-  }
-  return total ? { total, done } : null
-}
-
-/**
  * `{ total, open }` from a ticket body's `## Open questions` checklist, or
  * `{ total: 0, open: 0 }` when it has none. Only `- [ ]` and `- [x]` lines
  * count, up to the next heading; an option bullet under a question is not a
@@ -225,6 +194,7 @@ export function parseRequest(body, repos = []) {
   const out = {}
   if (j.replan === true) out.replan = true
   if (j.escalated === true) out.escalated = true
+  if (j.continue === true) out.continue = true
   if (j.transfer && typeof j.transfer.repo === 'string' && repos.includes(j.transfer.repo)) {
     out.transfer = { repo: j.transfer.repo, milestone: typeof j.transfer.milestone === 'string' ? j.transfer.milestone : null }
   }

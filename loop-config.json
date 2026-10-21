@@ -142,7 +142,7 @@
       "unknownPr": "address"
     },
     "timeoutsMinutes": {
-      "implement": 150,
+      "implement": 360,
       "implement-roadmap": 150,
       "revise": 60,
       "revise-roadmap": 120,

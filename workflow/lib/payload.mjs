@@ -68,6 +68,10 @@ function cleared(list) {
   const refs = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && REF.test(x)) : []
   return refs.length ? { cleared: refs } : {}
 }
+/** `{ continuation: n }`: the nth session an implement asked for in a row. A count, never instructions. */
+function continuation(n, max) {
+  return Number.isInteger(n) && n > 0 && n <= max ? { continuation: n } : {}
+}
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
 
 /**
@@ -145,7 +149,7 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
     record: {
       ...r,
       // `withdrawn`: a verify whose children all closed as not planned. True or absent.
-      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}), ...cleared(r.flags?.cleared) },
+      flags: { onDemand: r.flags?.onDemand === true, delegated: r.flags?.delegated === true, mode: typeof r.flags?.mode === 'string' && MODE.test(r.flags.mode) ? r.flags.mode : null, ...(r.flags?.withdrawn === true ? { withdrawn: true } : {}), ...cleared(r.flags?.cleared), ...continuation(r.flags?.continuation, maxAttempts) },
       owner,
       name,
       lock: r.kind === REPO_KIND ? null : lock,

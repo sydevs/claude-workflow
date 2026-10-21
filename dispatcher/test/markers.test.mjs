@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, stripBlockedBy, parseRecheck, parseSentry, datePassed, parsePhases, parseOpenQuestions, parseRequest } from '../markers.mjs'
+import { parseBlockedBy, stripBlockedBy, parseRecheck, parseSentry, datePassed, parseOpenQuestions, parseRequest } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -93,32 +93,6 @@ test('the strip leaves every line the reader skips', () => {
     'This is blocked by sydevs/SahajCloud#2',
   ].join('\n')
   assert.deepEqual(stripBlockedBy(live, 'sydevs', 'Blocked by', [two]), { body: live, dropped: [] })
-})
-
-test('phases are counted from the PR body checklist, up to the next heading', () => {
-  const b = '## Summary\n- [x] not a phase\n\n## Phases\n- [x] schema\n- [X] endpoint\n- [ ] admin UI\n* [ ] docs\n\n## Test results\n- [ ] not a phase either'
-  assert.deepEqual(parsePhases(b), { total: 4, done: 2 })
-})
-
-test('a body without a phases checklist has no phases', () => {
-  assert.equal(parsePhases('## Summary\n- [ ] x'), null)
-  assert.equal(parsePhases('## Phases\n\nNone yet.'), null)
-  assert.equal(parsePhases(''), null)
-})
-
-test('phases below a change outline count only the real checklist', () => {
-  const b = [
-    '## Summary', '- x', '',
-    '## Change outline', '### Flow', '```diff', '## Phases', '- [ ] not a phase', '+- [x] nor this', '```', '',
-    '## Preview', '- y', '',
-    '## Phases', '- [x] schema', '- [ ] admin UI', '',
-    'Closes #9',
-  ].join('\n')
-  assert.deepEqual(parsePhases(b), { total: 2, done: 1 })
-})
-
-test('a phases heading inside a code fence is not a plan', () => {
-  assert.equal(parsePhases('## Notes\n```markdown\n## Phases\n- [ ] one\n```\n'), null)
 })
 
 test('open questions count checkboxes under their own heading, not option bullets', () => {
