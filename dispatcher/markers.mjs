@@ -97,9 +97,11 @@ const TARGET = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:issues|pull)\/\d+|\b
  * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  *
  * `targets` is what a caller keys a report on: short, and stable while the
- * author rewords the reason after the em dash. A line that resolved at least
- * one target is not reported at all — the ticket is related and carries
- * `blocked`, so nothing diverges.
+ * author rewords the reason after the em dash. It is reported in the order
+ * written, so a key built from it sorts first — an author correcting one of
+ * two targets often rewrites the pair, and the order must not re-post the
+ * advice. A line that resolved at least one target is not reported at all —
+ * the ticket is related and carries `blocked`, so nothing diverges.
  */
 export function unresolvedBlockers(body, org, marker = 'Blocked by') {
   const out = []
@@ -107,7 +109,7 @@ export function unresolvedBlockers(body, org, marker = 'Blocked by') {
   for (const { line, bare } of blockerLines(body, marker)) {
     if (parseRefs(bare, org).length) continue
     const targets = [...new Set(bare.match(TARGET) || [])]
-    const key = targets.join(' ')
+    const key = [...targets].sort().join(' ')
     if (!targets.length || seen.has(key)) continue
     seen.add(key)
     out.push({ line, targets })

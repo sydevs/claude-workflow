@@ -116,6 +116,9 @@ test('the shared body reports its two unresolved lines, each once', () => {
   const after = unresolvedBlockers('Blocked by #12 — waiting on the backport', 'sydevs')[0]
   assert.deepEqual(first.targets, after.targets, 'the reason is not part of the identity')
   assert.notEqual(first.line, after.line, 'though the quoted line follows the edit')
+  // An author correcting one of two targets often rewrites the pair, so the
+  // order they end up in is not part of the identity either.
+  assert.equal(unresolvedBlockers('Blocked by #12 and #13\nBlocked by #13 and #12', 'sydevs').length, 1)
 })
 
 // ---- a converted blocker line is deleted (why: docs/why.md#a-converted-blocker-line-is-deleted)

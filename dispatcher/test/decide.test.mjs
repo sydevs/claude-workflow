@@ -311,6 +311,10 @@ test('the refusal is keyed on the targets, so neither a later edit nor a reword 
   // A corrected target yields a key that is never reached.
   const fixed = blockerSnap([{ line: 'Blocked by #907', targets: ['#907'] }])
   assert.notEqual(unresolved(decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, fixed, config))[0].key, onOpen.key)
+  // Nor is the order of two targets, which an author rewrites as a pair.
+  const pair = (targets) => unresolved(decide({ reason: 'issues.opened' }, blockerSnap([{ line: 'Blocked by #12 and #13', targets }]), config))[0]
+  assert.equal(pair(['#13', '#12']).key, pair(['#12', '#13']).key, 'the key is sorted')
+  assert.match(pair(['#13', '#12']).body, /#13, #12 name no sydevs issue/, 'the message keeps the order written')
 })
 
 test('a bare #N on edit is refused, and a resolvable line beside it still relates', () => {

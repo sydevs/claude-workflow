@@ -655,13 +655,14 @@ function blockVerb(s, config, facts) {
  *
  * Keyed on the targets, not the whole line: there is no comment id on this
  * path, and the author rewording the reason must not re-post the advice.
+ * Sorted, so reordering the targets does not either.
  */
 function refuseUnresolvedBlockers(s, config) {
   // Guarded, unlike its `blockedBy` neighbour: a snapshot assembled by hand
   // predates the field, and `decide` must stay total over one.
   return (s.markers.unresolvedBlockers || []).map(({ line, targets }) =>
     commentOnce(
-      `blocker-unresolved ${targets.join(' ')}`,
+      `blocker-unresolved ${[...targets].sort().join(' ')}`,
       [
         `No relationship created: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue.`,
         `> ${line}`,
