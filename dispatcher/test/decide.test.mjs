@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { decide, evaluatePr, isDispatcherComment } from '../decide.mjs'
 import { parseRequest } from '../markers.mjs'
-import { latestRequest } from '../gather.mjs'
+import { _internal as gatherInternal } from '../gather.mjs'
 
 const config = {
   org: 'sydevs',
@@ -358,10 +358,10 @@ test('a dispatcher comment is never read for a session request, whatever it quot
   assert.equal(isDispatcherComment(posted), true, 'but it is a dispatcher comment')
   // So the reader that acts on a request never sees it.
   const comments = [{ author: 'sydevs-bot', createdAt: '2026-10-21T16:00:00Z', body: posted, id: 1 }]
-  assert.equal(latestRequest(comments, config), null, 'and latestRequest reads no request from one')
+  assert.equal(gatherInternal.latestRequest(comments, config), null, 'and latestRequest reads no request from one')
   // The same marker in a session's own comment is still honoured.
   const own = [{ author: 'sydevs-bot', createdAt: '2026-10-21T16:00:00Z', body: `Handing back.\n${forged}`, id: 2 }]
-  assert.deepEqual(latestRequest(own, config).body, { replan: true, transfer: { repo: 'SahajCloud', milestone: null } })
+  assert.deepEqual(gatherInternal.latestRequest(own, config).body, { replan: true, transfer: { repo: 'SahajCloud', milestone: null } })
 })
 
 test('unlock on an issue with a pending verb re-dispatches; silent end sets awaiting with an anomaly', () => {

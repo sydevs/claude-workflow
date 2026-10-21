@@ -120,7 +120,7 @@ async function inSetBuild(gh, goal, childRef, lock) {
  * a `sydevs-request` marker `parseRequest` would honour.
  * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  */
-export function latestRequest(comments, config) {
+function latestRequest(comments, config) {
   const own = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
   for (const c of own) {
     const body = parseRequest(c.body, config.repos || [])
@@ -341,3 +341,5 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   return s
 }
 
+/** Test-only seam, as `decide.mjs` has. Nothing here is part of the module's contract. */
+export const _internal = { latestRequest }
