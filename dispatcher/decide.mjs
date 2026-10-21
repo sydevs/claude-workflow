@@ -372,7 +372,7 @@ export function evaluatePr(s, config) {
   // with no CI is green the moment the PR opens, so without this the critic
   // fires while implement is still pushing.
   // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
-  if (s.linkedLocked?.length) return [note(`#${s.linkedLocked[0]} is still locked — its session owns this branch`)]
+  if (s.linkedLocked?.length) return [note(`${String(s.linkedLocked[0]).includes('#') ? '' : '#'}${s.linkedLocked[0]} is still locked — its session owns this branch`)]
 
   if (pendingReviewVerb(s, config)) return [fire('review-pr', { onDemand: true })]
 
@@ -434,6 +434,10 @@ function linkTarget(url) {
 function evaluateGreenPr(s, config) {
   const pr = s.pr
   const awaiting = config.labels.awaiting
+  // A consumer built beside its producer is reviewed with it, and merges
+  // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
+  const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn
 
   if (pr.draft) {
     // implement opens the PR only once the ticket is built, so the critic
@@ -444,7 +448,8 @@ function evaluateGreenPr(s, config) {
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     const plan = [markReady(), requestReviewer(), label([awaiting], [])]
-    if (!loopMayNotMerge(s, config)) plan.push(armAutoMerge())
+    if (mayArm) plan.push(armAutoMerge())
+    if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) {
       const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
       plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
@@ -456,7 +461,7 @@ function evaluateGreenPr(s, config) {
   // satisfied — one approval, every thread resolved, CI green — and the queue
   // rebases and tests before it lands. All that is left here is arming a PR
   // that reached ready without it. (why: docs/why.md#github-owns-the-merge)
-  if (!loopMayNotMerge(s, config) && !s.pr?.autoMergeArmed) return [armAutoMerge()]
+  if (mayArm && !s.pr?.autoMergeArmed) return [armAutoMerge()]
   if (s.normalized?.reviewDecision !== 'APPROVED') return [status('revising')]
   const plan = [status('approved')]
   if (loopMayNotMerge(s, config)) plan.push(label([awaiting], []))
@@ -536,18 +541,49 @@ function implementGoal(s, config, facts) {
   return [record({ approveOnPlan: { by: facts.author || null } }), fire('implement-roadmap', { mode: planned(s) && open.length ? 'replan' : 'plan' })]
 }
 
-/** Approve every unstarted child. Each starts now, or once a recheck confirms its blocker cleared. */
+const refOf = (c) => `${c.repo?.full || `${c.owner}/${c.repo}`}#${c.number}`
+
+/**
+ * The unstarted children one session can build together: each blocked only
+ * by others in the set, so the producer and its consumers share a build and
+ * a review, and only the merge waits. (why: docs/why.md#a-cross-repo-set-is-built-together)
+ */
+function buildSet(todo) {
+  let set = todo
+  for (;;) {
+    const keys = new Set(set.map(refOf))
+    const next = set.filter((c) => (c.blockedByOpen || []).every((b) => keys.has(refOf(b))))
+    if (next.length === set.length) return set
+    set = next
+  }
+}
+
+/**
+ * Approve every unstarted child. Two or more that are free together build as
+ * one set, on the goal's lock. The rest start alone, now or once a recheck
+ * confirms their blocker cleared.
+ */
 function approveChildren(s, config, facts) {
   if (s.locked) return [recheck()]
   const todo = unstarted(s)
   if (!todo.length) return [record({ approved: true }), note('every open child already has a PR')]
   const parent = `${s.repo.full}#${s.item.number}`
-  const list = todo.map((c) => `${c.repo.full}#${c.number}`).join(', ')
-  return [
+  const by = facts.author || null
+  const set = buildSet(todo)
+  const together = set.length > 1 ? set : []
+  const alone = todo.filter((c) => !together.includes(c))
+  const how = together.length ? `${together.map(refOf).join(', ')} build together now, and merge in order.` : ''
+  const rest = alone.length ? `${alone.map(refOf).join(', ')} ${alone.length === 1 ? 'starts' : 'each start'} now, or once a recheck confirms its blocker has cleared.` : ''
+  const plan = [
     record({ approved: true }),
-    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${todo.length} implementation ticket(s): ${list}. Each starts now, or once a recheck confirms its blocker has cleared.`),
-    targets(todo.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by: facts.author || null, parent } }))),
+    commentOnce(`approve-all ${facts.commentId || ''}`, `Approved ${todo.length} implementation ticket(s). ${[how, rest].filter(Boolean).join(' ')}`),
+    targets([
+      ...together.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve-set', facts: { by, parent } })),
+      ...alone.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve', facts: { by, parent } })),
+    ]),
   ]
+  if (together.length) plan.push(fire('implement', { mode: 'set', children: together.map(refOf) }))
+  return plan
 }
 
 /**
@@ -684,6 +720,9 @@ function derive(target, s, config) {
       if (parked(s)) return applyIfMissing(`parked until ${s.park.until}`)
       if (!labelled) return [note('not blocked')]
       if (s.kind !== 'issue') return [label([L.awaiting], [L.blocked])]
+      // Built in a set while its producer was open: the blocker merging lets
+      // its PR merge too. No session is needed. (why: docs/why.md#a-cross-repo-set-is-built-together)
+      if (inFlight(s)) return [label([], [L.blocked]), targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
       if (s.locked) return [recheck()]
       // The date passing or the blocker closing is a cue to look, not proof
       // the ticket is free. A recheck session reads why it was held, and
@@ -760,6 +799,11 @@ function derive(target, s, config) {
       if (s.locked) return plan.concat(pending, recheck())
       return plan.concat(fire('implement'))
     }
+    // A child built in its goal's set: approved here, built by the session
+    // that holds the goal. (why: docs/why.md#a-cross-repo-set-is-built-together)
+    case 'approve-set':
+      if (s.item.state !== 'open') return [note('closed — nothing to approve')]
+      return [label([], [L.proposal, L.awaiting, L.stuck]), status('approved'), note(`approved — built in the set on ${facts.parent}`)]
     case 'child-closed': {
       if (!isRoadmap(s, config)) return [note('parent is not a roadmap ticket')]
       if (s.item.state !== 'open') return [note('roadmap ticket already closed')]
@@ -895,6 +939,8 @@ function derive(target, s, config) {
           // Then end as an unlock with nothing re-armed would.
           plan.push(record({ verifyDue: false }), note('the verify that just ended already read every child'))
         }
+        // A set build answers with its PRs, which carry the turn from here.
+        if (finished === 'implement' && kids.some((c) => c.state === 'open') && !unstarted(s).length) return plan.concat(label([], [L.awaiting]), note('the set build answered with its PRs'))
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }

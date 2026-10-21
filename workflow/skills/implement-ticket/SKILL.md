@@ -1,6 +1,6 @@
 ---
 name: implement-ticket
-description: Implement one authorised ticket, whole, in one session, in an isolated worktree. Open a draft PR through /finalize-pr only once every criterion is met, push, and end. Fired by the dispatcher on `@sydevs-bot implement`, and on its own continue request. Runnable locally with an issue number.
+description: Implement one authorised ticket — or a roadmap goal's cross-repo set — whole, in one session, in isolated worktrees. Open a draft PR through /finalize-pr only once every criterion is met, push, and end. Fired by the dispatcher on `@sydevs-bot implement`, and on its own continue request. Runnable locally with an issue number.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -40,7 +40,8 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
    ticket, the `blocked` label and the open native blockers. You still read the body: a
    `Blocked by:` line it has not converted yet that names an open issue, or a `Re-check:` date in
-   the future → comment which, and stop.
+   the future → comment which, and stop. In a set, a blocker that is another child of the set is
+   expected: it orders the merge, not the build.
 
 4. **Decide what "done" looks like before you plan how.** Most tickets end in a PR. A ticket
    whose acceptance criteria describe a *decision* — "evaluate", "determine whether",
@@ -130,6 +131,25 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 
 14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on
     the way. Locally, say the same to the person who ran you.
+
+## A set (`flags.mode: set`)
+
+The record points at the roadmap goal, and you hold its lock. `flags.children` lists the approved
+children the set builds — one per repo, a producer and the consumers whose `Blocked by:` names
+it. Build them all in this session, through the steps above, each in its own repo's checkout,
+worktree and branch. (why: docs/why.md#a-cross-repo-set-is-built-together)
+
+- **Producer first.** A consumer builds against the producer's branch: copy the producer's
+  generated files into the consumer's `contractSync` paths by hand. Never run `types:cms` here —
+  it reads `main`, which does not have them yet. The dispatcher re-syncs the copy on the
+  consumer's PR once the producer merges.
+- **Ship once the whole set is built**, producer first, each PR through `/workflow:finalize-pr`.
+  Each body names its siblings and the merge order under `## Notes for reviewer`. The dispatcher
+  holds a consumer's auto-merge until its producer closes.
+- **A child you cannot build** — a decision, a protected path — goes as step 4 says. Build the
+  rest.
+- **A continue request carries the whole set.** Say per child what is built and what remains.
+- **End with one comment on the goal**: each child's PR, in merge order.
 
 ## Hard rules
 

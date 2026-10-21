@@ -519,6 +519,27 @@ test('no implementation ticket is revised on arrival — write-ticket already wr
   assert.ok(!decide({ reason: 'issues.opened' }, mine, config).some((a) => a.type === 'fire'))
 })
 
+// ---- a consumer merges after its producer (why: docs/why.md#a-cross-repo-set-is-built-together)
+
+test('a green consumer draft is marked ready for review with its producer, but not armed', () => {
+  const s = prSnap({ reviews: [criticReview], linkedBlockedOpen: ['sydevs/SahajCloud#10'] })
+  const p = evaluatePr(s, config)
+  assert.deepEqual(types(p).slice(0, 3), ['markReady', 'requestReviewer', 'label'])
+  assert.ok(!p.some((a) => a.type === 'armAutoMerge'))
+  assert.match(p.find((a) => a.type === 'comment' && a.key.startsWith('waits-on')).body, /merges after sydevs\/SahajCloud#10/)
+})
+
+test('a ready consumer is armed only once its producer has closed', () => {
+  const ready = { pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, reviews: [criticReview] }
+  assert.ok(!evaluatePr(prSnap({ ...ready, linkedBlockedOpen: ['sydevs/SahajCloud#10'] }), config).some((a) => a.type === 'armAutoMerge'))
+  assert.deepEqual(types(evaluatePr(prSnap({ ...ready, linkedBlockedOpen: [] }), config)), ['armAutoMerge'])
+})
+
+test('a PR whose goal holds the set build lock is left to that session', () => {
+  assert.deepEqual(types(evaluatePr(prSnap({ linkedLocked: ['sydevs/SahajAtlasWeb#300'] }), config)), ['note'])
+  assert.match(evaluatePr(prSnap({ linkedLocked: ['sydevs/SahajAtlasWeb#300'] }), config)[0].text, /^sydevs\/SahajAtlasWeb#300 is still locked/)
+})
+
 // ---- a feature is built in one session (why: docs/why.md#a-feature-is-built-in-one-session)
 
 const cfgAttempts = { ...config, dispatch: { ...config.dispatch, maxAttempts: 3 } }

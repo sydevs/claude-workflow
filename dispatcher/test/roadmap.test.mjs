@@ -138,10 +138,10 @@ test('implement on a roadmap ticket with children approves the open ones', () =>
     { repo: repo('SahajAtlasWeb'), number: 12, state: 'open' },
   ]
   const p = decide(verb('@sydevs-bot implement'), snap({ children, record: { dispatches: [{ handler: 'implement-roadmap', outcome: 'done' }] } }), config)
-  assert.equal(fires(p).length, 0, 'the parent starts nothing itself')
   const t = p.find((a) => a.type === 'targets').list
-  assert.deepEqual(t.map((x) => [x.repo.name, x.number, x.reason]), [['SahajCloud', 10, 'approve'], ['SahajAtlasWeb', 12, 'approve']])
+  assert.deepEqual(t.map((x) => [x.repo.name, x.number, x.reason]), [['SahajCloud', 10, 'approve-set'], ['SahajAtlasWeb', 12, 'approve-set']])
   assert.equal(t[0].facts.parent, 'sydevs/SahajAtlasWeb#300')
+  assert.deepEqual(fires(p).map((a) => [a.handler, a.flags.mode, a.flags.children]), [['implement', 'set', ['sydevs/SahajCloud#10', 'sydevs/SahajAtlasWeb#12']]], 'the open children build as one set')
 })
 
 test('every child closed: implement plans what the goal still lacks', () => {
@@ -343,7 +343,7 @@ test('the plan the verb asked for approves its children when it ends, with no se
   const children = [{ repo: repo('SahajCloud'), number: 10, state: 'open', prs: 0 }, { repo: repo('SahajAtlasWeb'), number: 12, state: 'open', prs: 0 }]
   const p = decide({ reason: 'unlock', facts: { handler: 'implement-roadmap' } }, snap({ children, record: endedPlan() }), config)
   const t = p.find((a) => a.type === 'targets').list
-  assert.deepEqual(t.map((x) => [x.number, x.reason, x.facts.by]), [[10, 'approve', 'Ardnived'], [12, 'approve', 'Ardnived']])
+  assert.deepEqual(t.map((x) => [x.number, x.reason, x.facts.by]), [[10, 'approve-set', 'Ardnived'], [12, 'approve-set', 'Ardnived']])
   assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan === null))
   assert.ok(p.some((a) => a.type === 'record' && a.patch.approved === true))
   assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'the goal is not your turn')
@@ -376,4 +376,51 @@ test('a re-plan of an approved goal approves what it files', () => {
   const p = decide({ reason: 'unlock', facts: {} }, s, config)
   assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan))
   assert.equal(fires(p)[0].flags.mode, 'replan')
+})
+
+// ---- a cross-repo set is built together (why: docs/why.md#a-cross-repo-set-is-built-together)
+
+const producer = { repo: repo('SahajCloud'), number: 10, state: 'open', prs: 0, blockedByOpen: [] }
+const consumer = { repo: repo('SahajAtlasWeb'), number: 12, state: 'open', prs: 0, blockedByOpen: [{ owner: 'sydevs', repo: 'SahajCloud', number: 10, state: 'open' }] }
+
+test('a consumer blocked only by its producer builds with it, in one session on the goal', () => {
+  const p = decide(verb('@sydevs-bot implement'), snap({ children: [producer, consumer], record: plannedRec() }), config)
+  assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.number, x.reason]), [[10, 'approve-set'], [12, 'approve-set']])
+  assert.deepEqual(fires(p)[0].flags.children, ['sydevs/SahajCloud#10', 'sydevs/SahajAtlasWeb#12'])
+})
+
+test('a child blocked outside the set waits alone, and a lone free child builds alone', () => {
+  const held = { ...consumer, blockedByOpen: [{ owner: 'sydevs', repo: 'SahajCloud', number: 700, state: 'open' }] }
+  const p = decide(verb('@sydevs-bot implement'), snap({ children: [producer, held], record: plannedRec() }), config)
+  assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.number, x.reason]), [[10, 'approve'], [12, 'approve']])
+  assert.equal(fires(p).length, 0, 'each child starts through its own approval')
+})
+
+test('a consumer whose producer waits outside drops out of the set with it', () => {
+  const blockedProducer = { ...producer, blockedByOpen: [{ owner: 'sydevs', repo: 'SahajCloud', number: 700, state: 'open' }] }
+  const p = decide(verb('@sydevs-bot implement'), snap({ children: [blockedProducer, consumer], record: plannedRec() }), config)
+  assert.ok(p.find((a) => a.type === 'targets').list.every((x) => x.reason === 'approve'))
+})
+
+test('a set child is approved without a session of its own', () => {
+  const p = decide({ reason: 'approve-set', facts: { by: 'Ardnived', parent: 'sydevs/SahajAtlasWeb#300' } }, ticket({ item: { labels: ['proposal', 'awaiting', 'blocked'] } }), config)
+  assert.equal(fires(p).length, 0)
+  assert.ok(p.some((a) => a.type === 'status' && a.value === 'approved'))
+  assert.ok(!p.some((a) => a.type === 'label' && a.remove.includes('blocked')), 'the producer still orders the merge')
+})
+
+test('a set build that opened every PR leaves the goal off your list', () => {
+  const s = snap({ children: [{ ...producer, prs: 1 }, { ...consumer, prs: 1 }], record: { dispatches: [{ handler: 'revise-roadmap' }, { handler: 'implement-roadmap' }], current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set' } } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config)
+  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  const short = { ...s, children: [{ ...producer, prs: 1 }, consumer] }
+  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, short, config).some((a) => a.type === 'label' && a.add.includes('awaiting')), 'a child left unbuilt is your turn')
+})
+
+test('the producer merging frees a built consumer without a session', () => {
+  const s = ticket({ item: { labels: ['blocked'] }, openPrsClosingIt: [55] })
+  const p = decide({ reason: 'unblock-check', facts: {} }, s, config)
+  assert.equal(fires(p).length, 0)
+  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked')))
+  assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.kind, x.number, x.reason]), [['pr', 55, 'ci']])
 })

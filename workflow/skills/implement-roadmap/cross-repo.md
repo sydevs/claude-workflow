@@ -34,10 +34,12 @@ upstream fails the plugin's build until its copy is updated.
    contract — is re-synced by the dispatcher in a bot PR once the producer merges, and
    `audit-contracts` opens any it missed. Name that consumer in `## Downstream impact` with
    "re-synced automatically". (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
-4. **Each consumer child is blocked by the producer child**, with the exact marker in its body:
+4. **Each consumer child is blocked by the producer child**, with the exact marker in its body.
+   Between children of one goal, the line orders the **merge**: the dispatcher builds the set
+   together in one session, and holds the consumer's PR until the producer's closes.
 
    ```markdown
-   Blocked by: https://github.com/sydevs/<producer>/issues/<N> — `pnpm types:cms` reads from `main`, so running it before that merges silently pulls the old shape
+   Blocked by: https://github.com/sydevs/<producer>/issues/<N> — `pnpm types:cms` reads from `main`, so this merges only after that does
    ```
 
    The dispatcher converts the line into the native relationship and applies `blocked`. A
@@ -56,10 +58,11 @@ gh api repos/sydevs/<producer>/issues/<N>/dependencies/blocking   --jq '.[].numb
 
 ## Ordering rules
 
-- **Producer merges first, always.** A consumer child is never built against a shape that does not
-  exist on `main` yet.
-- **The consumer step runs `types:cms` against `main`, not a branch.** If a consumer must develop
-  early, say so in its child and note its types are provisional.
+- **Producer merges first, always.** A consumer is built beside its producer, against the
+  producer's branch, and merges only after it. Say so in the consumer's child: its copied types
+  are provisional until the producer merges and the dispatcher re-syncs them on its PR.
+- **Never run `types:cms` against an unmerged producer.** It reads `main`, and silently pulls the
+  old shape. During the set build, copy the producer branch's generated files by hand.
 - **One PR per repo.** No mechanism coordinates a simultaneous merge, so do not try.
 - **The WordPress contract diff fails loudly, on purpose.** Never weaken the CI check to unblock a
   consumer — update the copy instead.

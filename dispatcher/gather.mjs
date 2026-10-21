@@ -88,7 +88,7 @@ async function parentOf(gh, { owner, repo, number }) {
   try {
     const { data } = await gh.request(`GET /repos/{owner}/{repo}/issues/{n}/parent`, { owner, repo, n: number })
     const r = repoFromUrl(data.repository_url, owner)
-    return r ? { repo: r, number: data.number, state: data.state, type: data.type?.name || null } : null
+    return r ? { repo: r, number: data.number, state: data.state, type: data.type?.name || null, labels: (data.labels || []).map((l) => l.name || l) } : null
   } catch {
     return null
   }
@@ -212,11 +212,14 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.parent = await parentOf(gh, base)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
     s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []
-    // An approval starts only the open children no PR answers yet.
-    // (why: docs/why.md#one-verb-plans-and-approves)
+    // An approval starts only the open children no PR answers yet, and builds
+    // together the ones whose only blockers are each other.
+    // (why: docs/why.md#one-verb-plans-and-approves, docs/why.md#a-cross-repo-set-is-built-together)
     for (const c of s.children.filter((k) => k.state === 'open')) {
       const ref = { owner: c.repo.owner, repo: c.repo.name, number: c.number }
       c.prs = (await openPrsClosing(gh, ref)).length
+      const deps = await dependencies(gh, ref, 'blocked_by')
+      c.blockedByOpen = Array.isArray(deps) ? deps.filter((b) => b.state === 'open') : []
     }
     const blocking = target.reason === 'issues.closed' ? await dependencies(gh, base, 'blocking') : []
     s.dependents = Array.isArray(blocking)
@@ -280,14 +283,22 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)
-  // The lock sits on the issue, and the session it locked owns this branch.
-  // Until it unlocks, nothing else may touch the PR.
-  // (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  // The lock sits on the issue, or on its goal during a set build, and the
+  // session it locked owns this branch. Until it unlocks, nothing else may
+  // touch the PR. (why: docs/why.md#the-lease-covers-the-branch-not-the-item)
+  // A linked issue still blocked waits for its blocker to merge first.
+  // (why: docs/why.md#a-cross-repo-set-is-built-together)
   s.linkedLocked = []
+  s.linkedBlockedOpen = []
   if (isBot(pr.user?.login, config)) {
     for (const n of s.linkedIssues) {
+      const ref = { owner, repo, number: n }
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
       if ((li.labels || []).some((l) => (l.name || l) === config.labels.lock)) s.linkedLocked.push(n)
+      const goal = await parentOf(gh, ref)
+      if (goal?.labels?.includes(config.labels.lock)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
+      const deps = await dependencies(gh, ref, 'blocked_by')
+      if (Array.isArray(deps)) s.linkedBlockedOpen.push(...deps.filter((b) => b.state === 'open').map((b) => `${b.owner}/${b.repo}#${b.number}`))
     }
   }
   if (target.reason === 'pull_request.closed' && target.facts?.merged) {

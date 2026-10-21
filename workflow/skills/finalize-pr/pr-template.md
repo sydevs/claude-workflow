@@ -83,9 +83,10 @@ automated tests do not reach. Omit when genuinely nothing applies.]
 
 ## Notes for reviewer
 
-[Only what changes how they review: a judgement call you want checked, a known
-follow-up linked where it was routed, an area wanting extra scrutiny. Dismissed
-review findings and why. A decision is never here: it is a question thread.]
+[Only what changes how they review: a judgement call you want checked, the
+sibling PRs of a set and the order they merge in, a follow-up the reviewer chose,
+an area wanting extra scrutiny. Dismissed review findings and why. A decision is
+never here: it is a question thread.]
 
 <details>
 <summary>Detail</summary>
