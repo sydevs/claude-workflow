@@ -126,6 +126,27 @@ function freshRequest(s) {
   return !since || s.request.at >= since ? s.request.body : null
 }
 
+/** The handlers that may ask for another session to finish their work. */
+const CONTINUES = new Set(['implement', 'address-review'])
+
+/**
+ * A session near its deadline pushed what it built and asked for another.
+ * It starts at once, with the same flags, up to `dispatch.maxAttempts` in a
+ * row, then the item is your turn. (why: docs/why.md#a-feature-is-built-in-one-session)
+ */
+function continueNext(s, config, handler) {
+  const n = (s.record?.continues || 0) + 1
+  if (n <= (config.dispatch.maxAttempts ?? 3)) return [record({ continues: n }), fire(handler, { ...(s.record?.current?.flags || {}), continuation: n })]
+  const p = config.dispatch.commandPrefix
+  const number = s.kind === 'pr' ? s.pr?.number : s.item.number
+  return [
+    record({ continues: 0 }),
+    label([config.labels.awaiting], []),
+    commentOnce(`continue-cap ${s.record?.current?.firedAt || ''}`, `Not finished after ${n} sessions in a row. The branch holds what is built, and the comment above says what remains. A mention (\`${p}\`) starts me again.`),
+    anomaly('continue-cap', `${s.repo.full}#${number} not finished after ${n} sessions`),
+  ]
+}
+
 /** The bot's newest comment that is not a dispatcher comment. */
 export function botLastWordAt(comments, config) {
   let at = null
@@ -879,6 +900,11 @@ function derive(target, s, config) {
     case 'unlock': {
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })
+      if (CONTINUES.has(finished)) {
+        const live = s.kind === 'pr' ? s.pr?.state === 'open' : s.item.state === 'open'
+        if (live && freshRequest(s)?.continue) return plan.concat(continueNext(s, config, finished))
+        if (s.record?.continues) plan.push(record({ continues: 0 }))
+      }
       if (s.kind === 'pr') {
         const p = evaluatePr(s, config)
         // A closed PR is nobody's turn. Without this, a session that was
@@ -900,17 +926,6 @@ function derive(target, s, config) {
       if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
       if (s.item.state !== 'open') return plan.concat(label([], [L.awaiting, L.stuck]))
       const req = freshRequest(s)
-      // An implement session near its deadline pushed what it built and asked
-      // for another. It starts at once, with the same flags, up to
-      // `dispatch.maxAttempts` in a row. (why: docs/why.md#a-feature-is-built-in-one-session)
-      if (finished === 'implement') {
-        const n = (s.record?.continues || 0) + 1
-        if (req?.continue && n <= (config.dispatch.maxAttempts ?? 3)) return plan.concat(record({ continues: n }), fire('implement', { ...(s.record?.current?.flags || {}), continuation: n }))
-        if (req?.continue) {
-          return plan.concat(record({ continues: 0 }), label([L.awaiting], []), commentOnce(`continue-cap ${s.record?.current?.firedAt || ''}`, `Not finished after ${n} sessions in a row. The branch holds what is built, and the comment above says what remains. A mention (\`${config.dispatch.commandPrefix}\`) or \`${config.dispatch.commandPrefix} implement\` starts me again.`), anomaly('continue-cap', `${s.repo.full}#${s.item.number} not finished after ${n} sessions`))
-        }
-        if (s.record?.continues) plan.push(record({ continues: 0 }))
-      }
       if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
       // Still held — the recheck re-held it, or the session parked it. Quiet:
       // blocked is not your turn. (why: docs/why.md#recheck-before-awaiting)

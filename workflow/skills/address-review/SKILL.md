@@ -1,6 +1,6 @@
 ---
 name: address-review
-description: Answer every open thread on one PR after a review or comment. Adopt with a commit, or rebut with evidence, then push and end. Fired by the dispatcher on review activity. Runnable locally against a PR number.
+description: Answer every open thread on one PR after a review or comment. Build every reviewer ask on this PR, rebut only a fact, offer a split only as the reviewer's choice, then push and end. Fired by the dispatcher on review activity. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
@@ -57,19 +57,37 @@ every thread.** The one exception points inward: the own-rooted threads are the 
 they are work. Comment type and thread root together are the key.
 (why: docs/why.md#the-author-filters-one-exception)
 
+## The reviewer's ask is the spec
+
+**A human reviewer's ask is built on this PR** — a fix, a redesign, a wider scope, the same fix
+across the system. The PR is done when it meets the ticket and every ask, not when its code works.
+Never rebut an ask on scope, size or design, never call the PR proven to merge first, and never
+defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
+
+- **An ask that adds or changes a requirement** goes into the ticket's `## Acceptance criteria`
+  as format-ticket's review line, in the same run. A small fix does not.
+- **A strong case that part of an ask belongs in its own ticket** — little connective tissue
+  with this PR, or a size that dwarfs it — is the reviewer's choice, never yours. Build it here
+  anyway. Then ask in the thread, in format-ticket's options shape: *A — keep it here (built)*,
+  *B — revert it, and file it as its own ticket*. Only their *B* files it.
+- **Ask before you build** only what cannot be built here: work in another repo, or a decision
+  the goal owns. Another repo's part of a goal belongs on that repo's sibling PR, or its child.
+- **Too much for this run** → push what is built, and reply only to the threads it finishes.
+  End the summary comment with what remains, then `<!-- sydevs-request {"continue":true} -->`:
+  the dispatcher starts the next run at once. Never answer a thread with a promise.
+
 ## Per thread
 
 | Decision | Do |
 | --- | --- |
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
-| **Rebut** | Reply in the thread with evidence — a file and line, or the ticket line it satisfies. **On the critic's thread — one the own login rooted — resolve it:** your evidence settles a bot's point. **On a human's thread, leave it open.** Only they settle it. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
-| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
-| **Ambiguous or architectural** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
+| **Rebut a fact** | Only when the ask rests on a premise the code disproves. Reply with the evidence — a file and line, or the ticket line it satisfies. **On a human's thread, leave it open.** Only they settle it. |
+| **Rebut the critic** | On a thread the own login rooted, any point may be rebutted with evidence. **Resolve it:** your evidence settles a bot's point. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
+| **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. A split answered *B* → revert that part, and file it through `/workflow:write-ticket` in `create` mode. Reply with the SHA, the new ticket, or that the built option stands. **Resolve the thread.** |
+| **Ambiguous** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |
 
-**Never rebut a point on scope that format-ticket's join rule joins to this PR**, whatever the
-ticket listed. A reviewer's ask to apply a fix across the same system is one. On a docs PR, every
-docs point in its repo is this PR's. Adopt it.
-(why: docs/why.md#the-work-you-hold-takes-what-joins-it, docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
+On a docs PR, every docs point in its repo is this PR's. Adopt it.
+(why: docs/why.md#a-docs-fix-is-a-pr-not-a-ticket)
 
 A thread with a reply from the own login newer than its last human comment is already handled.
 Skip it. A review body is handled once a summary comment from the own login is newer than its
@@ -78,8 +96,7 @@ Skip it. A review body is handled once a summary comment from the own login is n
 **A review body has no thread to reply in.** Adopt, rebut or ask exactly as for a thread, one
 commit per adopted point, and answer every point in step 6's summary comment: quote it, then give
 the SHA or the evidence. An ask becomes a question thread on the line it concerns
-(`/workflow:finalize-pr` step 7c), and the summary links it. A point the join rule does not join is routed as
-preflight's incidental-finding rule says.
+(`/workflow:finalize-pr` step 7c), and the summary links it.
 
 ## Then
 
@@ -106,7 +123,8 @@ session pushes only to `claude/*`. In order:
    this even when nothing else happens.
 2. **Open a stacked PR** from `claude/<type>-<number>-<slug>` targeting **their branch**, not
    `main`, through `/workflow:finalize-pr` with `base:<their branch>`. Name it in the summary.
-3. **Route what the stacked PR does not take** as preflight's incidental-finding rule says.
+3. **Build every ask in the stacked PR.** A part you would split goes to them as a choice,
+   exactly as on a bot PR.
 
 ⚠ **Check the stacked PR's base is their branch before you open it.**
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)

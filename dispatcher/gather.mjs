@@ -179,6 +179,8 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const newestHuman = comments.filter((c) => !isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
 
   const s = {
+    // A session asks the dispatcher through a marker in its newest comment.
+    request: latestRequest(comments, config),
     kind: issue.pull_request ? 'pr' : 'issue',
     repo: { owner, name: repo, full: `${owner}/${repo}` },
     item: { number, nodeId: issue.node_id, state: issue.state, title: issue.title, body: issue.body || '', labels, author: issue.user?.login || '', authorAssociation: issue.author_association || null, type: issue.type?.name || null, milestone: issue.milestone?.title || null, htmlUrl: issue.html_url, updatedAt: issue.updated_at },
@@ -208,7 +210,6 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.blockedByError = Array.isArray(blockedBy) ? null : blockedBy.error
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)
-    s.request = latestRequest(comments, config)
     s.parent = await parentOf(gh, base)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
     s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base) : []

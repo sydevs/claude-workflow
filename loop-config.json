@@ -146,7 +146,7 @@
       "implement-roadmap": 150,
       "revise": 60,
       "revise-roadmap": 120,
-      "address-review": 60,
+      "address-review": 150,
       "fix-ci": 60,
       "resolve-conflicts": 45,
       "review-pr": 45,

@@ -587,7 +587,13 @@ test('an old continue request is not read again, and an implement that ends with
   assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 0))
 })
 
-test('only implement continues: another handler asking is ignored', () => {
+test('an address-review that asks to continue gets the next session on the PR', () => {
+  const s = prSnap({ request: { at: '2026-10-07T11:00:00Z', body: { continue: true } }, record: { current: { handler: 'address-review', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'address-review' } }, s, cfgAttempts)
+  assert.deepEqual(p.filter((a) => a.type === 'fire').map((a) => [a.handler, a.flags.continuation]), [['address-review', 1]])
+})
+
+test('only implement and address-review continue: another handler asking is ignored', () => {
   const s = asked({ record: { current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
   assert.ok(!decide({ reason: 'unlock', facts: { handler: 'revise' } }, s, cfgAttempts).some((a) => a.type === 'fire'))
 })
