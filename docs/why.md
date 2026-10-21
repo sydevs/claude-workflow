@@ -1060,8 +1060,9 @@ The result is a ticket that reads as blocked to every human and as ready to the 
 `block on` verb has refused loudly in exactly this situation since it shipped; the body-marker path
 had no equivalent.
 
-So an unresolved line gets one comment naming it and the two accepted spellings. Nothing else moves:
-the item really is not blocked, and `blocked` follows the relationship.
+So an unresolved line gets one comment naming it and the two accepted spellings. Nothing else moves
+for it: `blocked` follows the relationship, and this line made none. The comment says that, rather
+than "not blocked" — a sibling line that did resolve can be applying `blocked` in the same plan.
 
 - **Report narrower than you read.** The matcher is loose by design, and that entry priced a false
   positive as a run skipping a ticket. A comment on a live ticket is dearer, so only a line that
@@ -1070,7 +1071,9 @@ the item really is not blocked, and `blocked` follows the relationship.
 - **Keyed on the targets, not the line.** There is no comment id on this path. The whole line
   would make the reason prose part of the identity, so rewording after the em dash — the edit
   people actually make — would re-post advice already read, and any later tidying of the matcher
-  would re-nag every open ticket. A corrected target still yields a key never reached.
+  would re-nag every open ticket. A corrected target still yields a key never reached. The key
+  sorts them, so their order is not part of the identity either: an author correcting one of two
+  targets usually rewrites the pair.
 - **The line is quoted as written**, bullet off and nothing else. The matcher's intermediate
   strips leading emphasis only, so quoting it returns `Blocked by #12.**` to its author and reads
   as the dispatcher having mis-seen the line.
