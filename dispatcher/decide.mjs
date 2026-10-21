@@ -660,7 +660,6 @@ function refuseUnusableBlockers(s, config) {
 }
 
 // ---- per-event deciders ------------------------------------------------
-const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'label']
 
 /**
  * `decide(target, snapshot, config)` → plan[].
@@ -1043,4 +1042,4 @@ function derive(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor }
