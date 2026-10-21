@@ -114,8 +114,13 @@ async function inSetBuild(gh, goal, childRef, lock) {
  * The newest `sydevs-request` a bot comment carries, with when it was made.
  * Only the newest comments are read, which is where a session that just
  * ended left its own. (why: docs/why.md#a-session-asks-actions-acts)
+ *
+ * **A dispatcher comment is never read here**, and that term is load-bearing:
+ * a dispatcher comment may quote an issue author's own line, which can carry
+ * a `sydevs-request` marker `parseRequest` would honour.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  */
-function latestRequest(comments, config) {
+export function latestRequest(comments, config) {
   const own = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
   for (const c of own) {
     const body = parseRequest(c.body, config.repos || [])

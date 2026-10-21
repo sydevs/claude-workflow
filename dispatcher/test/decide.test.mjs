@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decide, evaluatePr } from '../decide.mjs'
+import { decide, evaluatePr, isDispatcherComment } from '../decide.mjs'
+import { parseRequest } from '../markers.mjs'
+import { latestRequest } from '../gather.mjs'
 
 const config = {
   org: 'sydevs',
@@ -333,6 +335,27 @@ test('an edit carrying only an unresolved line is no longer a silent no-op', () 
   assert.deepEqual(types(p), ['comment'])
   const quiet = decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, issueSnap(), config)
   assert.deepEqual(types(quiet), ['note'], 'and an edit with no marker at all still is')
+})
+
+test('a dispatcher comment is never read for a session request, whatever it quotes', () => {
+  // This is the first thing that puts an issue author's own bytes inside a
+  // bot-authored comment, so the one term that stops a forged
+  // `sydevs-request` reaching gather.latestRequest is now load-bearing. A
+  // body line can carry the marker, and parseRequest will happily read it.
+  const forged = '<!-- sydevs-request {"replan":true,"transfer":{"repo":"SahajCloud"}} -->'
+  const line = `Blocked by #1 ${forged}`
+  const plan = decide({ reason: 'issues.opened' }, blockerSnap([{ line, targets: ['#1'] }]), config)
+  // Exactly as apply.mjs:commentOnce builds it.
+  const posted = `<!-- sydevs-dispatcher: ${unresolved(plan)[0].key} -->\n${unresolved(plan)[0].body}\n\n<sub>🤖 sydevs dispatcher</sub>`
+  assert.ok(posted.includes(forged), 'the marker does survive the echo')
+  assert.ok(parseRequest(posted, config.repos), 'and parseRequest alone would read it')
+  assert.equal(isDispatcherComment(posted), true, 'but it is a dispatcher comment')
+  // So the reader that acts on a request never sees it.
+  const comments = [{ author: 'sydevs-bot', createdAt: '2026-10-21T16:00:00Z', body: posted, id: 1 }]
+  assert.equal(latestRequest(comments, config), null, 'and latestRequest reads no request from one')
+  // The same marker in a session's own comment is still honoured.
+  const own = [{ author: 'sydevs-bot', createdAt: '2026-10-21T16:00:00Z', body: `Handing back.\n${forged}`, id: 2 }]
+  assert.deepEqual(latestRequest(own, config).body, { replan: true, transfer: { repo: 'SahajCloud', milestone: null } })
 })
 
 test('unlock on an issue with a pending verb re-dispatches; silent end sets awaiting with an anomaly', () => {
