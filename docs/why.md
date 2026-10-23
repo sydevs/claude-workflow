@@ -1297,6 +1297,21 @@ is why it was exhausted and then refused the real fix. Now a session that alread
 against this head sha, whatever its outcome, means no second fire; a new sha asks again.
 `rec.dispatches` keeps 20 entries, so a long-lived PR can age one out; the ceiling is the backstop.
 
+## A queue failure is a CI failure
+
+SahajCloud#959 entered the merge queue about 60 times between 2026-10-15 and 2026-10-23 and failed
+typecheck every time, on one identical queue commit for the last 40 tries. #957 had merged a new
+importer of the export #959 removed, and the PR's own head never contained it, so its own CI stayed
+green. A queue run tests a temporary `gh-readonly-queue/<base>/pr-<n>-<sha>` commit that no PR
+points at, so `resolve` found no PR for its `workflow_run` and dropped it. GitHub disarmed
+auto-merge, and the next `sweep-pr` saw approved, green and unarmed, and re-armed it — straight
+back into the same failure. `fix-ci` never fired, the ceiling never counted, and no anomaly reached
+the journal. Now the branch name maps a failed queue run to its PR. The failure is kept in the
+status record against the head it failed on, and while that head stays unarmed it is repaired
+under `ciFixIterations` like red CI, never re-armed. `cancelled` is not a failure: the queue
+cancels a run when it rebuilds a group after another entry failed. A PR still armed is that
+rebuild, so it is left alone.
+
 ## The journal tally needs a writer that cannot stop
 
 Monday 2026-09-28 reported 22 dispatches and 1 anomaly against 37 and 4; Thursday 2026-10-01, 84

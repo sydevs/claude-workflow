@@ -171,3 +171,10 @@ test('a recheck record carries the cleared blockers, and no other record grows t
   assert.equal('cleared' in build({ mode: 'recheck' }), false)
   assert.equal('cleared' in build({ mode: 'recheck', cleared: [] }), false)
 })
+
+test('a fix-ci record carries the queue run it repairs, and no other record grows the key', () => {
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 959 }
+  const build = (flags) => buildRecord({ handler: 'fix-ci', target, snapshot: {}, flags, attempt: 1, journalNumber: 1, config, now: new Date('2026-10-23T20:00:00Z') }).flags
+  assert.equal(build({ queueRun: 'https://run' }).queueRun, 'https://run')
+  assert.equal('queueRun' in build({}), false)
+})
