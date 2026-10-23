@@ -908,3 +908,47 @@ test('a question review neither counts as the critic nor answers a review verb',
   const fired = evaluatePr(after, config).find((a) => a.handler === 'review-pr')
   assert.equal(fired?.flags?.onDemand, true, 'the verb is still owed')
 })
+
+// ---- merge-queue failures (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+
+const run = 'https://github.com/sydevs/SahajCloud/actions/runs/40014085678'
+// SahajCloud#959: approved, green on its own head, dequeued on every attempt.
+const dequeued = (over = {}) => prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' }, ...over })
+
+test('a queue failure is recorded against the head and repaired, not re-armed', () => {
+  const plan = decide({ reason: 'queue-failed', facts: { run } }, dequeued(), config)
+  assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
+  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run } })
+  assert.deepEqual(plan[2].flags, { queueRun: run }, 'the session is told where the failure is')
+})
+
+test('a sweep over a recorded queue failure repairs it — the #959 loop', () => {
+  const s = dequeued({ record: { fixCi: 0, queueFail: { sha: 'abc', run } } })
+  assert.deepEqual(types(decide({ reason: 'sweep-pr', facts: {} }, s, config)), ['bumpFixCi', 'fire:fix-ci'])
+})
+
+test('a queue failure on an older head says nothing about this one', () => {
+  const s = dequeued({ record: { fixCi: 0, queueFail: { sha: 'old', run } } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['armAutoMerge'])
+})
+
+test('a PR still armed after a queue failure is the queue rebuilding it, not a repair', () => {
+  const s = dequeued({ pr: { ...dequeued().pr, autoMergeArmed: true } })
+  assert.ok(!types(decide({ reason: 'queue-failed', facts: { run } }, s, config)).includes('fire:fix-ci'))
+})
+
+test('a fix-ci that ended on the dequeued head stands down instead of re-arming', () => {
+  const s = dequeued({ record: { fixCi: 1, queueFail: { sha: 'abc', run }, dispatches: [endedFixCi('abc')] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+})
+
+test('a queue failure past the ceiling hands over like red CI', () => {
+  const capped = evaluatePr(dequeued({ record: { fixCi: 3, queueFail: { sha: 'abc', run } } }), config)
+  assert.deepEqual(types(capped), ['label', 'comment', 'anomaly'])
+  assert.match(capped[1].body, /merge queue run failed/)
+})
+
+test('a queue failure on a human PR is not the bot\'s to repair', () => {
+  const s = dequeued({ pr: { ...dequeued().pr, user: { login: 'Ardnived' } } })
+  assert.deepEqual(types(decide({ reason: 'queue-failed', facts: { run } }, s, config)), ['note'])
+})

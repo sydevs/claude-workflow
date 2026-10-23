@@ -293,6 +293,30 @@ function infraPlan(s, config, infra) {
   ]
 }
 
+/** A queue failure recorded against this head, while nothing has re-armed it. */
+function queueFailure(s) {
+  const q = s.record?.queueFail
+  return q?.sha && q.sha === s.pr?.head?.sha && !s.pr?.autoMergeArmed ? q : null
+}
+
+/** Fire `fix-ci` on this head, once per head and up to the ceiling, then hand it to a person. */
+function repairPlan(s, config, reason, flags = {}) {
+  const pr = s.pr
+  const ended = endedFixCiFor(s.record, pr.head?.sha)
+  if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
+  const cap = config.ceilings?.ciFixIterations ?? 3
+  if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci', flags)]
+  // The cap comment promises that a person's push starts the repair again,
+  // so a head they pushed since the last fix-ci resets the count.
+  // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+  if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci', flags)]
+  return [
+    label([config.labels.awaiting], [config.labels.stuck]),
+    commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${reason}). I have stopped retrying. A mention or a push from you starts me again.`),
+    anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${reason}`),
+  ]
+}
+
 /** The head the last `fix-ci` fire was about, or null. */
 function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
@@ -407,21 +431,14 @@ export function evaluatePr(s, config) {
     // (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
     const infra = s.ci.infra || []
     if (infra.length && infra.length === s.ci.failing.length) return infraPlan(s, config, infra)
-    const ended = endedFixCiFor(s.record, pr.head?.sha)
-    if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
-    const cap = config.ceilings?.ciFixIterations ?? 3
-    if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci')]
-    // The cap comment promises that a person's push starts the repair again,
-    // so a head they pushed since the last fix-ci resets the count.
-    // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
-    if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci')]
-    return [
-      label([awaiting], [config.labels.stuck]),
-      commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${s.ci.reason}). I have stopped retrying. A mention or a push from you starts me again.`),
-      anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${s.ci.reason}`),
-    ]
+    return repairPlan(s, config, s.ci.reason)
   }
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
+  // Green here and red in the queue: the PR breaks against the base it will
+  // land on. Repaired like red CI, never re-armed into the same failure.
+  // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+  const queued = queueFailure(s)
+  if (queued) return repairPlan(s, config, 'the merge queue run failed', queued.run ? { queueRun: queued.run } : {})
   return deployPass(s, config) || evaluateGreenPr(s, config).concat(advisoryNote(s))
 }
 
@@ -650,7 +667,7 @@ const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'lab
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
  * `pull_request.synchronize`, `review`, `review_comment`, `thread`, `ci`,
- * `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
+ * `queue-failed`, `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
  * what the payload said — used only to pick the row; state comes from the
  * snapshot.
  */
@@ -981,6 +998,15 @@ function derive(target, s, config) {
     }
     case 'ci':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
+    // Kept against the head it failed on, so every later pass — a sweep
+    // included — repairs it rather than re-arming it.
+    // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+    case 'queue-failed': {
+      if (!isBot(s.pr?.user?.login, config)) return [note('not a bot PR')]
+      if (!s.pr?.head?.sha || s.pr.state !== 'open') return [note('no open head to charge the queue failure to')]
+      const queueFail = { sha: s.pr.head.sha, run: facts.run || null }
+      return [record({ queueFail })].concat(evaluatePr({ ...s, record: { ...s.record, queueFail } }, config))
+    }
     // Residue from a pass that won the lease and died before the label. Both
     // the label and `rec.current` must be absent: the winner writes them in
     // that order, so either one present means a live session.

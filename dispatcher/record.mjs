@@ -43,6 +43,7 @@ export function renderRecord(rec) {
   }
   if (rec.fixCi) lines.push(`CI fix ${rec.fixCi}`)
   if (rec.ciReruns?.count) lines.push(`CI re-run ${rec.ciReruns.count} on ${String(rec.ciReruns.sha || '').slice(0, 7)} — infrastructure, not the change`)
+  if (rec.queueFail?.sha) lines.push(`merge queue failed on ${String(rec.queueFail.sha).slice(0, 7)}${rec.queueFail.run ? ` · [run](${rec.queueFail.run})` : ''}`)
   if (rec.recheck) lines.push('an event arrived while a session held the lock — re-derived on unlock')
   const hist = (rec.dispatches || []).slice(-5).reverse()
   if (hist.length) {
