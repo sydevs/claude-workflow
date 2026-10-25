@@ -577,7 +577,8 @@ characters, to learn what 4,854 already held. Reading the body alone costs a thi
 future read. The journal is the sharp case: one day's thread reached 134,000 characters, and a
 single `get_comments` call returned 97,279 of them, exceeding the token limit and breaking the run.
 The journal is now one rewritten document per day, and **no run calls `get_comments` on a journal
-issue.**
+issue** — except `improve-loop`, once a week, at `perPage` 20 on the days whose title or tally
+block names something only a comment carries.
 
 ## Lint measures style, not content
 
