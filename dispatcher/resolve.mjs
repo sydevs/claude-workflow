@@ -14,6 +14,20 @@
 import { isBot } from './decide.mjs'
 import { listSweepTargets } from './sweep.mjs'
 
+/**
+ * The PR a merge-queue branch tests, or null. GitHub names the temporary
+ * branch `gh-readonly-queue/<base>/pr-<number>-<base sha>`, and `<base>` may
+ * itself hold slashes.
+ */
+export function queuedPr(branch) {
+  const m = /^gh-readonly-queue\/.+\/pr-(\d+)-[0-9a-f]+$/.exec(String(branch || ''))
+  return m ? Number(m[1]) : null
+}
+
+// `cancelled` is the queue rebuilding a group after an entry ahead failed,
+// not a verdict on this PR.
+const QUEUE_FAILED = new Set(['failure', 'timed_out'])
+
 function repoOf(context) {
   return { owner: context.repo.owner, name: context.repo.repo, full: `${context.repo.owner}/${context.repo.repo}` }
 }
@@ -104,6 +118,14 @@ export async function resolve({ github, context, config, now = new Date() }) {
   if (name === 'workflow_run' || name === 'check_suite' || name === 'status') {
     const sha = ev.workflow_run?.head_sha || ev.check_suite?.head_sha || ev.sha
     if (!sha) return []
+    // A queue run tests a commit no PR points at, so the lookup below never
+    // finds one. Its branch names the PR instead.
+    // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+    const queued = queuedPr(ev.workflow_run?.head_branch || ev.check_suite?.head_branch)
+    if (queued) {
+      if (!QUEUE_FAILED.has(ev.workflow_run?.conclusion || ev.check_suite?.conclusion)) return []
+      return one('pr', queued, 'queue-failed', { run: ev.workflow_run?.html_url || null })
+    }
     let prs = (ev.workflow_run?.pull_requests || ev.check_suite?.pull_requests || []).map((p) => p.number)
     if (!prs.length) {
       const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner: repo.owner, repo: repo.name, commit_sha: sha })
