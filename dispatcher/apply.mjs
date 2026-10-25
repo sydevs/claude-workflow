@@ -10,6 +10,7 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy } from './markers.mjs'
+import { isReviewer } from './decide.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -221,8 +222,8 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // GitHub refuses to request a review from the PR's own author, so a
         // reviewer-authored PR answered 422 and `handOver` read that as a step
         // a human owes. Nobody owes anything: the author is the reviewer.
-        const author = String(snapshot.pr?.user?.login || '')
-        if (author.toLowerCase() === reviewer.toLowerCase()) { log('reviewer is the PR author'); break }
+        const author = snapshot.pr?.user?.login
+        if (author && isReviewer(author, config)) { log('reviewer is the PR author'); break }
         const already = (snapshot.pr?.requestedReviewers || []).some((l) => l.toLowerCase() === reviewer.toLowerCase())
           || (snapshot.reviews || []).some((r) => String(r.user?.login).toLowerCase() === reviewer.toLowerCase())
         if (already) { log('reviewer already requested or reviewed'); break }
