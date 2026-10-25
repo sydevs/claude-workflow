@@ -204,6 +204,12 @@ goes in the journal.
 
 ## Close the week's journals
 
+**Carry forward what the proposal ceiling refused.** A night's audit over `ceilings.maxOpenProposals`
+records its best unfiled findings in its journal entry. Closing that journal drops them, because
+`labels.journal` is excluded from every worklist. So copy them into the usage report before you
+close, each naming its audit and day. There they wait for review capacity instead of dying with the
+week.
+
 Once the usage report is written, close every `label:<labels.journal> is:open` issue you read,
 each with a one-line comment linking the reflection PR or tonight's journal entry — a quiet week
 included. **Except when an unreviewed reflection PR held this week's back:** leave them open, so
