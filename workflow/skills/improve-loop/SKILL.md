@@ -138,6 +138,12 @@ Then **one or two concrete suggestions to the humans**, each tied to a number: b
 comments into one review, one verb at a time, a
 `Hold Until` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
 
+**The report also carries what the proposal ceiling refused.** A night's audit over
+`ceilings.maxOpenProposals` records its best unfiled findings in its journal entry, and closing
+that journal drops them, because `labels.journal` is excluded from every worklist. List them here
+instead, each naming its audit and its day. On a week with no PR they ride tonight's entry to the
+next Sunday, which lists them again, so the close loses none of them.
+
 The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
 into tonight's journal entry as its own `### 📊 Usage` section, which `budget.mjs --fit` never
 cuts. An `OVER` the report alone causes is expected: post the entry, and report nothing under
@@ -203,12 +209,6 @@ outcome, and an unneeded change to the machinery costs more than none. The usage
 goes in the journal.
 
 ## Close the week's journals
-
-**Carry forward what the proposal ceiling refused.** A night's audit over `ceilings.maxOpenProposals`
-records its best unfiled findings in its journal entry. Closing that journal drops them, because
-`labels.journal` is excluded from every worklist. So copy them into the usage report before you
-close, each naming its audit and day. There they wait for review capacity instead of dying with the
-week.
 
 Once the usage report is written, close every `label:<labels.journal> is:open` issue you read,
 each with a one-line comment linking the reflection PR or tonight's journal entry — a quiet week
