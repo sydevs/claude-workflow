@@ -184,6 +184,20 @@ test('green draft bot PR above the threshold fires the critic; under it marks re
   assert.ok(small.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('awaiting')))
 })
 
+test('a PR the reviewer wrote themselves asks nobody for a review, and still goes awaiting', async () => {
+  // 7 `handed-over` anomalies on 3 days in 2026-10-18..24 — SahajAtlasWeb#311,
+  // SahajAtlasWordpress#70, SahajCloud#1007, #1009, #1028, WeMeditateWeb#197,
+  // SahajAtlasWeb#318 — all "Review cannot be requested from pull request
+  // author", because ready_for_review requests the reviewer unconditionally.
+  const pr = { number: 5, node_id: 'PR1', state: 'open', draft: false, merged: false, user: { login: 'Ardnived' }, head: { ref: 'fix/theirs', sha: 'abc' }, base: { ref: 'main' }, mergeable: true, mergeable_state: 'clean', changed_files: 1, additions: 3, deletions: 1, requested_reviewers: [] }
+  const world = { issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [], user: { login: 'Ardnived' }, pull_request: {}, html_url: 'u', comments: 0 } }, comments: {}, prs: { 5: pr }, checks: [{ name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'success' }] }
+  const github = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'pull_request.ready_for_review', event: 'pull_request.ready_for_review', facts: {} }
+  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.ok(!github.calls.some((c) => c.name === 'requestReviewers'), 'nothing asked Ardnived to review Ardnived')
+  assert.ok(github.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('awaiting')), 'the rest of the plan still ran')
+})
+
 test('a write the token is refused hands the step to a human, and the plan finishes', async () => {
   // sydevs/SahajCloud#744 on 2026-09-09: CI green, the critic done, and
   // markPullRequestReadyForReview came back FORBIDDEN. The job died, so the
