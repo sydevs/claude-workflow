@@ -6,6 +6,8 @@
  * (why: docs/why.md#the-journal-day-is-a-local-date)
  */
 
+import { isBot } from './decide.mjs'
+
 const DAY_MARKER = '<!-- ops-journal:'
 const TALLY_OPEN = '<!-- tally -->'
 const TALLY_CLOSE = '<!-- /tally -->'
@@ -135,7 +137,12 @@ export async function closeDuplicateDays(gh, config, now = new Date()) {
   return closed
 }
 
-/** Every comment on an issue, oldest first. */
+/**
+ * Every comment on an issue, oldest first. Unqualified on purpose: a session's
+ * own entry is a comment too, so the two readers of a dispatcher-owned marker
+ * filter by author themselves.
+ * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ */
 async function allComments(gh, owner, repo, issue_number) {
   const out = []
   let page = 1
@@ -171,7 +178,7 @@ export async function postAnomaly(gh, config, journalNumber, { kind, text, id = 
   const line = `⚠️ **${kind}** · ${text}`
   try {
     const said = await allComments(gh, owner, repo, journalNumber)
-    if (said.some((c) => anomalyLine(c.body) === line)) return false
+    if (said.some((c) => isBot(c.user?.login, config) && anomalyLine(c.body) === line)) return false
   } catch { /* a listing we cannot read must not silence the anomaly */ }
   const body = `${ANOMALY_MARKER}${JSON.stringify({ kind, id })} -->\n${line}`
   await gh.rest.issues.createComment({ owner, repo, issue_number: journalNumber, body })
@@ -225,7 +232,8 @@ export async function refreshTally(gh, config, journalNumber, now = new Date(), 
   if (!journalNumber) return null
   const owner = config.org
   const repo = config.journalRepo
-  const counts = tallyFrom((await allComments(gh, owner, repo, journalNumber)).map((c) => c.body))
+  const own = (await allComments(gh, owner, repo, journalNumber)).filter((c) => isBot(c.user?.login, config))
+  const counts = tallyFrom(own.map((c) => c.body))
   const title = titleFor(label || weekday(now, config.journal.timezone), counts)
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: journalNumber })
   const body = withTally(issue.body, renderTally(counts))

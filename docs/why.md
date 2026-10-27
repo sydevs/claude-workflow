@@ -1409,7 +1409,7 @@ state.
 
 ## A dispatcher-owned marker is qualified by its author
 
-A stranger's *body* marker is text, read against `author_association`. Two markers the dispatcher
+A stranger's *body* marker is text, read against `author_association`. Four markers the dispatcher
 writes into its own *comments* had no such test, and a comment needs no association at all.
 
 `commentOnce` deduped an advisory on `body.startsWith(mark)` alone, and every key is guessable from
@@ -1420,11 +1420,20 @@ dispatcher reads its own marker back and logs `already posted`. `loadRecord` was
 the first comment that parsed, so a comment starting with `MARKER` seeded `current`, `pending`,
 `fixCi` and `dispatches`, naming a handler and an attempt nobody dispatched.
 
-Both filters are the one clause `isBot` already applies elsewhere: the author must be
-`identity.expectedLogin`. Neither costs a call — the listings both seams already make carry
-`user.login` — so the login is threaded in, and `isLogin` holds the compare for the two seams that
-have the login and not the config. The filter lives in `loadRecord`, not `parseRecord`, which sees
-a body and no author.
+The journal carries the other two, and it is a public issue in this repo. `postAnomaly` deduped on
+the visible line, so a hand-posted `⚠️ **<kind>** · <text>` silences that anomaly for the day — its
+own doc comment said *"said once a day, like the `commentOnce` beside it"*, and the resemblance was
+exact. `refreshTally` counted every author's `sydevs-dispatch-done` marker, so a stranger could
+inflate the day's title and the tally block `improve-loop` reads as the loop's usage evidence.
+
+Every filter is the one clause `isBot` already applies elsewhere: the author must be
+`identity.expectedLogin`. None costs a call — the listings all four seams already make carry
+`user.login`. Each seam applies it in the idiom its signature already uses: `postAnomaly` and
+`refreshTally` take `config`, so they call `isBot`; `commentOnce` and `loadRecord` take scalars
+only, as `inSetBuild` does with `lock`, so the login is threaded in and `isLogin` holds the compare
+`isBot` is now a one-liner over. The filter lives in `loadRecord`, not `parseRecord`, which sees a
+body and no author, and `allComments` stays unqualified because a session's own entry is a comment
+too.
 
 A comment the bot wrote under a former login stops being recognised, so on first contact every
 advisory re-posts once and every record is re-created once. That one-off duplicate across the open
