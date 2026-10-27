@@ -10,7 +10,7 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy } from './markers.mjs'
-import { isReviewer } from './decide.mjs'
+import { isLogin, isReviewer } from './decide.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -18,10 +18,15 @@ function marker(text) {
   return String(text || '').replace(/-->/g, '--&gt;')
 }
 
-async function commentOnce(gh, t, key, body, dryRun, log) {
+/**
+ * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
+ * author's comment counts as already posted — every key is guessable from the
+ * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ */
+async function commentOnce(gh, t, bot, key, body, dryRun, log) {
   const mark = `${DISPATCHER_MARK}${marker(key)} -->`
   const comments = await gh.paginate(gh.rest.issues.listComments, { owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, per_page: 100 })
-  if (comments.some((c) => String(c.body || '').startsWith(mark))) return log(`comment "${key}" already posted`)
+  if (comments.some((c) => isLogin(c.user?.login, bot) && String(c.body || '').startsWith(mark))) return log(`comment "${key}" already posted`)
   log(`comment: ${key}`)
   if (dryRun) return
   await gh.rest.issues.createComment({ owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, body: `${mark}\n${body}\n\n<sub>🤖 sydevs dispatcher</sub>` })
@@ -71,6 +76,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   let moved = false
   let bumpFixCi = false
   const rec = snapshot.record
+  const bot = config.identity.expectedLogin
 
   // The board is a lens. A token that cannot reach it must not stop the
   // dispatch, which is the part that matters — the labels carry the state.
@@ -162,7 +168,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         await gh.rest.issues.update({ owner: t.repo.owner, repo: a.repo, issue_number: moved_to, milestone: m.number })
         break
       }
-      case 'comment': await commentOnce(gh, t, a.key, a.body, dryRun, log); break
+      case 'comment': await commentOnce(gh, t, bot, a.key, a.body, dryRun, log); break
       case 'react':
         if (dryRun || !t.facts?.commentId) break
         try { await gh.rest.reactions.createForIssueComment({ ...args, comment_id: t.facts.commentId, content: a.emoji }) } catch { /* cosmetic */ }
@@ -332,7 +338,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           // issue, a verb or a bare mention. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
           const p = config.dispatch.commandPrefix
           const wake = t.kind === 'pr' ? `A mention (\`${p}\`) or a push from you starts me again.` : `A \`${p}\` verb or mention from you starts me again.`
-          await commentOnce(gh, t, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. ${wake}`, dryRun, log)
+          await commentOnce(gh, t, bot, `attempts-exhausted ${cur?.id || now.toISOString()}`, `The session for **${cur?.handler || 'this item'}** did not finish after ${max} attempts. I have stopped retrying. ${wake}`, dryRun, log)
           if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'attempts-exhausted', text: `${t.repo.full}#${t.number} ${cur?.handler || ''}`, id: cur?.id || null }) }
           break
         }
@@ -347,7 +353,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     const steps = handedOver.map((h) => h.what).join(' or ')
     const reasons = handedOver.map((h) => `- **${h.what}** — GitHub said: \`${h.why}\``).join('\n')
     await labels(gh, t, snapshot, [config.labels.awaiting], [], dryRun, log)
-    await commentOnce(gh, t, `handover ${handedOver.map((h) => h.what).join('+')}`,
+    await commentOnce(gh, t, bot, `handover ${handedOver.map((h) => h.what).join('+')}`,
       `I could not ${steps} here, so this is the step left for you.\n\n${reasons}`, dryRun, log)
     try {
       const j = await ensureJournalDay(gh, config, now)
@@ -389,6 +395,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // anyway. This ref create is the compare-and-swap that settles it: one 201,
   // one 422. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
   const item = { owner: t.repo.owner, repo: t.repo.name, number: t.number }
+  const bot = config.identity.expectedLogin
   const lease = await takeLease(gh, item, snapshot.pr?.head?.sha)
   if (!lease.won) {
     const why = lease.contended ? 'another pass holds the lease' : lease.error
@@ -443,7 +450,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   rec.pending = { handler, flags, attempt, reason, retryAfter, id: record.id, bumpFixCi }
   await labels(gh, t, snapshot, [L.stuck], [L.lock], dryRun, log)
   await release(gh, config, t, { now, dryRun, log })
-  await commentOnce(gh, t, `fire-failed ${record.id}`, res.status === 400
+  await commentOnce(gh, t, bot, `fire-failed ${record.id}`, res.status === 400
     ? '⏸ The routines are paused, so nothing started. I will retry when they resume.'
     : `⏳ ${reason}. I will retry ${retryAfter ? `after ${retryAfter.slice(11, 16)}Z` : 'shortly'}.`, dryRun, log)
   await postAnomaly(gh, config, journal.number, { kind: res.status === 400 ? 'paused' : String(res.status), text: `${t.repo.full}#${t.number} ${handler} attempt ${attempt}: ${reason}${res.error ? ' — ' + res.error : ''}`, id: record.id })

@@ -40,8 +40,19 @@ export const transfer = (repo, milestone) => ({ type: 'transfer', repo, mileston
 // ---- predicates ------------------------------------------------------
 const lower = (s) => String(s || '').toLowerCase()
 
+/**
+ * A login is the loop's own, case aside. The expected login must be named, and
+ * a missing one throws: a seam that forgets to thread it would otherwise refuse
+ * every comment, which `loadRecord` reports as no record at all and
+ * `sweep.mjs` then reads as a timed-out lease on a live session.
+ * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ */
+export function isLogin(login, expected) {
+  if (!expected) throw new Error('isLogin: the expected login is required')
+  return lower(login) === lower(expected)
+}
 export function isBot(login, config) {
-  return lower(login) === lower(config.identity?.expectedLogin)
+  return isLogin(login, config.identity?.expectedLogin)
 }
 export function respondTo(login, config) {
   return (config.assignment?.respondTo || []).some((l) => lower(l) === lower(login))

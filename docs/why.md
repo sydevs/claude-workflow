@@ -1014,6 +1014,17 @@ with or without the colon, and takes a URL or `owner/repo#N`. It stays closed wh
 wrong: a bare `#N` names no repo, a PR is not an issue, another org is not ours, and a
 struck-through line is a cleared blocker.
 
+A fenced line is the fifth. `format-ticket/SKILL.md` documents the format inside a code fence, and
+both the reader and `stripBlockedBy` acted on that example: swept over every tracked `.md`, it was
+the one file that would have related `SahajCloud#632` and then had its own documentation deleted.
+
+The rule belongs below the readers, not in them. `parseOpenQuestions` carried its own flag, and
+adding one to `parseBlockedBy` would have left `parseRecheck` and `parseSentry` out — so a ticket
+fencing an example `Re-check:` would have parked itself until that date. So `liveLines` drops
+fenced blocks once and all four readers go through it. `stripBlockedBy` keeps its own loop, because
+it must emit every unit it does not drop and each unit carries its own line ending; it shares
+`isFence`. A reader-only fix would have related nothing and still deleted the documentation.
+
 ## blocked follows the relationship
 
 The four tickets above had **correct native relationships all along**; they lacked the `blocked`
@@ -1430,6 +1441,45 @@ naming SahajCloud#632, a recheck session paid for when it closes. So the dispatc
 `Re-check:` park. On `issues.edited` the editor decides; only the author, the bot or a maintainer
 can edit a body, so the one edit refused is a non-member author's own. A member's edit makes it
 state.
+
+## A dispatcher-owned marker is qualified by its author
+
+A stranger's *body* marker is text, read against `author_association`. Four markers the dispatcher
+writes into its own *comments* had no such test, and a comment needs no association at all.
+
+`commentOnce` deduped an advisory on `body.startsWith(mark)` alone, and every key is guessable from
+the item: 16 of the 18 on `main` prefix a fixed word with a head sha, a comment id or a PR number,
+and `blocked` and `approve-open-questions` are bare words. So anyone who could comment could
+pre-post `<!-- sydevs-dispatcher: blocked -->` and silence that advisory for the item's life — the
+dispatcher reads its own marker back and logs `already posted`. `loadRecord` was worse: it returned
+the first comment that parsed, so a comment starting with `MARKER` seeded `current`, `pending`,
+`fixCi` and `dispatches`, naming a handler and an attempt nobody dispatched.
+
+The journal carries the other two, and it is a public issue in this repo. `postAnomaly` deduped on
+the visible line, so a hand-posted `⚠️ **<kind>** · <text>` silences that anomaly for the day — its
+own doc comment said *"said once a day, like the `commentOnce` beside it"*, and the resemblance was
+exact. `refreshTally` counted every author's `sydevs-dispatch-done` marker, so a stranger could
+inflate the day's title and the tally block `improve-loop` reads as the loop's usage evidence.
+
+Every filter is the one clause `isBot` already applies elsewhere: the author must be
+`identity.expectedLogin`. None costs a call — the listings all four seams already make carry
+`user.login`. Each seam applies it in the idiom its signature already uses: `postAnomaly` and
+`refreshTally` take `config`, so they call `isBot`; `commentOnce` and `loadRecord` take scalars
+only, as `inSetBuild` does with `lock`, so the login is threaded in and `isLogin` holds the compare
+`isBot` is now a one-liner over. The filter lives in `loadRecord`, not `parseRecord`, which sees a
+body and no author, and in the journal's `ownComments`, not in its two readers: a session's own
+entry is a comment too, but `finish-run` posts it as `identity.expectedLogin`, so filtering at the
+listing keeps it and a third reader inherits the clause.
+
+A missing expected login throws. Refusing every comment instead would be quiet in the wrong place:
+`loadRecord` would report no record at all, and `sweep.mjs` reads a lock with no record as a
+timed-out lease, so a seam that forgot to thread the login would break live sessions rather than
+fail.
+
+A comment the bot wrote under a former login stops being recognised, so on first contact every
+advisory re-posts once and every record is re-created once. That one-off duplicate across the open
+items in five repos is cheaper than a reconciliation path, and was chosen over one
+(sydevs/claude-workflow#205).
 
 ## An outsider feeds, a member fires
 

@@ -50,11 +50,13 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   const out = []
   const push = (kind, number, reason, facts = {}) => out.push({ repo, kind, number, reason, event: 'schedule', facts })
 
+  const bot = config.identity.expectedLogin
+
   const byLabel = async (label) => github.paginate(github.rest.issues.listForRepo, { owner, repo: name, state: 'open', labels: label, per_page: 100 })
 
   for (const i of await byLabel(L.lock)) {
     const kind = i.pull_request ? 'pr' : 'issue'
-    const { rec } = await loadRecord(github, { owner, repo: name, number: i.number })
+    const { rec } = await loadRecord(github, { owner, repo: name, number: i.number }, bot)
     const cur = rec.current
     if (!cur) { push(kind, i.number, 'sweep-timeout', { reason: 'lock without a record' }); continue }
     if (cur.deadline && Date.parse(cur.deadline) < now.getTime()) push(kind, i.number, 'sweep-timeout', { handler: cur.handler, attempt: cur.attempt })
@@ -62,7 +64,7 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
 
   for (const i of await byLabel(L.stuck)) {
     const kind = i.pull_request ? 'pr' : 'issue'
-    const { rec } = await loadRecord(github, { owner, repo: name, number: i.number })
+    const { rec } = await loadRecord(github, { owner, repo: name, number: i.number }, bot)
     const p = rec.pending
     if (!p) { push(kind, i.number, 'sweep-recheck'); continue }
     if (!p.retryAfter || Date.parse(p.retryAfter) <= now.getTime()) push(kind, i.number, 'sweep-retry', { handler: p.handler, attempt: p.attempt })
@@ -104,7 +106,6 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
     if (!lockedNumbers.has(n)) push(openPrNumbers.has(n) ? 'pr' : 'issue', n, 'sweep-lease', {})
   }
   const orphanHours = config.dispatch.orphanDraftHours ?? 6
-  const bot = config.identity.expectedLogin
   for (const pr of openPrs) {
     if (!isBot(pr.user?.login, config) || lockedNumbers.has(pr.number)) continue
     const labels = (pr.labels || []).map((l) => l.name)

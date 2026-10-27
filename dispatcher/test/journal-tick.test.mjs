@@ -8,8 +8,8 @@ import { previousDay, dayLabel, refreshTally, DONE_MARKER, ANOMALY_MARKER } from
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 const DAY_MARKER = '<!-- ops-journal:'
-const done = (handler) => ({ body: `${DONE_MARKER}${JSON.stringify({ id: 'x', handler, repo: 'sydevs/SahajCloud', number: 1, failed: 0 })} -->\n✅` })
-const anomaly = (kind) => ({ body: `${ANOMALY_MARKER}${JSON.stringify({ kind })} -->\n⚠️ **${kind}** · x` })
+const done = (handler) => ({ body: `${DONE_MARKER}${JSON.stringify({ id: 'x', handler, repo: 'sydevs/SahajCloud', number: 1, failed: 0 })} -->\n✅`, user: { login: 'sydevs-bot' } })
+const anomaly = (kind) => ({ body: `${ANOMALY_MARKER}${JSON.stringify({ kind })} -->\n⚠️ **${kind}** · x`, user: { login: 'sydevs-bot' } })
 
 /**
  * A journal repo with two day issues: #134 for Monday 2026-09-28, frozen at a
@@ -35,7 +35,7 @@ function journalRepo(over = {}) {
         update: async (a) => { calls.push(['update', a.issue_number, a.title]); Object.assign(issues[a.issue_number], a); return { data: {} } },
         create: async () => { throw new Error('today already exists') },
         listComments: async ({ issue_number, page = 1 }) => ({ data: page === 1 ? (comments[issue_number] || []) : [] }),
-        createComment: async (a) => { calls.push(['comment', a.issue_number, a.body]); (comments[a.issue_number] ||= []).push({ body: a.body }); return { data: {} } },
+        createComment: async (a) => { calls.push(['comment', a.issue_number, a.body]); (comments[a.issue_number] ||= []).push({ body: a.body, user: { login: 'sydevs-bot' } }); return { data: {} } },
       },
     },
     ...over,

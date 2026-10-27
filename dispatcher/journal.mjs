@@ -6,6 +6,8 @@
  * (why: docs/why.md#the-journal-day-is-a-local-date)
  */
 
+import { isBot } from './decide.mjs'
+
 const DAY_MARKER = '<!-- ops-journal:'
 const TALLY_OPEN = '<!-- tally -->'
 const TALLY_CLOSE = '<!-- /tally -->'
@@ -135,13 +137,21 @@ export async function closeDuplicateDays(gh, config, now = new Date()) {
   return closed
 }
 
-/** Every comment on an issue, oldest first. */
-async function allComments(gh, owner, repo, issue_number) {
+/**
+ * The loop's own comments on a journal issue, oldest first. The journal is a
+ * public issue, so the author test lives here: every reader of a
+ * dispatcher-owned marker inherits it, and a session's own entry is kept
+ * because `finish-run` posts it as `identity.expectedLogin` too.
+ * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ */
+async function ownComments(gh, config, issue_number) {
+  const owner = config.org
+  const repo = config.journalRepo
   const out = []
   let page = 1
   for (;;) {
     const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number, per_page: 100, page })
-    for (const c of data) out.push(c)
+    for (const c of data) if (isBot(c.user?.login, config)) out.push(c)
     if (data.length < 100) break
     page += 1
   }
@@ -170,7 +180,7 @@ export async function postAnomaly(gh, config, journalNumber, { kind, text, id = 
   const repo = config.journalRepo
   const line = `⚠️ **${kind}** · ${text}`
   try {
-    const said = await allComments(gh, owner, repo, journalNumber)
+    const said = await ownComments(gh, config, journalNumber)
     if (said.some((c) => anomalyLine(c.body) === line)) return false
   } catch { /* a listing we cannot read must not silence the anomaly */ }
   const body = `${ANOMALY_MARKER}${JSON.stringify({ kind, id })} -->\n${line}`
@@ -225,7 +235,7 @@ export async function refreshTally(gh, config, journalNumber, now = new Date(), 
   if (!journalNumber) return null
   const owner = config.org
   const repo = config.journalRepo
-  const counts = tallyFrom((await allComments(gh, owner, repo, journalNumber)).map((c) => c.body))
+  const counts = tallyFrom((await ownComments(gh, config, journalNumber)).map((c) => c.body))
   const title = titleFor(label || weekday(now, config.journal.timezone), counts)
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: journalNumber })
   const body = withTally(issue.body, renderTally(counts))

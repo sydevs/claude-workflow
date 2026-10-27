@@ -6,6 +6,8 @@
  * The session never writes it. (why: docs/why.md#the-lock-label-is-the-lease)
  */
 
+import { isLogin } from './decide.mjs'
+
 export const MARKER = '<!-- sydevs-status v1 '
 const END = ' -->'
 
@@ -57,12 +59,19 @@ export function renderRecord(rec) {
   return `${MARKER}${json}${END}\n${lines.join('\n')}\n\n<sub>Written by the sydevs dispatcher. Sessions never edit this comment.</sub>`
 }
 
-/** Find the status comment. Returns `{ id, rec }`, with `id` null when absent. */
-export async function loadRecord(gh, { owner, repo, number }) {
+/**
+ * Find the status comment. Returns `{ id, rec }`, with `id` null when absent.
+ *
+ * `bot` is `identity.expectedLogin`, required, and only that author's comment
+ * counts. The filter belongs here, not in `parseRecord`, which sees a body and
+ * no author. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ */
+export async function loadRecord(gh, { owner, repo, number }, bot) {
   let page = 1
   for (;;) {
     const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100, page })
     for (const c of data) {
+      if (!isLogin(c.user?.login, bot)) continue
       const rec = parseRecord(c.body)
       if (rec) return { id: c.id, rec }
     }
