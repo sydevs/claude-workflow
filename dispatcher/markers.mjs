@@ -53,12 +53,20 @@ const markerWords = (marker) => String(marker).replace(/:\s*$/, '').toLowerCase(
  * Both spellings of a target are accepted: a full in-org issue URL, and
  * `owner/repo#N`. A bare `#N` is not — it would resolve against whichever
  * repository rendered it. PR URLs are ignored.
+ *
+ * A line inside a triple-backtick fence is documentation, not a blocker:
+ * `format-ticket/SKILL.md` shows the format that way, and its own example
+ * would otherwise be related. `parseOpenQuestions` skips a fence for the same
+ * reason. (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
  */
 export function parseBlockedBy(body, org, marker = 'Blocked by') {
   const out = []
   const words = markerWords(marker)
   const seen = new Set()
+  let fenced = false
   for (const l of lines(body)) {
+    if (l.startsWith('```')) { fenced = !fenced; continue }
+    if (fenced) continue
     const bare = blockerText(l, words)
     if (bare === null) continue
     for (const r of parseRefs(bare, org)) {
@@ -94,6 +102,11 @@ export function parseRefs(text, org) {
  * naming no in-org target, or any target still unrelated, stays. The rest
  * survives byte for byte, line endings included: the blank run a dropped line
  * leaves collapses to one, and a heading the drop empties stays.
+ *
+ * A fenced line is skipped here too. The flag cannot be shared with
+ * `parseBlockedBy`: this loop splits after each newline so every unit keeps
+ * its own line ending, and a reader-only fix would relate nothing while still
+ * deleting the author's documentation.
  * (why: docs/why.md#a-converted-blocker-line-is-deleted)
  */
 export function stripBlockedBy(body, org, marker = 'Blocked by', related = []) {
@@ -104,9 +117,12 @@ export function stripBlockedBy(body, org, marker = 'Blocked by', related = []) {
   const kept = []
   const dropped = []
   let afterDrop = false
+  let fenced = false
   // Split after each newline, so each line keeps its own `\n` or `\r\n`.
   for (const unit of raw.split(/(?<=\n)/)) {
-    const bare = blockerText(unit, words)
+    const fence = unit.trim().startsWith('```')
+    if (fence) fenced = !fenced
+    const bare = fence || fenced ? null : blockerText(unit, words)
     const refs = bare === null ? [] : parseRefs(bare, org)
     if (refs.length && refs.every((r) => done.has(`${r.repo}#${r.number}`))) {
       dropped.push(unit.replace(/\r?\n$/, ''))

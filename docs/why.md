@@ -1013,6 +1013,13 @@ with or without the colon, and takes a URL or `owner/repo#N`. It stays closed wh
 wrong: a bare `#N` names no repo, a PR is not an issue, another org is not ours, and a
 struck-through line is a cleared blocker.
 
+A fenced line is the fifth. `format-ticket/SKILL.md` documents the format inside a code fence, and
+both the reader and `stripBlockedBy` acted on that example: swept over every tracked `.md`, it was
+the one file that would have related `SahajCloud#632` and then had its own documentation deleted.
+`parseOpenQuestions` already carried the flag; the other two did not. Each needs its own, because
+the stripper splits after every newline so each unit keeps its line ending — and a reader-only fix
+would relate nothing while still deleting the line.
+
 ## blocked follows the relationship
 
 The four tickets above had **correct native relationships all along**; they lacked the `blocked`

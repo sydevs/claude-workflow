@@ -95,6 +95,35 @@ test('the strip leaves every line the reader skips', () => {
   assert.deepEqual(stripBlockedBy(live, 'sydevs', 'Blocked by', [two]), { body: live, dropped: [] })
 })
 
+// ---- a fenced line is documentation, not a blocker
+// Verbatim from workflow/skills/format-ticket/SKILL.md, the one tracked file
+// whose own example both readers used to act on.
+const fenced = [
+  '## Notes',
+  '',
+  '```',
+  'Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint does not exist yet',
+  '```',
+  '',
+  'See also #4.',
+  '',
+].join('\n')
+
+test('a fenced Blocked by line is neither related nor stripped', () => {
+  assert.deepEqual(parseBlockedBy(fenced, 'sydevs'), [])
+  const out = stripBlockedBy(fenced, 'sydevs', 'Blocked by', [{ repo: 'SahajCloud', number: 632 }])
+  assert.deepEqual(out, { body: fenced, dropped: [] }, 'the fence and its line survive byte for byte')
+  assert.deepEqual(parseBlockedBy('```markdown\nBlocked by: sydevs/SahajCloud#632\n```', 'sydevs'), [], 'an info string opens the fence too')
+})
+
+test('a fence elsewhere in the body leaves a live line alone', () => {
+  const mixed = `${fenced}Blocked by: https://github.com/sydevs/SahajCloud/issues/2 — live\n`
+  assert.deepEqual(parseBlockedBy(mixed, 'sydevs'), [{ owner: 'sydevs', repo: 'SahajCloud', number: 2 }])
+  const out = stripBlockedBy(mixed, 'sydevs', 'Blocked by', [two])
+  assert.deepEqual(out.dropped, ['Blocked by: https://github.com/sydevs/SahajCloud/issues/2 — live'])
+  assert.equal(out.body, fenced, 'only the live line goes')
+})
+
 test('open questions count checkboxes under their own heading, not option bullets', () => {
   const b = ['## Open questions', '- [ ] **1. Permanent redirect?**', '  - **A — Permanent (recommended):** links keep working', '  - **B — Temporary:** revisit in 2027', '- [x] **2. Who owns DNS?** Answered 2026-10-05', '', '## Notes', '- [ ] not a question'].join('\n')
   assert.deepEqual(parseOpenQuestions(b), { total: 2, open: 1 })
