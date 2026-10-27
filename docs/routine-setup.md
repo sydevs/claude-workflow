@@ -786,3 +786,4 @@ judgement is the only thing that costs a session.
 | An `is:blocked` search returns the wrong issues | In issue **search** it matches the `blocked` label, not the relationship. Use GraphQL `blockedBy` on `Issue`. |
 | Two journal issues for one day | Two `act` jobs created one each. The scheduled journal job closes the newer within 30 minutes. |
 | A session starts and stops immediately | It found no `bot:working` label. Either the lock write failed, or another session already finished the item. |
+| After a bot rename or PAT migration, every advisory re-posts and every status comment is duplicated, once | Expected. Only `identity.expectedLogin` is read back, so the old login's comments stop counting. One duplicate per open item, then quiet. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author) |
