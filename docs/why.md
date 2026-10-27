@@ -1400,6 +1400,30 @@ naming SahajCloud#632, a recheck session paid for when it closes. So the dispatc
 can edit a body, so the one edit refused is a non-member author's own. A member's edit makes it
 state.
 
+## A dispatcher-owned marker is qualified by its author
+
+A stranger's *body* marker is text, read against `author_association`. Two markers the dispatcher
+writes into its own *comments* had no such test, and a comment needs no association at all.
+
+`commentOnce` deduped an advisory on `body.startsWith(mark)` alone, and every key is guessable from
+the item: 16 of the 18 on `main` prefix a fixed word with a head sha, a comment id or a PR number,
+and `blocked` and `approve-open-questions` are bare words. So anyone who could comment could
+pre-post `<!-- sydevs-dispatcher: blocked -->` and silence that advisory for the item's life — the
+dispatcher reads its own marker back and logs `already posted`. `loadRecord` was worse: it returned
+the first comment that parsed, so a comment starting with `MARKER` seeded `current`, `pending`,
+`fixCi` and `dispatches`, naming a handler and an attempt nobody dispatched.
+
+Both filters are the one clause `isBot` already applies elsewhere: the author must be
+`identity.expectedLogin`. Neither costs a call — the listings both seams already make carry
+`user.login` — so the login is threaded in, and `isLogin` holds the compare for the two seams that
+have the login and not the config. The filter lives in `loadRecord`, not `parseRecord`, which sees
+a body and no author.
+
+A comment the bot wrote under a former login stops being recognised, so on first contact every
+advisory re-posts once and every record is re-created once. That one-off duplicate across the open
+items in five repos is cheaper than a reconciliation path, and was chosen over one
+(sydevs/claude-workflow#205).
+
 ## An outsider feeds, a member fires
 
 A member's new goal is reviewed on arrival. Opened to the public, that would let anyone spend an

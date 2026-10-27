@@ -40,8 +40,16 @@ export const transfer = (repo, milestone) => ({ type: 'transfer', repo, mileston
 // ---- predicates ------------------------------------------------------
 const lower = (s) => String(s || '').toLowerCase()
 
+/**
+ * A login is the loop's own, case aside. The expected login must be named: a
+ * missing one matches nothing, so a seam that forgets to thread it refuses
+ * every comment rather than accepting every anonymous one.
+ */
+export function isLogin(login, expected) {
+  return !!expected && lower(login) === lower(expected)
+}
 export function isBot(login, config) {
-  return lower(login) === lower(config.identity?.expectedLogin)
+  return isLogin(login, config.identity?.expectedLogin)
 }
 export function respondTo(login, config) {
   return (config.assignment?.respondTo || []).some((l) => lower(l) === lower(login))

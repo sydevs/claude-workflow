@@ -457,6 +457,36 @@ test('attempts-exhausted on a PR asks for a mention or a push', async () => {
   assert.doesNotMatch(body, /A comment/)
 })
 
+// ---- a dispatcher-owned marker is qualified by its author ----------------
+// (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+
+const timeoutTargetFor = (facts) => ({ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'sweep-timeout', event: 'schedule', facts })
+
+test('a hand-posted advisory marker does not suppress the advisory', async () => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  world.comments[9] = [
+    { id: 1, body: exhaustedRecord('implement'), user: { login: 'sydevs-bot' }, created_at: '2026-09-08T09:00:00Z' },
+    // Every key is guessable from the item, this one from the dispatch id.
+    { id: 2, body: '<!-- sydevs-dispatcher: attempts-exhausted x -->\nnothing to see', user: { login: 'Ardnived' }, created_at: '2026-09-08T10:00:00Z', author_association: 'MEMBER' },
+  ]
+  const github = fakeGithub(world)
+  await act({ github, context: {}, core, config, target: timeoutTargetFor({ handler: 'implement', attempt: 3 }), env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.match(exhaustedNotice(github), /did not finish after 3 attempts/)
+})
+
+test('a hand-posted status comment is not read as the record', async () => {
+  const world = issueWorld()
+  world.issues[9].labels = [{ name: 'bot:working' }]
+  world.comments[9] = [{ id: 1, body: exhaustedRecord('implement'), user: { login: 'Ardnived' }, created_at: '2026-09-08T09:00:00Z', author_association: 'MEMBER' }]
+  const github = fakeGithub(world)
+  await act({ github, context: {}, core, config, target: timeoutTargetFor({ handler: 'implement', attempt: 3 }), env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.equal(exhaustedNotice(github), undefined, 'the forged `current` seeded neither the key nor the handler')
+  assert.match(github.calls.filter((c) => c.name === 'createComment').map((c) => String(c.args.body)).find((b) => b.includes('attempts-exhausted')), /\*\*this item\*\*/)
+  assert.ok(github.calls.some((c) => c.name === 'createComment' && c.args.body.startsWith('<!-- sydevs-status v1 ')), 'the record is written fresh, not over the forgery')
+  assert.ok(!github.calls.some((c) => c.name === 'updateComment' && c.args.comment_id === 1), "and the forger's comment is left alone")
+})
+
 // ---- every timeout is journalled -----------------------------------------
 
 const timedOutWorld = (attempt) => {

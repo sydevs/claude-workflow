@@ -99,10 +99,10 @@ async function parentOf(gh, { owner, repo, number }) {
  * from the goal's record. Any other goal session leaves its children alone.
  * (why: docs/why.md#a-cross-repo-set-is-built-together)
  */
-async function inSetBuild(gh, goal, childRef, lock) {
+async function inSetBuild(gh, goal, childRef, lock, bot) {
   if (!goal?.labels?.includes(lock)) return false
   try {
-    const { rec } = await loadRecord(gh, { owner: goal.repo.owner, repo: goal.repo.name, number: goal.number })
+    const { rec } = await loadRecord(gh, { owner: goal.repo.owner, repo: goal.repo.name, number: goal.number }, bot)
     const cur = rec?.current
     return cur?.handler === 'implement' && cur.flags?.mode === 'set' && (cur.flags.children || []).includes(childRef)
   } catch {
@@ -189,7 +189,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
 
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: number })
   const labels = (issue.labels || []).map((l) => l.name || l)
-  const record = await loadRecord(gh, base)
+  const record = await loadRecord(gh, base, bot)
   const comments = await newestComments(gh, base, issue.comments)
   const botLast = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
   const newestHuman = comments.filter((c) => !isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
@@ -227,7 +227,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.openPrsClosingIt = await openPrsClosing(gh, base)
     s.openQuestions = parseOpenQuestions(issue.body)
     s.parent = await parentOf(gh, base)
-    if (s.parent) s.parent.setBuild = await inSetBuild(gh, s.parent, `${owner}/${repo}#${number}`, config.labels.lock)
+    if (s.parent) s.parent.setBuild = await inSetBuild(gh, s.parent, `${owner}/${repo}#${number}`, config.labels.lock, bot)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
     s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock) : []
     // An approval starts only the open children no PR answers yet, and builds
@@ -315,7 +315,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
       if ((li.labels || []).some((l) => (l.name || l) === config.labels.lock)) s.linkedLocked.push(n)
       const goal = await parentOf(gh, ref)
-      if (await inSetBuild(gh, goal, `${owner}/${repo}#${n}`, config.labels.lock)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
+      if (await inSetBuild(gh, goal, `${owner}/${repo}#${n}`, config.labels.lock, bot)) s.linkedLocked.push(`${goal.repo.full}#${goal.number}`)
       const deps = await dependencies(gh, ref, 'blocked_by')
       if (Array.isArray(deps)) s.linkedBlockedOpen.push(...deps.filter((b) => b.state === 'open').map((b) => `${b.owner}/${b.repo}#${b.number}`))
     }
