@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlockedBy, stripBlockedBy, parseRecheck, parseSentry, datePassed, parseOpenQuestions, parseRequest } from '../markers.mjs'
+import { parseBlockedBy, unresolvedBlockers, stripBlockedBy, parseRecheck, parseSentry, datePassed, parseOpenQuestions, parseRequest } from '../markers.mjs'
 
 const body = `## Summary
 x
@@ -62,6 +62,63 @@ test('loose matching stays closed to everything it should ignore', () => {
   assert.deepEqual(parseBlockedBy('This is blocked by sydevs/SahajCloud#5', 'sydevs'), [], 'mid-sentence prose')
   assert.deepEqual(parseBlockedBy('Blocked by: https://github.com/other/Repo/issues/3', 'sydevs'), [], 'another org')
   assert.deepEqual(parseBlockedBy('Blocked by #12', 'sydevs'), [], 'a bare number names no repository')
+})
+
+// ---- an unresolved blocker line is reported (why: docs/why.md#an-unresolved-blocker-line-is-reported)
+
+const PULL = 'Blocked by: https://github.com/sydevs/SahajCloud/pull/912 — until it merges'
+
+test('a blocker line that names a target and resolves no in-org issue is reported', () => {
+  // sydevs/SahajCloud#987 named the PR, not the issue that PR closes.
+  assert.deepEqual(unresolvedBlockers(PULL, 'sydevs'), [
+    { line: PULL, targets: ['https://github.com/sydevs/SahajCloud/pull/912'] },
+  ])
+  // The line is reported as written — bullet off, nothing else — so the comment
+  // does not quote the parser's intermediate back at the author.
+  assert.deepEqual(unresolvedBlockers('- **Blocked by #12.**', 'sydevs'), [
+    { line: '**Blocked by #12.**', targets: ['#12'] },
+  ])
+  assert.deepEqual(unresolvedBlockers('Blocked by: https://github.com/other-org/repo/issues/9', 'sydevs'), [
+    { line: 'Blocked by: https://github.com/other-org/repo/issues/9', targets: ['https://github.com/other-org/repo/issues/9'] },
+  ], "another org names no issue of ours")
+  assert.deepEqual(unresolvedBlockers('Blocked by other-org/repo#9', 'sydevs')[0].targets, ['other-org/repo#9'])
+})
+
+test('reporting is narrower than reading: a line naming no target is prose', () => {
+  // The loose matcher's false positives must not become public comments.
+  // (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
+  assert.deepEqual(unresolvedBlockers('Blocked by the lack of staging credentials.', 'sydevs'), [])
+  assert.deepEqual(unresolvedBlockers('**Blocked by the Payload upgrade.**', 'sydevs'), [])
+})
+
+test('nothing else is reported: a resolved line, a struck line, no line at all', () => {
+  assert.deepEqual(unresolvedBlockers('Blocked by: https://github.com/sydevs/SahajCloud/issues/907', 'sydevs'), [])
+  assert.deepEqual(
+    unresolvedBlockers('Blocked by: https://github.com/sydevs/SahajCloud/issues/907 and https://github.com/sydevs/SahajCloud/pull/912', 'sydevs'),
+    [],
+    'one resolvable target on the line is enough',
+  )
+  assert.deepEqual(unresolvedBlockers('- ~~Blocked by: https://github.com/sydevs/SahajCloud/pull/912~~', 'sydevs'), [], 'struck through')
+  assert.deepEqual(unresolvedBlockers('This is blocked by sydevs/SahajCloud/pull/912', 'sydevs'), [], 'mid-sentence prose is no line')
+  assert.deepEqual(unresolvedBlockers('no markers', 'sydevs'), [])
+  assert.deepEqual(unresolvedBlockers('', 'sydevs'), [])
+})
+
+test('the shared body reports its two unresolved lines, each once', () => {
+  assert.deepEqual(unresolvedBlockers(body, 'sydevs').map((u) => u.targets), [
+    ['https://github.com/other-org/repo/issues/9'],
+    ['https://github.com/sydevs/SahajCloud/pull/99'],
+  ])
+  // Keyed on the targets, so the same targets twice are one report — and
+  // rewording the reason does not make a second.
+  assert.deepEqual(unresolvedBlockers('Blocked by #12\nBlocked by #12', 'sydevs').length, 1)
+  const first = unresolvedBlockers('Blocked by #12 — until that lands', 'sydevs')[0]
+  const after = unresolvedBlockers('Blocked by #12 — waiting on the backport', 'sydevs')[0]
+  assert.deepEqual(first.targets, after.targets, 'the reason is not part of the identity')
+  assert.notEqual(first.line, after.line, 'though the quoted line follows the edit')
+  // An author correcting one of two targets often rewrites the pair, so the
+  // order they end up in is not part of the identity either.
+  assert.equal(unresolvedBlockers('Blocked by #12 and #13\nBlocked by #13 and #12', 'sydevs').length, 1)
 })
 
 // ---- a converted blocker line is deleted (why: docs/why.md#a-converted-blocker-line-is-deleted)

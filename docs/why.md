@@ -1052,6 +1052,36 @@ The strike ordering was fixed too, or a misread line would relate and delete evi
 The edit history keeps the `— <reason>` prose. Until a session can read relationships itself
 (sydevs/claude-workflow#3), the `blocked` label and the pre-fire check are the gate.
 
+## An unresolved blocker line is reported
+
+`sydevs/SahajCloud#987` said `Blocked by: …/pull/912`. `parseBlockedBy` returns `[]` for that line
+— GitHub's relationship takes an issue — so nothing was created, no `blocked` went on, and no word
+was said. `stripBlockedBy` leaves the line, rightly: it is the only record of the author's intent.
+The result is a ticket that reads as blocked to every human and as ready to the machinery. The
+`block on` verb has refused loudly in exactly this situation since it shipped; the body-marker path
+had no equivalent.
+
+So an unresolved line gets one comment naming it and the two accepted spellings. Nothing else moves
+for it: `blocked` follows the relationship, and this line made none. The comment says that, rather
+than "not blocked" — a sibling line that did resolve can be applying `blocked` in the same plan.
+
+- **Report narrower than you read.** The matcher is loose by design, and that entry priced a false
+  positive as a run skipping a ticket. A comment on a live ticket is dearer, so only a line that
+  names a ref-shaped target and resolves none is reported. `Blocked by the lack of staging
+  credentials.` is prose, and the first draft of this would have nagged its author.
+- **Keyed on the targets, not the line.** There is no comment id on this path. The whole line
+  would make the reason prose part of the identity, so rewording after the em dash — the edit
+  people actually make — would re-post advice already read, and any later tidying of the matcher
+  would re-nag every open ticket. A corrected target still yields a key never reached. The key
+  sorts them, so their order is not part of the identity either: an author correcting one of two
+  targets usually rewrites the pair.
+- **The line is quoted as written**, bullet off and nothing else. The matcher's intermediate
+  strips leading emphasis only, so quoting it returns `Blocked by #12.**` to its author and reads
+  as the dispatcher having mis-seen the line.
+- **A line that resolved one target stays silent.** That ticket is related and carries `blocked`,
+  so the human and the machinery agree. A PR URL beside a resolved issue is as often reason prose
+  — "until that PR merges" — as a second blocker, and reporting it would be a guess.
+
 ## A date belongs in a date field
 
 A park used to be `Re-check: 2026-10-01` in `## Notes`, parsed by regex — a shape inherited from
@@ -1297,6 +1327,21 @@ first session's unlock re-derived the same plan. Only `ceilings.ciFixIterations`
 is why it was exhausted and then refused the real fix. Now a session that already ran and ended
 against this head sha, whatever its outcome, means no second fire; a new sha asks again.
 `rec.dispatches` keeps 20 entries, so a long-lived PR can age one out; the ceiling is the backstop.
+
+## A queue failure is a CI failure
+
+SahajCloud#959 entered the merge queue about 60 times between 2026-10-15 and 2026-10-23 and failed
+typecheck every time, on one identical queue commit for the last 40 tries. #957 had merged a new
+importer of the export #959 removed, and the PR's own head never contained it, so its own CI stayed
+green. A queue run tests a temporary `gh-readonly-queue/<base>/pr-<n>-<sha>` commit that no PR
+points at, so `resolve` found no PR for its `workflow_run` and dropped it. GitHub disarmed
+auto-merge, and the next `sweep-pr` saw approved, green and unarmed, and re-armed it — straight
+back into the same failure. `fix-ci` never fired, the ceiling never counted, and no anomaly reached
+the journal. Now the branch name maps a failed queue run to its PR. The failure is kept in the
+status record against the head it failed on, and while that head stays unarmed it is repaired
+under `ciFixIterations` like red CI, never re-armed. `cancelled` is not a failure: the queue
+cancels a run when it rebuilds a group after another entry failed. A PR still armed is that
+rebuild, so it is left alone.
 
 ## The journal tally needs a writer that cannot stop
 

@@ -1,7 +1,7 @@
 // One target per repo#number, carrying every reason the pass found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { coalesceTargets } from '../resolve.mjs'
+import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
 
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const t = (number, reason, facts = {}) => ({ repo, kind: 'pr', number, reason, event: 'schedule', facts })
@@ -42,4 +42,32 @@ test('one reason twice for one item is one reason', () => {
 
 test('nothing in, nothing out', () => {
   assert.deepEqual(coalesceTargets([]), [])
+})
+
+// ---- merge-queue runs (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+
+test('a queue branch names its PR, whatever the base is called', () => {
+  assert.equal(queuedPr('gh-readonly-queue/main/pr-959-2c2765ba676e1689ea4d48fa445517e2054f5177'), 959)
+  assert.equal(queuedPr('gh-readonly-queue/release/v2/pr-12-abc123'), 12)
+  assert.equal(queuedPr('claude/refactor-958-escape-regexp-utility'), null)
+  assert.equal(queuedPr(undefined), null)
+})
+
+const queueRun = (conclusion, kind = 'workflow_run') => ({
+  eventName: kind,
+  repo: { owner: 'sydevs', repo: 'SahajCloud' },
+  payload: { action: 'completed', [kind]: { head_sha: 'q1', head_branch: 'gh-readonly-queue/main/pr-959-2c2765ba', conclusion, pull_requests: [], html_url: kind === 'workflow_run' ? 'https://run' : undefined } },
+})
+// The queue path needs no API call: a lookup by sha would find no PR.
+const noApi = new Proxy({}, { get: () => { throw new Error('no API call expected') } })
+
+test('a failed queue run targets the PR its branch names', async () => {
+  const out = await resolve({ github: noApi, context: queueRun('failure'), config: {} })
+  assert.deepEqual(out.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { run: 'https://run' }]])
+  const suite = await resolve({ github: noApi, context: queueRun('timed_out', 'check_suite'), config: {} })
+  assert.deepEqual(suite.map((t) => [t.number, t.reason]), [[959, 'queue-failed']])
+})
+
+test('a passing or cancelled queue run targets nothing', async () => {
+  for (const c of ['success', 'cancelled', 'neutral']) assert.deepEqual(await resolve({ github: noApi, context: queueRun(c), config: {} }), [], c)
 })

@@ -293,6 +293,30 @@ function infraPlan(s, config, infra) {
   ]
 }
 
+/** A queue failure recorded against this head, while nothing has re-armed it. */
+function queueFailure(s) {
+  const q = s.record?.queueFail
+  return q?.sha && q.sha === s.pr?.head?.sha && !s.pr?.autoMergeArmed ? q : null
+}
+
+/** Fire `fix-ci` on this head, once per head and up to the ceiling, then hand it to a person. */
+function repairPlan(s, config, reason, flags = {}) {
+  const pr = s.pr
+  const ended = endedFixCiFor(s.record, pr.head?.sha)
+  if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
+  const cap = config.ceilings?.ciFixIterations ?? 3
+  if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci', flags)]
+  // The cap comment promises that a person's push starts the repair again,
+  // so a head they pushed since the last fix-ci resets the count.
+  // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+  if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci', flags)]
+  return [
+    label([config.labels.awaiting], [config.labels.stuck]),
+    commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${reason}). I have stopped retrying. A mention or a push from you starts me again.`),
+    anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${reason}`),
+  ]
+}
+
 /** The head the last `fix-ci` fire was about, or null. */
 function lastFixCiSha(record) {
   return [...(record?.dispatches || [])].reverse().find((d) => d.handler === 'fix-ci')?.sha || null
@@ -407,21 +431,14 @@ export function evaluatePr(s, config) {
     // (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
     const infra = s.ci.infra || []
     if (infra.length && infra.length === s.ci.failing.length) return infraPlan(s, config, infra)
-    const ended = endedFixCiFor(s.record, pr.head?.sha)
-    if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
-    const cap = config.ceilings?.ciFixIterations ?? 3
-    if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci')]
-    // The cap comment promises that a person's push starts the repair again,
-    // so a head they pushed since the last fix-ci resets the count.
-    // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
-    if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci')]
-    return [
-      label([awaiting], [config.labels.stuck]),
-      commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${s.ci.reason}). I have stopped retrying. A mention or a push from you starts me again.`),
-      anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${s.ci.reason}`),
-    ]
+    return repairPlan(s, config, s.ci.reason)
   }
   if (s.ci.running.length || !s.ci.green) return [note(`waiting on CI: ${s.ci.reason}`)]
+  // Green here and red in the queue: the PR breaks against the base it will
+  // land on. Repaired like red CI, never re-armed into the same failure.
+  // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+  const queued = queueFailure(s)
+  if (queued) return repairPlan(s, config, 'the merge queue run failed', queued.run ? { queueRun: queued.run } : {})
   return deployPass(s, config) || evaluateGreenPr(s, config).concat(advisoryNote(s))
 }
 
@@ -642,15 +659,43 @@ function blockVerb(s, config, facts) {
   return [fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'block' })]
 }
 
+/**
+ * One comment per live `Blocked by` line that names a target and resolves no
+ * in-org issue. `stripBlockedBy` leaves such a line in the body, rightly — it
+ * is the only record of the author's intent — so unreported it reads as
+ * blocked to every human and as ready to the machinery. No label,
+ * relationship or Status moves for it, because `blocked` follows the
+ * relationship and this line made none. The message says that, rather than
+ * "not blocked": a sibling line that did resolve can be applying `blocked`
+ * in the same plan.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
+ *
+ * Keyed on the targets, not the whole line: there is no comment id on this
+ * path, and the author rewording the reason must not re-post the advice.
+ * Sorted, so reordering the targets does not either.
+ */
+function refuseUnresolvedBlockers(s, config) {
+  // Guarded, unlike its `blockedBy` neighbour: a snapshot assembled by hand
+  // predates the field, and `decide` must stay total over one.
+  return (s.markers.unresolvedBlockers || []).map(({ line, targets }) =>
+    commentOnce(
+      `blocker-unresolved ${[...targets].sort().join(' ')}`,
+      [
+        `No relationship created: ${targets.join(', ')} ${targets.length > 1 ? 'name' : 'names'} no ${config.org} issue.`,
+        `> ${line}`,
+        `Name the blocker as a full issue URL or \`owner/repo#N\`. A PR URL and a bare \`#N\` are ignored — block on the issue a PR closes.`,
+      ].join('\n\n'),
+    ))
+}
+
 // ---- per-event deciders ------------------------------------------------
-const LOCK_FREE_STATUS_ONLY = ['status', 'ensure', 'note', 'relationships', 'label']
 
 /**
  * `decide(target, snapshot, config)` → plan[].
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
  * `pull_request.synchronize`, `review`, `review_comment`, `thread`, `ci`,
- * `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
+ * `queue-failed`, `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
  * what the payload said — used only to pick the row; state comes from the
  * snapshot.
  */
@@ -702,6 +747,8 @@ function derive(target, s, config) {
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (blockers.length) plan.push(relationships(blockers, true))
       if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
+      // An outsider's own markers are already text, so there is nothing to refuse.
+      if (!outsider) plan.push(...refuseUnresolvedBlockers(s, config))
       // Nothing the loop files is revised on arrival any more: every author
       // writes through write-ticket, so a proposal arrives fully specified.
       // (why: docs/why.md#one-author-writes-every-implementation-ticket)
@@ -722,6 +769,9 @@ function derive(target, s, config) {
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
       if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
+      // No outsider guard here: the early return above already refused the one
+      // case where the editor cannot make state.
+      plan.push(...refuseUnresolvedBlockers(s, config))
       return plan.length ? plan : [note('no marker change')]
     }
     case 'issues.reopened':
@@ -981,6 +1031,15 @@ function derive(target, s, config) {
     }
     case 'ci':
       return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
+    // Kept against the head it failed on, so every later pass — a sweep
+    // included — repairs it rather than re-arming it.
+    // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+    case 'queue-failed': {
+      if (!isBot(s.pr?.user?.login, config)) return [note('not a bot PR')]
+      if (!s.pr?.head?.sha || s.pr.state !== 'open') return [note('no open head to charge the queue failure to')]
+      const queueFail = { sha: s.pr.head.sha, run: facts.run || null }
+      return [record({ queueFail })].concat(evaluatePr({ ...s, record: { ...s.record, queueFail } }, config))
+    }
     // Residue from a pass that won the lease and died before the label. Both
     // the label and `rec.current` must be absent: the winner writes them in
     // that order, so either one present means a live session.
@@ -1024,4 +1083,4 @@ function derive(target, s, config) {
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, LOCK_FREE_STATUS_ONLY }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor }
