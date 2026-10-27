@@ -7,7 +7,7 @@
 
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
-import { parseBlockedBy, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
+import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment } from './decide.mjs'
 import { isContractSyncOnly } from './contracts.mjs'
 
@@ -114,6 +114,11 @@ async function inSetBuild(gh, goal, childRef, lock, bot) {
  * The newest `sydevs-request` a bot comment carries, with when it was made.
  * Only the newest comments are read, which is where a session that just
  * ended left its own. (why: docs/why.md#a-session-asks-actions-acts)
+ *
+ * **A dispatcher comment is never read here**, and that term is load-bearing:
+ * a dispatcher comment may quote an issue author's own line, which can carry
+ * a `sydevs-request` marker `parseRequest` would honour.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
  */
 function latestRequest(comments, config) {
   const own = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -211,6 +216,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   if (s.kind === 'issue') {
     const blockedBy = await dependencies(gh, base, 'blocked_by')
     const markerBlockers = parseBlockedBy(issue.body, config.org, config.relationships?.bodyMarker)
+    const unresolved = unresolvedBlockers(issue.body, config.org, config.relationships?.bodyMarker)
     // The `Hold Until` org field is where a park lives. The `Re-check:` line is
     // the older spelling, still read so a ticket written before the change
     // still parks. (why: docs/why.md#a-date-belongs-in-a-date-field)
@@ -218,7 +224,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     const held = (issue.issue_field_values || []).find((f) => f.issue_field_name === fieldName)
     const until = (held?.value && String(held.value).slice(0, 10)) || parseRecheck(issue.body, config.relationships?.recheckMarker)
     s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
-    s.markers = { blockedBy: markerBlockers, recheck: s.park.until, recheckPassed: s.park.passed }
+    s.markers = { blockedBy: markerBlockers, unresolvedBlockers: unresolved, recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
     // Every relationship, closed blockers too: a line naming one is already
     // converted, so it is stripped, never re-POSTed.
@@ -335,3 +341,5 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   return s
 }
 
+/** Test-only seam, as `decide.mjs` has. Nothing here is part of the module's contract. */
+export const _internal = { latestRequest }

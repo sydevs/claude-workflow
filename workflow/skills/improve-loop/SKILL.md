@@ -37,7 +37,8 @@ and `$REVIEWER` come from `loop-config.json` (`org`, `journalRepo`, `identity.ex
 
 **A journal day is one issue: a title with the counts, a body with the usage tally, and one
 comment per session.** The week is seven titles and seven bodies. Open a day's comments only when
-its title reports a failure or an anomaly.
+its title reports a failure or an anomaly, or its tally block lists `audit-nightly` — that night's
+entry carries what the proposal ceiling refused, and no title ever flags it.
 
 ```
 # the week's journal issues — one per day, all still open
@@ -46,6 +47,8 @@ mcp__github__search_issues  query:"repo:$ORG/$JOURNAL_REPO is:issue is:open labe
 mcp__github__issue_read  method:get  owner:$ORG repo:$JOURNAL_REPO issue_number:<n>
 # a flagged day only: one comment per session, newest first, small pages
 mcp__github__issue_read  method:get_comments  issue_number:<n>  perPage:20  page:<from the comments count>
+# an audit night: page 1, where its entry sits — the audit fires at the top of the journal day
+mcp__github__issue_read  method:get_comments  issue_number:<n>  perPage:20  page:1
 
 # what actually happened to the PRs
 mcp__github__list_pull_requests  owner:$ORG repo:$REPO  state:all  perPage:40
@@ -137,6 +140,13 @@ each one's sub-issues, and count two things beside last week's numbers:
 Then **one or two concrete suggestions to the humans**, each tied to a number: batch review
 comments into one review, one verb at a time, a
 `Hold Until` date on a ticket that was revised three times. Never a rule for the loop. Never a cap.
+
+**The report also carries what the proposal ceiling refused.** A night's audit over
+`ceilings.maxOpenProposals` records its best unfiled findings in its journal entry, and closing
+that journal drops them, because `labels.journal` is excluded from every worklist. They are the
+one part of this report that needs the audit nights' comments, read as Evidence says. List them
+here, each naming its audit and its day. On a week with no PR they ride tonight's entry, itself an
+audit night, so the same read reaches them next Sunday and the close loses none of them.
 
 The report fills `pr-template.md`'s `## 📊 Usage` section. With no PR this week, it goes
 into tonight's journal entry as its own `### 📊 Usage` section, which `budget.mjs --fit` never

@@ -74,18 +74,64 @@ const markerWords = (marker) => String(marker).replace(/:\s*$/, '').toLowerCase(
  * A fenced line is documentation, not a blocker — `liveLines` drops it.
  */
 export function parseBlockedBy(body, org, marker = 'Blocked by') {
-  const out = []
+  const by = new Map()
+  for (const { bare } of blockerLines(body, marker)) {
+    for (const r of parseRefs(bare, org)) by.set(`${r.repo}#${r.number}`, r)
+  }
+  return [...by.values()]
+}
+
+/**
+ * Every live `Blocked by` line, as `{ line, bare }` — the line as written,
+ * trimmed, and the text the matcher reads. One scan, two readers: a line's
+ * recognition is asserted here and nowhere else.
+ */
+function blockerLines(body, marker) {
   const words = markerWords(marker)
-  const seen = new Set()
+  const out = []
   for (const l of liveLines(body)) {
     const bare = blockerText(l, words)
-    if (bare === null) continue
-    for (const r of parseRefs(bare, org)) {
-      const key = `${r.repo}#${r.number}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push(r)
-    }
+    if (bare !== null) out.push({ line: l.replace(BULLET, ''), bare })
+  }
+  return out
+}
+
+/**
+ * A target a `Blocked by` line could be naming: an issue or pull-request URL
+ * in any org, `owner/repo#N`, or a bare `#N`. Reporting is narrower than
+ * reading on purpose. The reader matches the words loosely, because people
+ * write `**Blocked by sydevs/X#9.**`, and `docs/why.md#the-marker-reader-matches-words-not-punctuation`
+ * priced that looseness as a run skipping a ticket. A comment on a live
+ * ticket is dearer, so only a line that reaches for a target and misses is
+ * reported — `Blocked by the lack of staging credentials.` is prose.
+ */
+const TARGET = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:issues|pull)\/\d+|\b[\w.-]+\/[\w.-]+#\d+|(?<![\w\/])#\d+\b/g
+
+/**
+ * `{ line, targets }` per live `Blocked by` line that reaches for a target and
+ * resolves no in-org issue — a PR URL, a bare `#N`, another org's issue.
+ * `parseBlockedBy` drops such a line silently, so no caller can tell "no
+ * blocker line" from "a blocker line naming nothing", and the body keeps
+ * advertising a blocker nothing enforces.
+ * (why: docs/why.md#an-unresolved-blocker-line-is-reported)
+ *
+ * `targets` is what a caller keys a report on: short, and stable while the
+ * author rewords the reason after the em dash. It is reported in the order
+ * written, so a key built from it sorts first — an author correcting one of
+ * two targets often rewrites the pair, and the order must not re-post the
+ * advice. A line that resolved at least one target is not reported at all —
+ * the ticket is related and carries `blocked`, so nothing diverges.
+ */
+export function unresolvedBlockers(body, org, marker = 'Blocked by') {
+  const out = []
+  const seen = new Set()
+  for (const { line, bare } of blockerLines(body, marker)) {
+    if (parseRefs(bare, org).length) continue
+    const targets = [...new Set(bare.match(TARGET) || [])]
+    const key = [...targets].sort().join(' ')
+    if (!targets.length || seen.has(key)) continue
+    seen.add(key)
+    out.push({ line, targets })
   }
   return out
 }
