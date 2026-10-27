@@ -116,6 +116,13 @@ test('a fenced Blocked by line is neither related nor stripped', () => {
   assert.deepEqual(parseBlockedBy('```markdown\nBlocked by: sydevs/SahajCloud#632\n```', 'sydevs'), [], 'an info string opens the fence too')
 })
 
+test('the other two line readers skip a fence from the same place', () => {
+  // `liveLines` owns the rule, so every reader over it inherits the skip.
+  assert.equal(parseRecheck('```\nRe-check: 2026-12-01\n```'), null)
+  assert.equal(parseSentry('```\nSentry: https://sy-developers.sentry.io/issues/9 (id: 9)\n```'), null)
+  assert.equal(parseRecheck(`${fenced}Re-check: 2026-10-01\n`), '2026-10-01', 'and a live line outside one still reads')
+})
+
 test('a fence elsewhere in the body leaves a live line alone', () => {
   const mixed = `${fenced}Blocked by: https://github.com/sydevs/SahajCloud/issues/2 — live\n`
   assert.deepEqual(parseBlockedBy(mixed, 'sydevs'), [{ owner: 'sydevs', repo: 'SahajCloud', number: 2 }])

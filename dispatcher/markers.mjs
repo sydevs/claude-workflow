@@ -17,6 +17,23 @@ function lines(body) {
   return String(body || '').split(/\r?\n/).map((l) => l.trim())
 }
 
+/** A triple-backtick fence line, indented or not. */
+const isFence = (line) => line.trim().startsWith('```')
+
+/**
+ * The body's lines, trimmed, with every fenced block dropped. A marker inside
+ * a fence is documentation: `format-ticket/SKILL.md` shows three of these
+ * formats that way, and its own examples would otherwise be read as state.
+ * (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
+ */
+function* liveLines(body) {
+  let fenced = false
+  for (const l of lines(body)) {
+    if (isFence(l)) { fenced = !fenced; continue }
+    if (!fenced) yield l
+  }
+}
+
 /** A list bullet, then leading markdown emphasis — what a human writes and a parser should not see. */
 const BULLET = /^[-*+]\s+/
 const EMPHASIS = /^[*_~`]*/
@@ -54,19 +71,13 @@ const markerWords = (marker) => String(marker).replace(/:\s*$/, '').toLowerCase(
  * `owner/repo#N`. A bare `#N` is not — it would resolve against whichever
  * repository rendered it. PR URLs are ignored.
  *
- * A line inside a triple-backtick fence is documentation, not a blocker:
- * `format-ticket/SKILL.md` shows the format that way, and its own example
- * would otherwise be related. `parseOpenQuestions` skips a fence for the same
- * reason. (why: docs/why.md#the-marker-reader-matches-words-not-punctuation)
+ * A fenced line is documentation, not a blocker — `liveLines` drops it.
  */
 export function parseBlockedBy(body, org, marker = 'Blocked by') {
   const out = []
   const words = markerWords(marker)
   const seen = new Set()
-  let fenced = false
-  for (const l of lines(body)) {
-    if (l.startsWith('```')) { fenced = !fenced; continue }
-    if (fenced) continue
+  for (const l of liveLines(body)) {
     const bare = blockerText(l, words)
     if (bare === null) continue
     for (const r of parseRefs(bare, org)) {
@@ -103,10 +114,9 @@ export function parseRefs(text, org) {
  * survives byte for byte, line endings included: the blank run a dropped line
  * leaves collapses to one, and a heading the drop empties stays.
  *
- * A fenced line is skipped here too. The flag cannot be shared with
- * `parseBlockedBy`: this loop splits after each newline so every unit keeps
- * its own line ending, and a reader-only fix would relate nothing while still
- * deleting the author's documentation.
+ * A fenced line is kept here, not skipped: this loop must emit every unit it
+ * does not drop, so it tracks the fence itself and shares only `isFence`. A
+ * reader-only fix would relate nothing and still delete the documentation.
  * (why: docs/why.md#a-converted-blocker-line-is-deleted)
  */
 export function stripBlockedBy(body, org, marker = 'Blocked by', related = []) {
@@ -120,7 +130,7 @@ export function stripBlockedBy(body, org, marker = 'Blocked by', related = []) {
   let fenced = false
   // Split after each newline, so each line keeps its own `\n` or `\r\n`.
   for (const unit of raw.split(/(?<=\n)/)) {
-    const fence = unit.trim().startsWith('```')
+    const fence = isFence(unit)
     if (fence) fenced = !fenced
     const bare = fence || fenced ? null : blockerText(unit, words)
     const refs = bare === null ? [] : parseRefs(bare, org)
@@ -144,7 +154,7 @@ export function stripBlockedBy(body, org, marker = 'Blocked by', related = []) {
  * item never reaches it, struck or not: the bullet fails `startsWith`.
  */
 export function parseRecheck(body, marker = 'Re-check:') {
-  for (const l of lines(body)) {
+  for (const l of liveLines(body)) {
     if (STRUCK.test(l) || !l.toLowerCase().startsWith(marker.toLowerCase())) continue
     const m = /(\d{4}-\d{2}-\d{2})/.exec(l)
     if (m) return m[1]
@@ -154,7 +164,7 @@ export function parseRecheck(body, marker = 'Re-check:') {
 
 /** `{ url, id }` from a `Sentry: <url> (id: <n>)` line, or null. */
 export function parseSentry(body) {
-  for (const l of lines(body)) {
+  for (const l of liveLines(body)) {
     const m = /^Sentry:\s*(\S+)\s+\(id:\s*(\d+)\)/i.exec(l)
     if (m) return { url: m[1], id: m[2] }
   }
@@ -170,12 +180,9 @@ export function parseSentry(body) {
  */
 export function parseOpenQuestions(body) {
   let inside = false
-  let fenced = false
   let total = 0
   let open = 0
-  for (const l of lines(body)) {
-    if (l.startsWith('```')) { fenced = !fenced; continue }
-    if (fenced) continue
+  for (const l of liveLines(body)) {
     if (/^#{1,6}\s/.test(l)) {
       if (inside) break
       inside = /^##\s+open questions\s*$/i.test(l)

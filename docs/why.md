@@ -1016,9 +1016,13 @@ struck-through line is a cleared blocker.
 A fenced line is the fifth. `format-ticket/SKILL.md` documents the format inside a code fence, and
 both the reader and `stripBlockedBy` acted on that example: swept over every tracked `.md`, it was
 the one file that would have related `SahajCloud#632` and then had its own documentation deleted.
-`parseOpenQuestions` already carried the flag; the other two did not. Each needs its own, because
-the stripper splits after every newline so each unit keeps its line ending — and a reader-only fix
-would relate nothing while still deleting the line.
+
+The rule belongs below the readers, not in them. `parseOpenQuestions` carried its own flag, and
+adding one to `parseBlockedBy` would have left `parseRecheck` and `parseSentry` out — so a ticket
+fencing an example `Re-check:` would have parked itself until that date. So `liveLines` drops
+fenced blocks once and all four readers go through it. `stripBlockedBy` keeps its own loop, because
+it must emit every unit it does not drop and each unit carries its own line ending; it shares
+`isFence`. A reader-only fix would have related nothing and still deleted the documentation.
 
 ## blocked follows the relationship
 
