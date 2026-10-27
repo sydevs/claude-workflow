@@ -29,8 +29,12 @@ test('a forged record alone reads as no record, so the real one is created', asy
   assert.deepEqual(await loadRecord(gh, ref, 'sydevs-bot'), { id: null, rec: emptyRecord() })
 })
 
-test('the login compare ignores case, and an unnamed login matches nothing', async () => {
+test('the login compare ignores case, and an unnamed login throws', async () => {
   const gh = fake([{ id: 3, body: status(real), user: { login: 'SyDevs-Bot' } }])
   assert.equal((await loadRecord(gh, ref, 'sydevs-bot')).id, 3)
-  assert.equal((await loadRecord(gh, ref, undefined)).id, null, 'a seam that forgets the login refuses every comment')
+  await assert.rejects(
+    loadRecord(gh, ref, undefined),
+    /expected login is required/,
+    'a seam that forgets the login crashes, rather than reading as no record',
+  )
 })

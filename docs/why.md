@@ -1467,8 +1467,14 @@ Every filter is the one clause `isBot` already applies elsewhere: the author mus
 `refreshTally` take `config`, so they call `isBot`; `commentOnce` and `loadRecord` take scalars
 only, as `inSetBuild` does with `lock`, so the login is threaded in and `isLogin` holds the compare
 `isBot` is now a one-liner over. The filter lives in `loadRecord`, not `parseRecord`, which sees a
-body and no author, and `allComments` stays unqualified because a session's own entry is a comment
-too.
+body and no author, and in the journal's `ownComments`, not in its two readers: a session's own
+entry is a comment too, but `finish-run` posts it as `identity.expectedLogin`, so filtering at the
+listing keeps it and a third reader inherits the clause.
+
+A missing expected login throws. Refusing every comment instead would be quiet in the wrong place:
+`loadRecord` would report no record at all, and `sweep.mjs` reads a lock with no record as a
+timed-out lease, so a seam that forgot to thread the login would break live sessions rather than
+fail.
 
 A comment the bot wrote under a former login stops being recognised, so on first contact every
 advisory re-posts once and every record is re-created once. That one-off duplicate across the open

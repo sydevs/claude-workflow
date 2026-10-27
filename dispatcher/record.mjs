@@ -62,9 +62,9 @@ export function renderRecord(rec) {
 /**
  * Find the status comment. Returns `{ id, rec }`, with `id` null when absent.
  *
- * `bot` is `identity.expectedLogin`, and only that author's comment counts.
- * The filter belongs here, not in `parseRecord`, which sees a body and no
- * author. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * `bot` is `identity.expectedLogin`, required, and only that author's comment
+ * counts. The filter belongs here, not in `parseRecord`, which sees a body and
+ * no author. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 export async function loadRecord(gh, { owner, repo, number }, bot) {
   let page = 1
