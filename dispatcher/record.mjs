@@ -63,10 +63,8 @@ export function renderRecord(rec) {
  * Find the status comment. Returns `{ id, rec }`, with `id` null when absent.
  *
  * `bot` is `identity.expectedLogin`, and only that author's comment counts.
- * `parseRecord` sees a body and no author, so the filter belongs here: anyone
- * who can comment could otherwise post one starting with `MARKER` and have
- * `current`, `pending`, `fixCi` and `dispatches` read out of it.
- * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * The filter belongs here, not in `parseRecord`, which sees a body and no
+ * author. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 export async function loadRecord(gh, { owner, repo, number }, bot) {
   let page = 1

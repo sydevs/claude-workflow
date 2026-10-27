@@ -5,7 +5,7 @@ import { apply } from '../apply.mjs'
 // An infrastructure failure is re-run with the calling repo's own token.
 // (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
 
-const config = { labels: { awaiting: 'awaiting', stuck: 'stuck', lock: 'bot:working' }, ceilings: { ciInfraReruns: 2 } }
+const config = { labels: { awaiting: 'awaiting', stuck: 'stuck', lock: 'bot:working' }, ceilings: { ciInfraReruns: 2 }, identity: { expectedLogin: 'sydevs-bot' } }
 const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'ci' }
 const core = { info() {} }
 

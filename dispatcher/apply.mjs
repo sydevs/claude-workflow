@@ -20,12 +20,8 @@ function marker(text) {
 
 /**
  * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
- * author's comment counts as already posted.
- *
- * Every key is guessable from the item — a head sha, a comment id, a PR
- * number, or a fixed word — so without the filter anyone who can comment
- * could pre-post the marker and silence that advisory for good.
- * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * author's comment counts as already posted — every key is guessable from the
+ * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 async function commentOnce(gh, t, bot, key, body, dryRun, log) {
   const mark = `${DISPATCHER_MARK}${marker(key)} -->`
@@ -80,7 +76,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   let moved = false
   let bumpFixCi = false
   const rec = snapshot.record
-  const bot = config.identity?.expectedLogin
+  const bot = config.identity.expectedLogin
 
   // The board is a lens. A token that cannot reach it must not stop the
   // dispatch, which is the part that matters — the labels carry the state.
@@ -394,7 +390,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // anyway. This ref create is the compare-and-swap that settles it: one 201,
   // one 422. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
   const item = { owner: t.repo.owner, repo: t.repo.name, number: t.number }
-  const bot = config.identity?.expectedLogin
+  const bot = config.identity.expectedLogin
   const lease = await takeLease(gh, item, snapshot.pr?.head?.sha)
   if (!lease.won) {
     const why = lease.contended ? 'another pass holds the lease' : lease.error
