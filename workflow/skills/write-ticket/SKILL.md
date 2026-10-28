@@ -15,7 +15,7 @@ one the loop filed are indistinguishable and equally ready to build.
 `/workflow:format-ticket`. Read it first.
 
 As a handler, **start with `/workflow:start-run` and end with `/workflow:finish-run`.** The
-record's `flags.mode` names the job: `revise`, `recheck` or `block`. Called by another skill, the
+record's `flags.mode` names the job: `revise` or `block`. Called by another skill, the
 job is `create`, or `update` for a ticket that skill must reshape. Neither has a record.
 
 ## Ground from the code
@@ -105,32 +105,18 @@ Never promote a `Bug`, and never promote a roadmap child — escalate instead.
 
 The dispatcher then routes the ticket to `revise-roadmap`.
 
-## `recheck` — the hold date passed, or the last blocker closed
+## `block` — a human said `block until <reason>` or `block <reason>`
 
-The dispatcher fired this instead of handing the ticket back blind.
-(why: docs/why.md#recheck-before-awaiting)
+Turn the reason into one of two things the dispatcher can wait on without a session:
 
-1. **Find why it waited**: the comment beside the `Hold Until` date, the `block` verb, or the
-   blockers in `flags.cleared` and each one's outcome. A converted `Blocked by:` line is gone from
-   the body.
-2. **Check that condition now**, against source, a release, an upstream issue, or the merged
-   blocker's diff.
-3. **Still waiting** → set a new `Hold Until` within `issueFields.holdUntil.maxHorizonDays`, and
-   post one line: what you checked and what you are still waiting for. Nothing else.
-4. **Free** → re-read the ticket against today's code. Correct whatever the blocker's merge
-   changed. Post one line of evidence: `Unblocked: <what you saw>`.
-5. **Free, but a person must now choose** → write the decision into `## Open questions` with
-   options and a recommendation.
+- **Another ticket** → a `Blocked by:` line naming it. The ticket comes back when it closes.
+- **Anything else** → a `Hold Until` date within `issueFields.holdUntil.maxHorizonDays`, at the
+  soonest moment the condition could plausibly have changed, and the reason written into the body
+  under `## Notes` as `Held until <date>: <what to check>`. A date the person named is the date.
 
-The dispatcher reads the result from the ticket: a future date or an open blocker re-holds it
-quietly, an unticked question hands it to the reviewer, and a pre-approved ticket otherwise
-starts.
-
-## `block` — a human said `block <reason>` with no date
-
-Turn the reason into something checkable. A blocker that is another ticket → a `Blocked by:` line.
-Anything else → a `Hold Until` date within the horizon, at the soonest moment the condition could
-plausibly have changed, and one comment naming exactly what the recheck will look at.
+Then one comment naming which, and what will be checked. Nothing rechecks it for you: when the date
+passes the ticket is the person's again, with the reason in its body.
+(why: docs/why.md#a-hold-is-a-date-not-a-recheck)
 
 ## Escalate
 
@@ -140,7 +126,7 @@ On a ticket whose `## Goal context` links a roadmap parent, a decision never sta
    recommendation, linking the child.
 2. On the child, link the parent's question in place of an answer.
 3. End your comment on the child with `<!-- sydevs-request {"escalated":true} -->`. The
-   dispatcher then gives the parent `awaiting`.
+   dispatcher then makes the parent Awaiting.
 
 (why: docs/why.md#a-late-decision-goes-to-the-goal)
 

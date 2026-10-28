@@ -390,8 +390,8 @@ to memory.
   deploy, and only when step 7 needs that deploy.
 - **Never** set an assignee, and **never** request a reviewer — the dispatcher requests
   `assignment.reviewer` at ready.
-- **Never** write `awaiting` or a board Status here. Opening the PR is an event. The dispatcher
-  turns it into state within seconds. (why: docs/why.md#awaiting-has-one-writer)
+- **Never** write a label or a board Status here. Opening the PR is an event. The dispatcher
+  derives its Status within seconds. (why: docs/why.md#status-is-derived-never-read)
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.
 
 ## References

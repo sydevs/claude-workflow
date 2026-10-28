@@ -40,13 +40,19 @@ One comment, and keep it to what the diff cannot show: which side each hunk took
 the choice was not obvious. A conflict resolved the only way it could be resolved needs a
 sentence, not a section.
 
+**A hunk a reviewer should confirm** — two readings were both defensible — gets a review thread on
+that hunk carrying `review.questionMarker`, in format-ticket's options shape, the built choice
+first. That thread is the only thing that puts an approved PR back on the person's list; a clean
+resolution asks nothing. (why: docs/why.md#a-resolved-conflict-is-not-a-new-question)
+
 **A semantic conflict** — `main` removed what this PR extends, or changed a contract it relies on
 — is not yours to guess. Comment the question in format-ticket's options shape, with
 `identity.commentMarker`, push nothing, and stop. The dispatcher fires nothing more on this head:
 the PR becomes the person's turn until a push. (why: docs/why.md#a-conflicted-draft-is-resolved-too)
 
-**A human's PR** (`flags.delegated`, or the author is not the own login): you cannot push to it.
-Comment the resolution as a patch or a description, and stop.
+**A branch outside `claude/*`** (a member's own branch, Copilot's, `flags.delegated` on one): you
+cannot push to it. Comment the resolution as a patch or a description, and stop. A member's PR on a
+`claude/*` branch is pushed to like your own.
 (why: docs/why.md#you-cannot-push-to-a-humans-pr)
 
 ## Hard rules

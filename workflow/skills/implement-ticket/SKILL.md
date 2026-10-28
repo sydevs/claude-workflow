@@ -35,10 +35,12 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
 
    **`flags.continuation`, or `attempt > 1`, means an earlier session left work.** Read the
    branch diff and your newest comment on the ticket — it says what is built and what remains —
-   then carry on from there. Never start over.
+   then carry on from there. Never start over. A branch behind `origin/<base>` is merged first, as
+   address-review's *Merge the base first* says, and that merge goes out with your next push.
+   (why: docs/why.md#a-merge-is-pushed-only-with-work)
 
 3. **Refuse what the dispatcher could not see.** It already checked for an open PR closing this
-   ticket, the `blocked` label and the open native blockers. You still read the body: a
+   ticket, the `Hold Until` date and the open native blockers. You still read the body: a
    `Blocked by:` line it has not converted yet that names an open issue, or a `Re-check:` date in
    the future → comment which, and stop. In a set, a blocker that is another child of the set is
    expected: it orders the merge, not the build.
@@ -51,9 +53,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    **Not implementable as written** — criteria contradict the code, or a decision was never made
    → do not guess. Settle every fact yourself. A decision goes in `## Open questions` with options
    and a recommendation — on the roadmap parent when `## Goal context` links one, following
-   `write-ticket`'s Escalate steps. Comment what is unresolved, and stop. The dispatcher sets
-   `awaiting` when you unlock — on the ticket, or on its roadmap parent when you escalated.
-   (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-late-decision-goes-to-the-goal)
+   `write-ticket`'s Escalate steps. Comment what is unresolved, and stop. When you unlock, the
+   approval is spent and the ticket reads Awaiting — or its roadmap parent does, when you escalated.
+   (why: docs/why.md#approval-lives-in-the-record, docs/why.md#a-late-decision-goes-to-the-goal)
 
    **A decision only part of the work turns on does not stop the build.** Build the recommended
    option, and ask the decision as a question thread (`/workflow:finalize-pr` step 7c).
@@ -124,9 +126,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     **Never pass `discard_changes`.** Do not wait for CI first.
     (why: docs/why.md#push-and-end)
 
-13. **Touch no state.** Opening the PR is the event. The dispatcher moves the ticket to Done and
-    the PR to Revising, reads CI, fires the critic, marks the PR ready, and requests the
-    reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
+13. **Touch no state.** Opening the PR is the event. The dispatcher derives the ticket's Status
+    (Done while its PR is open) and the PR's, reads CI, fires the critic, marks the PR ready, and
+    requests the reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
     (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on

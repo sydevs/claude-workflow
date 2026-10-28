@@ -25,7 +25,7 @@ The record's `flags.mode`:
 | --- | --- | --- |
 | `intake` | a member's new goal, or one typed Roadmap | The full review |
 | `revise` | `@sydevs-bot revise` or `review`, or a bare mention | Fold in answers and edits, and review again what they changed |
-| `recheck` / `block` | a hold date passing, a blocker closing, or `block <reason>` | As in `write-ticket`, on the goal |
+| `block` | `block until <reason>` or `block <reason>` | As in `write-ticket`, on the goal |
 | `verify` | the last child closing | Check what shipped against the goal |
 
 ## Read

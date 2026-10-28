@@ -31,8 +31,11 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 
 ## Do
 
-1. `git fetch origin <branch>`, then `git worktree add .claude/worktrees/<slug> origin/<branch>
-   -B <branch>`. This is the PR's existing branch: never `-b` off the default branch.
+1. `git fetch origin <base> <branch>`, then `git worktree add .claude/worktrees/<slug> origin/<branch>
+   -B <branch>`. This is the PR's existing branch: never `-b` off the default branch. Behind
+   `origin/<base>` → merge it first, as address-review's *Merge the base first* says, so the fix is
+   tested against the base it lands on; it is pushed with the fix, never alone.
+   (why: docs/why.md#a-merge-is-pushed-only-with-work)
 2. Reproduce locally when the log is not enough: `leanGate.full` from `.claude/workflow.json`.
 3. Fix in one commit, `fix(ci): <what, in five words>`.
 4. Lean gate. A failure that also exists on `main` is still yours to fix here — say so in the
