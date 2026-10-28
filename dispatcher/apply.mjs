@@ -91,7 +91,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   const handOver = async (what, fn) => {
     try { await fn(); return true } catch (e) {
       const msg = String(e?.message || '').replace(/\s+/g, ' ').trim()
-      const denied = e?.status === 403 || e?.status === 405 || e?.status === 422
+      // GraphQL reports a refusal in `errors[].type`, with no HTTP status.
+      const refused = (e?.errors || []).some((x) => ['FORBIDDEN', 'UNPROCESSABLE'].includes(x?.type))
+      const denied = refused || e?.status === 403 || e?.status === 405 || e?.status === 422
         || /not accessible|FORBIDDEN|Resource protected|protected branch|required status check|approving review/i.test(msg)
       if (!denied) throw e
       log(`cannot ${what} — ${e.status || '?'} ${msg}`)

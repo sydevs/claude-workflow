@@ -999,3 +999,10 @@ test('a queue failure on an outside PR is not the bot\'s to repair; on a member\
   const member = dequeued({ pr: { ...dequeued().pr, user: { login: 'Ardnived' } } })
   assert.ok(decide({ reason: 'queue-failed', facts: { run } }, member, config).some((a) => a.type === 'fire' && a.handler === 'fix-ci'))
 })
+
+test('a PR stacked on another branch is never armed; its review is the gate', () => {
+  const stacked = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false, base: { ref: 'claude/feat-147-submit-a-class', defaultBranch: 'main' } }, normalized: { reviewDecision: 'APPROVED' } })
+  assert.ok(!types(evaluatePr(stacked, config)).includes('armAutoMerge'))
+  const onMain = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false, base: { ref: 'main', defaultBranch: 'main' } }, normalized: { reviewDecision: 'APPROVED' } })
+  assert.deepEqual(types(evaluatePr(onMain, config)), ['armAutoMerge'])
+})

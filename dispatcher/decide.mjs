@@ -518,7 +518,11 @@ function evaluateGreenPr(s, config) {
   // A consumer built beside its producer is reviewed with it, and merges
   // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
   const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
-  const mayArm = !loopMayNotMerge(s, config) && !waitsOn
+  // A PR stacked on another branch has no ruleset behind it: GitHub refuses
+  // to arm it, and would merge it unreviewed if it did. Its review is the
+  // gate. (why: docs/why.md#a-stacked-pr-is-never-armed)
+  const stacked = Boolean(pr.base?.defaultBranch && pr.base.ref !== pr.base.defaultBranch)
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stacked
 
   if (pr.draft) {
     // implement opens the PR only once the ticket is built, so the critic
