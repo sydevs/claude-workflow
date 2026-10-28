@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting } from './decide.mjs'
+import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -87,6 +87,7 @@ function prStatus(s, config, locked, rec) {
   if (s.linkedLocked?.length) return out('pending', `the session on ${s.linkedLocked[0]} owns this branch`)
   const author = pr.user?.login
   if (!fullTreatment(author, config)) return out('awaiting', 'outside PR — the bot answers a mention only')
+  if (stackedPr(s)) return out('awaiting', `stacked on ${pr.base.ref} — merge it there, or retarget it to ${pr.base.defaultBranch}`)
   if (rec.handback) return out('awaiting', rec.handback.reason)
   if (pr.draft) return isBot(author, config) ? out('pending', 'draft — the build or the critic owes the next move', true) : out('awaiting', 'your draft — mark it ready, or mention the bot')
   if (rec.pending) return out('pending', `${rec.pending.handler}: ${rec.pending.reason}`, true)

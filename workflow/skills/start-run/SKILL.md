@@ -83,6 +83,13 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
 - **Work only on `claude/*` branches.** A cloud session cannot push anywhere else. A branch named
   `roadmap.spikeBranchPrefix` is a throwaway for one experiment: only `revise-roadmap` pushes
   one, and it deletes it, and any PR on it, before it ends.
+- **On a PR, push where `flags.push` says.** `direct`: `git push`. `relay`: `git push origin
+  HEAD:refs/heads/<dispatch.relayBranchPrefix><pr>-<short sha>`, and end your summary comment with
+  `<!-- sydevs-request {"relay":{"branch":"<that branch>","head":"<the PR's branch>","sha":"<full
+  HEAD sha>"}} -->`. Actions lands it, or hands it back. `none`, or absent on a branch that is not
+  `claude/*`: push nothing, and describe a change in words, never as a patch. **Never open a PR
+  based on another PR's branch.** (why: docs/why.md#the-branch-decides-where-a-session-pushes,
+  docs/why.md#the-relay)
 - **Production is read-only.** A read-only key in the environment is for looking. Never write to
   production, a shared database, or a vendor account.
 - **Ask the dispatcher, never act for it.** A replan, an escalation or a transfer is a

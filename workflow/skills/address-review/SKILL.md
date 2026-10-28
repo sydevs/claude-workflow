@@ -114,7 +114,7 @@ the SHA or the evidence. An ask becomes a question thread on the line it concern
    (`/workflow:finalize-pr` step 3). A reviewer's ask can widen `allowed-tools` too.
 2. Lean gate, from `.claude/workflow.json` (`/workflow:finalize-pr` step 4).
 3. Docs sync (`/workflow:finalize-pr` step 5).
-4. `git push`. Never force-push. Never rebase.
+4. Push where `flags.push` says (start-run). Never force-push. Never rebase.
 5. Refresh the PR title and body **where this push made either one false**, as `pr-template.md`'s
    *Refresh* says — a `## Change outline` view the new commits contradict is false, and
    `review-pr` step 2 reads it first.
@@ -124,20 +124,12 @@ the SHA or the evidence. An ask becomes a question thread on the line it concern
 
 **Push and stop.** Actions reads CI when it completes. (why: docs/why.md#push-and-end)
 
-## A human's PR
+## Someone else's PR
 
-`flags.delegated`, or the PR author is not the own login. **You cannot push to it.** A cloud
-session pushes only to `claude/*`. In order:
-
-1. **Answer every thread** — adopt it, or push back with evidence, in one summary comment. Do
-   this even when nothing else happens.
-2. **Open a stacked PR** from `claude/<type>-<number>-<slug>` targeting **their branch**, not
-   `main`, through `/workflow:finalize-pr` with `base:<their branch>`. Name it in the summary.
-3. **Build every ask in the stacked PR.** A part you would split goes to them as a choice,
-   exactly as on a bot PR.
-
-⚠ **Check the stacked PR's base is their branch before you open it.**
-(why: docs/why.md#you-cannot-push-to-a-humans-pr)
+The branch decides, not the author. `flags.push` `direct` or `relay`: build every ask on this PR,
+exactly as on your own. `none`: **answer every thread**, adopting or pushing back with evidence in
+one summary comment, and build nothing. Never a second PR for the asks.
+(why: docs/why.md#the-branch-decides-where-a-session-pushes)
 
 ## Hard rules
 

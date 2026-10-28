@@ -283,7 +283,7 @@ private repo:
 
 | Name | What |
 | --- | --- |
-| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge` and the lease ref need. |
+| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
@@ -771,7 +771,7 @@ judgement is the only thing that costs a session.
 | Plugin installs but reports `disabled` | `enabledPlugins` written as an array. It must be an object map. |
 | Cross-repo `--add-blocked-by` "invalid issue format" | Needs the full URL, not `owner/repo#N`. |
 | A newly created label vanishes | Case-insensitive collision with a label deleted in the same run. |
-| The loop answers review feedback but pushes nothing | It can only push to `claude/*`, never a human's branch. It opens a stacked PR into that branch instead. |
+| The loop answers review feedback but pushes nothing | The PR is a fork or an outsider's (`flags.push: none`): the loop answers, and builds nothing. A member's own branch is reached through the relay; a refused relay leaves a hand-back comment naming its `claude/relay-*` branch. |
 | A `<details>` block seems missing on MCP readback | The write landed. MCP's **read** path strips `<details>`/`<summary>` (keeping `<table>`, `<sub>`, `<a>`). REST shows the tags intact. Trust the write's 200. Never re-post. |
 | A run dies in seconds, `Setup script failed`, zero turns | The setup script exited non-zero, so the session never started. Keep optional dependencies best-effort (see the Postgres traps above). |
 | A `search_issues` query returns zero unexpectedly | The `>` in `updated:>…` was HTML-escaped to `&gt;`. It fails silently, with no error. |

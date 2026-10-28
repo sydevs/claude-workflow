@@ -32,7 +32,7 @@ behind is not this handler's work.
    Never take one side wholesale to make the merge go away.
 3. Lean gate, from `.claude/workflow.json`. Run the specs that cover the conflicted files.
 4. Commit the merge. Keep the merge commit — the history is the evidence.
-5. `git push`. **Then end.** CI runs on the push, and Actions reads it.
+5. Push where `flags.push` says (start-run). **Then end.** CI runs on the push, and Actions reads it.
 
 ## Say it in a line
 
@@ -50,10 +50,9 @@ resolution asks nothing. (why: docs/why.md#a-resolved-conflict-is-not-a-new-ques
 `identity.commentMarker`, push nothing, and stop. The dispatcher fires nothing more on this head:
 the PR becomes the person's turn until a push. (why: docs/why.md#a-conflicted-draft-is-resolved-too)
 
-**A branch outside `claude/*`** (a member's own branch, Copilot's, `flags.delegated` on one): you
-cannot push to it. Comment the resolution as a patch or a description, and stop. A member's PR on a
-`claude/*` branch is pushed to like your own.
-(why: docs/why.md#you-cannot-push-to-a-humans-pr)
+**`flags.push: relay`** (a member's or Copilot's own branch) lands through the relay, like any
+push. **`none`**: describe the resolution in a comment, never as a patch, push nothing, and stop.
+(why: docs/why.md#the-branch-decides-where-a-session-pushes)
 
 ## Hard rules
 

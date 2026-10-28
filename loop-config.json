@@ -93,7 +93,7 @@
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires, and overdue checks of a Pending item, before it is handed to you. pendingDueMinutes is how long a wait the machinery owns may sit Pending before it is checked. reconcileMaxPerEvent caps the drift targets one event run adds. githubRetry retries a GitHub 5xx under every dispatcher call. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires, and overdue checks of a Pending item, before it is handed to you. pendingDueMinutes is how long a wait the machinery owns may sit Pending before it is checked. reconcileMaxPerEvent caps the drift targets one event run adds. githubRetry retries a GitHub 5xx under every dispatcher call. sessionBranchPrefix is the one branch prefix a cloud session can push to; relayBranchPrefix + <pr>- names the branch a session leaves for Actions to move a PR branch to (docs/why.md#the-relay). enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
@@ -155,6 +155,8 @@
     "maxAttempts": 3,
     "pendingDueMinutes": 120,
     "reconcileMaxPerEvent": 10,
+    "sessionBranchPrefix": "claude/",
+    "relayBranchPrefix": "claude/relay-",
     "orphanDraftHours": 6,
     "fireRetry": {
       "inline429MaxSeconds": 60,

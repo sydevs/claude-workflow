@@ -55,13 +55,13 @@ nobody has looked at.
 ## Invocation
 
 ```
-/finalize-pr [base:<branch>]
+/finalize-pr
 ```
 
-Operates on the current branch. `<base>` is the repo's default branch unless the caller passes
-one — a stacked PR passes the branch it targets. The diff under review is always the **whole
-branch** — `origin/<base>...HEAD`, not the last commit. Reuse that range, and that base,
-throughout.
+Operates on the current branch. `<base>` is always the repo's default branch: a PR is never based
+on another PR's branch (why: docs/why.md#a-stacked-pr-is-never-armed). The diff under review is
+always the **whole branch** — `origin/<base>...HEAD`, not the last commit. Reuse that range, and
+that base, throughout.
 
 ## Pipeline
 
