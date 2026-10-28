@@ -1113,6 +1113,12 @@ not the default branch: the reviewer's merge is the gate, and the parent carries
 which the hand-over test did not recognise, so it threw and the pass never wrote the item's Status.
 `handOver` now reads `errors[].type` too.
 
+`mayArm` is the Status derivation's business too, or the item is handed back under a wrong reason.
+Each of the three reasons has its own arm in `prStatus`: a stacked PR is **Awaiting**, because
+merging it into its parent is the reviewer's and no wait would ever end it. Without that arm it
+derived `approved — auto-merge is owed` with a due, which the reconciler checks three times before
+it reports the PR overdue.
+
 ## A write we cannot make is handed over, not thrown
 
 `markPullRequestReadyForReview` came back `FORBIDDEN` on sydevs/SahajCloud#744. The job died on the

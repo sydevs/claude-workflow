@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting } from './decide.mjs'
+import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, stacked, threadsWaiting } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -101,6 +101,8 @@ function prStatus(s, config, locked, rec) {
   if (loopMayNotMerge(s, config)) return out('awaiting', 'approved — merging it is yours')
   if (s.mergeable === 'CONFLICTING') return out('pending', 'approved — conflicts with its base', true)
   if (s.ci?.failing?.length) return out('pending', 'approved — CI is red', true)
+  // Nothing will ever arm a stacked PR, so a wait here would never end.
+  if (stacked(s)) return out('awaiting', `approved — merging it into ${pr.base.ref} is yours`)
   if (s.linkedBlockedOpen?.length) return out('pending', `approved — merges after ${s.linkedBlockedOpen.join(', ')}`)
   return out('pending', pr.autoMergeArmed ? 'approved — the merge queue owes it' : 'approved — auto-merge is owed', true)
 }
