@@ -40,7 +40,7 @@ One PR, one red run, one pass. Actions counts the passes and stops dispatching a
 3. Fix in one commit, `fix(ci): <what, in five words>`.
 4. Lean gate. A failure that also exists on `main` is still yours to fix here — say so in the
    commit body. (why: docs/why.md#ci-truth-lives-in-check-runs)
-5. `git push`. **Then end.** Actions reads the next CI result.
+5. Push where `flags.push` says (start-run). **Then end.** Actions reads the next CI result.
 
 **Cannot fix it in one pass?** Comment what remains and what you tried, with
 `identity.commentMarker`. Push nothing broken. Stop.
