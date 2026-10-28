@@ -1109,9 +1109,7 @@ SahajAtlasWeb#340 sits on #318's) has no ruleset behind it. GitHub refuses to ar
 in a clean state ("Pull request is in clean status"), and if it accepted, it would merge an
 unreviewed change into the parent the moment it went green. So `mayArm` is false when the base is
 not the default branch: the reviewer's merge is the gate, and the parent carries the change to
-`main` under the ruleset. The refusal arrived as a GraphQL `UNPROCESSABLE` with no HTTP status,
-which the hand-over test did not recognise, so it threw and the pass never wrote the item's Status.
-`handOver` now reads `errors[].type` too.
+`main` under the ruleset.
 
 `mayArm` is the Status derivation's business too, or the item is handed back under a wrong reason.
 Each of the three reasons has its own arm in `prStatus`: a stacked PR is **Awaiting**, because
@@ -1128,6 +1126,14 @@ do not hold is not a bug**; dying on it only skips the rest of the plan. So a de
 the step over: the plan finishes, the item gets `awaiting`, one comment names the step the token
 could not take, and the journal records a `handed-over` anomaly. This is the third instance after
 the board and the journal: **the dispatcher's job is to get the work to a person or a session.**
+
+A refusal can also arrive with **no HTTP status at all**. Arming auto-merge on SahajAtlasWeb#340
+came back as a GraphQL error — `UNPROCESSABLE`, "Pull request is in clean status" — which a test
+reading `e.status` could not see, so it threw and the pass never wrote the item's Status. So
+`handOver` reads `errors[].type` too, and only for `FORBIDDEN`: `UNPROCESSABLE` is GitHub calling
+the input invalid, which a wrong node id or a bad enum also answers, and that is a bug, which must
+still throw. The clean-status refusal is recognised by its words, where every other refusal already
+was.
 
 ## Quote the refusal, do not name a cause
 
