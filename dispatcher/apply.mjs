@@ -93,10 +93,11 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     try { await fn(); return true } catch (e) {
       const msg = String(e?.message || '').replace(/\s+/g, ' ').trim()
       // GraphQL reports a refusal in `errors[].type`, with no HTTP status.
-      // Only FORBIDDEN: UNPROCESSABLE also covers a wrong node id or enum,
-      // and a bug must throw.
+      // Only FORBIDDEN: UNPROCESSABLE, and its REST twin 422, are GitHub
+      // calling the input invalid — a wrong node id, a Hold Until field id,
+      // a reviewer nobody can review — and a bug must throw.
       const refused = (e?.errors || []).some((x) => x?.type === 'FORBIDDEN')
-      const denied = refused || e?.status === 403 || e?.status === 405 || e?.status === 422
+      const denied = refused || e?.status === 403 || e?.status === 405
         || /not accessible|FORBIDDEN|Resource protected|protected branch|required status check|approving review|in clean status|not allowed for this repository/i.test(msg)
       if (!denied) throw e
       log(`cannot ${what} — ${e.status || '?'} ${msg}`)

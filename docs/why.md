@@ -1124,14 +1124,19 @@ recognised by GitHub's sentence, the clean status that blocks arming and a repos
 auto-merge switched off ("not allowed for this repository") among them. **A refusal this type test
 drops is added by the words GitHub answers with, never by its type.**
 
+The same line splits the REST writes. A 403 is a permission, and a 422 is the same invalid input
+`UNPROCESSABLE` carries — a `Hold Until` field id that does not exist, an `assignment.reviewer`
+nobody can request a review from — so it throws with its GraphQL twin. A branch rule can answer
+422 as well, and its sentence is what tells the two apart.
+
 ## Quote the refusal, do not name a cause
 
 The hand-over comment blamed the dispatch token for every refusal. Three merges failed that way
 with no usable explanation: the token was fine and the branch ruleset said no. A missing scope and a
-branch rule both answer 403, and the rule can also answer 405 or 422, which the old test missed. Only
-GitHub's sentence distinguishes them, and a guessed cause sends the reader to the wrong fix, such as
-rotating a credential that was never the problem. So the comment carries 220 characters of what
-GitHub said and names the step, nothing else — the runs' anomaly rule
+branch rule both answer 403, and the rule can also answer 405, or a 422 only its sentence tells
+from invalid input. Only GitHub's sentence distinguishes them, and a guessed cause sends the reader
+to the wrong fix, such as rotating a credential that was never the problem. So the comment carries
+220 characters of what GitHub said and names the step, nothing else — the runs' anomaly rule
 ([Report anomalies, do not explain them](#report-anomalies-do-not-explain-them)) applied to the
 dispatcher.
 

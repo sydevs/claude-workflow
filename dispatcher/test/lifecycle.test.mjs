@@ -34,6 +34,7 @@ function pr(over = {}) {
   }
 }
 const hoursAgo = (h) => new Date(now.getTime() - h * 3600_000).toISOString()
+const handover = (gh) => gh.calls.filter(([k]) => k === 'createComment').map(([, a]) => a.body).find((b) => b.includes('step left for you'))
 
 // ---- the reconcile pass ---------------------------------------------------
 
@@ -184,7 +185,6 @@ test('a GraphQL refusal is handed over by its own words; an invalid input still 
   }
   const snap = () => pr({ item: { number: 5, state: 'open', labels: [], nodeId: 'PR1' }, pull: { nodeId: 'PR1', autoMergeArmed: false } })
   const run = (gh, snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'armAutoMerge' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
-  const handover = (gh) => gh.calls.filter(([k]) => k === 'createComment').map(([, a]) => a.body).find((b) => b.includes('step left for you'))
 
   const clean = arming(err('UNPROCESSABLE', 'Pull request is in clean status'))
   const s = snap()
@@ -205,6 +205,29 @@ test('a GraphQL refusal is handed over by its own words; an invalid input still 
 
   // A wrong node id is a bug, and a loud job is how we find it.
   await assert.rejects(() => run(arming(err('UNPROCESSABLE', "Could not resolve to a node with the global id of 'nope'")), snap()), /Could not resolve to a node/)
+})
+
+test('a REST refusal is handed over by its words; a REST 422 is invalid input and throws', async () => {
+  // 422 is the REST spelling of UNPROCESSABLE, so the same split applies: a
+  // reviewer login nobody can request a review from is a config bug, and a
+  // loud job is how we find it. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+  const requesting = (e) => {
+    const gh = boardGh('Awaiting')
+    gh.rest.pulls = { requestReviewers: async () => { throw e } }
+    return gh
+  }
+  const snap = () => pr({ pull: { user: { login: 'sydevs-bot' }, requestedReviewers: [] } })
+  const run = (gh, snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'requestReviewer' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
+
+  const forbidden = requesting(Object.assign(new Error('Resource not accessible by integration'), { status: 403 }))
+  const s = snap()
+  await run(forbidden, s)
+  assert.match(handover(forbidden), /not accessible/, 'a 403 is a permission, handed over')
+  assert.deepEqual(s.pr.requestedReviewers, [], 'and nobody is recorded as asked')
+
+  const typo = requesting(Object.assign(new Error('Reviews may only be requested from collaborators'), { status: 422 }))
+  await assert.rejects(() => run(typo, snap()), /only be requested from collaborators/)
+  assert.equal(handover(typo), undefined, 'a bug says nothing to the reviewer')
 })
 
 test('no pass but a person\'s verb approves a goal\'s children', () => {
