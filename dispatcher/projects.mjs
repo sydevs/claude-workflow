@@ -5,7 +5,7 @@
  *
  * Every function here throws `BoardUnreachable` when the token cannot see
  * the board. The caller logs that and carries on: the board is a lens over
- * state the labels already carry, and a lens must never stop the machine.
+ * state the record already carries, and a lens must never stop the machine.
  * (why: docs/why.md#the-board-is-a-lens-so-it-may-fail-alone)
  */
 
@@ -68,31 +68,23 @@ export async function ensureItem(gh, config, contentNodeId) {
 }
 
 /**
- * Set Status by vocabulary key (`proposed`…), or clear it with `null`.
- * Writes only on change. Returns the name written, `'none'` on a clear, or null.
+ * Set Status by vocabulary key (`awaiting`…). Writes only on change.
+ * Returns `{ written, previous }`: the name written or null, and the name the
+ * board held before. An option the board does not have yet is the board out
+ * of step with the config, not a crash: it reads as unreachable, so the
+ * dispatch carries on and the journal says so.
  */
 export async function setStatus(gh, config, contentNodeId, key) {
-  if (key === null) {
-    const { itemId, status } = await itemOf(gh, config, contentNodeId)
-    if (!itemId || !status) return null
-    const ids = await projectIds(gh, config)
-    await gh.graphql(
-      `mutation($p:ID!,$i:ID!,$f:ID!){ clearProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f}){ projectV2Item { id } } }`,
-      { p: ids.projectId, i: itemId, f: ids.statusFieldId },
-    )
-    return 'none'
-  }
   const name = config.projects.status?.[key]
   if (!name) throw new Error(`projects.status has no "${key}"`)
   const ids = await projectIds(gh, config)
   const optionId = ids.options[name]
-  if (!optionId || !ids.statusFieldId) throw new Error(`Status option "${name}" not found on the board`)
+  if (!optionId || !ids.statusFieldId) throw new BoardUnreachable(`Status option "${name}" is not on the board yet`)
   const { itemId, status } = await ensureItem(gh, config, contentNodeId)
-  if (status === name) return null
+  if (status === name) return { written: null, previous: status }
   await gh.graphql(
     `mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item { id } } }`,
     { p: ids.projectId, i: itemId, f: ids.statusFieldId, o: optionId },
   )
-  return name
+  return { written: name, previous: status }
 }
-

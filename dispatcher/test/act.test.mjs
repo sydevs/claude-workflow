@@ -74,8 +74,8 @@ function fakeGithub(world) {
       if (q.includes('reviewThreads')) return { repository: { pullRequest: { reviewThreads: { nodes: world.threads || [] } } } }
       if (q.includes('closingIssuesReferences')) return { repository: { pullRequest: { closingIssuesReferences: { nodes: [] } } } }
       if (q.includes('closedByPullRequestsReferences')) return { repository: { issue: { closedByPullRequestsReferences: { nodes: [] } } } }
-      if (q.includes('projectV2(number')) return { organization: { projectV2: { id: 'P1', status: { id: 'F1', options: [{ id: 'o1', name: 'Proposed' }, { id: 'o2', name: 'Revising' }, { id: 'o3', name: 'Approved' }, { id: 'o4', name: 'Done' }] } } } }
-      if (q.includes('projectItems')) return { node: { projectItems: { nodes: [{ id: 'I1', project: { number: 2 }, fieldValueByName: { name: 'Proposed' } }] } } }
+      if (q.includes('projectV2(number')) return { organization: { projectV2: { id: 'P1', status: { id: 'F1', options: [{ id: 'o1', name: 'Awaiting' }, { id: 'o2', name: 'Blocked' }, { id: 'o3', name: 'Hold' }, { id: 'o4', name: 'Pending' }, { id: 'o5', name: 'Working' }, { id: 'o6', name: 'Done' }] } } } }
+      if (q.includes('projectItems') && q.includes('node(id')) return { node: { projectItems: { nodes: [{ id: 'I1', project: { number: 2 }, fieldValueByName: { name: world.board || 'Awaiting' } }] } } }
       if (q.includes('updateProjectV2ItemFieldValue')) return { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'I1' } } }
       if (q.includes('markPullRequestReadyForReview')) return { markPullRequestReadyForReview: { pullRequest: { id: 'PR1' } } }
       return {}
@@ -150,17 +150,20 @@ test('live implement: labels, status, lock, fire, status comment', async () => {
   assert.ok(labels.includes('bot:working'))
   assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'proposal'))
   assert.ok(github.calls.some((c) => c.name === 'createComment' && c.args.body.startsWith('<!-- sydevs-status v1 ')), 'status comment created')
-  assert.ok(github.calls.some((c) => c.name === 'graphql' && c.args.q.includes('updateProjectV2ItemFieldValue')), 'status written')
+  const written = github.calls.filter((c) => c.name === 'graphql' && c.args.q.includes('updateProjectV2ItemFieldValue'))
+  assert.equal(written.length, 1, 'Status written once, after the plan')
+  assert.equal(written[0].args.v.o, 'o5', 'Working: derived from the lock the fire took')
 })
 
-test('a 429 on fire releases the lock, marks stuck, and records the retry window', async () => {
+test('a 429 on fire releases the lock, reads Pending, and records the retry window', async () => {
   const github = fakeGithub(issueWorld())
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'issue_comment', event: 'issue_comment.created', facts: { author: 'Ardnived', body: '@sydevs-bot answer?', association: 'MEMBER', commentId: 77 } }
   const fetchImpl = async () => ({ status: 429, headers: new Map([['retry-after', '3600']]), text: async () => 'limit' })
   await act({ github, context: {}, core, config, target, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl })
   const final = github.rest.issues.get && (await github.rest.issues.get({ issue_number: 9 })).data.labels.map((l) => l.name)
-  assert.ok(final.includes('stuck'))
   assert.ok(!final.includes('bot:working'))
+  const written = github.calls.filter((c) => c.name === 'graphql' && c.args.q.includes('updateProjectV2ItemFieldValue'))
+  assert.equal(written.pop()?.args.v.o, 'o4', 'Pending: the machinery owes the retry')
   const status = github.calls.filter((c) => c.name === 'updateComment' || c.name === 'createComment').map((c) => c.args.body).filter((b) => b.startsWith('<!-- sydevs-status')).pop()
   assert.match(status, /"reason":"429 rate limited"/)
   assert.match(status, /retryAfter":"2026-09-08T13:00:00/)
@@ -181,10 +184,10 @@ test('green draft bot PR above the threshold fires the critic; under it marks re
   await act({ github: small, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
   assert.ok(small.calls.some((c) => c.name === 'graphql' && c.args.q.includes('markPullRequestReadyForReview')))
   assert.ok(small.calls.some((c) => c.name === 'requestReviewers'))
-  assert.ok(small.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('awaiting')))
+  assert.ok(!small.calls.some((c) => c.name === 'addLabels'), 'no label says whose turn it is')
 })
 
-test('a PR the reviewer wrote themselves asks nobody for a review, and still goes awaiting', async () => {
+test('a PR the reviewer wrote asks the other member for a review, never its author', async () => {
   // 7 `handed-over` anomalies on 3 days in 2026-10-18..24 — SahajAtlasWeb#311,
   // SahajAtlasWordpress#70, SahajCloud#1007, #1009, #1028, WeMeditateWeb#197,
   // SahajAtlasWeb#318 — all "Review cannot be requested from pull request
@@ -194,8 +197,9 @@ test('a PR the reviewer wrote themselves asks nobody for a review, and still goe
   const github = fakeGithub(world)
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'pull_request.ready_for_review', event: 'pull_request.ready_for_review', facts: {} }
   await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
-  assert.ok(!github.calls.some((c) => c.name === 'requestReviewers'), 'nothing asked Ardnived to review Ardnived')
-  assert.ok(github.calls.some((c) => c.name === 'addLabels' && c.args.labels.includes('awaiting')), 'the rest of the plan still ran')
+  const asked = github.calls.filter((c) => c.name === 'requestReviewers').flatMap((c) => c.args.reviewers)
+  assert.deepEqual(asked, ['antontcymbal'], 'nothing asked Ardnived to review Ardnived; the other member is asked')
+  assert.ok(!github.calls.some((c) => c.name === 'createComment' && /step left for you/.test(c.args.body)), 'and nothing was handed over')
 })
 
 test('a write the token is refused hands the step to a human, and the plan finishes', async () => {
@@ -217,8 +221,8 @@ test('a write the token is refused hands the step to a human, and the plan finis
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'ci', event: 'workflow_run.completed', facts: { sha: 'abc' } }
   await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
 
-  const labels = github.calls.filter((c) => c.name === 'addLabels').flatMap((c) => c.args.labels)
-  assert.ok(labels.includes('awaiting'), 'the step is handed to a human')
+  const record = github.calls.filter((c) => c.name === 'createComment' || c.name === 'updateComment').map((c) => c.args.body).filter((b) => b.startsWith('<!-- sydevs-status')).pop()
+  assert.match(record, /"handback":\{"reason":"cannot mark ready"/, 'the step is handed to a human: Status reads Awaiting')
   const comment = github.calls.filter((c) => c.name === 'createComment').map((c) => c.args.body).find((b) => b.includes('step left for you'))
   assert.ok(comment, 'and the item says which step')
   assert.match(comment, /mark ready/)

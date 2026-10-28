@@ -32,11 +32,8 @@
     ]
   },
   "labels": {
-    "$comment": "journal excludes the diary from every worklist. awaiting = your turn, stuck = the machinery owes a retry, blocked = an open blocker or a Hold Until date, lock = a session holds the item, proposal = bot-filed with no human verb yet. Actions writes all but the lock's release. Rules in start-run/SKILL.md.",
+    "$comment": "journal excludes the diary from every worklist. lock = a session holds the item (the lease a session reads, the unlock event, the kill switch), proposal = bot-filed with no human verb yet. Where an item stands is the board's Status, not a label. Actions writes both but the lock's release. Rules in start-run/SKILL.md.",
     "journal": "ops-journal",
-    "awaiting": "awaiting",
-    "stuck": "stuck",
-    "blocked": "blocked",
     "lock": "bot:working",
     "proposal": "proposal"
   },
@@ -96,7 +93,7 @@
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires before awaiting. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires, and overdue checks of a Pending item, before it is handed to you. pendingDueMinutes is how long a wait the machinery owns may sit Pending before it is checked. reconcileMaxPerEvent caps the drift targets one event run adds. githubRetry retries a GitHub 5xx under every dispatcher call. enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
@@ -123,12 +120,15 @@
         "implement",
         "revise",
         "review",
-        "block"
+        "block",
+        "hold"
       ],
       "pr": [
         "address",
         "review",
-        "revise"
+        "revise",
+        "block",
+        "hold"
       ],
       "aliases": {
         "issue": {
@@ -153,12 +153,18 @@
       "audit-deps": 90
     },
     "maxAttempts": 3,
+    "pendingDueMinutes": 120,
+    "reconcileMaxPerEvent": 10,
     "orphanDraftHours": 6,
     "fireRetry": {
       "inline429MaxSeconds": 60,
       "default429Seconds": 600,
       "max429Seconds": 3600,
       "backoff5xxSeconds": 20
+    },
+    "githubRetry": {
+      "attempts": 3,
+      "baseSeconds": 2
     },
     "recordHistory": 20,
     "workflow": ".github/workflows/dispatcher.yml",
@@ -349,11 +355,14 @@
       ]
     },
     "holdUntil": {
-      "$comment": "Where a park lives: the date a ticket comes back. The dispatcher reads it, applies `blocked` while it is ahead, and fires a recheck when it passes. maxRehold quiet re-holds in a row hand it to you (why: docs/why.md#recheck-before-awaiting).",
+      "$comment": "Where a hold lives: the date a ticket comes back to you. Status is Hold while it is ahead. A bare `hold` picks a day between defaultDays[0] and defaultDays[1] from now, spread by item number; no hold may reach past maxHorizonDays (why: docs/why.md#a-hold-is-a-date-not-a-recheck).",
       "name": "Hold Until",
       "fieldId": 46423871,
-      "maxHorizonDays": 30,
-      "maxRehold": 3
+      "maxHorizonDays": 180,
+      "defaultDays": [
+        30,
+        90
+      ]
     }
   },
   "relationships": {
@@ -381,13 +390,15 @@
     "timezone": "America/Vancouver"
   },
   "projects": {
-    "$comment": "The org board, public as the roadmap. The dispatcher writes Status on every item except a Roadmap ticket, which carries none (why: docs/why.md#a-roadmap-ticket-has-no-status). The loop never reads it (why: docs/why.md#the-board-is-a-lens-so-it-may-fail-alone).",
+    "$comment": "The org board, public as the roadmap. The dispatcher derives every open item's Status, Roadmap tickets included, after each plan, and never reads it back to decide (why: docs/why.md#status-is-derived-never-read). status maps the derivation's keys to the board's option names.",
     "url": "https://github.com/orgs/sydevs/projects/2",
     "number": 2,
     "status": {
-      "proposed": "Proposed",
-      "revising": "Revising",
-      "approved": "Approved",
+      "awaiting": "Awaiting",
+      "blocked": "Blocked",
+      "hold": "Hold",
+      "pending": "Pending",
+      "working": "Working",
       "done": "Done"
     }
   },

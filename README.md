@@ -41,40 +41,49 @@ nightly audit, work starts only on an event. Each session does one job, pushes, 
      draft PR(s) ─► CI ─► review-pr ─► address-review ─► ready ─► you approve ─► GitHub merges
                                  │                         (a consumer merges after its producer)
                                  ▼
-     a goal's last child closes ─► revise-roadmap verifies it ─► goal closed, or awaiting
+     a goal's last child closes ─► revise-roadmap verifies it ─► goal closed, or Awaiting
 ```
 
 - **Who can start the bot.** Only the members in `assignment.respondTo`, with write access. Their
   `@sydevs-bot` verbs count. Anyone else's comment starts nothing.
-- **The public gate.** Anyone can suggest a goal. It lands as a Roadmap ticket with `awaiting`, and
-  nothing runs until a member says `@sydevs-bot revise`. The author's replies set `awaiting` and
-  are read on the next member-started run. They never start a session.
-- **Holds and rechecks.** When a hold's date passes or its blocker closes, a short recheck reads why
-  it was held. Still blocked: it is quietly re-held, with no ping. You get `awaiting` only when the
-  ticket is ready, needs a decision, or has been re-held 3 times in a row.
+- **The public gate.** Anyone can suggest a goal. It lands as a Roadmap ticket reading Awaiting,
+  and nothing runs until a member says `@sydevs-bot revise`. The author's replies are read on the
+  next member-started run. They never start a session.
+- **Holds and blockers.** A hold is a date: when it passes the ticket is yours again, with its
+  reason in the body. When a blocker closes, an approved ticket starts at once and any other comes
+  back to you. No session rechecks either first.
 - **One verb.** `implement` on a goal files at most one ticket per repo and approves them. The
-  children free together build as one set, in one session. A child blocked outside the set
-  records `pending: implement` and starts when a recheck confirms it is free, with no second verb.
+  children free together build as one set, in one session. A child blocked outside the set keeps
+  its approval, reads Pending, and starts when its blocker closes, with no second verb.
 - **One session per feature.** A build opens its PR only once every criterion is met. A session
   near its deadline pushes, says what remains, and asks for the next session, which starts at once.
 - **Your review is the spec.** A change you ask for on a PR is built on that PR and written into
   the ticket's criteria. A separate ticket is only ever proposed, with options, for you to choose.
 - **The completion check.** When a goal's last child closes, `revise-roadmap` compares what shipped
-  with *What success looks like*. It closes the goal, or names the gap and sets `awaiting`.
+  with *What success looks like*. It closes the goal, or names the gap and the goal reads Awaiting.
 - **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
   green. `claude-workflow` is never auto-merged, because merging it is the deploy.
 
+Every open issue and PR — Roadmap tickets too — has one board **Status**, derived by the
+dispatcher after every event from the item's own state. Nobody sets it; a drag on the board is put
+back on the item's next pass.
+
+| Status | Means | Leaves when |
+| --- | --- | --- |
+| **Awaiting** | Your turn. The newest bot comment says what for. | You give a verb, a review, an answer or a push. |
+| **Blocked** | Not approved, and waits on an open blocker. | The blocker closes: it comes back to you. |
+| **Hold** | Not approved, and waits on a Hold Until date. | The date passes: it comes back to you. `implement` clears it and starts. |
+| **Pending** | The machinery owes the next move: an approved build, a retry, CI, the merge queue, a goal in delivery. | It moves. A wait the bot owns is checked after `dispatch.pendingDueMinutes`, then handed to you with the reason. |
+| **Working** | A session holds the `bot:working` lock. | The session ends. |
+| **Done** | Closed, or an issue whose PR is open. | — |
+
 | Label | Means |
 | --- | --- |
-| `awaiting` | Your turn: ready, a decision is needed, or the bot gave up. |
-| `blocked` | Waits on an open blocker or a Hold Until date. A recheck decides when it is free. |
 | `bot:working` | A session holds this item. Its status comment links the session. |
-| `stuck` | The machinery owes a retry (usage limit, paused routine, dead session). Nothing needed yet. |
 | `proposal` | The bot filed it, and no human has given a verdict. |
 
-The board's Status (Proposed, Revising, Approved, Done) tracks implementation tickets and PRs. A
-Roadmap ticket has none: its milestone, its sub-issue progress, and whether it is closed say where
-it is. Only the dispatcher writes labels and Status; a session only removes its own `bot:working`.
+Only the dispatcher writes labels and Status; a session only removes its own `bot:working`.
+Approval lives in the item's status comment, not on the board.
 
 **Nightly audits**, 08:00 UTC, one per day:
 
@@ -112,13 +121,18 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Roadmap ticket | `@sydevs-bot revise` (or `review`, or a bare mention) | `revise-roadmap` reviews the goal or reads your answers. On a non-member's suggestion, this accepts it. |
 | Roadmap ticket | `@sydevs-bot implement` | `implement-roadmap` files one ticket per repo, absorbing the ones the review attached, and the build starts when it ends. Already planned: every unstarted child is approved. |
 | Implementation ticket | `@sydevs-bot revise <what to change>` | `write-ticket` updates the ticket, or answers your question from the code. |
-| Implementation ticket | `@sydevs-bot implement` | `implement-ticket` builds it into a draft PR. On a blocked ticket the approval waits. |
-| Any issue | `@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x` | Sets Hold Until and `blocked`, and keeps the reason. The date must be within 30 days. |
-| Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link and `blocked`. Rechecked when that issue closes. |
-| Any issue | `@sydevs-bot block waiting on legal sign-off` | A short session picks what to watch and a recheck date. |
-| Bot PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
+| Implementation ticket | `@sydevs-bot implement` | `implement-ticket` builds it into a draft PR. On a blocked ticket the approval waits (Pending); on a held one the hold is cleared and it starts. |
+| Any issue | `@sydevs-bot hold` · `hold 3 weeks` · `hold until 2026-12-01` | Sets Hold Until and withdraws any approval. Alone, it picks a date 30–90 days out; never more than 180. |
+| Any issue | `@sydevs-bot block on sydevs/SahajCloud#632` | Adds a native blocked-by link. An approval is kept, and the build starts when that issue closes. |
+| Any issue | `@sydevs-bot block until legal signs off` | A short session turns the reason into a blocker or a hold, and writes it into the body. |
+| Bot or member PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
-| Your own PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into your branch. |
+| Anyone else's PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into the branch. |
+| Any PR | `@sydevs-bot hold` or `block …` | Refused: a PR is merged or closed. |
+
+A PR by a member (`assignment.respondTo`) gets what a bot PR gets once it is ready: the critic,
+the other member asked to review, fixes for CI and conflicts, and auto-merge. A member's draft is
+left alone until it is ready or you mention the bot.
 
 `implement` is refused while the ticket's **Open questions** has an unticked item.
 
@@ -135,7 +149,7 @@ mention. The bot ticks the item and moves it to **Decisions**, with who answered
 
 **Declining a suggestion.** Close it as *not planned*.
 
-**A plain comment with no mention does nothing**, on an issue or a PR, except that a roadmap ticket's own author marks it `awaiting`. On a bot PR, a review or a thread reply needs no mention.
+**A plain comment with no mention does nothing**, on an issue or a PR. On a bot or member PR, a review or a thread reply needs no mention.
 
 ## Automated skills
 
@@ -143,10 +157,10 @@ Fired by the dispatcher (GitHub Actions) on events:
 
 | Skill | Fired by | Produces |
 | --- | --- | --- |
-| `revise-roadmap` | a member's new goal; `revise`; `block <reason>`; a recheck; the last child closing | a plain-language goal, decisions as options, technical notes in the body; or the completion verdict |
+| `revise-roadmap` | a member's new goal; `revise`; `block until <reason>`; the last child closing | a plain-language goal, decisions as options, technical notes in the body; or the completion verdict |
 | `implement-roadmap` | the first `implement` on a goal; a re-plan request | one implementation ticket per repo, as sub-issues in merge order, absorbing existing tickets |
-| `write-ticket` | `revise` on a ticket; a recheck; `block <reason>` | the updated ticket, or an answer from the code |
-| `implement-ticket` | `implement`; a goal's approval; a recheck that frees an approved ticket; its own continue request | a draft PR once the ticket is built, or a goal's set of PRs |
+| `write-ticket` | `revise` on a ticket; `block until <reason>` | the updated ticket, or an answer from the code |
+| `implement-ticket` | `implement`; a goal's approval; the blocker of an approved ticket closing; its own continue request | a draft PR once the ticket is built, or a goal's set of PRs |
 | `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
 | `address-review` | a review, thread reply or mention on a bot PR; its own continue request | a commit per ask, a rebuttal only of a fact, or a ticket proposed as options — review-body points included |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
@@ -181,8 +195,8 @@ metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
 - **`dispatch.enabledHandlers`** in `loop-config.json`: a list of the handlers allowed to fire
   (`null` = all).
 - **`BOT_DISPATCH`** org variable: `dry` logs every plan and writes nothing. `off` runs nothing.
-- **Pause the routines** at claude.ai/code/routines. That stops every session. Fires fail as
-  `stuck` and retry later.
+- **Pause the routines** at claude.ai/code/routines. That stops every session. Fires fail, read
+  Pending, and retry later.
 
 **Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
 `leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,

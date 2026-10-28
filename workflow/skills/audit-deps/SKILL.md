@@ -37,8 +37,8 @@ For each finding, in this order:
    CVSS score describes the vulnerable code, not our use of it.
 2. **Is a fix available?** No patched version means no PR. Journal it. If the risk is genuinely
    live, file a `Bug` through `/workflow:write-ticket` in `create` mode, and set its `Hold Until`
-   field to the date the fix is likely, saying why in a comment. The dispatcher parks it as
-   `blocked` until then, and rechecks it on that date.
+   field to the date the fix is likely, saying why in the body. It reads Hold until then, and
+   comes back to a person on that date.
 3. **Read the changelog before you bump.** A major needs its breaking-changes section read and its
    call sites checked. This is why this is an audit, not Dependabot.
 

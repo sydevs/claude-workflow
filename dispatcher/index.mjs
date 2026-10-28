@@ -19,6 +19,7 @@ import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
 import { ensureJournalDay, refreshTally, closeDuplicateDays, previousJournalDay, postAnomaly } from './journal.mjs'
+import { installRetry } from './retry.mjs'
 
 export { planContractSync } from './contracts.mjs'
 export { depsTick } from './deps.mjs'
@@ -28,12 +29,14 @@ export function loadConfig(path) {
 }
 
 export async function resolveTargets({ github, context, core, config }) {
+  installRetry(github, config)
   const targets = coalesceTargets(await resolveEvent({ github, context, config }))
   core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
   return targets
 }
 
 export async function act({ github, context, core, config, target, env = process.env, dryRun = false, now = new Date(), fetchImpl }) {
+  installRetry(github, config)
   // One leg, every reason resolve found for this item, in the order it found
   // them — then whatever the plans emit. (why: docs/why.md#one-target-per-item)
   const queue = (target.reasons || [{ reason: target.reason, facts: target.facts }])

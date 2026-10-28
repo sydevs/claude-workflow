@@ -10,7 +10,8 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy } from './markers.mjs'
-import { isLogin, isReviewer } from './decide.mjs'
+import { isLogin, isReviewer, isHuman } from './decide.mjs'
+import { deriveStatus } from './status.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -79,12 +80,13 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   const bot = config.identity.expectedLogin
 
   // The board is a lens. A token that cannot reach it must not stop the
-  // dispatch, which is the part that matters — the labels carry the state.
-  // The failure is journalled once per run, not swallowed.
+  // dispatch, which is the part that matters — the record carries the state,
+  // and Status is derived from it again on the next pass. The failure is
+  // journalled once per run, not swallowed.
   // A write the token is not allowed to make is not a crash. It is a step the
   // machinery cannot take, so it hands that step to a human: the plan carries
-  // on, the item gets `awaiting`, and the journal says which step and why.
-  // (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+  // on, the item is handed back (Awaiting), and the journal says which step
+  // and why. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
   const handedOver = []
   const handOver = async (what, fn) => {
     try { await fn(); return true } catch (e) {
@@ -110,6 +112,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
     }
   }
 
+  let syncWanted = false
   for (const a of plan) {
     switch (a.type) {
       case 'note': log(a.text); break
@@ -117,14 +120,12 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         log('ensure on project')
         if (!dryRun) await board(() => ensureItem(gh, config, nodeId))
         break
-      case 'status': {
-        log(a.value ? `status → ${a.value}` : 'status → none')
-        if (!dryRun) await board(async () => { const w = await setStatus(gh, config, nodeId, a.value); if (w) log(`status written: ${w}`) })
-        break
-      }
+      // Run last, whatever its place in the plan: Status is read off the
+      // state every other action left. (why: docs/why.md#status-is-derived-never-read)
+      case 'syncStatus': syncWanted = true; break
       case 'label': await labels(gh, t, snapshot, a.add, a.remove, dryRun, log); break
-      // The dispatcher's own memory on the item: a pre-approval, the re-hold
-      // count, a completion check owed. (why: docs/why.md#recheck-before-awaiting)
+      // The dispatcher's own memory on the item: the approval, a hand-back,
+      // a completion check owed. (why: docs/why.md#approval-lives-in-the-record)
       case 'record':
         log(`record ← ${JSON.stringify(a.patch)}`)
         Object.assign(rec, a.patch)
@@ -133,16 +134,18 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       // ⚠ This endpoint replaces the issue's whole field-value set, so every
       // value it already carries is sent back with the new date.
       // (why: docs/why.md#a-date-belongs-in-a-date-field)
+      // `date: null` clears the field: `implement` answers a hold.
       case 'hold': {
         const f = config.issueFields?.holdUntil
-        log(`hold until ${a.date}`)
+        log(a.date ? `hold until ${a.date}` : 'hold cleared')
+        snapshot.park = a.date ? { until: a.date, passed: false, source: 'field' } : { until: null, passed: false, source: null }
         if (dryRun || !f?.fieldId) break
         const { data: fresh } = await gh.rest.issues.get({ ...args, issue_number: t.number })
         const values = (fresh.issue_field_values || [])
           .filter((v) => v.issue_field_id !== f.fieldId)
           .map((v) => ({ field_id: v.issue_field_id, value: v.single_select_option?.name ?? v.value }))
-        values.push({ field_id: f.fieldId, value: a.date })
-        await handOver('set Hold Until', () => gh.request('PUT /repos/{owner}/{repo}/issues/{n}/issue-field-values', { ...args, n: t.number, data: values }))
+        if (a.date) values.push({ field_id: f.fieldId, value: a.date })
+        await handOver(a.date ? 'set Hold Until' : 'clear Hold Until', () => gh.request('PUT /repos/{owner}/{repo}/issues/{n}/issue-field-values', { ...args, n: t.number, data: values }))
         break
       }
       // A roadmap ticket lives in its milestone's repo. A session cannot move
@@ -182,6 +185,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // left behind is a permanent lock on the item.
         await release(gh, config, t, { now, dryRun, log })
         if (rec.recheck) { rec.recheck = false; recordDirty = true }
+        // A fire refused while this session held the lease is re-derived now,
+        // not retried blind.
+        if (rec.pending?.refused) { rec.pending = null; recordDirty = true }
         if (rec.current) {
           rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done' }]
           rec.current = null
@@ -224,17 +230,20 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         break
       }
       case 'requestReviewer': {
-        const reviewer = config.assignment.reviewer
-        // GitHub refuses to request a review from the PR's own author, so a
-        // reviewer-authored PR answered 422 and `handOver` read that as a step
-        // a human owes. Nobody owes anything: the author is the reviewer.
+        // GitHub refuses a review request to the PR's own author (it failed
+        // on sydevs/SahajAtlasWeb#318), so a member's PR asks the other
+        // member, and a PR with nobody else to ask asks nobody.
+        // (why: docs/why.md#a-members-pr-gets-the-loop)
         const author = snapshot.pr?.user?.login
-        if (author && isReviewer(author, config)) { log('reviewer is the PR author'); break }
+        const reviewer = reviewerFor(author, config)
+        if (!reviewer) { log('no reviewer other than the PR author'); break }
         const already = (snapshot.pr?.requestedReviewers || []).some((l) => l.toLowerCase() === reviewer.toLowerCase())
           || (snapshot.reviews || []).some((r) => String(r.user?.login).toLowerCase() === reviewer.toLowerCase())
         if (already) { log('reviewer already requested or reviewed'); break }
         log(`request reviewer ${reviewer}`)
-        if (!dryRun) await handOver('request a reviewer', () => gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] }))
+        if (!dryRun && await handOver('request a reviewer', () => gh.rest.pulls.requestReviewers({ ...args, pull_number: t.number, reviewers: [reviewer] }))) {
+          snapshot.pr.requestedReviewers = [...(snapshot.pr.requestedReviewers || []), reviewer]
+        }
         break
       }
       case 'armAutoMerge': {
@@ -267,6 +276,8 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
             const { data: blocker } = await gh.rest.issues.get({ owner: b.owner, repo: b.repo, issue_number: b.number })
             await gh.request('POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by', { ...args, n: t.number, issue_id: blocker.id })
             related.push(b)
+            // The Status this plan ends on must see the blocker it just made.
+            if (blocker.state === 'open') snapshot.blockedByOpen = [...(snapshot.blockedByOpen || []), { ...b, state: 'open' }]
           } catch (e) { log(`relationship write failed: ${e.status || ''} ${e.message}`) }
         }
         if (!a.strip || !related.length) break
@@ -293,6 +304,15 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       }
       case 'releaseLease':
         log(`reclaim ${leaseRef(t.number)} — ${a.why}`)
+        await release(gh, config, t, { now, dryRun, log })
+        break
+      case 'archiveCurrent':
+        if (rec.current) {
+          log(`archive ${rec.current.handler} — its end was never seen`)
+          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'ended unseen' }]
+          rec.current = null
+          recordDirty = true
+        }
         await release(gh, config, t, { now, dryRun, log })
         break
       case 'targets': emitted.push(...(a.list || [])); break
@@ -333,7 +353,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           } catch { /* the journal is not the deadline's keeper */ }
         }
         if (!cur || attempt > max) {
-          await labels(gh, t, snapshot, [config.labels.awaiting], [config.labels.stuck], dryRun, log)
+          rec.handback = { reason: `${cur?.handler || 'the session'} did not finish after ${max} attempts`, at: now.toISOString() }
           // On a PR only a mention, a review or a push wakes the bot; on an
           // issue, a verb or a bare mention. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
           const p = config.dispatch.commandPrefix
@@ -352,7 +372,8 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   if (handedOver.length && !dryRun && !moved) {
     const steps = handedOver.map((h) => h.what).join(' or ')
     const reasons = handedOver.map((h) => `- **${h.what}** — GitHub said: \`${h.why}\``).join('\n')
-    await labels(gh, t, snapshot, [config.labels.awaiting], [], dryRun, log)
+    rec.handback = { reason: `cannot ${steps}`, at: now.toISOString() }
+    recordDirty = true
     await commentOnce(gh, t, bot, `handover ${handedOver.map((h) => h.what).join('+')}`,
       `I could not ${steps} here, so this is the step left for you.\n\n${reasons}`, dryRun, log)
     try {
@@ -366,8 +387,58 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       await postAnomaly(gh, config, j.number, { kind: 'board-unreachable', text: `${t.repo.full}#${t.number}: ${boardFailed}` })
     } catch { /* the journal is not the board's keeper */ }
   }
+  if (syncWanted && !moved) {
+    if (await syncStatus({ gh, config, t, snapshot, rec, nodeId, now, dryRun, log, board })) recordDirty = true
+  }
   if (recordDirty && !dryRun && !moved) snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   return emitted
+}
+
+/** The member to ask for a review: the configured reviewer, or the other human when they wrote it. */
+export function reviewerFor(author, config) {
+  const lower = (x) => String(x || '').toLowerCase()
+  if (!isReviewer(author, config)) return config.assignment.reviewer
+  return (config.assignment.respondTo || []).find((l) => isHuman(l, config) && lower(l) !== lower(author)) || null
+}
+
+/**
+ * Derive the item's Status from the state the plan left and write it when it
+ * changed. `rec.status` remembers the last value written, so a board value
+ * that is neither is a person's drag: reverted here, and journalled.
+ * The Pending clock starts when a wait the machinery owns begins.
+ * Returns whether the record changed. (why: docs/why.md#status-is-derived-never-read)
+ */
+async function syncStatus({ gh, config, t, snapshot, rec, nodeId, now, dryRun, log, board }) {
+  const d = deriveStatus({ ...snapshot, record: rec, now }, config, now)
+  const name = config.projects.status?.[d.key]
+  let dirty = false
+  if (d.key === 'pending' && d.due) {
+    if (rec.status !== 'pending' || !rec.pendingSince) { rec.pendingSince = now.toISOString(); rec.dueAttempts = 0; dirty = true }
+  } else if (rec.pendingSince || rec.dueAttempts) {
+    rec.pendingSince = null
+    rec.dueAttempts = 0
+    dirty = true
+  }
+  log(`status → ${name} (${d.reason})`)
+  if (!dryRun && nodeId) {
+    await board(async () => {
+      const r = await setStatus(gh, config, nodeId, d.key)
+      if (r.written) log(`status written: ${r.written}`)
+      const last = rec.status ? config.projects.status?.[rec.status] : null
+      if (r.written && r.previous && last && r.previous !== last) {
+        log(`board drag reverted: ${r.previous} → ${name}`)
+        try {
+          const j = await ensureJournalDay(gh, config, now)
+          await postAnomaly(gh, config, j.number, { kind: 'board-drag', text: `${t.repo.full}#${t.number}: moved to ${r.previous} on the board, derived ${name} (${d.reason}) — reverted` })
+        } catch { /* the journal is not the board's keeper */ }
+      }
+    })
+  }
+  // Remembered only where a status comment already exists: an item the loop
+  // never dispatched gets no comment just to hold this, so a drag there is
+  // reverted without being journalled.
+  if (rec.status !== d.key) { rec.status = d.key; if (snapshot.recordId) dirty = true }
+  return dirty
 }
 
 async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi = false }) {
@@ -377,7 +448,6 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   if (!routineId || !token) {
     log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)
     rec.pending = { handler, flags, attempt, reason: 'no routine configured', retryAfter: null, bumpFixCi }
-    await labels(gh, t, snapshot, [L.stuck], [], dryRun, log)
     if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'unconfigured', text: `${t.repo.full}#${t.number} ${handler}: no routine id or token` }) }
     return
   }
@@ -401,6 +471,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
     const why = lease.contended ? 'another pass holds the lease' : lease.error
     log(`refused ${handler} — ${why}`)
     if (!rec.recheck) rec.recheck = true
+    // Never silent: the item reads Pending with a retry, so a lease that never
+    // comes free is still checked again. (why: docs/why.md#a-refused-fire-is-pending-not-silent)
+    rec.pending = { handler, flags, attempt, reason: lease.contended ? 'the lease is held' : 'the lease is unavailable', retryAfter: new Date(now.getTime() + 10 * 60_000).toISOString(), bumpFixCi, refused: true }
     if (!lease.contended) {
       const j = await ensureJournalDay(gh, config, now)
       await postAnomaly(gh, config, j.number, { kind: 'lease-unavailable', text: `${t.repo.full}#${t.number} ${handler}: ${why}` })
@@ -412,11 +485,13 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // the CAS and the fire would otherwise leave a ref no label and no record
   // points at, which only `sweep-lease` could reclaim.
   try {
-    await labels(gh, t, snapshot, [L.lock], [L.stuck, L.awaiting], dryRun, log)
+    await labels(gh, t, snapshot, [L.lock], [], dryRun, log)
     // `sha` rides on `current`, so the entry `unlocked` and `timeout` append
     // carries the head this session was fired against. (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
     rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null, sha: record.head?.sha || null }
     rec.pending = null
+    // A session starting is the machinery taking the item back.
+    rec.handback = null
     snapshot.recordId = await saveRecord(gh, { owner: t.repo.owner, repo: t.repo.name, number: t.number }, snapshot.recordId, rec)
   } catch (e) {
     await release(gh, config, t, { now, dryRun, log })
@@ -448,7 +523,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   const retryAfter = res.status === 429 ? res.retryAfter : res.status === 400 ? null : new Date(now.getTime() + 10 * 60_000).toISOString()
   rec.current = null
   rec.pending = { handler, flags, attempt, reason, retryAfter, id: record.id, bumpFixCi }
-  await labels(gh, t, snapshot, [L.stuck], [L.lock], dryRun, log)
+  await labels(gh, t, snapshot, [], [L.lock], dryRun, log)
   await release(gh, config, t, { now, dryRun, log })
   await commentOnce(gh, t, bot, `fire-failed ${record.id}`, res.status === 400
     ? '⏸ The routines are paused, so nothing started. I will retry when they resume.'

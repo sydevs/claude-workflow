@@ -42,9 +42,9 @@ upstream fails the plugin's build until its copy is updated.
    Blocked by: https://github.com/sydevs/<producer>/issues/<N> — `pnpm types:cms` reads from `main`, so this merges only after that does
    ```
 
-   The dispatcher converts the line into the native relationship and applies `blocked`. A
-   blocker recorded only in the panel gets no label, and a session reading the body never sees
-   it. **Cross-repo relationships need the full issue URL** — `owner/repo#N` is rejected as
+   The dispatcher converts the line into the native relationship, which Status reads. A
+   blocker recorded only in the panel is still read by the dispatcher, but a session reading the
+   body never sees it. **Cross-repo relationships need the full issue URL** — `owner/repo#N` is rejected as
    `invalid issue format` by `gh issue edit --add-blocked-by`.
 
 Locally you may also link it at once, and verify both directions — a silent no-op here loses the

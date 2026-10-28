@@ -117,23 +117,26 @@ Hold Until. Include every field you want kept. Field ids live in `loop-config.js
 `issueFields`.
 </details>
 
-### Whose turn it is — labels and Status, written by the dispatcher
+### Whose turn it is — Status, derived by the dispatcher
 
-No assignee carries meaning. The dispatcher (GitHub Actions) maintains every turn marker from
-events, within seconds:
+No assignee carries meaning. The dispatcher (GitHub Actions) derives every open item's board
+Status — Roadmap tickets included — after each event, within seconds:
 
-| Marker | Means |
+| Status | Means |
 | --- | --- |
-| `awaiting` | Your turn. The bot finished, gave up, or needs a decision. |
-| `bot:working` | A session holds the item. Its status comment names the handler and the session. |
-| `stuck` | The machinery owes a retry. No human is needed yet. |
-| `blocked` | An open `Blocked by:` target, or a `Hold Until` date still ahead. |
-| `proposal` | Bot-filed, no human verdict yet. |
-| Status `Proposed` / `Revising` / `Approved` / `Done` | Where an implementation ticket or PR sits on the board. **A Roadmap ticket carries none.** |
+| `Awaiting` | Your turn. The newest bot comment says what for. |
+| `Blocked` | Not approved, and waits on an open native relationship. |
+| `Hold` | Not approved, and waits on its `Hold Until` date. |
+| `Pending` | The machinery owes the next move: an approved build, a retry, CI, the merge queue. |
+| `Working` | A session holds the item's lock. |
+| `Done` | Closed, or an issue whose PR is open. |
+
+Two labels remain: `bot:working`, the lock a session holds, and `proposal`, bot-filed with no
+human verdict yet. (why: docs/why.md#status-is-derived-never-read)
 
 **Never write any of them** — start-run's list, whose one exception is `finish-run` removing the
 lock. Set the fields and the body markers below. The dispatcher does the
-rest. (why: docs/why.md#awaiting-has-one-writer, docs/why.md#a-roadmap-ticket-has-no-status)
+rest. (why: docs/why.md#status-is-derived-never-read)
 
 **To hand a ticket to the loop, comment a verb**: `@sydevs-bot implement`, `revise` (or
 `review`), or `block`. Only a `respondTo` human's verb counts, and only the verb authorises code —
@@ -203,8 +206,8 @@ they chose before. (why: docs/why.md#a-reopened-question-says-what-it-reopens)
 **Decisions live on the Roadmap ticket.** An implementation ticket with a roadmap parent carries
 none. A decision found while writing or building one goes up to the parent's `## Open questions`,
 in plain language, with options. The child links it, and the comment you leave on the child
-carries `<!-- sydevs-request {"escalated":true} -->`. The dispatcher then gives the parent
-`awaiting`. (why: docs/why.md#a-late-decision-goes-to-the-goal)
+carries `<!-- sydevs-request {"escalated":true} -->`. The parent's open question makes it
+Awaiting. (why: docs/why.md#a-late-decision-goes-to-the-goal)
 
 ## Relationships — what must happen first
 
@@ -220,14 +223,13 @@ block on the issue a PR closes, never the PR:
 Blocked by: https://github.com/sydevs/SahajCloud/issues/632 — the endpoint this consumes does not exist until that merges
 ```
 
-The dispatcher reads that line on `issues.opened` and `issues.edited`, creates the native
-relationship, and applies `blocked`. Once every blocker on the line is related, it deletes the
-line. Never restore a deleted line. (why: docs/why.md#a-converted-blocker-line-is-deleted)
+The dispatcher reads that line on `issues.opened` and `issues.edited` and creates the native
+relationship; Status reads Blocked from it. Once every blocker on the line is related, it deletes
+the line. Never restore a deleted line. (why: docs/why.md#a-converted-blocker-line-is-deleted)
 A line a non-member writes into their own issue stays text.
-(why: docs/why.md#a-strangers-marker-is-text) When the last blocker closes, the dispatcher fires
-a **recheck**, not `awaiting`: a session reads why the ticket waited and re-holds it quietly, or
-hands it back. A ticket approved while blocked starts on its own once the recheck clears it.
-(why: docs/why.md#recheck-before-awaiting)
+(why: docs/why.md#a-strangers-marker-is-text) When the last blocker closes, an approved ticket
+starts at once and any other comes back to you. No session rechecks it first.
+(why: docs/why.md#a-hold-is-a-date-not-a-recheck)
 
 **Write the format. Do not rely on it when reading.** The reader matches the words `Blocked by`,
 with or without a colon, through leading bold or a list bullet, and takes either a full in-org
@@ -245,24 +247,24 @@ gh issue edit <n> --repo "$ORG/$REPO" --add-blocked-by "https://github.com/$ORG/
 
 A human blocks a ticket with a verb instead: `@sydevs-bot block on <org/repo#N>`.
 
-### `Hold Until` — a date, and the promise to look again
+### `Hold Until` — a date the ticket comes back
 
-Park a ticket on a date, not a blocker, by setting the **`Hold Until` field**:
+Hold a ticket on a date, not a blocker, by setting the **`Hold Until` field**:
 
 ```
 mcp__github__issue_write  method:update  owner:$ORG  repo:$REPO  issue_number:<n>
   issue_fields:[{field_name:"Hold Until", value:"2026-10-01"}]
 ```
 
-**Say why in a comment** — what condition you are waiting on, and what to check. The field holds
-no reason, and the recheck on that date reads your comment to decide. The dispatcher applies
-`blocked` while the date is ahead and refuses `implement`. Keep the horizon inside
-`issueFields.holdUntil.maxHorizonDays` — a longer wait is a re-hold, made at the recheck. After
-`issueFields.holdUntil.maxRehold` quiet re-holds in a row, the ticket comes back to you with
-options.
+**Write why into the body** under `## Notes`, as `Held until <date>: <what to check>`. The field
+holds no reason, and nothing rechecks it: when the date passes the ticket is the person's again,
+and the body is what they read. Status is Hold while the date is ahead. Keep it inside
+`issueFields.holdUntil.maxHorizonDays`. A hold withdraws any approval; `implement` clears it.
 
-A human sets it with `@sydevs-bot block until <date> — <reason>`, or asks the bot to choose with
-`@sydevs-bot block <reason>`.
+A human holds with `@sydevs-bot hold [until] <N days|weeks|months|YYYY-MM-DD>` — a bare `hold`
+picks a date inside `issueFields.holdUntil.defaultDays` — or asks the bot to turn a reason into a
+relationship or a hold with `@sydevs-bot block until <reason>`. A PR is never held: it is merged
+or closed. (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
 
 Clear it with `issue_fields:[{field_name:"Hold Until", delete:true}]`, which leaves Priority
 alone.
@@ -426,10 +428,10 @@ The shorthand is safe only for issues in the same repository as the comment.
 - **Priority** — `issue_fields`, with `field_option_name`, so the option is validated before the
   call.
 - **Blockers** — the `Blocked by:` line. The dispatcher makes it a relationship.
-- **A park** — the `Hold Until` field, a date, with the reason in a comment.
+- **A hold** — the `Hold Until` field, a date, with the reason in the body.
 - **A parent** — `mcp__github__sub_issue_write` on the roadmap ticket.
-- **No label, no Status, no assignee.** The dispatcher sets Proposed and `awaiting` on
-  `issues.opened`, and `proposal` when the bot filed it.
+- **No label, no Status, no assignee.** The dispatcher derives Status on `issues.opened`, and
+  adds `proposal` when the bot filed it.
 
 If a call genuinely fails, **journal the failure and file nothing.** An unfiled finding can be
 re-derived next run. A malformed backlog must be cleaned up by hand.

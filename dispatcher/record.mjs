@@ -2,8 +2,10 @@
  * The per-item status comment: one comment per issue or PR, for its whole
  * life, edited in place by the dispatcher. It holds what the lock label
  * cannot — which handler, which attempt, the session link, the fix-ci
- * counter, the recheck flag, and a pending retry — and a short history.
- * The session never writes it. (why: docs/why.md#the-lock-label-is-the-lease)
+ * counter, the recheck flag, a pending retry, the approval, a hand-back and
+ * the Status last written — and a short history. Status is derived from it;
+ * it is never derived from Status. The session never writes it.
+ * (why: docs/why.md#the-lock-label-is-the-lease, docs/why.md#approval-lives-in-the-record)
  */
 
 import { isLogin } from './decide.mjs'
@@ -43,6 +45,9 @@ export function renderRecord(rec) {
   } else {
     lines.push('🤖 no session running')
   }
+  if (rec.handback) lines.push(`✋ handed back: ${rec.handback.reason}`)
+  if (rec.approved) lines.push(`approved${rec.approved.by ? ` by ${rec.approved.by}` : ''}`)
+  if (rec.pendingSince) lines.push(`pending since ${fmtTime(rec.pendingSince)}${rec.dueAttempts ? ` · ${rec.dueAttempts} check(s) past the due` : ''}`)
   if (rec.fixCi) lines.push(`CI fix ${rec.fixCi}`)
   if (rec.ciReruns?.count) lines.push(`CI re-run ${rec.ciReruns.count} on ${String(rec.ciReruns.sha || '').slice(0, 7)} — infrastructure, not the change`)
   if (rec.queueFail?.sha) lines.push(`merge queue failed on ${String(rec.queueFail.sha).slice(0, 7)}${rec.queueFail.run ? ` · [run](${rec.queueFail.run})` : ''}`)

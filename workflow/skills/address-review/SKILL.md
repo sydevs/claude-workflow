@@ -28,8 +28,11 @@ and the run ends. **Start with `/workflow:start-run` and end with
 **Before any thread, merge `origin/<base>` into the branch when the branch is behind it.** Every
 run on a PR you can push to, asked or not, so each fix is built on the current base and the lean gate tests the merged
 result. A merge commit only, resolved as `resolve-conflicts` steps 2-4 say: both sides' intent,
-both behaviours kept. Push it even when no thread is adopted. In the summary comment a clean merge
-gets one line, and a resolved conflict gets a line per hunk whose choice was not obvious.
+both behaviours kept. **Push the merge only with other work, or when it resolved a conflict.** A
+clean merge with nothing else to push stays local: pushing it alone re-runs CI and asks nobody
+anything new. In the summary comment a clean merge gets one line, and a resolved conflict gets a
+line per hunk whose choice was not obvious.
+(why: docs/why.md#a-merge-is-pushed-only-with-work)
 **On a semantic conflict, `git merge --abort`**, ask in format-ticket's options shape, and address
 the threads on the unmerged branch.
 (why: docs/why.md#every-revision-starts-from-the-current-base)

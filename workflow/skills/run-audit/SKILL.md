@@ -11,9 +11,9 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 The once-a-night pass across the five sydevs repos. It is one task: tonight's audit. **This is
 not a ladder** — nothing here competes for budget. The sweeps that used to run beside it —
-`awaiting` drift, expired parks, unheard replies — are the dispatcher's now, on events and on
-its 30-minute sweep. (why: docs/why.md#the-run-audit-is-not-a-ladder,
-docs/why.md#awaiting-has-one-writer)
+Status drift, expired holds, unheard replies — are the dispatcher's now, on events and on
+its 30-minute reconcile. (why: docs/why.md#the-run-audit-is-not-a-ladder,
+docs/why.md#the-reconciler-replaces-the-drift-window)
 
 **Begin with `/workflow:start-run` in cron mode, and end with
 `/workflow:finish-run` in cron mode.**
@@ -38,8 +38,8 @@ the angle by hand: the script is the one reader of `auditCalendar` and `auditAng
 journal entry.
 
 **File and stop — the dispatcher does the rest.** Everything filed here is bot-authored, so
-`issues.opened` sets Status Proposed, `proposal`, and `awaiting` within seconds. **Never set any
-of them, and assign nobody** — a proposal exists to be judged, and `awaiting` says so.
+`issues.opened` adds `proposal` and derives Status Awaiting within seconds. **Never set either,
+and assign nobody** — a proposal exists to be judged, and Awaiting says so.
 
 Before filing, check the standing proposal ceiling with one indexed search:
 
@@ -60,7 +60,7 @@ reaches `ceilings.maxOpenProposals`. Record the rest in the journal, to wait for
 | A real defect found while implementing, reviewing, or investigating | **No. File it, every time, even over the ceiling** |
 
 An audit manufactures candidates on demand, so a cap fits. An incidental finding is evidence you
-already hold, and `Proposed` commits nobody to anything. Each ticket still costs a review, so
+already hold, and a proposal commits nobody to anything. Each ticket still costs a review, so
 format-ticket's join rule applies. **Never discard a real finding to respect a number.**
 `start-run` routes it.
 

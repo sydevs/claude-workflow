@@ -475,17 +475,15 @@ exempts it from `review-pr`'s exclusive right to start threads.
 
 ## The board is a lens
 
-The org project (`projects.url`) shows every open issue and PR in a `Status` lane, with
-`labels.awaiting` on anything needing a human. **The dispatcher writes `Status` from events, and no
-session reads or writes the board.** At first GitHub's built-in workflows set `Status`. The
+The org project (`projects.url`) shows every open issue and PR in a `Status` lane, Awaiting for
+anything needing a human. **The dispatcher derives `Status` after every plan, and no session reads
+or writes the board.** At first GitHub's built-in workflows set `Status`. The
 dispatcher took that write over with every other mechanical write, and the built-in `Status`
 workflows are off so two writers never race. **Routines cannot reach Projects v2 at all**: probed
 live on 2026-09-03, zero `mcp__github__projects*` tools resolve in the routine environment. **The
 board is derived, so it lags**: a run reading it would hit `#search-lags-the-review-that-feeds-it`
-in full, so the dispatcher writes `Status` from the labels, relationships and PR, never as input.
-
-**A Roadmap ticket gets no `Status` at all**: its milestone, sub-issue progress and closed state
-already answer (why: docs/why.md#a-roadmap-ticket-has-no-status). The journal dropped its
+in full, so the dispatcher writes `Status` from the record, relationships and PR, never as input
+(why: docs/why.md#status-is-derived-never-read). The journal dropped its
 `📋 Awaiting you` table for the same reason: the board answers "what needs me" continuously, so
 restating it every run was a second implementation of one rule. The journal keeps what the board
 cannot show: why a run failed, what a ceiling cost, which rule misfired.
@@ -903,26 +901,6 @@ The cost is one model and tool grant per repo: a short `write-ticket` answer run
 as `implement`, five to eight turns. "Never pushes" is a skill rule now; the lock label and the
 dispatcher's actor filter were always the controls that mattered.
 
-## awaiting has one writer
-
-The `awaiting` label drifted because two writers set it: the state machine on events and the loop
-on its dead ends, with a nightly sweep recomputing the backlog to catch disagreements. Now the
-dispatcher is the only writer: it sets the label when the bot's turn ends and clears it when a
-human acts. The sweeper still re-derives and journals any correction, as evidence of a missed event.
-
-`stuck` is the other single-writer label: the machinery owes a retry (usage limit, paused routine,
-dead session) and no human is needed yet. The sweeper retries up to `dispatch.maxAttempts`, then
-hands over to `awaiting`. The two never coexist.
-
-## blocked and awaiting are exclusive
-
-sydevs/SahajCloud#780 got `awaiting` at 08:23:07 and `blocked` at 08:23:09 from one
-`issues.opened` plan, which added `awaiting` unconditionally and never removed it on the blocked
-branch. Both labels answer whose turn it is: a parked ticket waits on its blocker, not on you, and
-`awaiting` is the label a human scans. So `issues.opened` decides `bornBlocked` before writing, and
-the blocked write removes `awaiting` in the same plan. The same exclusivity holds for `stuck`, which
-[awaiting has one writer](#awaiting-has-one-writer) records.
-
 ## A closed item is nobody's turn
 
 sydevs/SahajCloud#747 merged while a session held the lock. Two minutes later the unlock path
@@ -974,8 +952,8 @@ throws `BoardUnreachable`, carrying the fix in its message.
 A day later `itemOf` declared `$n` and never used it, GraphQL rejected the query, and
 `BoardUnreachable` misreported it as a missing permission. The message now says what went wrong
 first and guesses a cause only when the error reads like one, and a test fails on any query variable
-declared but unused. The board is a lens over state the labels and status comment already carry,
-so **a board write that fails must never stop the dispatch**. Every Projects call degrades: the run
+declared but unused. The board is a lens over state the status comment already carries, so **a
+board write that fails must never stop the dispatch** — an option the board lacks included. Every Projects call degrades: the run
 fires and one `board-unreachable` anomaly goes in the journal.
 
 ## The journal pointer is an optimisation
@@ -1025,24 +1003,6 @@ fenced blocks once and all four readers go through it. `stripBlockedBy` keeps it
 it must emit every unit it does not drop and each unit carries its own line ending; it shares
 `isFence`. A reader-only fix would have related nothing and still deleted the documentation.
 
-## blocked follows the relationship
-
-The four tickets above had **correct native relationships all along**; they lacked the `blocked`
-label, because the dispatcher wrote it only when converting a marker. The implement gate reads
-`blockedByOpen` and refused them correctly. But `unblock-check` began with *"no label, nothing to
-do"* and the sweeper looked only at labelled items, so a closing blocker would have passed the
-dependent over in silence.
-
-So `unblock-check` applies `blocked` when GitHub says the issue is blocked and we have not. When the
-last blocker closes it fires a recheck, and the label comes off once that session finds the ticket
-free (why: docs/why.md#recheck-before-awaiting).
-
-Finding candidates took two tries. `is:blocked` in issue search **matches the `blocked` label, not
-the relationship**: the first live sweep returned the two labelled tickets and none of the four that
-needed it. The relationship is reachable only through GraphQL `blockedBy` on `Issue`, so the
-sweeper asks for every open issue with labels and blockers in one paginated query per repo. That
-query also found a fifth ticket nobody had named.
-
 ## A converted blocker line is deleted
 
 The dispatcher used to convert a `Blocked by:` line into a native relationship and leave the line.
@@ -1060,8 +1020,8 @@ pass that makes the relationship deletes it.
   stripped (why: docs/why.md#a-strangers-marker-is-text); a `block on` verb leaves the body alone.
 
 The strike ordering was fixed too, or a misread line would relate and delete evidence in one pass.
-The edit history keeps the `— <reason>` prose. Until a session can read relationships itself
-(sydevs/claude-workflow#3), the `blocked` label and the pre-fire check are the gate.
+The edit history keeps the `— <reason>` prose. A session cannot read relationships over MCP, so the
+dispatcher's pre-fire check is the gate.
 
 ## An unresolved blocker line is reported
 
@@ -1102,16 +1062,6 @@ and the dispatcher reads directly. It cannot be malformed, sorts and filters on 
 clears in one call that leaves Priority alone. `Re-check:` is still read for tickets written before
 2026-09-09, until nothing carries it. So `issueFields.holdUntil` is load-bearing again after the
 cutover slated it for deletion; only `Stage` goes.
-
-## A park stops the dispatch, not the session
-
-The implement gate tested the `blocked` label and an open native blocker, neither about a date. A
-ticket parked until October with no label — every ticket parked before the label existed — would
-have been dispatched, cloned five repos, read the ticket and stopped. The refusal is free in the
-dispatcher and costs a fire, a clone and a lease in a session. So the gate reads the park too and
-names which of the three reasons applies. A refused `implement` is recorded as an approval that
-waits, starting once a recheck confirms the block lifted
-(why: docs/why.md#children-are-approved-together).
 
 ## The lease covers the branch, not the item
 
@@ -1382,15 +1332,6 @@ or ask. The summary comment quotes each point with the SHA or evidence, and bein
 review's `submitted_at` marks it handled — the dispatcher's `since` test — so a resumed run never
 answers twice.
 
-## A locked item is never awaiting
-
-A ticket created with its type set fires `opened` and `typed`, which share a concurrency group and
-run in either order. On the first twelve roadmap goals `typed` ran first, took the lock and started
-the review; `opened` then added `awaiting` to an item a session held, and seven goals sat in the
-Awaiting view while the bot worked. Rather than each row checking the lock, one rule after every row
-says no plan adds `awaiting` to a locked item. The unlock re-derives from the finished state, where
-`awaiting` belongs.
-
 ## Subscribe only to what resolves
 
 The callers subscribed to `assigned`, `field_added` and `field_removed` long after the state machine
@@ -1419,16 +1360,6 @@ approach, an executable checklist. Bugs and small tickets skip the roadmap, whic
 round trip. A human approves the goal once its decisions are settled, and its children in one verb.
 A goal lives in its milestone's one home repo, and `revise-roadmap` asks the dispatcher to move a
 childless goal there (why: docs/why.md#a-session-asks-actions-acts).
-
-## A roadmap ticket has no status
-
-The `Status` lanes (Proposed, Revising, Approved, Done) describe one ticket on its way to one PR. A
-goal's stages (suggested, committed, in delivery, shipped) GitHub already shows: no milestone and
-no children, a milestone, a sub-issue progress bar, closed. A lane was a second answer from rules
-meant for tickets: `Approved` from an `implement` verb would sit on a goal for weeks. So `decide`
-turns every `Status` write for a Roadmap ticket into a clear, a ticket typed Roadmap later loses its
-lane on the `typed` event, the Pipeline and Backlog views filter `-type:Roadmap`, and the public
-Roadmap view shows goals alone.
 
 ## A stranger's marker is text
 
@@ -1510,19 +1441,6 @@ raises a decision. So, as with `Blocked by:`, the session writes a marker the di
 `<!-- sydevs-request {...} -->` in its own comment. Only `replan`, `escalated` and `transfer` are
 read, and a transfer must name one of our repos. A request older than the session that just ended
 is ignored, so old comments never replay. The transfer runs last, as it changes the issue number.
-
-## Recheck before awaiting
-
-A hold used to end mechanically: when `Hold Until` passed or the last blocker closed, the dispatcher
-removed `blocked`, set `awaiting` and mentioned you. A ticket held for a release came back whether
-or not the release shipped, and you had to re-park it; a closed blocker can also ship something the
-ticket did not assume. So the cue fires a short recheck (`write-ticket`, or `revise-roadmap` on a
-goal). **Still blocked:** it re-holds with a new date and one line, pinging nobody. **Free and
-valid:** a pre-approved ticket starts, any other becomes `awaiting`. **Changed:** the body is
-updated and a decision reaches you with options. After `holdUntil.maxRehold` quiet re-holds in a
-row you get three options (keep waiting, rework around the blocker, close); any verb from you resets
-the count. `block until <date> — <reason>` and `block on <ref>` are mechanical, `block <reason>`
-lets a session choose, and a date past `holdUntil.maxHorizonDays` is refused in favour of rechecks.
 
 ## Children are approved together
 
@@ -1952,10 +1870,169 @@ contract re-sync is a commit on the consumer PR its goal built beside the produc
 finds it through the producer ticket's `blocking` relationship, and `contracts-sync` pushes there.
 The standalone sync PR remains for a merge no goal is building against, or a push the feature
 branch refuses.
+# The Status lifecycle
+
+## Status is derived, never read
+
+Items fell into a dead zone with none of `awaiting`, `blocked` or `bot:working`: sydevs/SahajAtlasWeb#328
+and #318, sydevs/WeMeditateWeb#124, #146, #150, #168 and #198 on 2026-10-27. Each label was set on a
+transition, so a transition missed — a 503, a refused fire, a branch no row handled — left nothing.
+Now `status.mjs` derives one of Awaiting, Blocked, Hold, Pending, Working and Done from the record,
+the relationships, Hold Until, the lock and the PR, and `apply` writes it after every plan. No row
+names a Status. The board is never read to decide; `rec.status` remembers the last value written,
+so a different one on the board is a drag, reverted and journalled as `board-drag`.
+`bot:working` stays: it is the lease a session reads, the unlock event Actions wakes on, and the
+kill switch, and no session can read or write the board (why: docs/why.md#the-board-is-a-lens).
+
+## Approval lives in the record
+
+`Approved` was a Status, so writing the board was writing the approval, and a board that failed or
+lagged lost it. `implement` now writes `approved: {by, at}` to the status comment. It survives a
+blocker (Pending, not Blocked) and is spent by `hold`, `revise`, a reopen, an abandoned PR, and a
+build that ends with no PR, whose comment says why. Pending is approval waiting; Awaiting is a
+verdict owed. `pendingImplement` folded into it; `approveOnPlan` stays, as the order to approve the
+children when the plan ends.
+
+## Pending has a due, Awaiting has a reason
+
+An approved, armed PR waited days with no owner (sydevs/SahajAtlasWeb#328, WeMeditateWeb#198): the
+merge was GitHub's, the question holding it was nobody's. A wait the machinery owns now starts a
+clock, `rec.pendingSince`; past `dispatch.pendingDueMinutes` the reconciler reads it again, up to
+`dispatch.maxAttempts` checks, then hands it back with the reason (`pending-overdue`). A wait on
+another open item — a blocker, a producer PR, a goal's children — has no due. A hand-back
+(`rec.handback`) replaces `stuck` and every "your turn" label: it reads Awaiting until you act.
+A blocker or hold outranks it, because nothing you do moves the item until that clears.
+
+## A hold is a date, not a recheck
+
+A recheck session confirmed a fact a date or a closed issue already held, and re-held quietly up to
+`maxRehold` times. Now the date passing makes the ticket yours (one comment says so), and a blocker
+closing starts an approved ticket at once or tells you about any other; the build stops with a
+question if it is not free after all. `hold [until] <N days|weeks|months|date>` sets the date,
+withdraws approval, and caps at `holdUntil.maxHorizonDays`; a bare `hold` spreads a batch across
+`holdUntil.defaultDays`. `block until <reason>` asks a session to make it a relationship or a hold.
+
+## A PR is merged or closed, never held
+
+A held PR rots against its base and keeps its review threads open. `hold` and `block` on a PR are
+refused with one reply: close it, and reopen it when it can go.
+
+## The reconciler replaces the drift window
+
+The drift sweep read only items updated in the last two hours, on a `*/30` cron that lands every
+two to seven, so sydevs/WeMeditateWeb#124 and #150 sat unlisted for days. `reconcile.mjs` reads every
+open item's labels, relationships, open PR, Hold Until and board Status in two GraphQL pages per repo,
+and gathers in full only an item whose board value those facts rule out, or, on the cron, every
+Pending item for its due. An event run checks its own repo too, capped at
+`dispatch.reconcileMaxPerEvent`. A dispatch on a repo's `workflow-state.yml` is the on-demand full pass.
+
+## A lease past its deadline is reclaimed
+
+A 503 between the lease and the label left `refs/sydevs-lease/318` and `/146` with a `current` past
+its deadline, and every later fire read the ref as contention, silently, for days. `sweep-lease` now
+reads a session on record with no lock as the unlock it was, and times out a locked one past its
+deadline, whatever the label says.
+
+## A refused fire is Pending, not silent
+
+A fire the lease refused recorded only `recheck`, which an unlock drains — and the item that held
+the lease never unlocked. Now it also sets `rec.pending` with a retry in ten minutes, so the item
+reads Pending and the reconciler fires it again. An unlock drops a refused retry and re-derives.
+
+## A GitHub 5xx is retried, not fatal
+
+One 503 mid-plan ended the `act` leg with the lease taken and no label written. Every call the
+dispatcher makes now passes through `installRetry`, which retries a 5xx or a dropped connection
+`dispatch.githubRetry.attempts` times with doubling backoff. A 4xx is an answer and is never retried.
+
+## A member's PR gets the loop
+
+A member's PR (`assignment.respondTo`) got nothing unless mentioned, so their own PRs sat outside
+every lane. Now a ready member PR gets the critic once, a reviewer request and auto-merge like the
+bot's. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
+refuses a request to the author (sydevs/SahajAtlasWeb#318). A member's draft is left alone until it
+is ready or they mention the bot, and only a thread the bot rooted or another person's review asks
+it for work. A session pushes only to `claude/*`, so a member branch outside it gets a patch in a comment.
+Anyone else's PR answers a mention and nothing more.
+
+## An approved PR names what holds it
+
+GitHub merges only once every thread is resolved, and an approved PR held by a bot question thread
+showed nothing (sydevs/SahajAtlasWeb#328). An unresolved thread whose last word is the bot's now makes
+the PR Awaiting, and an approved one gets a comment linking each such thread, once.
+
+## A resolved conflict is not a new question
+
+sydevs/SahajAtlasWeb#328 was approved three times: each conflict resolution ended in an idle unlock,
+which labelled the PR `awaiting` and put it back on the reviewer's list. Approvals were never
+dismissed. Now an approved PR a session touched derives Pending. Only a hunk the session asks about,
+as a question thread, makes it Awaiting.
+
+## Unknown mergeability is not clean
+
+GitHub computes `mergeable` lazily: REST answers null, GraphQL `UNKNOWN`, and both were read as clean,
+so an approved PR whose conflict was never computed waited forever. `gather` asks GraphQL when REST
+is still null, and past the due an approved PR still `UNKNOWN` gets `resolve-conflicts`.
+
+## A merge is pushed only with work
+
+`address-review` pushed a clean base merge even when it adopted nothing, which re-ran CI and, with a
+review requested on push, re-asked for a review nothing had changed. A base merge now opens every
+`address-review`, `fix-ci` and continued `implement`, and is pushed only with the work or when it
+resolved a conflict.
+
 # Retired
 
 Each entry is a failure someone paid for, under a mechanism that no longer exists. It stays so the
 lesson is met, not re-learned. The line under each heading says what took its place.
+
+### awaiting has one writer
+
+**Replaced by:** [Status is derived, never read](#status-is-derived-never-read): no label says whose turn it is, so there is no second writer to drift.
+
+`awaiting` drifted because two writers set it; then one writer set it on transitions only, and an item
+whose transition was missed (sydevs/WeMeditateWeb#168, approved and labelled nothing) stayed unlisted.
+
+### blocked and awaiting are exclusive
+
+**Replaced by:** [Status is derived, never read](#status-is-derived-never-read): one value per item, so two labels cannot disagree.
+
+sydevs/SahajCloud#780 got `awaiting` and `blocked` two seconds apart from one `issues.opened` plan.
+
+### blocked follows the relationship
+
+**Replaced by:** Status reads the native relationship on every pass, and the [reconciler](#the-reconciler-replaces-the-drift-window) reads it for every open item.
+
+Four tickets had correct relationships and no `blocked` label, so the sweeper, which read the label,
+never re-checked them. `is:blocked` in issue search matches a label, not the relationship.
+
+### A park stops the dispatch, not the session
+
+**Replaced by:** [A hold is a date, not a recheck](#a-hold-is-a-date-not-a-recheck): `implement` on a held ticket clears the hold and starts it.
+
+A ticket parked with no label would have been dispatched, so the gate read the date and recorded a
+refused `implement` as an approval waiting on a recheck.
+
+### A locked item is never awaiting
+
+**Replaced by:** [Status is derived, never read](#status-is-derived-never-read): a locked item derives Working, whatever row ran.
+
+`opened` and `typed` ran in either order, and seven goals sat in the Awaiting view while the bot
+worked on them.
+
+### A roadmap ticket has no status
+
+**Replaced by:** goals get a Status like any item, derived from their own verdict first and their children after ([Status is derived, never read](#status-is-derived-never-read)).
+
+A lane from ticket rules (`Approved` for weeks) misdescribed a goal, so goals carried none and lived
+in a Roadmap view. That left a goal awaiting its plan approval invisible on the board's Awaiting view.
+
+### Recheck before awaiting
+
+**Replaced by:** [A hold is a date, not a recheck](#a-hold-is-a-date-not-a-recheck).
+
+A recheck session re-held quietly up to `maxRehold` times. Three re-holds of sydevs/WeMeditateWeb#146
+ended in a dead zone after a 503, and every recheck cost a session to confirm a fact a date already held.
 
 ### A proposal is reviewed before you read it
 

@@ -42,18 +42,42 @@ export function parseVerb(body, config, surface) {
 /**
  * The arguments of `@sydevs-bot block …`, one of:
  *
- * - `{ form: 'until', date, reason }` — `block until 2026-11-15 — waiting on X`
  * - `{ form: 'on', refs }` — `block on sydevs/SahajCloud#632` (or a full issue URL)
- * - `{ form: 'reason', reason }` — anything else; a session picks the date
+ * - `{ form: 'reason', reason }` — `block until <reason>` or `block <reason>`;
+ *   a session turns it into a relationship or a hold
  *
- * Only the rest of the verb's own line is read.
+ * Only the rest of the verb's own line is read. A date after `until` is part
+ * of the reason now: a date alone is `hold`. (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
  */
 export function parseBlock(body, config, org) {
   const m = mentionRe(config).exec(String(body || ''))
   const rest = (m?.[2] || '').trim()
-  const until = /^until\s+(\d{4}-\d{2}-\d{2})\b[\s:,\-—–]*(.*)$/i.exec(rest)
-  if (until) return { form: 'until', date: until[1], reason: until[2].trim() }
   const on = /^on\s+(.+)$/i.exec(rest)
   if (on) return { form: 'on', refs: parseRefs(on[1], org) }
-  return { form: 'reason', reason: rest }
+  return { form: 'reason', reason: rest.replace(/^until\b[\s:,\-—–]*/i, '').trim() }
+}
+
+const UNIT_DAYS = { day: 1, week: 7, month: 30 }
+
+/**
+ * The arguments of `@sydevs-bot hold …`, one of:
+ *
+ * - `{ form: 'default' }` — `hold` alone; the dispatcher picks the date
+ * - `{ form: 'date', date }` — `hold until 2026-12-01`, `hold 3 weeks`, `hold until 2 months`
+ * - `{ form: 'invalid', text }` — anything else after the verb
+ *
+ * A month is 30 days. `now` makes a relative hold a date.
+ */
+export function parseHold(body, config, now = new Date()) {
+  const m = mentionRe(config).exec(String(body || ''))
+  const rest = (m?.[2] || '').trim().replace(/^until\b[\s:,\-—–]*/i, '').trim()
+  if (!rest) return { form: 'default' }
+  const date = /^(\d{4}-\d{2}-\d{2})\b/.exec(rest)
+  if (date && !Number.isNaN(Date.parse(`${date[1]}T00:00:00Z`))) return { form: 'date', date: date[1] }
+  const rel = /^(\d{1,3})\s*(day|week|month)s?\b/i.exec(rest)
+  if (rel) {
+    const d = new Date(now.getTime() + Number(rel[1]) * UNIT_DAYS[rel[2].toLowerCase()] * 86_400_000)
+    return { form: 'date', date: d.toISOString().slice(0, 10) }
+  }
+  return { form: 'invalid', text: rest.slice(0, 80) }
 }

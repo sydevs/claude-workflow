@@ -99,6 +99,7 @@ added for one bad night outlives its cause.
 | Proposals sitting unreviewed | Audits outrun review capacity — lower `ceilings.maxProposalsPerSurvey` |
 | Escalations or post-plan revisions on 2+ roadmap tickets | Planning misses decisions — `implement-roadmap` re-research, or a `revise-roadmap` lens, is the gap |
 | A recheck storm on one item | Humans comment while the bot works — a note for the usage report, not a rule |
+| `pending-overdue` or `board-drag` anomalies | A wait nothing owns, or a board someone edits by hand — read the reason, then the handler or the habit |
 
 Prefer **removing** a rule to adding one. Every dispatch reads its skill in full, and a skill that
 grows a paragraph per incident becomes unreadable — how the previous three-fork workflow decayed.
@@ -197,7 +198,7 @@ next author reads it:
 - **Anything structural** — new tooling, a hook, a workflow change, anything beyond prose — is a
   proposal ticket in that repo instead, filed through `/workflow:write-ticket` in `create` mode,
   under `ceilings.maxOpenProposals` like every audit proposal. The
-  dispatcher sets its Status and `awaiting`.
+  dispatcher derives its Status.
 
 **A recurring theme across the week's work** — the same kind of finding, request or friction on
 two or more distinct days, which no single ticket owns — may become a **Roadmap ticket proposal**.

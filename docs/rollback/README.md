@@ -32,6 +32,7 @@ What was deleted, and by what:
 | Tag **`v0.3.1`** (`f1b6e39`) | this repo | Every deleted file, whole and working. This is the recovery source, not a diff to reconstruct. |
 | `cutover-snapshot-2026-09-08.json` | beside this file | The **only remaining copy** of every issue's old `Stage` and `Hold Until`. The field is gone; the values are here. |
 | `migrate-to-status.mjs` | beside this file | `--restore` re-adds the `awaiting` set and the `sydevs-bot` assignments the old loop reads as its worklist. |
+| `migrate-to-lifecycle.mjs` | beside this file | The move from the `awaiting`/`blocked`/`stuck` labels to the derived Status (2026-10). Its `records` phase is what carries an approval across; the labels it deletes are recreated by `routine-setup.md`'s label script if you roll back past it. |
 | Org field `Hold Until` (`46423871`) | org settings | Never retired. A park still lives there. |
 | `sydevs/claude-workflow#74` | GitHub | The 20 tickets that held `Stage: Implement` at the cutover, grouped by repo. Human-readable, and it outlives these files. |
 
@@ -45,7 +46,7 @@ Three cheaper things stop the loop, and one of them is almost certainly what you
 | A noisy day, or dispatch firing sessions nobody asked for | `gh variable set BOT_DISPATCH --org sydevs --body off` — every repo goes quiet in one write |
 | You want to see plans without writes | `BOT_DISPATCH=dry` |
 | One item is stuck | close it, or remove its `bot:working` label |
-| The platform is the problem | pause the five routines in the UI; the dispatcher degrades to `stuck` and the sweeper retries when you unpause |
+| The platform is the problem | pause the five routines in the UI; fires read Pending and the sweeper retries when you unpause |
 
 `off` is instant, total and free. **A rollback is only for a wrong event model** — something
 about the design turns out to be unworkable and you need a loop running while you rewrite it.

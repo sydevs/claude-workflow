@@ -85,7 +85,7 @@ no per-repo setup.
 | Field | Type | Options | Read by |
 | --- | --- | --- | --- |
 | Priority | single select | Critical · High · Medium · Low | people, and the audits |
-| Hold Until | date | — | the dispatcher: a park, refusing `implement` until the date passes, then a recheck |
+| Hold Until | date | — | the dispatcher: Status Hold until the date passes, then Awaiting; `implement` clears it |
 
 > ⚠ A third field, **`Stage`**, was deleted on 2026-09-15. The event model replaced it with the
 > board's `Status` and the labels below. Its values survive only in
@@ -146,15 +146,12 @@ writes them with `issue_write`: `field_option_name` for a select, `value` for a 
 
 ### Labels (every repo, identical)
 
-Six, and the dispatcher writes five of them. Nothing else may.
-(why: docs/why.md#awaiting-has-one-writer)
+Three, and the dispatcher writes two of them. Nothing else may. Whose turn it is lives in the
+board's Status, not in a label. (why: docs/why.md#status-is-derived-never-read)
 
 | Label | Colour | Means | Written by |
 | --- | --- | --- | --- |
-| `awaiting` | yellow `FBCA04` | Your turn: ready, a decision is needed, or the bot gave up. | the dispatcher |
 | `bot:working` | blue `1D76DB` | A session holds this item. Its status comment names the handler and links the session. | the dispatcher applies it, the session removes it as its last write |
-| `stuck` | orange `D93F0B` | The machinery owes a retry — a usage limit, paused routines, a dead session. Nothing needed from you yet. | the dispatcher |
-| `blocked` | red `B60205` | An open blocker, or a `Hold Until` date still ahead. A recheck session decides when it is free. | the dispatcher |
 | `proposal` | purple `5319E7` | Bot-filed, no human verdict yet. The audits count these against `maxOpenProposals`. | the dispatcher |
 | `ops-journal` | `0052cc` | The daily diary, in `claude-workflow` only. Every worklist query excludes it. | you, once |
 
@@ -163,8 +160,8 @@ Six, and the dispatcher writes five of them. Nothing else may.
 > releases the lock, because `POST /git/refs` is GitHub's only compare-and-swap. It lives outside
 > `refs/heads` and `refs/tags`, so it is not a branch or a tag and `git branch -a` never shows it.
 > `git ls-remote origin 'refs/sydevs-lease/*'` lists the leases a repo holds; a ref there with no
-> `bot:working` on the item is residue the next sweep reclaims.
-> (why: docs/why.md#the-lease-is-a-ref-not-a-label)
+> `bot:working` on the item, or a record past its deadline, is residue the next sweep reclaims.
+> (why: docs/why.md#the-lease-is-a-ref-not-a-label, docs/why.md#a-lease-past-its-deadline-is-reclaimed)
 
 One script sets every shared label to the same colour and description in all five repos. It edits
 a label that exists and creates one that does not, so it serves a fresh account and a one-time
@@ -172,10 +169,7 @@ recolour alike:
 
 ```bash
 labels=(
-  "awaiting|FBCA04|Your turn: ready, a decision is needed, or the bot gave up. Set by the dispatcher only."
-  "blocked|B60205|Waits on an open blocker or a Hold Until date. A recheck decides when it is free."
   "bot:working|1D76DB|Lock: a cloud session is running on this item. See its status comment."
-  "stuck|D93F0B|The loop could not run or finish this and will retry. Nothing needed from you yet."
   "proposal|5319E7|Bot-filed, no human verdict yet."
 )
 for r in SahajCloud SahajAtlasWeb WeMeditateWeb SahajAtlasWordpress claude-workflow; do
@@ -226,18 +220,20 @@ One org project — **[`SYDevelopers Roadmap`, sydevs/projects/2](https://github
 `Status`**, and a board write that fails never stops a dispatch.
 (why: docs/why.md#the-board-is-a-lens-so-it-may-fail-alone)
 
-| Status | Implementation ticket | PR |
-| --- | --- | --- |
-| *(none)* | backlog, outside the process | — |
-| Proposed | filed, a verdict owed | — |
-| Revising | in conversation, not yet authorized | open, not yet approved |
-| Approved | `implement` authorized | approved by the reviewer |
-| Done | closed, or a PR is in flight | merged or closed |
+The **Status** field's options, in this order and spelled as `projects.status` names them. Every
+open item has one, Roadmap tickets included, derived after each plan by `dispatcher/status.mjs`.
+(why: docs/why.md#status-is-derived-never-read)
 
-**A Roadmap ticket carries no `Status`.** The dispatcher clears it instead of writing it. A goal's
-state is what is already on it: no milestone and no children = suggested, a milestone = committed,
-a sub-issue progress bar = in delivery, closed = shipped, `awaiting` = needs us.
-(why: docs/why.md#a-roadmap-ticket-has-no-status)
+| Status | Colour | Issue | PR |
+| --- | --- | --- | --- |
+| Awaiting | yellow | a verdict, an answer or a hand-back is owed by a person | a review, an answer or a resolution is owed |
+| Blocked | red | not approved; an open blocker | — |
+| Hold | gray | not approved; a Hold Until date ahead | — |
+| Pending | blue | approved and waiting, or a retry the machinery owes | the machinery owes the next move |
+| Working | orange | a session holds the lock | a session holds the lock |
+| Done | green | closed, or its PR is open | merged or closed |
+
+`docs/rollback/migrate-to-lifecycle.mjs board --apply` writes these options.
 
 **The dispatcher.** `.github/workflows/dispatcher.yml` in this repo is a `workflow_call` reusable
 workflow, and `dispatcher/*.mjs` beside it is the code. Every repo carries a thin
@@ -310,15 +306,11 @@ private repo:
 3. **Views**:
    | View | Layout | Filter |
    | --- | --- | --- |
-   | Awaiting | Table, sort Priority | `is:open label:awaiting` — the primary view; keeps Roadmap tickets |
-   | Bot Working | Table | `is:open label:bot:working,stuck` |
-   | Pipeline | Board by **Status** | `is:open -no:status -type:Roadmap` |
-   | Backlog | Table — drop the Effort column | `is:open -type:Roadmap AND (is:blocked OR no:status)` |
-   | Roadmap (view 8) | Table, **group by** Repository, **slice by** Milestone; columns Title, Milestone, Sub-issues progress | `type:Roadmap` — the public roadmap |
-
-   ⚠ `is:blocked` in a **view** filter is not the same qualifier as in issue **search**, where it
-   matches the `blocked` label rather than the relationship.
-   (why: docs/why.md#blocked-follows-the-relationship)
+   | Awaiting | Table, sort Priority | `is:open status:Awaiting` — the primary view; keeps Roadmap tickets |
+   | Bot Working | Table | `is:open status:Working,Pending` |
+   | Pipeline | Board by **Status** | `is:open -type:Roadmap` |
+   | Backlog | Table — drop the Effort column | `is:open -type:Roadmap status:Hold,Blocked` |
+   | Roadmap (view 8) | Table, **group by** Repository, **slice by** Milestone; columns Title, Milestone, Sub-issues progress, Status | `type:Roadmap` — the public roadmap |
 4. Turn on **"Automatically delete head branches"** in all five repos. The merge cannot do it.
 
 ### Intake forms — the `sydevs/.github` repo
@@ -332,7 +324,7 @@ A public `sydevs/.github` repo holds the org-default issue forms, in `.github/IS
 | `config.yml` | `blank_issues_enabled: false` |
 
 A repo with its own `ISSUE_TEMPLATE` folder ignores these defaults. A non-member's goal lands as a
-Roadmap ticket with `awaiting`, and nothing runs until a member says `@sydevs-bot revise`.
+Roadmap ticket reading Awaiting, and nothing runs until a member says `@sydevs-bot revise`.
 (why: docs/why.md#an-outsider-feeds-a-member-fires)
 
 > **Why an issue for the journal, not a Discussion or the Wiki?** Neither is writable from a cloud
@@ -679,7 +671,7 @@ Environment: `WeMeditate` = `env_0132ox9g3YUmZVB8GjQrJKoR`. Manage at
 2. **`on`, one repo.** Set a repo-level variable on `claude-workflow` only; it overrides the org
    value. Comment `@sydevs-bot revise …` on a scratch issue and watch it end to end: the Actions
    job summary, the item's status comment, the day's journal comment, the lock coming off,
-   `awaiting` going on.
+   Status moving to Awaiting.
 3. **`on`, the org.** Delete the repo override.
 
 Read the transcript, not just the run status (`RemoteTrigger` `list_runs` → `get_run_log`).
@@ -690,8 +682,11 @@ Read the transcript, not just the run status (`RemoteTrigger` `list_runs` → `g
 
 Cover one of each on purpose: a `revise`, an `implement` through to a merged PR, a review round,
 a red CI run, a conflicting PR, and one nightly audit. For the roadmap tier, run one throwaway goal
-through review, a `revise 1A` answer, `implement` twice (plan, then bulk approval), a `block` and
-its recheck, and the completion check.
+through review, a `revise 1A` answer, `implement` twice (plan, then bulk approval), a `hold` and
+its expiry, a `block on` and its blocker closing, and the completion check.
+
+**A full reconcile on demand**: `gh workflow run workflow-state.yml -R sydevs/<repo>`. A
+`workflow_dispatch` runs the sweep, which reconciles every open item against the board.
 
 ---
 
@@ -726,15 +721,14 @@ it during the handshake.
 
 That is the whole reason the body marker exists. A session writes
 `Blocked by: <url>` into `## Notes`, and **the dispatcher converts the line into the native
-relationship** and applies `blocked`. A local session can also set the relationship directly with
+relationship**, which Status reads. A local session can also set the relationship directly with
 `gh issue edit --add-blocked-by`, which needs the full URL cross-repo.
 
-**The relationship is what every gate reads**, so the label follows it in both directions, and the
-sweeper reconciles them. The reader is deliberately generous about the line's shape — it matches
+**The relationship is what every gate reads**, and Status follows it on every pass. The reader is deliberately generous about the line's shape — it matches
 the words `Blocked by`, with or without a colon, through bold or a bullet, and takes a URL or
 `owner/repo#N`. A line naming neither — a PR URL, a bare `#N` — creates no relationship, and the
 dispatcher comments once to say so, keyed on the targets it names.
-(why: docs/why.md#the-marker-reader-matches-words-not-punctuation, docs/why.md#blocked-follows-the-relationship,
+(why: docs/why.md#the-marker-reader-matches-words-not-punctuation,
 docs/why.md#an-unresolved-blocker-line-is-reported)
 
 Issue **fields** have no such problem: `list_issue_fields`, `issue_read.field_values`,
