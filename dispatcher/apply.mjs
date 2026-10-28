@@ -12,6 +12,7 @@ import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy } from './markers.mjs'
 import { isLogin, isReviewer, isHuman } from './decide.mjs'
 import { deriveStatus } from './status.mjs'
+import { applyRelay } from './relay.mjs'
 
 const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
 
@@ -367,6 +368,15 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           break
         }
         await doFire({ gh, t, snapshot, handler: cur.handler, flags: cur.flags || {}, attempt, config, env, dryRun, log, now, fetchImpl, rec })
+        break
+      }
+      // The session's commits wait on a relay branch; land them on the PR's
+      // branch, or hand back GitHub's words. (why: docs/why.md#the-relay)
+      case 'relay': {
+        log(`relay ${a.branch} (${String(a.sha).slice(0, 7)}) → ${a.head}`)
+        if (dryRun) break
+        const { refusal } = await applyRelay(gh, args, a, log)
+        if (refusal) handedOver.push(refusal)
         break
       }
       default: log(`unknown action ${a.type}`)

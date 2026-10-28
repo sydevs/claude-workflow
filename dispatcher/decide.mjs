@@ -12,6 +12,7 @@
  */
 
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
+import { pushRoute, relayRefusal } from './relay.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -40,6 +41,7 @@ export const hold = (date) => ({ type: 'hold', date })
 /** A pass on an item whose session ended with no unlock seen: archive it, release the lease. */
 export const archiveCurrent = () => ({ type: 'archiveCurrent' })
 export const transfer = (repo, milestone) => ({ type: 'transfer', repo, milestone })
+export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, sha })
 
 // ---- predicates ------------------------------------------------------
 const lower = (s) => String(s || '').toLowerCase()
@@ -78,6 +80,15 @@ export function isReviewer(login, config) {
  */
 export function fullTreatment(login, config) {
   return isBot(login, config) || respondTo(login, config)
+}
+/**
+ * A PR based on another branch than the default. The loop never opens one
+ * and never works one: it has no ruleset behind it, so armed it would merge
+ * unreviewed. (why: docs/why.md#a-stacked-pr-is-never-armed)
+ */
+export function stackedPr(s) {
+  const base = s.pr?.base
+  return Boolean(base?.defaultBranch && base.ref !== base.defaultBranch)
 }
 /**
  * The open PRs that close this issue, or null when none does. An issue whose
@@ -429,17 +440,6 @@ export function loopMayNotMerge(snapshot, config) {
   return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
-/**
- * A PR based on another branch, not the default one. Its base has no ruleset
- * behind it: GitHub refuses to arm it, and would merge it unreviewed if it
- * did. Its review is the gate, and merging it into its parent is the
- * reviewer's. (why: docs/why.md#a-stacked-pr-is-never-armed)
- */
-export function stacked(snapshot) {
-  const base = snapshot.pr?.base
-  return Boolean(base?.defaultBranch && base.ref !== base.defaultBranch)
-}
-
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is.
 const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets', 'rerunJobs'])
@@ -468,6 +468,9 @@ export function evaluatePr(s, config) {
   // A member's draft is their own work in progress until it is ready or they
   // mention the bot. (why: docs/why.md#a-members-pr-gets-the-loop)
   if (pr.draft && !isBot(pr.user?.login, config)) return [note('a member draft — left alone until it is ready')]
+  // Nothing runs on a stacked PR: no critic, no repair, no arming. Said once.
+  // (why: docs/why.md#a-stacked-pr-is-never-armed)
+  if (stackedPr(s)) return [commentOnce(`stacked ${pr.base.ref}`, `This PR is stacked on \`${pr.base.ref}\`. Merge it into that branch, or retarget it to \`${pr.base.defaultBranch}\`: the loop does not work stacked PRs, so nothing runs here until then.`)]
   // The session that holds the linked issue still owns this branch. A repo
   // with no CI is green the moment the PR opens, so without this the critic
   // fires while implement is still pushing.
@@ -529,7 +532,9 @@ function evaluateGreenPr(s, config) {
   // A consumer built beside its producer is reviewed with it, and merges
   // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
   const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
-  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stacked(s)
+  // evaluatePr stops a stacked PR before here; never arming one is the
+  // guard behind that. (why: docs/why.md#a-stacked-pr-is-never-armed)
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stackedPr(s)
 
   if (pr.draft) {
     // implement opens the PR only once the ticket is built, so the critic
@@ -797,8 +802,29 @@ function refuseUnresolvedBlockers(s, config) {
  * names a Status, because `apply` derives it from the state the plan left.
  * (why: docs/why.md#status-is-derived-never-read)
  */
+/**
+ * The session left its commits on a relay branch and asked for them to land.
+ * The push that lands them is the next event, so nothing else runs now.
+ * (why: docs/why.md#the-relay)
+ */
+function relayPlan(s, config, req) {
+  const why = relayRefusal(s, config, req, fullTreatment)
+  if (!why) return [relay(req)]
+  return [
+    handback(s, `the relay was refused: ${why}`),
+    commentOnce(`relay-refused ${req.sha}`, `The session left its work on \`${req.branch}\`, but I could not land it here: ${why}. The branch is kept; merge it yourself, or mention me (\`${config.dispatch.commandPrefix}\`) to try again.`),
+  ]
+}
+
+/** Every session fired at a PR carries where it may push. (why: docs/why.md#the-branch-decides-where-a-session-pushes) */
+function withPushRoute(plan, s, config) {
+  if (s.kind !== 'pr') return plan
+  const push = pushRoute(s, config, fullTreatment)
+  return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
+}
+
 export function decide(target, s, config) {
-  let plan = route(target, s, config)
+  let plan = withPushRoute(route(target, s, config), s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   if (untouched(s, config)) return plan
@@ -1074,7 +1100,11 @@ function route(target, s, config) {
       // A PR's next turn is derived like any other pass. An approved PR a
       // session just touched stays the machinery's: it is never asked about
       // again for a merge commit. (why: docs/why.md#a-resolved-conflict-is-not-a-new-question)
-      if (s.kind === 'pr') return plan.concat(evaluatePr(s, config))
+      if (s.kind === 'pr') {
+        const req = freshRequest(s)?.relay
+        if (req) return plan.concat(relayPlan(s, config, req))
+        return plan.concat(evaluatePr(s, config))
+      }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
       // so the verb that started it still reads as pending. Re-dispatching it

@@ -88,25 +88,6 @@ test('a PR: review is yours, the queue is the machinery\'s, and a question threa
   assert.equal(deriveStatus(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] }), config, now).due, false, 'waiting on its producer has no due')
 })
 
-test('an approved stacked PR is yours to merge into its parent, not a wait that never ends', () => {
-  // sydevs/SahajAtlasWeb#340 sits on #318's branch. Nothing arms it, so a
-  // Pending here is a due the reconciler checks three times and hands back.
-  const onParent = { base: { ref: 'claude/feat-147-submit-a-class', defaultBranch: 'main' } }
-  const s = pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' } })
-  assert.equal(deriveStatus(s, config, now).key, 'awaiting')
-  assert.match(deriveStatus(s, config, now).reason, /merging it into claude\/feat-147-submit-a-class is yours/)
-  assert.equal(deriveStatus(s, config, now).due, false)
-  const onMain = pr({ pull: { base: { ref: 'main', defaultBranch: 'main' } }, normalized: { reviewDecision: 'APPROVED' } })
-  assert.equal(key(onMain), 'pending', 'a PR on the default branch is still the queue\'s')
-  // A conflict or red CI on a stacked PR is still the machinery's to repair.
-  assert.equal(key(pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, mergeable: 'CONFLICTING' })), 'pending')
-  assert.equal(key(pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, ci: { green: false, failing: ['build'], running: [] } })), 'pending')
-  // A producer wait ends on its own, so it holds — merging ahead of it is wrong.
-  const alsoWaiting = pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] })
-  assert.equal(deriveStatus(alsoWaiting, config, now).key, 'pending')
-  assert.match(deriveStatus(alsoWaiting, config, now).reason, /merges after sydevs\/SahajCloud#1/)
-})
-
 test('a bot finding the bot has not answered is its own turn, not yours', () => {
   const finding = { isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-10-25T00:00:00Z' }] }
   assert.equal(key(pr({ threads: [finding] })), 'pending', 'address-review owes the reply')

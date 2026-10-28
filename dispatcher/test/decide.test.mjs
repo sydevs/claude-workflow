@@ -30,7 +30,7 @@ function prSnap(over = {}) {
     item: { number: 5, labels: [] },
     locked: false,
     record: { fixCi: 0 },
-    pr: { number: 5, state: 'open', draft: true, user: { login: 'sydevs-bot' }, head: { sha: 'abc' }, changed_files: 10, additions: 200, deletions: 20 },
+    pr: { number: 5, state: 'open', draft: true, user: { login: 'sydevs-bot' }, head: { sha: 'abc', ref: 'claude/fix-5-x', repo: 'sydevs/SahajCloud' }, changed_files: 10, additions: 200, deletions: 20 },
     mergeable: 'MERGEABLE',
     reviews: [],
     threads: [],
@@ -964,7 +964,7 @@ test('a queue failure is recorded against the head and repaired, not re-armed', 
   const plan = decide({ reason: 'queue-failed', facts: { run } }, dequeued(), config)
   assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
   assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run } })
-  assert.deepEqual(plan[2].flags, { queueRun: run }, 'the session is told where the failure is')
+  assert.deepEqual(plan[2].flags, { queueRun: run, push: 'direct' }, 'the session is told where the failure is, and where it may push')
 })
 
 test('a sweep over a recorded queue failure repairs it — the #959 loop', () => {
