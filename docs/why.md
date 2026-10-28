@@ -1102,6 +1102,17 @@ dispatcher does on a PR becomes input it reads, so every filter must match what 
 emits. Since [Only required checks are CI](#only-required-checks-are-ci), the list matters only when
 the ruleset cannot be read, and every check counts again.
 
+## A stacked PR is never armed
+
+A PR whose base is another branch (a review-asks refactor stacked on its parent's branch, as
+SahajAtlasWeb#340 sits on #318's) has no ruleset behind it. GitHub refuses to arm auto-merge on one
+in a clean state ("Pull request is in clean status"), and if it accepted, it would merge an
+unreviewed change into the parent the moment it went green. So `mayArm` is false when the base is
+not the default branch: the reviewer's merge is the gate, and the parent carries the change to
+`main` under the ruleset. The refusal arrived as a GraphQL `UNPROCESSABLE` with no HTTP status,
+which the hand-over test did not recognise, so it threw and the pass never wrote the item's Status.
+`handOver` now reads `errors[].type` too.
+
 ## A write we cannot make is handed over, not thrown
 
 `markPullRequestReadyForReview` came back `FORBIDDEN` on sydevs/SahajCloud#744. The job died on the
