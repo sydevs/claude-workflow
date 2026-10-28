@@ -160,6 +160,10 @@
       "max429Seconds": 3600,
       "backoff5xxSeconds": 20
     },
+    "githubRetry": {
+      "attempts": 3,
+      "baseSeconds": 2
+    },
     "recordHistory": 20,
     "workflow": ".github/workflows/dispatcher.yml",
     "callerWorkflow": ".github/workflows/workflow-state.yml",
