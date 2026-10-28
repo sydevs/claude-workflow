@@ -1117,15 +1117,12 @@ the step over: the plan finishes, the item gets `awaiting`, one comment names th
 could not take, and the journal records a `handed-over` anomaly. This is the third instance after
 the board and the journal: **the dispatcher's job is to get the work to a person or a session.**
 
-A refusal can also arrive with **no HTTP status at all**. Arming auto-merge on SahajAtlasWeb#340
-came back as a GraphQL error — `UNPROCESSABLE`, "Pull request is in clean status" — which a test
-reading `e.status` could not see, so it threw and the pass never wrote the item's Status. So
-`handOver` reads `errors[].type` too, and only for `FORBIDDEN`: `UNPROCESSABLE` is GitHub calling
-the input invalid, which a wrong node id or a bad enum also answers, and that is a bug, which must
-still throw. The clean-status refusal is recognised by its words, where every other refusal already
-was — as is a repository with auto-merge switched off ("not allowed for this repository"), the other
-settled setting GitHub reports as invalid input. Every refusal the narrowed type test drops has to
-be added there, by the words GitHub answers with.
+A refusal can also arrive with **no HTTP status at all**, so `handOver` reads `errors[].type` too
+— and only for `FORBIDDEN`. `UNPROCESSABLE` is GitHub calling the input invalid, which a wrong node
+id or a bad enum also answers, and that is a bug, which must still throw. So every other refusal is
+recognised by GitHub's sentence, the clean status that blocks arming and a repository with
+auto-merge switched off ("not allowed for this repository") among them. **A refusal this type test
+drops is added by the words GitHub answers with, never by its type.**
 
 ## Quote the refusal, do not name a cause
 
