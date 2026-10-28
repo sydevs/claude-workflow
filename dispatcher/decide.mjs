@@ -82,6 +82,15 @@ export function fullTreatment(login, config) {
   return isBot(login, config) || respondTo(login, config)
 }
 /**
+ * A PR based on another branch than the default. The loop never opens one
+ * and never works one: it has no ruleset behind it, so armed it would merge
+ * unreviewed. (why: docs/why.md#a-stacked-pr-is-never-armed)
+ */
+export function stackedPr(s) {
+  const base = s.pr?.base
+  return Boolean(base?.defaultBranch && base.ref !== base.defaultBranch)
+}
+/**
  * The open PRs that close this issue, or null when none does. An issue whose
  * PR is open is the PR's turn, not the human's.
  * (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
@@ -459,6 +468,9 @@ export function evaluatePr(s, config) {
   // A member's draft is their own work in progress until it is ready or they
   // mention the bot. (why: docs/why.md#a-members-pr-gets-the-loop)
   if (pr.draft && !isBot(pr.user?.login, config)) return [note('a member draft — left alone until it is ready')]
+  // Nothing runs on a stacked PR: no critic, no repair, no arming. Said once.
+  // (why: docs/why.md#a-stacked-pr-is-never-armed)
+  if (stackedPr(s)) return [commentOnce(`stacked ${pr.base.ref}`, `This PR is stacked on \`${pr.base.ref}\`. Merge it into that branch, or retarget it to \`${pr.base.defaultBranch}\`: the loop does not work stacked PRs, so nothing runs here until then.`)]
   // The session that holds the linked issue still owns this branch. A repo
   // with no CI is green the moment the PR opens, so without this the critic
   // fires while implement is still pushing.
@@ -520,11 +532,9 @@ function evaluateGreenPr(s, config) {
   // A consumer built beside its producer is reviewed with it, and merges
   // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
   const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
-  // A PR stacked on another branch has no ruleset behind it: GitHub refuses
-  // to arm it, and would merge it unreviewed if it did. Its review is the
-  // gate. (why: docs/why.md#a-stacked-pr-is-never-armed)
-  const stacked = Boolean(pr.base?.defaultBranch && pr.base.ref !== pr.base.defaultBranch)
-  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stacked
+  // evaluatePr stops a stacked PR before here; never arming one is the
+  // guard behind that. (why: docs/why.md#a-stacked-pr-is-never-armed)
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stackedPr(s)
 
   if (pr.draft) {
     // implement opens the PR only once the ticket is built, so the critic

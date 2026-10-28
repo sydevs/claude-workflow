@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { applyRelay, pushRoute, relayRefusal } from '../relay.mjs'
 import { fullTreatment, decide } from '../decide.mjs'
 import { parseRequest } from '../markers.mjs'
+import { deriveStatus } from '../status.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 const SHA = 'a'.repeat(40)
@@ -152,4 +153,25 @@ test('every session fired at a PR carries its push route', () => {
   const fire = decide({ reason: 'unlock', facts: {} }, s, config).find((a) => a.type === 'fire')
   assert.equal(fire.handler, 'resolve-conflicts')
   assert.equal(fire.flags.push, 'relay')
+})
+
+// ---- a stacked PR ----------------------------------------------------------
+
+test('a stacked PR fires nothing, is never armed, and reads Awaiting', () => {
+  const s = unlocked({ request: null, pr: { ...prSnap().pr, user: { login: 'sydevs-bot' }, head: { ref: 'claude/refactor-147', repo: 'sydevs/SahajAtlasWeb' }, base: { ref: 'claude/feat-147-submit-a-class', defaultBranch: 'main' } }, normalized: { reviewDecision: 'APPROVED' } })
+  for (const reason of ['unlock', 'sweep-pr', 'ci']) {
+    const plan = decide({ reason, facts: {} }, s, config)
+    assert.ok(!plan.some((a) => ['fire', 'armAutoMerge', 'markReady'].includes(a.type)), reason)
+  }
+  const plan = decide({ reason: 'sweep-pr', facts: {} }, s, config)
+  assert.ok(plan.some((a) => a.type === 'comment' && a.key === 'stacked claude/feat-147-submit-a-class'))
+  const st = deriveStatus(s, config)
+  assert.equal(st.key, 'awaiting')
+  assert.match(st.reason, /stacked on claude\/feat-147-submit-a-class/)
+})
+
+test('a stacked PR gets no session on a mention either', () => {
+  const s = unlocked({ request: null, record: {}, pr: { ...prSnap().pr, base: { ref: 'feat/parent', defaultBranch: 'main' } } })
+  const plan = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot please fix', association: 'OWNER', commentId: 1 } }, s, config)
+  assert.ok(!plan.some((a) => a.type === 'fire'))
 })
