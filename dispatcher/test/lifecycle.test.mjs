@@ -170,3 +170,16 @@ test('the Pending clock starts when a wait the machinery owns begins, and stops 
   assert.equal(done.record.pendingSince, null)
   assert.equal(done.record.dueAttempts, 0)
 })
+
+test('no pass but a person\'s verb approves a goal\'s children', () => {
+  // The migration records `approved` on goals that were planned, so a
+  // reconcile or an unblock that started their children would build tickets
+  // nobody approved.
+  const kids = [{ repo, number: 10, state: 'open', prs: 0, blockedByOpen: [] }]
+  const g = (over) => issue({ item: { type: 'Roadmap' }, children: kids, record: { approved: { by: 'Ardnived' }, dispatches: [{ handler: 'implement-roadmap' }] }, ...over })
+  assert.ok(!decide(reconcile, g(), config).some((a) => a.type === 'targets' || a.type === 'fire'), 'reconcile leaves a goal alone')
+  const unblocked = decide({ ...reconcile, reason: 'unblock-check', facts: { closedNumber: 3 } }, g(), config)
+  assert.ok(!unblocked.some((a) => a.type === 'targets' || a.type === 'fire'), 'an unblock never approves children')
+  const unplanned = decide({ ...reconcile, reason: 'unblock-check', facts: { closedNumber: 3 } }, g({ children: [], record: { approved: { by: 'Ardnived' } } }), config)
+  assert.ok(unplanned.some((a) => a.type === 'fire' && a.handler === 'implement-roadmap'), 'an approved, unplanned goal is planned when its blocker closes')
+})

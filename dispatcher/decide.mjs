@@ -802,10 +802,16 @@ function untouched(s, config) {
 /**
  * The approved ticket is free: build it. The same guards as the verb, without
  * recording the approval again. A ticket that turned out not free comes back
- * with the session's question. (why: docs/why.md#approval-lives-in-the-record)
+ * with the session's question. A goal is only ever planned here, never has
+ * its children approved: approving them is a person's verb.
+ * (why: docs/why.md#approval-lives-in-the-record)
  */
 function startApproved(s, config, commentId) {
-  if (isRoadmap(s, config)) return implementGoal(s, config, { author: s.record.approved.by, commentId })
+  if (isRoadmap(s, config)) {
+    if (planned(s)) return [note('an approved goal already planned — its children carry their own approvals')]
+    if (s.locked) return [recheck()]
+    return [record({ approveOnPlan: { by: s.record.approved.by || null } }), fire('implement-roadmap', { mode: 'plan' })]
+  }
   if (inFlight(s)) return [note(`#${inFlight(s)[0]} is already open for it`)]
   if (s.openQuestions?.open) return withdraw(s).concat(refuseOpenQuestions(s, config, { commentId }))
   if (s.locked) return [recheck()]
@@ -1169,7 +1175,7 @@ function route(target, s, config) {
         if (overdue(s, config) && !e.some((a) => MOVES.has(a.type))) return plan.concat(e, dueStep(s, config, `the PR has not moved (${s.normalized?.mergeStateStatus || s.mergeable || 'unknown'})`))
         return plan.concat(e)
       }
-      if (s.item.state === 'open' && rec.approved && !blockedNow(s) && !inFlight(s) && !rec.handback) {
+      if (s.item.state === 'open' && rec.approved && !isRoadmap(s, config) && !blockedNow(s) && !inFlight(s) && !rec.handback) {
         const start = startApproved(s, config, 'reconcile')
         if (overdue(s, config) && !start.some((a) => MOVES.has(a.type))) return plan.concat(start, dueStep(s, config, 'the approved build has not started'))
         return plan.concat(start)
