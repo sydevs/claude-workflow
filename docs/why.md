@@ -1104,7 +1104,8 @@ last 100 PRs of each repo (2026-10-27), and was merged back into #318. So a stac
 reads Awaiting with one comment and runs nothing. Never arming it is the guard behind that: GitHub
 refused #340 only because it was clean ("Pull request is in clean status"); with checks pending it
 arms, and merges unreviewed when they pass. That refusal came as a GraphQL `UNPROCESSABLE` with no
-HTTP status, so `handOver` now reads `errors[].type` too.
+HTTP status, which `handOver` now recognises by its words
+([A write we cannot make is handed over, not thrown](#a-write-we-cannot-make-is-handed-over-not-thrown)).
 
 ## A write we cannot make is handed over, not thrown
 
@@ -1115,6 +1116,16 @@ do not hold is not a bug**; dying on it only skips the rest of the plan. So a de
 the step over: the plan finishes, the item gets `awaiting`, one comment names the step the token
 could not take, and the journal records a `handed-over` anomaly. This is the third instance after
 the board and the journal: **the dispatcher's job is to get the work to a person or a session.**
+
+A refusal can also arrive with **no HTTP status at all**. Arming auto-merge on SahajAtlasWeb#340
+came back as a GraphQL error — `UNPROCESSABLE`, "Pull request is in clean status" — which a test
+reading `e.status` could not see, so it threw and the pass never wrote the item's Status. So
+`handOver` reads `errors[].type` too, and only for `FORBIDDEN`: `UNPROCESSABLE` is GitHub calling
+the input invalid, which a wrong node id or a bad enum also answers, and that is a bug, which must
+still throw. The clean-status refusal is recognised by its words, where every other refusal already
+was — as is a repository with auto-merge switched off ("not allowed for this repository"), the other
+settled setting GitHub reports as invalid input. Every refusal the narrowed type test drops has to
+be added there, by the words GitHub answers with.
 
 ## Quote the refusal, do not name a cause
 
