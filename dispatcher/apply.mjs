@@ -96,7 +96,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       // and a bug must throw.
       const refused = (e?.errors || []).some((x) => x?.type === 'FORBIDDEN')
       const denied = refused || e?.status === 403 || e?.status === 405 || e?.status === 422
-        || /not accessible|FORBIDDEN|Resource protected|protected branch|required status check|approving review|in clean status/i.test(msg)
+        || /not accessible|FORBIDDEN|Resource protected|protected branch|required status check|approving review|in clean status|not allowed for this repository/i.test(msg)
       if (!denied) throw e
       log(`cannot ${what} — ${e.status || '?'} ${msg}`)
       // GitHub's own words, not a guess. A branch rule refusing a merge and a

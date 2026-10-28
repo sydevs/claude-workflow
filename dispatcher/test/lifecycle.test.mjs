@@ -192,6 +192,12 @@ test('a GraphQL refusal is handed over by its own words; an invalid input still 
   assert.match(handover(clean), /in clean status/, "handed over in GitHub's own words")
   assert.equal(s.pr.autoMergeArmed, false, 'and nothing claims it is armed')
 
+  // Auto-merge off is a repo setting, not a bug, and GraphQL answers it
+  // UNPROCESSABLE too — so the words have to carry it.
+  const off = arming(err('UNPROCESSABLE', 'Pull request Auto merge is not allowed for this repository'))
+  await run(off, snap())
+  assert.match(handover(off), /not allowed for this repository/, 'auto-merge off is handed over')
+
   // A permission we do not hold reads as a refusal from its type alone.
   const forbidden = arming(err('FORBIDDEN', 'Your token has not been granted the scopes necessary'))
   await run(forbidden, snap())

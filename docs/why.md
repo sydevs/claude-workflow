@@ -1134,7 +1134,9 @@ reading `e.status` could not see, so it threw and the pass never wrote the item'
 `handOver` reads `errors[].type` too, and only for `FORBIDDEN`: `UNPROCESSABLE` is GitHub calling
 the input invalid, which a wrong node id or a bad enum also answers, and that is a bug, which must
 still throw. The clean-status refusal is recognised by its words, where every other refusal already
-was.
+was — as is a repository with auto-merge switched off ("not allowed for this repository"), the other
+settled setting GitHub reports as invalid input. Every refusal the narrowed type test drops has to
+be added there, by the words GitHub answers with.
 
 ## Quote the refusal, do not name a cause
 
