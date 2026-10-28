@@ -11,14 +11,15 @@
  * same answer. (why: docs/why.md#actions-observes-classifies-locks-and-fires)
  */
 
-import { parseVerb, parseBlock } from './verbs.mjs'
+import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
 export const fire = (handler, flags = {}) => ({ type: 'fire', handler, flags })
 export const recheck = () => ({ type: 'recheck' })
 export const label = (add = [], remove = []) => ({ type: 'label', add, remove })
-export const status = (value) => ({ type: 'status', value })
+/** The last action of every plan: `apply` derives Status from the state the plan left. (why: docs/why.md#status-is-derived-never-read) */
+export const syncStatus = () => ({ type: 'syncStatus' })
 export const commentOnce = (key, body) => ({ type: 'comment', key, body })
 export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
@@ -34,7 +35,10 @@ export const releaseLease = (why) => ({ type: 'releaseLease', why })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
 export const record = (patch) => ({ type: 'record', patch })
+/** Set the Hold Until date, or clear it with `null`. */
 export const hold = (date) => ({ type: 'hold', date })
+/** A pass on an item whose session ended with no unlock seen: archive it, release the lease. */
+export const archiveCurrent = () => ({ type: 'archiveCurrent' })
 export const transfer = (repo, milestone) => ({ type: 'transfer', repo, milestone })
 
 // ---- predicates ------------------------------------------------------
@@ -68,6 +72,14 @@ export function isReviewer(login, config) {
   return lower(login) === lower(config.assignment?.reviewer)
 }
 /**
+ * A PR the loop works in full: the bot's own, or one a `respondTo` login
+ * wrote. Anyone else's gets an answer to a mention and nothing more, so a
+ * stranger's PR cannot spend sessions. (why: docs/why.md#a-members-pr-gets-the-loop)
+ */
+export function fullTreatment(login, config) {
+  return isBot(login, config) || respondTo(login, config)
+}
+/**
  * The open PRs that close this issue, or null when none does. An issue whose
  * PR is open is the PR's turn, not the human's.
  * (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
@@ -94,6 +106,16 @@ function byOutsider(s, config) {
 }
 const parked = (s) => Boolean(s.park?.until && !s.park.passed)
 const blockedNow = (s) => s.blockedByOpen.length > 0 || parked(s)
+const nowOf = (s) => s.now || new Date()
+/** Approval is the dispatcher's memory, not a Status. (why: docs/why.md#approval-lives-in-the-record) */
+const approve = (s, by) => record({ approved: { by: by || null, at: nowOf(s).toISOString() } })
+const withdraw = (s) => (s.record?.approved ? [record({ approved: null })] : [])
+/**
+ * The machinery gave up, so the item is yours until you act: Status reads
+ * Awaiting with this reason. Any verb, mention, review or push of yours clears it.
+ */
+const handback = (s, reason) => record({ handback: { reason, at: nowOf(s).toISOString() } })
+const clearHandback = (s) => (s.record?.handback ? [record({ handback: null })] : [])
 
 /**
  * A member's roadmap ticket is reviewed once, unprompted. A stranger's
@@ -152,7 +174,7 @@ function continueNext(s, config, handler) {
   const number = s.kind === 'pr' ? s.pr?.number : s.item.number
   return [
     record({ continues: 0 }),
-    label([config.labels.awaiting], []),
+    handback(s, `not finished after ${n} sessions in a row`),
     commentOnce(`continue-cap ${s.record?.current?.firedAt || ''}`, `Not finished after ${n} sessions in a row. The branch holds what is built, and the comment above says what remains. A mention (\`${p}\`) starts me again.`),
     anomaly('continue-cap', `${s.repo.full}#${number} not finished after ${n} sessions`),
   ]
@@ -207,25 +229,34 @@ function ownReview(snapshot, config) {
  * A thread the bot rooted to ask a human something. It waits on that human:
  * only their reply, caught by the rule before it, makes it the bot's turn.
  */
-function isQuestion(root, config) {
+export function isQuestion(root, config) {
   const marker = config.review?.questionMarker || '<!-- sydevs-question -->'
   return isBot(root.author, config) && String(root.body || '').includes(marker)
 }
 
-function needsAddressReview(snapshot, config) {
+/**
+ * On a member's own PR the loop answers only the threads it rooted, and only
+ * a review someone else left: a member's notes to themselves are not a
+ * request. (why: docs/why.md#a-members-pr-gets-the-loop)
+ */
+export function needsAddressReview(snapshot, config) {
   const since = botLastWordAt(snapshot.comments, config)
+  const author = snapshot.pr?.user?.login
+  const memberPr = Boolean(author) && !isBot(author, config)
   for (const t of snapshot.threads || []) {
     if (t.isResolved) continue
     const cs = t.comments || []
     if (!cs.length) continue
     const root = cs[0]
     const last = cs[cs.length - 1]
+    if (memberPr && !isBot(root.author, config)) continue
     if (respondTo(last.author, config) && !isBot(last.author, config)) return 'a thread waits on a reply'
     if (isQuestion(root, config)) continue
     if (isBot(root.author, config) && !cs.slice(1).some((c) => isBot(c.author, config))) return 'own-rooted thread unanswered'
   }
   for (const r of snapshot.reviews || []) {
     if (!respondTo(r.user?.login, config) || isBot(r.user?.login, config)) continue
+    if (memberPr && lower(r.user?.login) === lower(author)) continue
     if (since && r.submitted_at <= since) continue
     const state = String(r.state || '').toUpperCase()
     if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim()) || r.inline_count > 0) return 'a review asks for changes'
@@ -298,7 +329,7 @@ function infraPlan(s, config, infra) {
   if (done < cap && infra.every((c) => c.jobId)) return [note(`infrastructure failure on ${names} — re-run ${done + 1} of ${cap}`), rerunJobs(sha, infra)]
   const tried = done ? ` I re-ran it ${done} time${done === 1 ? '' : 's'} and it is still red.` : ''
   return [
-    label([config.labels.awaiting], [config.labels.stuck]),
+    handback(s, `CI failed on infrastructure: ${names}`),
     commentOnce(`ci-infra ${sha}`, `CI failed on infrastructure, not on this change: ${names}.${tried} Re-run it once the service is back, or push.`),
     anomaly('ci-infra', `${s.repo.full}#${s.pr.number} infrastructure: ${names}`),
   ]
@@ -314,7 +345,9 @@ function queueFailure(s) {
 function repairPlan(s, config, reason, flags = {}) {
   const pr = s.pr
   const ended = endedFixCiFor(s.record, pr.head?.sha)
-  if (ended) return [note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
+  // It stood down on this head, and its comment says why: your turn, until a
+  // push gives it a new head.
+  if (ended) return [...(s.record?.handback ? [] : [handback(s, `fix-ci ran on ${String(pr.head.sha).slice(0, 7)} and CI is still red`)]), note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
   const cap = config.ceilings?.ciFixIterations ?? 3
   if ((s.record?.fixCi || 0) < cap) return [bumpFixCi(), fire('fix-ci', flags)]
   // The cap comment promises that a person's push starts the repair again,
@@ -322,7 +355,7 @@ function repairPlan(s, config, reason, flags = {}) {
   // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
   if (isHuman(s.headAuthor, config) && pr.head?.sha && pr.head.sha !== lastFixCiSha(s.record)) return [record({ fixCi: 0 }), bumpFixCi(), fire('fix-ci', flags)]
   return [
-    label([config.labels.awaiting], [config.labels.stuck]),
+    handback(s, `CI still red after ${cap} fix attempts`),
     commentOnce(`ci-capped ${pr.head?.sha}`, `CI is still red after ${config.ceilings.ciFixIterations} fix attempts (${reason}). I have stopped retrying. A mention or a push from you starts me again.`),
     anomaly('ci-capped', `${s.repo.full}#${pr.number} CI capped: ${reason}`),
   ]
@@ -365,12 +398,11 @@ function deployPassFor(record, sha) {
  * already ended on this head, or is ending now, stopped on a conflict it
  * would not guess, so that is your turn, until a push gives it a new head.
  */
-function conflictPlan(s, config) {
-  const awaiting = config.labels.awaiting
+export function conflictPlan(s, config) {
   const sha = s.pr.head?.sha
   const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
   const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
-  if (ended) return [label([awaiting], []), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
+  if (ended) return [...(s.record?.handback ? [] : [handback(s, 'it still conflicts after resolve-conflicts ran on this head')]), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
   return [fire('resolve-conflicts')]
 }
 
@@ -393,7 +425,7 @@ function underThreshold(pr, config) {
 }
 
 /** Repos where a merge is a deploy, so nothing is ever armed. */
-function loopMayNotMerge(snapshot, config) {
+export function loopMayNotMerge(snapshot, config) {
   return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
@@ -402,17 +434,16 @@ function loopMayNotMerge(snapshot, config) {
 const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
- * A sweep pass over an item that already carries `awaiting` says nothing
- * unless the derivation moves it.
+ * A sweep pass over an item last left Awaiting says nothing unless the
+ * derivation moves it.
  *
- * New activity is anything that clears `awaiting`, and every way to clear it
- * is an event the dispatcher already wakes on. So a plan with no move is the
- * plan the last pass ran, and running it again writes the same label, the
- * same `commentOnce` and the same anomaly.
- * (why: docs/why.md#a-quiet-awaiting-item-is-swept-in-silence)
+ * New activity is anything that ends Awaiting, and every way to end it is an
+ * event the dispatcher already wakes on. So a plan with no move is the plan
+ * the last pass ran, and running it again writes the same `commentOnce` and
+ * the same anomaly. (why: docs/why.md#a-quiet-awaiting-item-is-swept-in-silence)
  */
 function quietSweep(plan, s, config) {
-  if (!(s.item?.labels || []).includes(config.labels.awaiting)) return plan
+  if (s.record?.status !== 'awaiting') return plan
   if (plan.some((a) => MOVES.has(a.type))) return plan
   return [note('awaiting with no new activity — nothing to add')]
 }
@@ -420,10 +451,12 @@ function quietSweep(plan, s, config) {
 // ---- the one derivation every PR event funnels into ----------------------
 export function evaluatePr(s, config) {
   const pr = s.pr
-  const awaiting = config.labels.awaiting
-  if (!pr || pr.state !== 'open') return [status('done')]
-  if (!isBot(pr.user?.login, config)) return []
+  if (!pr || pr.state !== 'open') return []
+  if (!fullTreatment(pr.user?.login, config)) return []
   if (s.locked) return [recheck()]
+  // A member's draft is their own work in progress until it is ready or they
+  // mention the bot. (why: docs/why.md#a-members-pr-gets-the-loop)
+  if (pr.draft && !isBot(pr.user?.login, config)) return [note('a member draft — left alone until it is ready')]
   // The session that holds the linked issue still owns this branch. A repo
   // with no CI is green the moment the PR opens, so without this the critic
   // fires while implement is still pushing.
@@ -482,7 +515,6 @@ function linkTarget(url) {
 
 function evaluateGreenPr(s, config) {
   const pr = s.pr
-  const awaiting = config.labels.awaiting
   // A consumer built beside its producer is reviewed with it, and merges
   // after it. (why: docs/why.md#a-cross-repo-set-is-built-together)
   const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
@@ -496,7 +528,7 @@ function evaluateGreenPr(s, config) {
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
-    const plan = [markReady(), requestReviewer(), label([awaiting], [])]
+    const plan = [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
     if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) {
@@ -506,15 +538,41 @@ function evaluateGreenPr(s, config) {
     return plan
   }
 
+  // A member's PR reaches ready without the bot's draft pass, so it gets the
+  // critic and the reviewer request here, once.
+  // (why: docs/why.md#a-members-pr-gets-the-loop)
+  const member = !isBot(pr.user?.login, config)
+  if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [requestReviewer(), fire('review-pr')]
+  const plan = member ? [requestReviewer()] : []
+
   // The dispatcher no longer merges. GitHub does, once the ruleset is
   // satisfied — one approval, every thread resolved, CI green — and the queue
   // rebases and tests before it lands. All that is left here is arming a PR
   // that reached ready without it. (why: docs/why.md#github-owns-the-merge)
-  if (mayArm && !s.pr?.autoMergeArmed) return [armAutoMerge()]
-  if (s.normalized?.reviewDecision !== 'APPROVED') return [status('revising')]
-  const plan = [status('approved')]
-  if (loopMayNotMerge(s, config)) plan.push(label([awaiting], []))
+  if (mayArm && !s.pr?.autoMergeArmed) return plan.concat(armAutoMerge())
+  // Approved, and a thread still waits on you: the ruleset will not merge it
+  // until that thread is resolved, so say which.
+  // (why: docs/why.md#an-approved-pr-names-what-holds-it)
+  if (s.normalized?.reviewDecision === 'APPROVED') {
+    for (const t of threadsWaiting(s, config)) {
+      const url = t.comments?.[0]?.url
+      plan.push(commentOnce(`approved-thread ${t.id}`, `Approved, but this thread still waits on you, and the ruleset will not merge until it is resolved: ${url || 'see the review threads'}. Reply there, or resolve it.`))
+    }
+  }
   return plan
+}
+
+/**
+ * Unresolved threads whose last word is the bot's: a question it asked, or a
+ * reply it gave that nobody resolved. Each one waits on a person. A finding
+ * the bot rooted and never answered is the bot's own turn instead.
+ */
+export function threadsWaiting(s, config) {
+  return (s.threads || []).filter((t) => {
+    if (t.isResolved) return false
+    const cs = t.comments || []
+    return cs.length > 0 && isBot(cs[cs.length - 1].author, config) && (isQuestion(cs[0], config) || cs.length > 1 || !isBot(cs[0].author, config))
+  })
 }
 
 // ---- issue verbs ------------------------------------------------------
@@ -523,37 +581,27 @@ function evaluateGreenPr(s, config) {
 function refuseOpenQuestions(s, config, facts) {
   const p = config.dispatch.commandPrefix
   return [
-    label([config.labels.awaiting], []),
     commentOnce(`open-questions ${facts.commentId || ''}`, `Not started: ${s.openQuestions.open} open question(s) in the body still need an answer. Reply \`${p} revise\` with your choices (for example \`1A\`), then say \`${p} implement\` again.`),
   ]
 }
 
-function whyBlocked(s, config) {
-  if (s.blockedByOpen.length) return `it waits on ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`
-  if (parked(s)) return `it is parked until ${s.park.until}`
-  return 'it carries the blocked label'
-}
+const refList = (list) => list.map((b) => '#' + b.number).join(', ')
 
+/**
+ * `implement` approves, and starts the build when nothing stands in the way.
+ * A hold is cleared, because the verb is the answer the hold was waiting for.
+ * An open blocker keeps it Pending: it starts by itself when the last one
+ * closes. (why: docs/why.md#approval-lives-in-the-record)
+ */
 function implementTicket(s, config, facts) {
-  const L = config.labels
   const prs = inFlight(s)
-  if (prs) return [commentOnce(`in-flight ${prs[0]}`, `#${prs[0]} is already open for this ticket, so I will not start a second implementation.`), label([L.awaiting], [])]
+  if (prs) return [commentOnce(`in-flight ${prs[0]}`, `#${prs[0]} is already open for this ticket, so I will not start a second implementation.`)]
   if (s.openQuestions?.open) return refuseOpenQuestions(s, config, facts)
-  // A park stops the dispatch here, before any session starts. The label
-  // alone is not the test: a ticket parked on a date it never carried a label
-  // for would otherwise be implemented. The approval stands, though: it starts
-  // once a recheck confirms the unblock.
-  // (why: docs/why.md#a-park-stops-the-dispatch-not-the-session, docs/why.md#children-are-approved-together)
-  if ((s.item.labels || []).includes(L.blocked) || blockedNow(s)) {
-    return [
-      status('approved'),
-      record({ pendingImplement: { by: facts.author || null } }),
-      label([L.blocked], [L.awaiting]),
-      commentOnce('blocked', `Approved, but not started: ${whyBlocked(s, config)}. When that clears and a recheck confirms it, I will start without another word from you.`),
-    ]
+  const out = [approve(s, facts.author)]
+  if (parked(s)) out.push(hold(null), note(`hold until ${s.park.until} cleared — implement answers it`))
+  if (s.blockedByOpen.length) {
+    return out.concat(commentOnce(`approved-blocked ${facts.commentId || ''}`, `Approved. It waits on ${refList(s.blockedByOpen)}, and starts by itself when the last one closes.`))
   }
-  const out = [status('approved')]
-  if (s.record?.pendingImplement) out.push(record({ pendingImplement: null }))
   if (s.locked) return out.concat(recheck())
   if (s.parent?.setBuild) return out.concat(note(`its goal's set build is building it — ${s.parent.repo.full}#${s.parent.number}`))
   return out.concat(fire('implement'))
@@ -577,18 +625,20 @@ function doubledUp(s) {
  * planned, or planned under the old split, it plans — the children approved
  * when the plan ends. Planned, it approves every unstarted child. Planning
  * again once every child has closed files only what the goal still lacks.
+ * A blocked goal records the approval and plans when its blocker closes.
  * (why: docs/why.md#one-verb-plans-and-approves)
  */
 function implementGoal(s, config, facts) {
-  const L = config.labels
   if (s.openQuestions?.open) return refuseOpenQuestions(s, config, facts)
-  if ((s.item.labels || []).includes(L.blocked) || blockedNow(s)) {
-    return [label([L.blocked], [L.awaiting]), commentOnce('blocked', `Not started: ${whyBlocked(s, config)}. I will recheck it when that clears.`)]
+  const out = [approve(s, facts.author)]
+  if (s.blockedByOpen.length) {
+    return out.concat(commentOnce(`approved-blocked ${facts.commentId || ''}`, `Approved. It waits on ${refList(s.blockedByOpen)}, and is planned by itself when the last one closes.`))
   }
+  if (parked(s)) out.push(hold(null), note(`hold until ${s.park.until} cleared — implement answers it`))
   const open = (s.children || []).filter((c) => c.state === 'open')
-  if (planned(s) && open.length && !doubledUp(s)) return approveChildren(s, config, facts)
-  if (s.locked) return [recheck()]
-  return [record({ approveOnPlan: { by: facts.author || null } }), fire('implement-roadmap', { mode: planned(s) && open.length ? 'replan' : 'plan' })]
+  if (planned(s) && open.length && !doubledUp(s)) return out.concat(approveChildren(s, config, facts))
+  if (s.locked) return out.concat(recheck())
+  return out.concat(record({ approveOnPlan: { by: facts.author || null } }), fire('implement-roadmap', { mode: planned(s) && open.length ? 'replan' : 'plan' }))
 }
 
 const refOf = (c) => `${c.repo?.full || `${c.owner}/${c.repo}`}#${c.number}`
@@ -610,22 +660,21 @@ function buildSet(todo) {
 
 /**
  * Approve every unstarted child. Two or more that are free together build as
- * one set, on the goal's lock. The rest start alone, now or once a recheck
- * confirms their blocker cleared.
+ * one set, on the goal's lock. The rest start alone, now or once their
+ * blocker closes.
  */
 function approveChildren(s, config, facts) {
   if (s.locked) return [recheck()]
   const todo = unstarted(s)
-  if (!todo.length) return [record({ approved: true }), note('every open child already has a PR')]
+  if (!todo.length) return [note('every open child already has a PR')]
   const parent = `${s.repo.full}#${s.item.number}`
   const by = facts.author || null
   const set = buildSet(todo)
   const together = set.length > 1 ? set : []
   const alone = todo.filter((c) => !together.includes(c))
   const how = together.length ? `${together.map(refOf).join(', ')} build together now, and merge in order.` : ''
-  const rest = alone.length ? `${alone.map(refOf).join(', ')} ${alone.length === 1 ? 'starts' : 'each start'} now, or once a recheck confirms its blocker has cleared.` : ''
+  const rest = alone.length ? `${alone.map(refOf).join(', ')} ${alone.length === 1 ? 'starts' : 'each start'} now, or once ${alone.length === 1 ? 'its blocker closes' : 'their blockers close'}.` : ''
   const plan = [
-    record({ approved: true }),
     commentOnce(`approve-all ${facts.commentId || todo.map(refOf).join(' ')}`, `Approved ${todo.length} implementation ticket(s). ${[how, rest].filter(Boolean).join(' ')}`),
     targets([
       ...together.map((c) => ({ repo: c.repo, kind: 'issue', number: c.number, reason: 'approve-set', facts: { by, parent } })),
@@ -636,38 +685,61 @@ function approveChildren(s, config, facts) {
   return plan
 }
 
+/** A PR is merged or closed, never parked. (why: docs/why.md#a-pr-is-merged-or-closed-never-held) */
+function refusePrPark(s, config, facts, verb) {
+  return [commentOnce(`pr-park ${facts.commentId || ''}`, `Not ${verb === 'hold' ? 'held' : 'blocked'}: a PR is merged or closed, never parked. Close it if it should wait, and reopen it when it can go.`)]
+}
+
 /**
- * `block until <date> — <reason>` and `block on <ref>` are mechanical.
- * `block <reason>` alone asks a session to choose what to watch and when.
- * (why: docs/why.md#recheck-before-awaiting)
+ * `block on <ref>` is mechanical, and keeps an approval: the ticket starts
+ * when the last blocker closes. `block until <reason>` and `block <reason>`
+ * ask a session to turn the reason into a relationship or a hold.
+ * (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
  */
 function blockVerb(s, config, facts) {
-  const L = config.labels
   const p = config.dispatch.commandPrefix
   const b = parseBlock(facts.body, config.dispatch, config.org)
   const key = facts.commentId || ''
-  if (b.form === 'until') {
-    const now = s.now || new Date()
-    const today = now.toISOString().slice(0, 10)
-    const days = config.issueFields?.holdUntil?.maxHorizonDays ?? 30
-    const limit = new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10)
-    if (b.date <= today || b.date > limit) {
-      return [label([L.awaiting], []), commentOnce(`block-refused ${key}`, `Not held: ${b.date} must be after today and no later than ${limit} (${days} days). A longer wait is a re-hold, which I do myself when the date comes.`)]
-    }
-    return [
-      hold(b.date),
-      record({ rehold: 0 }),
-      label([L.blocked], [L.awaiting]),
-      commentOnce(`hold ${key}`, `Held until ${b.date}. On that date I will recheck ${b.reason ? `whether this still holds: ${b.reason}` : 'why it was held'}, then re-hold it or hand it back.`),
-    ]
-  }
   if (b.form === 'on') {
-    if (!b.refs.length) return [label([L.awaiting], []), commentOnce(`block-refused ${key}`, `Not blocked: name the blocker as a full issue URL or \`owner/repo#N\`, for example \`${p} block on ${config.org}/SahajCloud#632\`.`)]
+    if (!b.refs.length) return [commentOnce(`block-refused ${key}`, `Not blocked: name the blocker as a full issue URL or \`owner/repo#N\`, for example \`${p} block on ${config.org}/SahajCloud#632\`.`)]
     const refs = b.refs.map((r) => `${r.owner}/${r.repo}#${r.number}`).join(', ')
-    return [relationships(b.refs), record({ rehold: 0 }), label([L.blocked], [L.awaiting]), commentOnce(`block-on ${key}`, `Blocked by ${refs}. When the last one closes I will recheck this before handing it back.`)]
+    const then = s.record?.approved ? 'It is still approved, and starts by itself when the last one closes.' : 'When the last one closes it comes back to you.'
+    return [relationships(b.refs), commentOnce(`block-on ${key}`, `Blocked by ${refs}. ${then}`)]
   }
   if (s.locked) return [recheck()]
   return [fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'block' })]
+}
+
+/**
+ * A bare `hold` spreads the dates it picks across `issueFields.holdUntil.defaultDays`,
+ * keyed on the item, so a batch held together does not come back together.
+ */
+function defaultHoldDate(s, config) {
+  const [lo, hi] = config.issueFields?.holdUntil?.defaultDays || [30, 90]
+  const key = `${s.repo?.full || ''}#${s.item?.number || 0}`
+  let h = 0
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const days = lo + (h % Math.max(1, hi - lo + 1))
+  return new Date(nowOf(s).getTime() + days * 86_400_000).toISOString().slice(0, 10)
+}
+
+/**
+ * `hold [until] <N days|weeks|months|date>` parks the ticket on a date, and
+ * withdraws any approval: a held ticket comes back to you, never straight
+ * into a build. (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
+ */
+function holdVerb(s, config, facts) {
+  const p = config.dispatch.commandPrefix
+  const key = facts.commentId || ''
+  const h = parseHold(facts.body, config.dispatch, nowOf(s))
+  if (h.form === 'invalid') return [commentOnce(`hold-refused ${key}`, `Not held: \`${h.text}\` is not a date. Say \`${p} hold\`, \`${p} hold 3 weeks\`, \`${p} hold 2 months\` or \`${p} hold until 2026-12-01\`.`)]
+  const date = h.form === 'default' ? defaultHoldDate(s, config) : h.date
+  const days = config.issueFields?.holdUntil?.maxHorizonDays ?? 180
+  const today = nowOf(s).toISOString().slice(0, 10)
+  const limit = new Date(nowOf(s).getTime() + days * 86_400_000).toISOString().slice(0, 10)
+  if (date <= today || date > limit) return [commentOnce(`hold-refused ${key}`, `Not held: ${date} must be after today and no later than ${limit} (${days} days).`)]
+  const was = Boolean(s.record?.approved)
+  return [hold(date), ...withdraw(s), commentOnce(`hold ${key}`, `Held until ${date}. It comes back to you then.${was ? ` The approval is withdrawn: say \`${p} implement\` when it should start.` : ''}`)]
 }
 
 /**
@@ -706,36 +778,66 @@ function refuseUnresolvedBlockers(s, config) {
  *
  * `target.reason` names the event row: `issues.opened`, `issue_comment`,
  * `pull_request.synchronize`, `review`, `review_comment`, `thread`, `ci`,
- * `queue-failed`, `unlock`, `unblock-check`, `conflict-scan`, `sweep-*`. `target.facts` carries
- * what the payload said — used only to pick the row; state comes from the
- * snapshot.
+ * `queue-failed`, `unlock`, `unblock-check`, `conflict-scan`, `reconcile`,
+ * `sweep-*`. `target.facts` carries what the payload said — used only to pick
+ * the row; state comes from the snapshot.
+ *
+ * Every plan but a journal issue's or a spike's ends in `syncStatus`: no row
+ * names a Status, because `apply` derives it from the state the plan left.
+ * (why: docs/why.md#status-is-derived-never-read)
  */
 export function decide(target, s, config) {
-  let plan = derive(target, s, config)
+  let plan = route(target, s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
-  // A locked item is the session's turn, never yours. One event can arrive
-  // as two — a ticket created with its type fires `opened` and `typed` — and
-  // the second leg runs after the first took the lock. Unlock re-derives
-  // `awaiting` from the finished state. (why: docs/why.md#a-locked-item-is-never-awaiting)
-  if (s.locked) {
-    const L = config.labels
-    plan = plan.map((a) => (a.type === 'label' && a.add.includes(L.awaiting) ? label(a.add.filter((x) => x !== L.awaiting), a.remove) : a))
-  }
-  if (!isRoadmap(s, config)) return plan
-  // A roadmap ticket carries no Status: its milestone, its children and
-  // whether it is closed say where it is. Every status the rows below would
-  // write becomes one clear. (why: docs/why.md#a-roadmap-ticket-has-no-status)
-  const out = []
-  let cleared = false
-  for (const a of plan) {
-    if (a.type !== 'status') { out.push(a); continue }
-    if (!cleared) { out.push(status(null)); cleared = true }
-  }
-  return out
+  if (untouched(s, config)) return plan
+  return plan.concat(syncStatus())
 }
 
-function derive(target, s, config) {
+/** Items the dispatcher writes nothing to, Status included. */
+function untouched(s, config) {
+  return (s.item?.labels || []).includes(config.labels.journal) || isSpike(s, config)
+}
+
+/**
+ * The approved ticket is free: build it. The same guards as the verb, without
+ * recording the approval again. A ticket that turned out not free comes back
+ * with the session's question. (why: docs/why.md#approval-lives-in-the-record)
+ */
+function startApproved(s, config, commentId) {
+  if (isRoadmap(s, config)) return implementGoal(s, config, { author: s.record.approved.by, commentId })
+  if (inFlight(s)) return [note(`#${inFlight(s)[0]} is already open for it`)]
+  if (s.openQuestions?.open) return withdraw(s).concat(refuseOpenQuestions(s, config, { commentId }))
+  if (s.locked) return [recheck()]
+  if (s.parent?.setBuild) return [note(`its goal's set build is building it — ${s.parent.repo.full}#${s.parent.number}`)]
+  return [fire('implement')]
+}
+
+/**
+ * A Pending wait the machinery owns has sat past `dispatch.pendingDueMinutes`
+ * with nothing moving it. Check again, up to `dispatch.maxAttempts` times,
+ * then hand it to you with the reason. (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
+ */
+function overdue(s, config) {
+  const since = s.record?.pendingSince
+  const minutes = config.dispatch.pendingDueMinutes ?? 120
+  return Boolean(since) && nowOf(s).getTime() - Date.parse(since) > minutes * 60_000
+}
+function dueStep(s, config, why) {
+  const n = (s.record?.dueAttempts || 0) + 1
+  const max = config.dispatch.maxAttempts ?? 3
+  const p = config.dispatch.commandPrefix
+  if (n <= max) return [record({ dueAttempts: n, pendingSince: nowOf(s).toISOString() }), note(`pending past its due, check ${n} of ${max}: ${why}`)]
+  const number = s.kind === 'pr' ? s.pr?.number : s.item.number
+  return [
+    record({ dueAttempts: 0 }),
+    handback(s, `${why}, and nothing moved it in ${max} checks`),
+    commentOnce(`overdue ${s.record?.pendingSince || ''}`, `This has waited on the machinery past its due ${max} times: ${why}. I have stopped checking. A ${s.kind === 'pr' ? 'mention, review or push' : `\`${p}\` verb or mention`} from you starts me again.`),
+    anomaly('pending-overdue', `${s.repo.full}#${number}: ${why}`),
+  ]
+}
+
+function route(target, s, config) {
   const L = config.labels
   const facts = target.facts || {}
   const plan = []
@@ -750,14 +852,10 @@ function derive(target, s, config) {
       const outsider = byOutsider(s, config)
       const blockers = outsider ? [] : s.markers.blockedBy
       const parkedHere = parked(s) && !(outsider && s.park.source === 'marker')
-      // Parked or your turn, never both: a blocked ticket is waiting on the
-      // blocker, not on you. (why: docs/why.md#blocked-and-awaiting-are-exclusive)
       const bornBlocked = s.blockedByOpen.length || blockers.length || parkedHere
-      plan.push({ type: 'ensure' }, status('proposed'))
-      if (!bornBlocked) plan.push(label([L.awaiting], []))
+      plan.push({ type: 'ensure' })
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (blockers.length) plan.push(relationships(blockers, true))
-      if (bornBlocked) plan.push(label([L.blocked], [L.awaiting]))
       // An outsider's own markers are already text, so there is nothing to refuse.
       if (!outsider) plan.push(...refuseUnresolvedBlockers(s, config))
       // Nothing the loop files is revised on arrival any more: every author
@@ -767,9 +865,8 @@ function derive(target, s, config) {
       return plan
     }
     case 'issues.typed': {
-      if (!isRoadmap(s, config)) return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising')]
-      plan.push({ type: 'ensure' }, status(null))
-      if (needsIntake(s, config) && !blockedNow(s)) plan.push(s.locked ? recheck() : fire('revise-roadmap', { mode: 'intake' }))
+      plan.push({ type: 'ensure' })
+      if (isRoadmap(s, config) && needsIntake(s, config) && !blockedNow(s)) plan.push(s.locked ? recheck() : fire('revise-roadmap', { mode: 'intake' }))
       return plan
     }
     case 'issues.edited': {
@@ -779,122 +876,102 @@ function derive(target, s, config) {
       // (why: docs/why.md#a-strangers-marker-is-text)
       if (facts.sender && byOutsider(s, config) && lower(facts.sender) === lower(s.item.author)) return [note('edited by its non-member author — markers are text')]
       if (s.markers.blockedBy.length) plan.push(relationships(s.markers.blockedBy, true))
-      if (s.markers.blockedBy.length || parked(s)) plan.push(label([L.blocked], [L.awaiting]))
       // No outsider guard here: the early return above already refused the one
       // case where the editor cannot make state.
       plan.push(...refuseUnresolvedBlockers(s, config))
       return plan.length ? plan : [note('no marker change')]
     }
+    // A reopened item is a fresh verdict: whatever approval it had is spent.
     case 'issues.reopened':
     case 'issues.transferred':
-      return [{ type: 'ensure' }, status((s.item.labels || []).includes(L.proposal) ? 'proposed' : 'revising'), label([L.awaiting], [])]
+      return [{ type: 'ensure' }, ...withdraw(s), ...clearHandback(s)]
     case 'issues.closed': {
-      const next = s.dependents.map((d) => ({ ...d, reason: 'unblock-check' }))
+      const next = s.dependents.map((d) => ({ ...d, reason: 'unblock-check', facts: { closedNumber: s.item.number } }))
       // The last child of a roadmap ticket closing is the cue to check the
       // goal was met. (why: docs/why.md#a-goal-is-verified-not-assumed)
       if (s.parent?.state === 'open') next.push({ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'child-closed', facts: { child: `${s.repo.full}#${s.item.number}` } })
-      return [status('done'), label([], [L.awaiting, L.stuck]), targets(next)]
+      return [...clearHandback(s), targets(next)]
     }
-    // Both directions. `blocked` follows the native relationship, so an issue
-    // blocked before the label existed gets one the first time the sweeper
-    // sees it. (why: docs/why.md#blocked-follows-the-relationship)
+    // A blocker closed, or a hold date passed. An approved ticket starts now;
+    // any other comes back to you. No session rechecks it first: the
+    // relationship and the date are the facts, and the build itself stops with
+    // a question if the ticket is not free after all.
+    // (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
     case 'unblock-check': {
-      const labelled = (s.item.labels || []).includes(L.blocked)
-      const applyIfMissing = (why) => (labelled ? [note(why)] : [label([L.blocked], []), note(`${why} — label applied`)])
-      if (s.blockedByOpen.length) return applyIfMissing(`still blocked by ${s.blockedByOpen.map((b) => '#' + b.number).join(', ')}`)
-      if (parked(s)) return applyIfMissing(`parked until ${s.park.until}`)
-      if (!labelled) return [note('not blocked')]
-      if (s.kind !== 'issue') return [label([L.awaiting], [L.blocked])]
+      if (s.blockedByOpen.length) return [note(`still blocked by ${refList(s.blockedByOpen)}`)]
+      if (parked(s)) return [note(`held until ${s.park.until}`)]
+      if (s.kind !== 'issue') return [note('not an issue')]
+      if (s.item.state !== 'open') return [note('closed')]
       // Built in a set while its producer was open: the blocker merging lets
       // its PR merge too. No session is needed. (why: docs/why.md#a-cross-repo-set-is-built-together)
       // A contract consumer is armed by the event its re-sync push raises,
       // never before it lands; the sweep catches one that needs none.
       if (inFlight(s)) {
-        if (config.contractSync?.consumers?.[s.repo.name]) return [label([], [L.blocked]), note('free — its PR arms after the contract re-sync lands')]
-        return [label([], [L.blocked]), targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
+        if (config.contractSync?.consumers?.[s.repo.name]) return [note('free — its PR arms after the contract re-sync lands')]
+        return [targets(inFlight(s).map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'ci' })))]
       }
-      if (s.parent?.setBuild) return [label([], [L.blocked]), note('free — its goal\'s set build is building it')]
-      if (s.locked) return [recheck()]
-      // The date passing or the blocker closing is a cue to look, not proof
-      // the ticket is free. A recheck session reads why it was held, and
-      // re-holds it quietly or hands it back. After maxRehold quiet re-holds
-      // in a row, it is your call. (why: docs/why.md#recheck-before-awaiting)
-      const reholds = s.record?.rehold || 0
-      const max = config.issueFields?.holdUntil?.maxRehold ?? 3
-      if (reholds >= max) {
-        const p = config.dispatch.commandPrefix
-        return [
-          label([L.awaiting], [L.blocked]),
-          record({ rehold: 0 }),
-          commentOnce(`rehold-cap ${s.park?.until || facts.closedNumber || ''}`, [
-            `This has been re-held ${reholds} times in a row. Which way?`,
-            '',
-            `- **A — keep waiting (recommended if the blocker is still real):** \`${p} block until <date> — <reason>\``,
-            `- **B — rework it around the blocker:** \`${p} revise <how>\``,
-            '- **C — drop it:** close it as not planned.',
-          ].join('\n')),
-        ]
-      }
-      // The converted `Blocked by:` line is gone from the body, so the fire
-      // names what it waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
-      const cleared = (s.blockedByAll || []).map((b) => `${b.owner}/${b.repo}#${b.number}`)
-      return [record({ rehold: reholds + 1 }), fire(isRoadmap(s, config) ? 'revise-roadmap' : 'revise', { mode: 'recheck', ...(cleared.length ? { cleared } : {}) })]
+      if (s.parent?.setBuild) return [note('free — its goal\'s set build is building it')]
+      if (s.record?.approved) return startApproved(s, config, `unblocked-${facts.closedNumber || s.park?.until || ''}`)
+      const p = config.dispatch.commandPrefix
+      if (facts.closedNumber) return [commentOnce(`unblocked ${facts.closedNumber}`, `#${facts.closedNumber} closed, so nothing blocks this now. Say \`${p} implement\` to start it, or \`${p} revise\` to rework it first.`)]
+      return [note('free — it is yours')]
     }
     case 'issue_comment': {
       if (isBot(facts.author, config)) return [note('own comment — ignored')]
       // The author of a roadmap ticket answers its questions, member or not.
-      // A stranger's words never start a session: they mark the ticket your
-      // turn and are read as data on the next run a member starts.
-      // (why: docs/why.md#an-outsider-feeds-a-member-fires)
+      // A stranger's words never start a session: they are read as data on
+      // the next run a member starts. (why: docs/why.md#an-outsider-feeds-a-member-fires)
       if (s.kind === 'issue' && isRoadmap(s, config) && !respondTo(facts.author, config) && lower(facts.author) === lower(s.item.author)) {
-        if (s.locked || (s.item.labels || []).includes(L.blocked)) return [note('the author replied — read on the next run')]
-        return [label([L.awaiting], []), note('the author replied — read as data on the next run a member starts')]
+        return [note('the author replied — read as data on the next run a member starts')]
       }
       if (!respondTo(facts.author, config)) return [note(`comment by ${facts.author} — not feedback`)]
       if (isHuman(facts.author, config) && !hasAccess(facts.association)) return [note(`comment by ${facts.author} without write access — not feedback`)]
       if (s.kind === 'pr') {
         const v = parseVerb(facts.body, config.dispatch, 'pr')
         // On every PR, a comment reaches the bot only through a mention. A
-        // review or a thread reply on its own PR needs none.
+        // review or a thread reply on a PR it works needs none.
         // (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
-        if (!v.mentioned) return [note(`${isBot(s.pr?.user?.login, config) ? 'bot' : 'human'} PR comment, no mention — ignored`)]
-        if (isBot(s.pr?.user?.login, config)) { plan.push(label([], [L.awaiting, L.stuck])); return plan.concat(evaluatePr(s, config)) }
+        if (!v.mentioned) return [note(`${fullTreatment(s.pr?.user?.login, config) ? 'worked' : 'outside'} PR comment, no mention — ignored`)]
+        if (v.verb === 'hold' || v.verb === 'block') return refusePrPark(s, config, facts, v.verb)
+        // A member's draft is left alone, so a mention there is a request on its own.
+        const memberDraft = s.pr?.draft && !isBot(s.pr?.user?.login, config)
+        if (fullTreatment(s.pr?.user?.login, config) && !memberDraft) return clearHandback(s).concat(evaluatePr(s, config))
         if (s.locked) return [recheck()]
-        return v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })]
+        return clearHandback(s).concat(v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })])
       }
       if (!isHuman(facts.author, config)) return [note('issue verbs are for humans')]
       const v = parseVerb(facts.body, config.dispatch, 'issue')
       if (!v.mentioned) return [note('no mention — ignored')]
-      plan.push(label([], [L.proposal, L.awaiting, L.stuck]), react('eyes'))
+      plan.push(label([], [L.proposal]), react('eyes'), ...clearHandback(s))
       if (v.verb === 'block') return plan.concat(blockVerb(s, config, facts))
+      if (v.verb === 'hold') return plan.concat(holdVerb(s, config, facts))
       if (v.verb === 'implement') return plan.concat(isRoadmap(s, config) ? implementGoal(s, config, facts) : implementTicket(s, config, facts))
-      // `revise`, `review`, or a bare mention. A human's word ends any run of
-      // quiet re-holds. (why: docs/why.md#recheck-before-awaiting)
-      plan.push(status('revising'))
-      if (s.record?.rehold) plan.push(record({ rehold: 0 }))
+      // `revise`, `review`, or a bare mention: the ticket is changing, so any
+      // approval it had is spent. (why: docs/why.md#approval-lives-in-the-record)
+      plan.push(...withdraw(s))
       if (s.locked) return plan.concat(recheck())
       // A member's first word on a stranger's goal accepts it: the full review.
       if (isRoadmap(s, config)) return plan.concat(fire('revise-roadmap', { mode: reviewedBefore(s) ? 'revise' : 'intake' }))
       return plan.concat(fire('revise', { mode: 'revise' }))
     }
     // One child of a roadmap ticket, approved with the rest by `implement` on
-    // the parent. A blocked child is approved now and starts once a recheck
-    // confirms the unblock. (why: docs/why.md#children-are-approved-together)
+    // the parent. A blocked child is approved now and starts when its blocker
+    // closes. (why: docs/why.md#children-are-approved-together)
     case 'approve': {
       if (s.item.state !== 'open') return [note('closed — nothing to approve')]
       if (inFlight(s)) return [note(`#${inFlight(s)[0]} is already open for it`)]
-      if (s.openQuestions?.open) return [label([L.awaiting], []), commentOnce('approve-open-questions', `Not started: ${s.openQuestions.open} open question(s) here still need an answer.`)]
-      const pending = record({ pendingImplement: { by: facts.by || null, parent: facts.parent || null } })
-      plan.push(label([], [L.proposal, L.awaiting, L.stuck]), status('approved'))
-      if (blockedNow(s) || (s.item.labels || []).includes(L.blocked)) return plan.concat(pending, label([L.blocked], [L.awaiting]), note('approved — starts when a recheck confirms the unblock'))
-      if (s.locked) return plan.concat(pending, recheck())
+      if (s.openQuestions?.open) return [commentOnce('approve-open-questions', `Not started: ${s.openQuestions.open} open question(s) here still need an answer.`)]
+      plan.push(label([], [L.proposal]), approve(s, facts.by), ...clearHandback(s))
+      if (parked(s)) plan.push(hold(null))
+      if (s.blockedByOpen.length) return plan.concat(note('approved — starts when its blocker closes'))
+      if (s.locked) return plan.concat(recheck())
       return plan.concat(fire('implement'))
     }
     // A child built in its goal's set: approved here, built by the session
     // that holds the goal. (why: docs/why.md#a-cross-repo-set-is-built-together)
     case 'approve-set':
       if (s.item.state !== 'open') return [note('closed — nothing to approve')]
-      return [label([], [L.proposal, L.awaiting, L.stuck]), status('approved'), note(`approved — built in the set on ${facts.parent}`)]
+      return [label([], [L.proposal]), approve(s, facts.by), ...clearHandback(s), note(`approved — built in the set on ${facts.parent}`)]
     case 'child-closed': {
       if (!isRoadmap(s, config)) return [note('parent is not a roadmap ticket')]
       if (s.item.state !== 'open') return [note('roadmap ticket already closed')]
@@ -908,11 +985,11 @@ function derive(target, s, config) {
     // questions. That is your turn here. (why: docs/why.md#a-late-decision-goes-to-the-goal)
     case 'escalated': {
       if (s.item.state !== 'open') return [note('closed')]
-      return [label([L.awaiting], []), commentOnce(`escalated ${facts.child}`, `A decision came up while working on ${facts.child}. It is in **Open questions** above, with options and a recommendation.`)]
+      return [commentOnce(`escalated ${facts.child}`, `A decision came up while working on ${facts.child}. It is in **Open questions** above, with options and a recommendation.`)]
     }
-    // A review comment is a review. From a human on a bot PR that means
+    // A review comment is a review. From a human on a worked PR that means
     // `evaluatePr`, so a cancelled sibling costs nothing — the invariant the
-    // concurrency group rests on. ⚠ On a human PR it means the verb tail,
+    // concurrency group rests on. ⚠ On an outside PR it means the verb tail,
     // which reads this one body, so a verb left in the review body is still
     // lost when that leg is the cancelled one. The bot guard is the only
     // thing this row does not share: `case 'review'`'s bot branch carries the
@@ -920,40 +997,42 @@ function derive(target, s, config) {
     // (why: docs/why.md#a-review-comment-is-feedback-whatever-its-association)
     case 'review_comment': {
       if (isBot(facts.author, config)) return [note('own review comment — ignored')]
-      return decide({ ...target, reason: 'review' }, s, config)
+      return route({ ...target, reason: 'review' }, s, config)
     }
     case 'review': {
       if (isBot(facts.author, config)) {
         const header = config.review?.bodyHeader || '## 🧐 Adversarial review'
-        const isCritic = String(facts.body || '').trimStart().startsWith(header) && isBot(s.pr?.user?.login, config)
+        const isCritic = String(facts.body || '').trimStart().startsWith(header) && fullTreatment(s.pr?.user?.login, config)
         return isCritic ? evaluatePr(s, config) : [note('own review — ignored')]
       }
       if (!respondTo(facts.author, config)) return [note(`review by ${facts.author} — ignored`)]
-      if (isBot(s.pr?.user?.login, config)) return [label([], [L.awaiting, L.stuck])].concat(evaluatePr(s, config))
+      if (fullTreatment(s.pr?.user?.login, config)) return clearHandback(s).concat(evaluatePr(s, config))
       const v = parseVerb(facts.body, config.dispatch, 'pr')
-      if (!v.mentioned) return [note('human PR review, no mention')]
+      if (!v.mentioned) return [note('outside PR review, no mention')]
       if (s.locked) return [recheck()]
       return v.verb === 'review' ? [fire('review-pr', { onDemand: true })] : [fire('address-review', { delegated: true })]
     }
     case 'thread':
-      return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('human PR thread')]
+      return fullTreatment(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('outside PR thread')]
     case 'pull_request.opened':
     case 'pull_request.reopened': {
-      plan.push({ type: 'ensure' }, status('revising'))
-      if (target.reason === 'pull_request.opened' && isBot(s.pr?.user?.login, config)) {
+      plan.push({ type: 'ensure' })
+      if (target.reason === 'pull_request.opened' && fullTreatment(s.pr?.user?.login, config)) {
         plan.push(targets(s.linkedIssues.map((n) => ({ repo: s.repo, kind: 'issue', number: n, reason: 'linked-in-flight' }))))
       }
       return plan.concat(evaluatePr(s, config))
     }
+    // The issue's Status follows its PR: Done while the PR is open.
     case 'linked-in-flight':
-      return [status('done'), label([], [L.awaiting])]
+      return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
-      return [requestReviewer(), label([L.awaiting], [])].concat(evaluatePr(s, config))
+      return [requestReviewer()].concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
-      plan.push(facts.pusherIsBot ? note('bot push') : label([], [L.awaiting, L.stuck]))
+      // A person's push is the answer a hand-back waits for.
+      if (!facts.pusherIsBot) plan.push(...clearHandback(s))
       return plan.concat(evaluatePr(s, config))
     case 'pull_request.closed': {
-      plan.push(status('done'), label([], [L.awaiting, L.stuck]))
+      plan.push(...clearHandback(s))
       if (facts.merged) {
         for (const li of s.linkedIssueDetails || []) if (li.sentry) plan.push(sentry(li.number, li.sentry.id))
         plan.push(targets(s.otherOpenBotPrs.map((n) => ({ repo: s.repo, kind: 'pr', number: n, reason: 'conflict-scan' }))))
@@ -963,7 +1042,7 @@ function derive(target, s, config) {
       return plan
     }
     case 'linked-abandoned':
-      return [status('revising'), label([L.awaiting], []), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
+      return [...withdraw(s), commentOnce(`abandoned ${facts.pr}`, `#${facts.pr} was closed without merging, so this ticket is open again. Say \`${config.dispatch.commandPrefix} implement\` to try again.`)]
     // Drafts too: evaluatePr already leaves a branch a session holds alone.
     case 'conflict-scan':
       return evaluatePr(s, config)
@@ -975,40 +1054,26 @@ function derive(target, s, config) {
         if (live && freshRequest(s)?.continue) return plan.concat(continueNext(s, config, finished))
         if (s.record?.continues) plan.push(record({ continues: 0 }))
       }
-      if (s.kind === 'pr') {
-        const p = evaluatePr(s, config)
-        // A closed PR is nobody's turn. Without this, a session that was
-        // holding the lock when the PR merged unlocks afterwards, finds
-        // nothing left to do, and calls that the human's turn.
-        // (why: docs/why.md#a-closed-item-is-nobodys-turn)
-        if (s.pr?.state !== 'open') return plan.concat(p, label([], [L.awaiting, L.stuck]))
-        const idle = !p.some((a) => a.type === 'fire' || a.type === 'armAutoMerge' || a.type === 'markReady')
-        if (idle && !s.pr?.draft) p.push(label([L.awaiting], []))
-        return plan.concat(p)
-      }
+      // A PR's next turn is derived like any other pass. An approved PR a
+      // session just touched stays the machinery's: it is never asked about
+      // again for a merge commit. (why: docs/why.md#a-resolved-conflict-is-not-a-new-question)
+      if (s.kind === 'pr') return plan.concat(evaluatePr(s, config))
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
       // so the verb that started it still reads as pending. Re-dispatching it
-      // only hits the in-flight guard, and leaves `awaiting` on a ticket whose
-      // PR is open. The PR is the answer.
+      // only hits the in-flight guard. The PR is the answer.
       // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
       const answered = v?.verb === 'implement' && Boolean(inFlight(s))
       if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
-      if (s.item.state !== 'open') return plan.concat(label([], [L.awaiting, L.stuck]))
+      if (s.item.state !== 'open') return plan
       const req = freshRequest(s)
       if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
-      // Still held — the recheck re-held it, or the session parked it. Quiet:
-      // blocked is not your turn. (why: docs/why.md#recheck-before-awaiting)
-      if (blockedNow(s)) return plan.concat(label([L.blocked], [L.awaiting]))
-      if ((s.item.labels || []).includes(L.blocked)) plan.push(label([], [L.blocked]))
-      if (s.record?.rehold) plan.push(record({ rehold: 0 }))
+      // Still held or blocked: the approval, if any, waits with it.
+      if (blockedNow(s)) return plan
       if (req?.escalated && s.parent) return plan.concat(note('waits on the decision it raised on its roadmap ticket'))
-      // Approved while blocked, and the recheck found it free.
-      // (why: docs/why.md#children-are-approved-together)
-      if (s.record?.pendingImplement && !inFlight(s)) {
-        if (s.openQuestions?.open) return plan.concat(record({ pendingImplement: null }), status('revising'), label([L.awaiting], []))
-        return plan.concat(record({ pendingImplement: null }), status('approved'), fire('implement'))
-      }
+      // A build that ended with no PR stopped on purpose, and its comment says
+      // why. The approval is spent: the next one is yours to give.
+      if (finished === 'implement' && !isRoadmap(s, config) && !inFlight(s) && !s.parent?.setBuild) plan.push(...withdraw(s))
       if (isRoadmap(s, config)) {
         const kids = s.children || []
         // The plan the implement verb asked for has ended: approve what it
@@ -1018,7 +1083,7 @@ function derive(target, s, config) {
           if (!s.openQuestions?.open && unstarted(s).length) return plan.concat(approveChildren(s, config, { author: s.record.approveOnPlan.by }))
         }
         // A re-plan keeps an approval the goal already has.
-        if (req?.replan && kids.length && planned(s)) return plan.concat(s.record?.approved ? [record({ approveOnPlan: { by: null } })] : [], fire('implement-roadmap', { mode: 'replan' }))
+        if (req?.replan && kids.length && planned(s)) return plan.concat(s.record?.approved ? [record({ approveOnPlan: { by: s.record.approved.by || null } })] : [], fire('implement-roadmap', { mode: 'replan' }))
         if (s.record?.verifyDue && kids.length && kids.every((c) => c.state !== 'open')) {
           if (!verifiedAlready(s, kids)) return plan.concat(record({ verifyDue: false }), fire('revise-roadmap', verifyFlags(kids)))
           // Then end as an unlock with nothing re-armed would.
@@ -1028,41 +1093,42 @@ function derive(target, s, config) {
         if (finished === 'implement' && kids.some((c) => c.state === 'open') && !unstarted(s).length) {
           // Every PR event during the build was held, so each PR is read now.
           const prs = kids.flatMap((c) => (c.prNumbers || []).map((n) => ({ repo: c.repo, kind: 'pr', number: n, reason: 'ci' })))
-          return plan.concat(label([], [L.awaiting]), prs.length ? [targets(prs)] : [], note('the set build answered with its PRs'))
+          return plan.concat(prs.length ? [targets(prs)] : [], note('the set build answered with its PRs'))
         }
         // write-ticket promoted it, or it was typed while a session ran.
         if (needsIntake(s, config) && finished !== 'revise-roadmap') return plan.concat(fire('revise-roadmap', { mode: 'intake' }))
       }
-      if (inFlight(s)) plan.push(status('done'), label([], [L.awaiting]))
-      else if (s.botSpokeLast) plan.push(status('revising'), label([L.awaiting], []))
-      else plan.push(label([L.awaiting], []), anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
+      if (!inFlight(s) && !s.botSpokeLast) plan.push(anomaly('silent', `${s.repo.full}#${s.item.number} session ended without a comment`))
       // Last: the issue's number changes once it moves. (why: docs/why.md#a-session-asks-actions-acts)
       if (isRoadmap(s, config) && req?.transfer && !(s.children || []).length && req.transfer.repo !== s.repo.name) plan.push(transfer(req.transfer.repo, req.transfer.milestone))
       return plan
     }
     case 'ci':
-      return isBot(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('not a bot PR')]
+      return fullTreatment(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('outside PR')]
     // Kept against the head it failed on, so every later pass — a sweep
     // included — repairs it rather than re-arming it.
     // (why: docs/why.md#a-queue-failure-is-a-ci-failure)
     case 'queue-failed': {
-      if (!isBot(s.pr?.user?.login, config)) return [note('not a bot PR')]
+      if (!fullTreatment(s.pr?.user?.login, config)) return [note('outside PR')]
       if (!s.pr?.head?.sha || s.pr.state !== 'open') return [note('no open head to charge the queue failure to')]
       const queueFail = { sha: s.pr.head.sha, run: facts.run || null }
       return [record({ queueFail })].concat(evaluatePr({ ...s, record: { ...s.record, queueFail } }, config))
     }
-    // Residue from a pass that won the lease and died before the label. Both
-    // the label and `rec.current` must be absent: the winner writes them in
-    // that order, so either one present means a live session.
+    // A lease ref on an item with no lock. Residue from a pass that won the
+    // lease and died before the label, or a session whose end was never seen:
+    // the label off and `rec.current` still set means the session removed it
+    // (or a person did), so it is read as the unlock it was. A lease the
+    // record dates past its deadline is reclaimed whatever the label says.
+    // (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
     //
-    // ⚠ That is not a proof, only a narrowing. The per-item concurrency group
-    // is scoped to one repository, so a cross-repo fire that wins the CAS is
-    // unguarded until it writes the lock — one API call later. A sweep leg
-    // needs a checkout and a gather to reach here, so the window is far
-    // narrower than the cost of leaving a lease unreclaimed.
+    // ⚠ The narrow window is unchanged: the per-item concurrency group is
+    // scoped to one repository, so a cross-repo fire that wins the CAS is
+    // unguarded until it writes the lock — one API call later.
     case 'sweep-lease': {
-      if (s.locked) return [note('the lock is on the item — the lease is live')]
-      if (s.record?.current) return [note(`${s.record.current.handler} is still recorded — the lease is live`)]
+      const cur = s.record?.current
+      const expired = cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime()
+      if (s.locked) return expired ? [{ type: 'timeout' }] : [note('the lock is on the item — the lease is live')]
+      if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
     case 'sweep-retry':
@@ -1070,7 +1136,7 @@ function derive(target, s, config) {
     case 'sweep-timeout':
       return [{ type: 'timeout' }]
     case 'sweep-recheck':
-      return decide({ ...target, reason: 'unlock', facts: {} }, s, config)
+      return route({ ...target, reason: 'unlock', facts: {} }, s, config)
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {
@@ -1078,20 +1144,42 @@ function derive(target, s, config) {
       // nothing — a draft moving forward is not an orphan.
       const p = evaluatePr(s, config)
       if (p.some((a) => ['fire', 'armAutoMerge', 'markReady', 'targets'].includes(a.type))) return [note('still moving — not an orphan')]
-      return quietSweep(p.concat(label([L.awaiting], []), commentOnce(`orphan ${s.pr?.head?.sha}`, `This draft has had no CI activity for hours and no session holds it. A mention (\`${config.dispatch.commandPrefix}\`) or a push from you starts me again.`), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
+      return quietSweep(p.concat(...(s.record?.handback ? [] : [handback(s, 'an orphaned draft — no CI activity for hours')]), commentOnce(`orphan ${s.pr?.head?.sha}`, `This draft has had no CI activity for hours and no session holds it. A mention (\`${config.dispatch.commandPrefix}\`) or a push from you starts me again.`), anomaly('orphan', `${s.repo.full}#${s.pr?.number} orphaned draft`)), s, config)
     }
-    case 'sweep-awaiting': {
-      if (s.locked || (s.item.labels || []).includes(L.stuck) || (s.item.labels || []).includes(L.awaiting)) return [note('no correction')]
-      // This arm alone is pushed for PRs as well as issues (sweep.mjs:112), and
-      // a PR snapshot carries no such key. The `kind` test is what lets every
-      // read of it stay bare. (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
-      if (s.kind === 'issue' && inFlight(s)) return [note('an open PR closes it — the PR is the turn')]
-      if (s.botSpokeLast) return [label([L.awaiting], []), anomaly('awaiting-drift', `${s.repo.full}#${s.item.number} awaiting was missing`)]
-      return [note('human spoke last')]
+    // The reconciler's pass: the cheap view found the board out of step with
+    // the item, or the item is Pending and may be overdue. Re-derive, drain
+    // what a lost event left, and step a wait past its due.
+    // (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+    case 'reconcile': {
+      const rec = s.record || {}
+      const cur = rec.current
+      if (s.locked) return cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime() ? [{ type: 'timeout' }] : [note('a session holds it')]
+      if (cur || rec.recheck) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
+      if (rec.pending) return !rec.pending.retryAfter || Date.parse(rec.pending.retryAfter) <= nowOf(s).getTime() ? [{ type: 'retry' }] : [note(`retry waits until ${rec.pending.retryAfter}`)]
+      const p = config.dispatch.commandPrefix
+      if (s.kind === 'issue' && s.park?.passed && rec.status === 'hold') {
+        plan.push(commentOnce(`hold-expired ${s.park.until}`, `The hold until ${s.park.until} has passed, so this is back with you. Say \`${p} implement\` to start it, \`${p} hold …\` to wait longer, or close it.`))
+      }
+      if (s.kind === 'pr') {
+        if (!fullTreatment(s.pr?.user?.login, config)) return plan.length ? plan : [note('outside PR')]
+        // Past its due, an approved PR that still has not merged is read again.
+        // Mergeability GitHub still calls unknown is not clean: resolve it.
+        if (overdue(s, config) && s.normalized?.reviewDecision === 'APPROVED' && s.mergeable === 'UNKNOWN') return plan.concat(note('mergeability still unknown past the due'), conflictPlan(s, config))
+        const e = evaluatePr(s, config)
+        if (overdue(s, config) && !e.some((a) => MOVES.has(a.type))) return plan.concat(e, dueStep(s, config, `the PR has not moved (${s.normalized?.mergeStateStatus || s.mergeable || 'unknown'})`))
+        return plan.concat(e)
+      }
+      if (s.item.state === 'open' && rec.approved && !blockedNow(s) && !inFlight(s) && !rec.handback) {
+        const start = startApproved(s, config, 'reconcile')
+        if (overdue(s, config) && !start.some((a) => MOVES.has(a.type))) return plan.concat(start, dueStep(s, config, 'the approved build has not started'))
+        return plan.concat(start)
+      }
+      if (overdue(s, config)) return plan.concat(dueStep(s, config, rec.verifyDue ? 'the completion check has not run' : 'nothing has moved it'))
+      return plan.length ? plan : [note('in step')]
     }
     default:
       return [note(`no rule for ${target.reason}`)]
   }
 }
 
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor }
+export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, defaultHoldDate }

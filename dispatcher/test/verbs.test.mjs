@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseVerb, parseBlock } from '../verbs.mjs'
+import { parseVerb, parseBlock, parseHold } from '../verbs.mjs'
 
 const cfg = {
   commandPrefix: '@sydevs-bot',
@@ -41,8 +41,19 @@ test('review and revise are one verb on each surface', () => {
 })
 
 test('block reads the rest of its own line', () => {
-  assert.deepEqual(parseBlock('@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x\nmore', cfg, 'sydevs'), { form: 'until', date: '2026-11-15', reason: 'waiting on Payload 3.x' })
+  assert.deepEqual(parseBlock('@sydevs-bot block until Payload 3.x ships\nmore', cfg, 'sydevs'), { form: 'reason', reason: 'Payload 3.x ships' }, 'until is a reason: a date alone is `hold`')
+  assert.deepEqual(parseBlock('@sydevs-bot block until 2026-11-15 — waiting on Payload 3.x', cfg, 'sydevs'), { form: 'reason', reason: '2026-11-15 — waiting on Payload 3.x' }, 'a session reads the date out of the reason')
   assert.deepEqual(parseBlock('@sydevs-bot block on https://github.com/sydevs/SahajCloud/issues/632', cfg, 'sydevs'), { form: 'on', refs: [{ owner: 'sydevs', repo: 'SahajCloud', number: 632 }] })
   assert.deepEqual(parseBlock('@sydevs-bot block on #632', cfg, 'sydevs'), { form: 'on', refs: [] }, 'a bare #N names no repository')
   assert.deepEqual(parseBlock('@sydevs-bot block', cfg, 'sydevs'), { form: 'reason', reason: '' })
+})
+
+test('hold reads a date, a span or nothing, and refuses the rest', () => {
+  const now = new Date('2026-10-27T09:00:00Z')
+  assert.deepEqual(parseHold('@sydevs-bot hold', cfg, now), { form: 'default' })
+  assert.deepEqual(parseHold('@sydevs-bot hold until 2026-12-01 — after the launch', cfg, now), { form: 'date', date: '2026-12-01' })
+  assert.deepEqual(parseHold('@sydevs-bot hold 10 days', cfg, now), { form: 'date', date: '2026-11-06' })
+  assert.deepEqual(parseHold('@sydevs-bot hold until 2 weeks', cfg, now), { form: 'date', date: '2026-11-10' })
+  assert.deepEqual(parseHold('@sydevs-bot hold 1 month', cfg, now), { form: 'date', date: '2026-11-26' }, 'a month is 30 days')
+  assert.deepEqual(parseHold('@sydevs-bot hold until spring', cfg, now), { form: 'invalid', text: 'spring' })
 })

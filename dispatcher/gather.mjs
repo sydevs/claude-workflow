@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, isDispatcherComment } from './decide.mjs'
+import { isBot, isDispatcherComment, fullTreatment } from './decide.mjs'
 import { isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
@@ -28,12 +28,12 @@ async function newestComments(gh, { owner, repo, number }, total, perPage = 10) 
 
 async function reviewThreads(gh, { owner, repo, number }) {
   const q = `query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){
-    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login } createdAt body databaseId } } } } } } }`
+    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login } createdAt body databaseId url } } } } } } }`
   const d = await gh.graphql(q, { o: owner, r: repo, n: number })
   return (d.repository.pullRequest.reviewThreads.nodes || []).map((t) => ({
     id: t.id,
     isResolved: t.isResolved,
-    comments: (t.comments.nodes || []).map((c) => ({ author: c.author?.login || '', createdAt: c.createdAt, body: c.body, id: c.databaseId })),
+    comments: (t.comments.nodes || []).map((c) => ({ author: c.author?.login || '', createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
   }))
 }
 
@@ -73,11 +73,19 @@ function repoFromUrl(url, fallbackOwner) {
   return name ? { owner, name, full: `${owner}/${name}` } : null
 }
 
+/** The date an issue's Hold Until field holds, as `YYYY-MM-DD`, or null. */
+function holdUntilOf(issue, config) {
+  const fieldName = config.issueFields?.holdUntil?.name || 'Hold Until'
+  const held = (issue.issue_field_values || []).find((f) => f.issue_field_name === fieldName)
+  return held?.value ? String(held.value).slice(0, 10) : null
+}
+
 /** A roadmap ticket's implementation tickets, from GitHub's native sub-issues. */
-async function subIssues(gh, { owner, repo, number }, lock) {
+async function subIssues(gh, { owner, repo, number }, lock, config) {
+  const proposal = config.labels?.proposal
   try {
     const data = await gh.paginate(`GET /repos/{owner}/{repo}/issues/{n}/sub_issues`, { owner, repo, n: number, per_page: 100 })
-    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null, locked: (i.labels || []).some((l) => (l.name || l) === lock) }))
+    return (data || []).map((i) => ({ repo: repoFromUrl(i.repository_url, owner) || { owner, name: repo, full: `${owner}/${repo}` }, number: i.number, state: i.state, stateReason: i.state_reason || null, closedAt: i.closed_at || null, locked: (i.labels || []).some((l) => (l.name || l) === lock), proposal: Boolean(proposal) && (i.labels || []).some((l) => (l.name || l) === proposal), holdUntil: holdUntilOf(i, config) }))
   } catch {
     return []
   }
@@ -175,6 +183,16 @@ export async function infraFailures(gh, { owner, repo }, runs, config) {
   return out
 }
 
+async function graphqlMergeable(gh, { owner, repo, number }) {
+  try {
+    const d = await gh.graphql(`query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ mergeable mergeStateStatus } } }`, { o: owner, r: repo, n: number })
+    const p = d.repository.pullRequest
+    return { mergeable: p.mergeable === 'MERGEABLE' ? true : p.mergeable === 'CONFLICTING' ? false : null, mergeable_state: String(p.mergeStateStatus || '').toLowerCase() }
+  } catch {
+    return {}
+  }
+}
+
 async function pollMergeable(gh, { owner, repo, number }, pr) {
   let cur = pr
   for (let i = 0; i < 5 && (cur.mergeable === null || cur.mergeable === undefined); i += 1) {
@@ -220,10 +238,9 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     // The `Hold Until` org field is where a park lives. The `Re-check:` line is
     // the older spelling, still read so a ticket written before the change
     // still parks. (why: docs/why.md#a-date-belongs-in-a-date-field)
-    const fieldName = config.issueFields?.holdUntil?.name || 'Hold Until'
-    const held = (issue.issue_field_values || []).find((f) => f.issue_field_name === fieldName)
-    const until = (held?.value && String(held.value).slice(0, 10)) || parseRecheck(issue.body, config.relationships?.recheckMarker)
-    s.park = { until: until || null, passed: datePassed(until, now), source: held?.value ? 'field' : until ? 'marker' : null }
+    const fieldUntil = holdUntilOf(issue, config)
+    const until = fieldUntil || parseRecheck(issue.body, config.relationships?.recheckMarker)
+    s.park = { until: until || null, passed: datePassed(until, now), source: fieldUntil ? 'field' : until ? 'marker' : null }
     s.markers = { blockedBy: markerBlockers, unresolvedBlockers: unresolved, recheck: s.park.until, recheckPassed: s.park.passed }
     s.blockedByOpen = Array.isArray(blockedBy) ? blockedBy.filter((b) => b.state === 'open') : []
     // Every relationship, closed blockers too: a line naming one is already
@@ -235,7 +252,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     s.parent = await parentOf(gh, base)
     if (s.parent) s.parent.setBuild = await inSetBuild(gh, s.parent, `${owner}/${repo}#${number}`, config.labels.lock, bot)
     // A roadmap ticket's state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status)
-    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock) : []
+    s.children = s.item.type === (config.roadmap?.type || 'Roadmap') ? await subIssues(gh, base, config.labels.lock, config) : []
     // An approval starts only the open children no PR answers yet, and builds
     // together the ones whose only blockers are each other.
     // (why: docs/why.md#one-verb-plans-and-approves, docs/why.md#a-cross-repo-set-is-built-together)
@@ -256,6 +273,10 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // ---- pull request ----------------------------------------------------
   let { data: pr } = await gh.rest.pulls.get({ owner, repo, pull_number: number })
   if (pr.state === 'open') pr = await pollMergeable(gh, base, pr)
+  // REST still computing after the poll: GraphQL's answer, which says
+  // UNKNOWN rather than null. Unknown is never read as clean.
+  // (why: docs/why.md#unknown-mergeability-is-not-clean)
+  if (pr.state === 'open' && (pr.mergeable === null || pr.mergeable === undefined)) pr = { ...pr, ...(await graphqlMergeable(gh, base)) }
   const reviews = await gh.paginate(gh.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
   const threads = pr.state === 'open' ? await reviewThreads(gh, base) : []
   // A matrix job's check run is named `<job> (<params>)`, so an exact-match
@@ -315,7 +336,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // (why: docs/why.md#a-cross-repo-set-is-built-together)
   s.linkedLocked = []
   s.linkedBlockedOpen = []
-  if (isBot(pr.user?.login, config)) {
+  if (fullTreatment(pr.user?.login, config)) {
     for (const n of s.linkedIssues) {
       const ref = { owner, repo, number: n }
       const { data: li } = await gh.rest.issues.get({ owner, repo, issue_number: n })
@@ -334,7 +355,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     }
     // Drafts too: a conflicted draft runs no CI, so nothing else would see it.
     const open = await gh.paginate(gh.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 })
-    s.otherOpenBotPrs = open.filter((p) => p.number !== number && isBot(p.user?.login, config)).map((p) => p.number)
+    s.otherOpenBotPrs = open.filter((p) => p.number !== number && fullTreatment(p.user?.login, config)).map((p) => p.number)
   } else {
     s.otherOpenBotPrs = []
   }

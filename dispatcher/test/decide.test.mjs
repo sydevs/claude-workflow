@@ -8,12 +8,13 @@ const config = {
   org: 'sydevs',
   identity: { expectedLogin: 'sydevs-bot' },
   assignment: { reviewer: 'Ardnived', respondTo: ['Ardnived', 'antontcymbal', 'Copilot'] },
-  labels: { journal: 'ops-journal', awaiting: 'awaiting', stuck: 'stuck', blocked: 'blocked', lock: 'bot:working', proposal: 'proposal' },
+  labels: { journal: 'ops-journal', lock: 'bot:working', proposal: 'proposal' },
   ceilings: { ciFixIterations: 3 },
   mergePolicy: { loopMayNotMerge: ['claude-workflow'] },
   review: { bodyHeader: '## 🧐 Adversarial review', skipWhen: { maxFiles: 2, maxLines: 40 } },
-  dispatch: { commandPrefix: '@sydevs-bot', verbs: { issue: ['implement', 'revise', 'review', 'block'], pr: ['address', 'review', 'revise'], aliases: { issue: { review: 'revise' }, pr: { revise: 'review' } }, unknownIssue: 'revise', unknownPr: 'address' } },
-  issueFields: { holdUntil: { name: 'Hold Until', fieldId: 46423871, maxHorizonDays: 30, maxRehold: 3 } },
+  dispatch: { commandPrefix: '@sydevs-bot', maxAttempts: 3, pendingDueMinutes: 120, verbs: { issue: ['implement', 'revise', 'review', 'block', 'hold'], pr: ['address', 'review', 'revise', 'block', 'hold'], aliases: { issue: { review: 'revise' }, pr: { revise: 'review' } }, unknownIssue: 'revise', unknownPr: 'address' } },
+  issueFields: { holdUntil: { name: 'Hold Until', fieldId: 46423871, maxHorizonDays: 180, defaultDays: [30, 90] } },
+  projects: { number: 2, status: { awaiting: 'Awaiting', blocked: 'Blocked', hold: 'Hold', pending: 'Pending', working: 'Working', done: 'Done' } },
   roadmap: { type: 'Roadmap', spikeBranchPrefix: 'claude/spike-' },
   repos: ['SahajCloud', 'SahajAtlasWeb', 'WeMeditateWeb', 'SahajAtlasWordpress', 'claude-workflow'],
 }
@@ -41,7 +42,8 @@ function prSnap(over = {}) {
   }
 }
 
-const types = (plan) => plan.map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value ? ':' + a.value : ''))
+// `syncStatus` ends every plan `decide` returns; the Status it derives is tested in status.test.mjs.
+const types = (plan) => plan.filter((a) => a.type !== 'syncStatus').map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value ? ':' + a.value : ''))
 
 test('green draft with no critic review fires the critic, never marks ready', () => {
   assert.deepEqual(types(evaluatePr(prSnap(), config)), ['fire:review-pr'])
@@ -49,7 +51,7 @@ test('green draft with no critic review fires the critic, never marks ready', ()
 
 test('green draft under the size threshold is marked ready without a critic', () => {
   const p = evaluatePr(prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 } }), config)
-  assert.deepEqual(types(p).slice(0, 3), ['markReady', 'requestReviewer', 'label'])
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'])
   assert.ok(p.some((a) => a.type === 'comment' && a.key.startsWith('critic-skipped')))
 })
 
@@ -85,13 +87,15 @@ test('a fix-ci session that ended on this head is not fired again, whatever fixC
   // lock-respecting re-fires of a decision already made.
   const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [endedFixCi('19a284d')] } })
   const plan = evaluatePr(s, config)
-  assert.deepEqual(types(plan), ['note'], 'no fire, and no bumpFixCi')
-  assert.match(plan[0].text, /19a284d/)
+  assert.deepEqual(types(plan), ['record', 'note'], 'no fire, and no bumpFixCi — handed back instead')
+  assert.match(plan[1].text, /19a284d/)
 })
 
 test('a fix-ci session that timed out on this head is just as ended', () => {
   const s = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, dispatches: [endedFixCi('19a284d', 'timed out')] } })
-  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+  assert.deepEqual(types(evaluatePr(s, config)), ['record', 'note'])
+  const already = prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: '19a284d' } }, record: { fixCi: 1, handback: { reason: 'x' }, dispatches: [endedFixCi('19a284d', 'timed out')] } })
+  assert.deepEqual(types(evaluatePr(already, config)), ['note'], 'a hand-back already given is not written again')
 })
 
 test('a push to a new head clears the refusal', () => {
@@ -113,8 +117,8 @@ test('another handler ending on this head says nothing about fix-ci', () => {
 test('the unlock after a stood-down fix-ci makes the PR the human\'s turn, not a loop', () => {
   const s = prSnap({ ci: red, pr: { ...prSnap().pr, draft: false, head: { sha: '19a284d' } }, record: { fixCi: 1, current: null, dispatches: [endedFixCi('19a284d')] } })
   const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, config)
-  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'note', 'label'])
-  assert.deepEqual(plan[2].add, ['awaiting'])
+  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'record', 'note'])
+  assert.match(plan[1].patch.handback.reason, /fix-ci ran on 19a284d and CI is still red/, 'handed back: Status reads Awaiting')
 })
 
 // The record as the unlock really sees it: the ending session still in
@@ -123,8 +127,8 @@ test('the unlock that ends a stood-down fix-ci does not fire it again on the sam
   const fired = { id: 'SahajCloud-5-fix-ci-20261001T022800000Z-aaaa', handler: 'fix-ci', attempt: 1, firedAt: '2026-10-01T02:28:00.000Z', sha: '19a284d' }
   const s = prSnap({ ci: red, pr: { ...prSnap().pr, draft: false, head: { sha: '19a284d' } }, record: { fixCi: 1, current: { ...fired, flags: { mode: null } }, dispatches: [fired] } })
   const plan = decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, s, config)
-  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'note', 'label'])
-  assert.deepEqual(plan[2].add, ['awaiting'])
+  assert.deepEqual(types(plan), ['unlocked:fix-ci', 'record', 'note'])
+  assert.match(plan[1].patch.handback.reason, /fix-ci ran on 19a284d and CI is still red/, 'handed back: Status reads Awaiting')
   const pushed = { ...s, pr: { ...s.pr, head: { sha: 'b0b0b0b' } } }
   assert.deepEqual(types(decide({ reason: 'unlock', facts: { handler: 'fix-ci' } }, pushed, config)), ['unlocked:fix-ci', 'bumpFixCi', 'fire:fix-ci'], 'a pass that pushed a new head that is still red is repaired again')
 })
@@ -132,8 +136,8 @@ test('the unlock that ends a stood-down fix-ci does not fire it again on the sam
 test('red CI fires fix-ci until the cap, then hands over to awaiting', () => {
   assert.deepEqual(types(evaluatePr(prSnap({ ci: red }), config)), ['bumpFixCi', 'fire:fix-ci'])
   const capped = evaluatePr(prSnap({ ci: red, record: { fixCi: 3 } }), config)
-  assert.equal(capped[0].type, 'label')
-  assert.deepEqual(capped[0].add, ['awaiting'])
+  assert.equal(capped[0].type, 'record')
+  assert.match(capped[0].patch.handback.reason, /CI still red after 3 fix attempts/, 'handed back, with the reason Status shows')
   assert.ok(capped.some((a) => a.type === 'anomaly'))
 })
 
@@ -150,23 +154,23 @@ test('a ready PR gets auto-merge armed; GitHub decides the rest', () => {
   const unarmed = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' } })
   assert.deepEqual(types(evaluatePr(unarmed, config)), ['armAutoMerge'])
   const armed = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: true }, normalized: { reviewDecision: 'APPROVED' } })
-  assert.deepEqual(types(evaluatePr(armed, config)).slice(0, 1), ['status:approved'])
+  assert.deepEqual(types(evaluatePr(armed, config)), [], 'armed and approved: the queue owes the next move')
 })
 
-test('a human-merge repo shows Approved plus awaiting', () => {
+test('a human-merge repo is never armed, approved or not', () => {
   const s = prSnap({ repo: { owner: 'sydevs', name: 'claude-workflow', full: 'sydevs/claude-workflow' }, pr: { ...prSnap().pr, draft: false }, normalized: { reviewDecision: 'APPROVED' }, verdict: { verdict: 'HOLD', reason: 'human' } })
   const p = evaluatePr(s, config)
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.ok(!p.some((a) => a.type === 'armAutoMerge'))
 })
 
 test('a human review on a bot PR clears awaiting and dispatches address-review', () => {
   const s = prSnap({
     pr: { ...prSnap().pr, draft: false },
+    record: { fixCi: 0, handback: { reason: 'CI still red after 3 fix attempts' } },
     reviews: [{ user: { login: 'Ardnived' }, body: 'please fix', state: 'CHANGES_REQUESTED', submitted_at: '2026-09-08T11:00:00Z' }],
   })
   const p = decide({ reason: 'review', facts: { author: 'Ardnived', body: 'please fix' } }, s, config)
-  assert.equal(p[0].type, 'label')
-  assert.deepEqual(p[0].remove, ['awaiting', 'stuck'])
+  assert.deepEqual(p[0], { type: 'record', patch: { handback: null } }, 'a review of yours ends the hand-back')
   assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'address-review'))
 })
 
@@ -188,8 +192,7 @@ test('a review comment on a bot PR re-derives the PR, whatever association GitHu
     threads: [{ isResolved: false, comments: [{ author: 'Ardnived', createdAt: '2026-09-17T00:56:35Z', body: 'this is wrong' }] }],
   })
   const p = decide({ reason: 'review_comment', facts: { author: 'Ardnived', body: 'this is wrong', association: 'CONTRIBUTOR' } }, s, config)
-  assert.deepEqual(types(p), ['label', 'note', 'fire:address-review'])
-  assert.deepEqual(p[0].remove, ['awaiting', 'stuck'])
+  assert.deepEqual(types(p), ['note', 'fire:address-review'])
 })
 
 // The note text, not just the shape: an unhandled reason is also one note, so
@@ -206,13 +209,13 @@ test('a review comment from the bot, or from outside the allowlist, dispatches n
     threads: [{ isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-09-17T00:00:00Z', body: 'finding' }] }],
   })
   const own = decide({ reason: 'review_comment', facts: { author: 'sydevs-bot', body: '## 🧐 Adversarial review\n…' } }, s, config)
-  assert.deepEqual(own.map((a) => a.text), ['own review comment — ignored'])
+  assert.deepEqual(own.filter((a) => a.type === 'note').map((a) => a.text), ['own review comment — ignored'])
   const stranger = decide({ reason: 'review_comment', facts: { author: 'drive-by', body: 'a nit', association: 'MEMBER' } }, s, config)
-  assert.deepEqual(stranger.map((a) => a.text), ['review by drive-by — ignored'])
+  assert.deepEqual(stranger.filter((a) => a.type === 'note').map((a) => a.text), ['review by drive-by — ignored'])
 })
 
-test('a review comment carrying a verb on a human PR still dispatches that verb', () => {
-  const s = prSnap({ pr: { ...prSnap().pr, draft: false, user: { login: 'Ardnived' } } })
+test('a review comment carrying a verb on an outside PR still dispatches that verb', () => {
+  const s = prSnap({ pr: { ...prSnap().pr, draft: false, user: { login: 'drive-by' } } })
   const at = (body) => ({ reason: 'review_comment', facts: { author: 'Ardnived', body, association: 'CONTRIBUTOR' } })
   assert.deepEqual(types(decide(at('@sydevs-bot address this'), s, config)), ['fire:address-review'])
   assert.deepEqual(types(decide(at('@sydevs-bot review'), s, config)), ['fire:review-pr'])
@@ -245,7 +248,7 @@ function issueSnap(over = {}) {
 test('an implement verb from a human authorises and fires at once — there is no WIP cap', () => {
   const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }, issueSnap(), config)
   assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('proposal')))
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'approved'))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved?.by === 'Ardnived'), 'the approval is recorded, with who gave it')
   assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'implement'))
 })
 
@@ -268,11 +271,11 @@ test('a comment without write access is not feedback, even from an allowlisted l
   assert.ok(!p.some((a) => a.type === 'fire'))
 })
 
-test('the bot-filed issue gets proposal + awaiting + Proposed and its markers become relationships', () => {
+test('the bot-filed issue gets proposal, and its markers become relationships', () => {
   const p = decide({ reason: 'issues.opened' }, issueSnap({ markers: { blockedBy: [{ owner: 'sydevs', repo: 'SahajCloud', number: 1 }], recheck: null } }), config)
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'proposed'))
+  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('proposal')))
   assert.ok(p.some((a) => a.type === 'relationships'))
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked')))
+  assert.equal(p[p.length - 1].type, 'syncStatus', 'Status is derived from what the plan left')
 })
 
 // ---- an unresolved blocker line is reported (why: docs/why.md#an-unresolved-blocker-line-is-reported)
@@ -295,9 +298,8 @@ test('a blocker line naming a PR is refused on open, and nothing else moves for 
   assert.match(said[0].body, /full issue URL/)
   assert.match(said[0].body, /\n> Blocked by: /, 'the line as written, quoted')
   assert.ok(!p.some((a) => a.type === 'relationships'), 'no relationship')
-  assert.ok(!p.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('blocked'), 'no blocked label')
-  // Still Proposed and still your turn: the refusal moves no state.
-  assert.deepEqual(types(p).filter((t) => t.startsWith('status')), ['status:proposed'])
+  // Still your turn: the refusal moves no state.
+  assert.ok(!p.some((a) => a.type === 'record' || a.type === 'hold'), 'no state moves')
 })
 
 test('the refusal is keyed on the targets, so neither a later edit nor a reword reposts it', () => {
@@ -324,7 +326,6 @@ test('a bare #N on edit is refused, and a resolvable line beside it still relate
   const p = decide({ reason: 'issues.edited', facts: { sender: 'Ardnived' } }, s, config)
   assert.equal(unresolved(p).length, 1)
   assert.ok(p.some((a) => a.type === 'relationships'), 'the resolvable line is still converted')
-  assert.ok(p.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('blocked'))
   // So the refusal cannot claim the item is not blocked: this plan is blocking it.
   assert.doesNotMatch(unresolved(p)[0].body, /not blocked/i, 'it reports the relationship, not the state')
 })
@@ -385,75 +386,60 @@ test('a merged PR resolves Sentry for linked issues and scans other ready bot PR
   assert.equal(p.find((a) => a.type === 'targets').list.length, 2)
 })
 
-test('a closed issue goes Done and re-checks its dependents', () => {
-  const p = decide({ reason: 'issues.closed' }, issueSnap({ dependents: [{ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 12 }] }), config)
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'done'))
-  assert.equal(p.find((a) => a.type === 'targets').list[0].reason, 'unblock-check')
+test('a closed issue re-checks its dependents, naming itself', () => {
+  const p = decide({ reason: 'issues.closed' }, issueSnap({ item: { number: 9, state: 'closed', labels: [] }, dependents: [{ repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 12 }] }), config)
+  const next = p.find((a) => a.type === 'targets').list[0]
+  assert.equal(next.reason, 'unblock-check')
+  assert.deepEqual(next.facts, { closedNumber: 9 })
+  assert.equal(p[p.length - 1].type, 'syncStatus', 'Done is derived from the closed state')
 })
 
-test('a passed Hold Until date fires a recheck, not awaiting; a future one is left alone', () => {
-  const passed = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
-  assert.deepEqual(types(passed), ['record', 'fire:revise'])
-  assert.equal(passed[1].flags.mode, 'recheck')
-  assert.deepEqual(passed[0].patch, { rehold: 1 })
-  assert.ok(!passed.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'nobody is pinged on the date alone')
-  const early = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } }), config)
-  assert.ok(!early.some((a) => a.type === 'label'))
+test('a passed Hold Until date starts an approved ticket and hands any other back; a future one is left alone', () => {
+  const at = (over) => issueSnap({ item: { number: 1, state: 'open', labels: [] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' }, ...over })
+  const mine = decide({ reason: 'unblock-check', facts: {} }, at(), config)
+  assert.deepEqual(types(mine), ['note'], 'no session rechecks it: the date is the fact')
+  const approved = decide({ reason: 'unblock-check', facts: {} }, at({ record: { approved: { by: 'Ardnived' } } }), config)
+  assert.deepEqual(types(approved), ['fire:implement'])
+  const early = decide({ reason: 'unblock-check', facts: {} }, at({ park: { until: '2026-12-01', passed: false, source: 'field' } }), config)
+  assert.deepEqual(types(early), ['note'])
+  assert.match(early[0].text, /held until 2026-12-01/)
 })
 
-// The converted line is gone from the body, so the fire names what the ticket
-// waited on. (why: docs/why.md#a-converted-blocker-line-is-deleted)
-test('a recheck after the last blocker closes names the blockers that cleared', () => {
-  const blockedByAll = [{ owner: 'sydevs', repo: 'SahajCloud', number: 632, state: 'closed' }, { owner: 'sydevs', repo: 'WeMeditateWeb', number: 81, state: 'closed' }]
-  const p = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], blockedByAll }), config)
-  assert.deepEqual(types(p), ['record', 'fire:revise'])
-  assert.deepEqual(p[1].flags, { mode: 'recheck', cleared: ['sydevs/SahajCloud#632', 'sydevs/WeMeditateWeb#81'] })
-  const dated = decide({ reason: 'unblock-check', facts: {} }, issueSnap({ item: { number: 1, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-09-01', passed: true, source: 'field' } }), config)
-  assert.deepEqual(dated[1].flags, { mode: 'recheck' }, 'a date park names no blocker')
+// No recheck session sits between a blocker closing and the build: the
+// relationship is the fact. (why: docs/why.md#a-hold-is-a-date-not-a-recheck)
+test('a blocker closing starts an approved ticket at once, and tells you about an unapproved one', () => {
+  const free = (over) => issueSnap({ item: { number: 1, state: 'open', labels: [] }, blockedByOpen: [], ...over })
+  const approved = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, free({ record: { approved: { by: 'Ardnived' } } }), config)
+  assert.deepEqual(types(approved), ['fire:implement'])
+  const mine = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, free(), config)
+  assert.deepEqual(types(mine), ['comment'])
+  assert.match(mine[0].body, /#632 closed, so nothing blocks this now/)
+  const asks = decide({ reason: 'unblock-check', facts: { closedNumber: 632 } }, free({ record: { approved: { by: 'Ardnived' } }, openQuestions: { total: 1, open: 1 } }), config)
+  assert.deepEqual(types(asks), ['record', 'comment'], 'still not free: the approval is spent and the question is asked')
+  assert.deepEqual(asks[0].patch, { approved: null })
 })
 
-test('unblock-check applies the label when GitHub says blocked and we never labelled it', () => {
-  const snap = issueSnap({ item: { number: 195, labels: [] }, blockedByOpen: [{ number: 695 }], markers: { blockedBy: [], recheck: null, recheckPassed: false } })
+test('unblock-check with a blocker still open writes nothing — Status follows the relationship', () => {
+  const snap = issueSnap({ item: { number: 195, labels: [] }, blockedByOpen: [{ number: 695 }], record: { approved: { by: 'Ardnived' } } })
   const p = decide({ reason: 'unblock-check', facts: {} }, snap, config)
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked')), 'the label follows the relationship')
-  assert.ok(!p.some((a) => a.type === 'comment'), 'nothing to tell anyone yet')
+  assert.deepEqual(types(p), ['note'])
+  assert.match(p[0].text, /still blocked by #695/)
 })
 
-test('unblock-check is quiet when the label already matches the relationship', () => {
-  const snap = issueSnap({ item: { number: 195, labels: ['blocked'] }, blockedByOpen: [{ number: 695 }], markers: { blockedBy: [], recheck: null, recheckPassed: false } })
-  assert.deepEqual(types(decide({ reason: 'unblock-check', facts: {} }, snap, config)), ['note'])
-})
-
-test('unblock-check labels a date park that lost its label, and unparks when the date passes', () => {
-  const ahead = issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [], park: { until: '2026-12-01', passed: false, source: 'field' } })
-  assert.ok(decide({ reason: 'unblock-check', facts: {} }, ahead, config).some((a) => a.type === 'label' && a.add.includes('blocked')))
-  const past = issueSnap({ item: { number: 9, state: 'open', labels: ['blocked'] }, blockedByOpen: [], park: { until: '2026-01-01', passed: true, source: 'field' } })
-  const p = decide({ reason: 'unblock-check', facts: {} }, past, config)
-  assert.ok(p.some((a) => a.type === 'fire' && a.flags.mode === 'recheck'))
-})
-
-test('a park stops an implement dispatch before any session starts', () => {
-  // The label is not the test. A ticket parked on a date it never carried a
-  // label for would otherwise be implemented.
+test('implement on a held ticket clears the hold and starts it', () => {
   const verb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }
-  const parked = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-12-01', passed: false, source: 'field' } })
-  const p = decide(verb, parked, config)
-  assert.ok(!p.some((a) => a.type === 'fire'), 'nothing is fired')
-  const lab = p.find((a) => a.type === 'label' && a.add.includes('blocked'))
-  assert.ok(lab, 'blocked is applied')
-  assert.ok(lab.remove.includes('awaiting'), 'and awaiting comes off — parked is not your turn')
-  assert.match(p.find((a) => a.type === 'comment').body, /parked until 2026-12-01/)
-
-  const past = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-01-01', passed: true, source: 'field' } })
-  assert.ok(decide(verb, past, config).some((a) => a.type === 'fire' && a.handler === 'implement'), 'a passed date does not park')
+  const held = issueSnap({ item: { number: 9, labels: [] }, park: { until: '2026-12-01', passed: false, source: 'field' } })
+  const p = decide(verb, held, config)
+  assert.ok(p.some((a) => a.type === 'hold' && a.date === null), 'the hold is cleared')
+  assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'implement'), 'and the build starts')
 })
 
-test('the refusal says which of the three reasons applies', () => {
-  const verb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER' } }
-  const byBlocker = decide(verb, issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [{ number: 695 }] }), config)
-  assert.match(byBlocker.find((a) => a.type === 'comment').body, /waits on #695/)
-  const byLabel = decide(verb, issueSnap({ item: { number: 9, labels: ['blocked'] } }), config)
-  assert.match(byLabel.find((a) => a.type === 'comment').body, /blocked label/)
+test('implement on a blocked ticket approves it, says what it waits on, and fires nothing', () => {
+  const verb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER', commentId: 77 } }
+  const p = decide(verb, issueSnap({ item: { number: 9, labels: [] }, blockedByOpen: [{ number: 695 }] }), config)
+  assert.ok(!p.some((a) => a.type === 'fire'))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved?.by === 'Ardnived'), 'Pending, not Blocked: the approval is kept')
+  assert.match(p.find((a) => a.type === 'comment').body, /waits on #695, and starts by itself/)
 })
 
 test('a PR whose linked issue is still locked belongs to that session alone', () => {
@@ -470,40 +456,13 @@ test('an implement verb is answered by the PR, not re-dispatched on unlock', () 
   const withPr = issueSnap({ comments: verb, openPrsClosingIt: [742], botSpokeLast: false })
   const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, withPr, config)
   assert.ok(!p.some((a) => a.type === 'targets'), 'no second dispatch')
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'done'))
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')), 'a ticket in flight is not your turn')
+  assert.ok(!p.some((a) => a.type === 'record' && 'approved' in a.patch), 'the approval stands while its PR is open')
 
   // Any other verb still re-derives, and implement does too when no PR exists.
   const revise = issueSnap({ comments: [{ ...verb[0], body: '@sydevs-bot revise' }], openPrsClosingIt: [742] })
   assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, revise, config).some((a) => a.type === 'targets'))
   const noPr = issueSnap({ comments: verb, openPrsClosingIt: [] })
   assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, noPr, config).some((a) => a.type === 'targets'))
-})
-
-test('the awaiting sweep leaves a ticket whose PR is open, and does not throw on a PR', () => {
-  // session-end takes `awaiting` off a ticket a PR closes. Any bot comment
-  // after that makes the bot last speaker, and the sweep put the label back —
-  // claiming the reviewer twice for one piece of work.
-  const bare = (over) => issueSnap({ item: { number: 9, labels: [] }, botSpokeLast: true, ...over })
-  const open = (over) => decide({ reason: 'sweep-awaiting', facts: {} }, bare({ openPrsClosingIt: [742], ...over }), config)
-  // `types()` renders every note as 'note', so the text is pinned too: without
-  // the guard the botSpokeLast: false case says 'human spoke last' and passes.
-  for (const spoke of [true, false]) {
-    const p = open({ botSpokeLast: spoke })
-    assert.deepEqual(types(p), ['note'], 'no label, no anomaly')
-    assert.match(p[0].text, /open PR/, 'the PR is the turn, whoever spoke last')
-  }
-
-  // With no PR open, the correction the sweep exists for still fires.
-  const noPr = decide({ reason: 'sweep-awaiting', facts: {} }, bare(), config)
-  assert.ok(noPr.some((a) => a.type === 'label' && a.add.includes('awaiting')))
-  assert.ok(noPr.some((a) => a.type === 'anomaly' && a.kind === 'awaiting-drift'))
-
-  // sweep.mjs pushes this reason for PRs too, and a PR snapshot carries no
-  // `openPrsClosingIt` key — gather.mjs sets it on the issue arm alone. The
-  // guard must fall through it rather than throw, leaving the PR arm as it was.
-  const pr = decide({ reason: 'sweep-awaiting', facts: {} }, prSnap({ botSpokeLast: true }), config)
-  assert.deepEqual(types(pr), ['label', 'anomaly'])
 })
 
 test('a draft that is ready to advance is not reported as an orphan', () => {
@@ -523,10 +482,10 @@ test('a capped PR already labelled awaiting is swept in silence', () => {
   // label, the same comment and the same anomaly.
   const capped = { ci: red, record: { fixCi: 3 }, pr: { ...prSnap().pr, draft: false } }
   const first = decide({ reason: 'sweep-pr', facts: {} }, prSnap(capped), config)
-  assert.ok(first.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'the first pass hands over')
+  assert.ok(first.some((a) => a.type === 'record' && a.patch.handback), 'the first pass hands over')
   assert.ok(first.some((a) => a.type === 'anomaly'))
 
-  const next = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ...capped, item: { number: 5, labels: ['awaiting'] } }), config)
+  const next = decide({ reason: 'sweep-pr', facts: {} }, prSnap({ ...capped, record: { fixCi: 3, status: 'awaiting', handback: { reason: 'x' } } }), config)
   assert.deepEqual(types(next), ['note'], 'the next sweep writes nothing')
 })
 
@@ -534,7 +493,7 @@ test('an awaiting item is still swept, and a move still passes the gate', () => 
   // Resolving a review thread fires no workflow, so only the sweep sees it.
   // The derivation still runs; what the gate drops is a plan that repeats.
   const resolved = prSnap({
-    item: { number: 5, labels: ['awaiting'] },
+    record: { fixCi: 0, status: 'awaiting' },
     pr: { ...prSnap().pr, draft: false },
     normalized: { reviewDecision: 'APPROVED' },
   })
@@ -543,7 +502,7 @@ test('an awaiting item is still swept, and a move still passes the gate', () => 
   // A human-merge repo holds instead, and holding is not news.
   const held = prSnap({
     repo: { owner: 'sydevs', name: 'claude-workflow', full: 'sydevs/claude-workflow' },
-    item: { number: 5, labels: ['awaiting'] },
+    record: { fixCi: 0, status: 'awaiting' },
     pr: { ...prSnap().pr, draft: false },
     normalized: { reviewDecision: 'APPROVED' },
     verdict: { verdict: 'HOLD', reason: 'human' },
@@ -555,7 +514,7 @@ test('the orphan notice is said once, then the draft is left alone', () => {
   const stalled = { pr: { ...prSnap().pr, draft: true }, reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', state: 'COMMENTED', submitted_at: '2026-09-08T10:00:00Z' }], ci: red, record: { fixCi: 3 } }
   const first = decide({ reason: 'sweep-orphan', facts: {} }, prSnap(stalled), config)
   assert.ok(first.some((a) => a.type === 'anomaly' && a.kind === 'orphan'))
-  const next = decide({ reason: 'sweep-orphan', facts: {} }, prSnap({ ...stalled, item: { number: 5, labels: ['awaiting'] } }), config)
+  const next = decide({ reason: 'sweep-orphan', facts: {} }, prSnap({ ...stalled, record: { fixCi: 3, status: 'awaiting', handback: { reason: 'an orphaned draft' } } }), config)
   assert.deepEqual(types(next), ['note'])
 })
 
@@ -569,21 +528,16 @@ test('a merged PR is nobody\'s turn when its session finally unlocks', () => {
   // two minutes later, found nothing to do, and called that the human's turn.
   const merged = prSnap({ pr: { ...prSnap().pr, state: 'closed', merged: true, draft: false } })
   const p = decide({ reason: 'unlock', facts: { handler: 'address-review' } }, merged, config)
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'awaiting is not added')
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')), 'and any stale one comes off')
+  assert.deepEqual(types(p), ['unlocked:address-review'], 'nothing is fired, and Status derives Done from the merge')
 })
 
-test('a ticket born blocked never carries awaiting', () => {
-  // SahajCloud#780 got awaiting at 08:23:07 and blocked at 08:23:09.
+test('a ticket born blocked writes no state of its own — Status reads the relationship', () => {
+  // SahajCloud#780 got awaiting at 08:23:07 and blocked at 08:23:09: two
+  // writers. Now nothing in the plan names a state; one derivation does.
   const blocked = issueSnap({ item: { number: 780, labels: [], author: 'sydevs-bot' }, blockedByOpen: [{ number: 700 }] })
   const p = decide({ reason: 'issues.opened' }, blocked, config)
-  const adds = p.filter((a) => a.type === 'label').flatMap((a) => a.add)
-  assert.ok(adds.includes('blocked'), 'blocked is applied')
-  assert.ok(!adds.includes('awaiting'), 'awaiting never is')
-
-  const free = issueSnap({ item: { number: 781, labels: [], author: 'sydevs-bot' } })
-  const q = decide({ reason: 'issues.opened' }, free, config)
-  assert.ok(q.filter((a) => a.type === 'label').flatMap((a) => a.add).includes('awaiting'), 'an unblocked one still does')
+  assert.deepEqual(p.filter((a) => a.type === 'label').flatMap((a) => a.add), ['proposal'])
+  assert.equal(p[p.length - 1].type, 'syncStatus')
 })
 
 test('claude-workflow is never armed — merging it is the deploy', () => {
@@ -615,7 +569,7 @@ test('no implementation ticket is revised on arrival — write-ticket already wr
 test('a green consumer draft is marked ready for review with its producer, but not armed', () => {
   const s = prSnap({ reviews: [criticReview], linkedBlockedOpen: ['sydevs/SahajCloud#10'] })
   const p = evaluatePr(s, config)
-  assert.deepEqual(types(p).slice(0, 3), ['markReady', 'requestReviewer', 'label'])
+  assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'])
   assert.ok(!p.some((a) => a.type === 'armAutoMerge'))
   assert.match(p.find((a) => a.type === 'comment' && a.key.startsWith('waits-on')).body, /merges after sydevs\/SahajCloud#10/)
 })
@@ -666,7 +620,7 @@ test('continuations stop at maxAttempts in a row, and the ticket becomes your tu
   const s = asked({ record: { continues: 3, current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: {} } } })
   const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, cfgAttempts)
   assert.ok(!p.some((a) => a.type === 'fire'))
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.ok(p.some((a) => a.type === 'record' && /not finished after 4 sessions/.test(a.patch.handback?.reason || '')), 'handed back')
   assert.match(p.find((a) => a.type === 'comment').body, /Not finished after 4 sessions/)
   assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 0))
 })
@@ -700,10 +654,10 @@ test('a plain comment on a bot PR fires nothing and leaves awaiting on', () => {
   assert.equal(evaluatePr(s, config).some((a) => a.handler === 'address-review'), false, 'the sweep agrees: an unmentioned comment is not owed a reply')
 })
 
-test('a mention on a bot PR clears awaiting and dispatches address-review', () => {
-  const s = prSnap({ comments: [humanComment('@sydevs-bot rename this helper')] })
+test('a mention on a bot PR ends a hand-back and dispatches address-review', () => {
+  const s = prSnap({ comments: [humanComment('@sydevs-bot rename this helper')], record: { fixCi: 0, handback: { reason: 'x' } } })
   const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot rename this helper', association: 'OWNER' } }, s, config)
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('awaiting')))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.handback === null))
   assert.ok(p.some((a) => a.type === 'fire' && a.handler === 'address-review'))
 })
 
@@ -838,12 +792,12 @@ test('at the cap, a head a person pushed since the last fix-ci resets the count 
 
 test('at the cap, the bot pushing a new head does not reset the count', () => {
   const s = prSnap({ ci: red, headAuthor: 'sydevs-bot', pr: { ...prSnap().pr, head: { sha: 'f00d' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc', outcome: 'done' }] } })
-  assert.equal(evaluatePr(s, config)[0].type, 'label')
+  assert.ok(evaluatePr(s, config)[0].patch?.handback)
 })
 
 test('at the cap, a person whose push is still the head the last fix-ci saw does not reset it', () => {
   const s = prSnap({ ci: red, headAuthor: 'Ardnived', pr: { ...prSnap().pr, head: { sha: 'abc' } }, record: { fixCi: 3, dispatches: [{ handler: 'fix-ci', sha: 'abc' }] } })
-  assert.equal(evaluatePr(s, config)[0].type, 'label')
+  assert.ok(evaluatePr(s, config)[0].patch?.handback)
 })
 
 // ---- an infrastructure failure is re-run, not repaired (why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired)
@@ -859,8 +813,8 @@ test('red only on infrastructure re-runs the failed job instead of firing fix-ci
 
 test('after the re-run cap on this head, an infrastructure failure goes to a person, with no fix-ci', () => {
   const plan = evaluatePr(prSnap({ ci: infraRed, record: { fixCi: 0, ciReruns: { sha: 'abc', count: 2 } } }), infraCfg)
-  assert.deepEqual(types(plan), ['label', 'comment', 'anomaly'])
-  assert.deepEqual(plan[0].add, ['awaiting'])
+  assert.deepEqual(types(plan), ['record', 'comment', 'anomaly'])
+  assert.match(plan[0].patch.handback.reason, /infrastructure/)
   assert.match(plan[1].body, /infrastructure, not on this change/)
   assert.match(plan[1].body, /re-ran it 2 times/)
 })
@@ -872,7 +826,7 @@ test('re-runs counted on an older head do not count against a new one', () => {
 
 test('an infrastructure failure Actions did not produce cannot be re-run, so it goes to a person', () => {
   const plan = evaluatePr(prSnap({ ci: { ...red, infra: [{ name: 'CI', jobId: null }] } }), infraCfg)
-  assert.equal(plan[0].type, 'label')
+  assert.ok(plan[0].patch?.handback)
 })
 
 test('a code failure beside an infrastructure one still fires fix-ci', () => {
@@ -968,7 +922,7 @@ test('a resolve-conflicts that ended on this head is not fired again; a new head
   const ended = { id: 'x', handler: 'resolve-conflicts', attempt: 1, firedAt: '2026-10-09T10:00:00Z', sha: 'abc', outcome: 'done' }
   const p = evaluatePr(conflicted({ record: { dispatches: [ended] } }), config)
   assert.equal(p.some((a) => a.type === 'fire'), false, 'a session that stopped on a semantic conflict is not looped')
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'it is your turn')
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.handback), 'it is your turn')
   const unlock = decide({ reason: 'unlock', facts: { handler: 'resolve-conflicts' } }, conflicted({ record: { current: { ...ended, outcome: undefined } } }), config)
   assert.equal(unlock.some((a) => a.type === 'fire'), false, 'nor on the unlock that ends it')
   assert.deepEqual(types(evaluatePr(conflicted({ record: { dispatches: [{ ...ended, sha: 'old' }] } }), config)), ['fire:resolve-conflicts'])
@@ -1030,16 +984,18 @@ test('a PR still armed after a queue failure is the queue rebuilding it, not a r
 
 test('a fix-ci that ended on the dequeued head stands down instead of re-arming', () => {
   const s = dequeued({ record: { fixCi: 1, queueFail: { sha: 'abc', run }, dispatches: [endedFixCi('abc')] } })
-  assert.deepEqual(types(evaluatePr(s, config)), ['note'])
+  assert.deepEqual(types(evaluatePr(s, config)), ['record', 'note'])
 })
 
 test('a queue failure past the ceiling hands over like red CI', () => {
   const capped = evaluatePr(dequeued({ record: { fixCi: 3, queueFail: { sha: 'abc', run } } }), config)
-  assert.deepEqual(types(capped), ['label', 'comment', 'anomaly'])
+  assert.deepEqual(types(capped), ['record', 'comment', 'anomaly'])
   assert.match(capped[1].body, /merge queue run failed/)
 })
 
-test('a queue failure on a human PR is not the bot\'s to repair', () => {
-  const s = dequeued({ pr: { ...dequeued().pr, user: { login: 'Ardnived' } } })
+test('a queue failure on an outside PR is not the bot\'s to repair; on a member\'s it is', () => {
+  const s = dequeued({ pr: { ...dequeued().pr, user: { login: 'drive-by' } } })
   assert.deepEqual(types(decide({ reason: 'queue-failed', facts: { run } }, s, config)), ['note'])
+  const member = dequeued({ pr: { ...dequeued().pr, user: { login: 'Ardnived' } } })
+  assert.ok(decide({ reason: 'queue-failed', facts: { run } }, member, config).some((a) => a.type === 'fire' && a.handler === 'fix-ci'))
 })

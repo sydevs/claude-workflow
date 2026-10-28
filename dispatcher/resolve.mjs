@@ -13,6 +13,7 @@
 
 import { isBot } from './decide.mjs'
 import { listSweepTargets } from './sweep.mjs'
+import { cheapView, driftTargets } from './reconcile.mjs'
 
 /**
  * The PR a merge-queue branch tests, or null. GitHub names the temporary
@@ -53,7 +54,23 @@ export function coalesceTargets(targets) {
   return [...byItem.values()]
 }
 
+/**
+ * The event's own targets, then — on an event run — up to
+ * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo whose board
+ * Status the cheap view rules out. The cron covers the rest.
+ * (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+ */
 export async function resolve({ github, context, config, now = new Date() }) {
+  const own = await eventTargets({ github, context, config, now })
+  if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
+  const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
+  if (!limit) return own
+  const repo = repoOf(context)
+  const skip = new Set(own.map((t) => t.number))
+  return own.concat(driftTargets(await cheapView(github, config, repo.owner, repo.name), config, repo, { now, limit, skip }))
+}
+
+async function eventTargets({ github, context, config, now }) {
   const repo = repoOf(context)
   const ev = context.payload
   const action = ev.action

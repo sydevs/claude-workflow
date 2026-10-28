@@ -118,22 +118,31 @@ test('the dispatch id suffix is four hex digits, whatever the random source retu
 
 // --- the reclaim arm ----------------------------------------------------
 const leaseTarget = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 858, reason: 'sweep-lease', facts: {} }
-const snap = (over) => ({ kind: 'issue', repo: leaseTarget.repo, item: { number: 858, labels: [], body: '', state: 'open' }, locked: false, record: { current: null, dispatches: [] }, ...over })
+const snap = (over) => ({ kind: 'issue', repo: leaseTarget.repo, item: { number: 858, labels: [], body: '', state: 'open' }, locked: false, record: { current: null, dispatches: [] }, comments: [], openPrsClosingIt: [], blockedByOpen: [], park: { until: null, passed: false }, openQuestions: { open: 0 }, children: [], ...over })
 
 test('sweep-lease reclaims a ref left on an item with no lock and no session', () => {
-  const plan = decide(leaseTarget, snap(), config)
+  const plan = decide(leaseTarget, snap(), config).filter((a) => a.type !== 'syncStatus')
   assert.deepEqual(plan.map((a) => a.type), ['releaseLease'])
   assert.match(plan[0].why, /no lock and no session/)
 })
 
-test('sweep-lease leaves a live lease alone — the label or the record is enough', () => {
-  const locked = decide(leaseTarget, snap({ locked: true, item: { number: 858, labels: ['bot:working'], body: '', state: 'open' } }), config)
-  assert.deepEqual(locked.map((a) => a.type), ['note'])
-  const recorded = decide(leaseTarget, snap({ record: { current: { handler: 'fix-ci' }, dispatches: [] } }), config)
-  assert.deepEqual(recorded.map((a) => a.type), ['note'])
-  assert.match(recorded[0].text, /fix-ci is still recorded/)
+test('sweep-lease leaves a live lease alone while its deadline holds', () => {
+  const live = { current: { handler: 'fix-ci', deadline: '2099-01-01T00:00:00Z' }, dispatches: [] }
+  const locked = decide(leaseTarget, snap({ locked: true, record: live, item: { number: 858, labels: ['bot:working'], body: '', state: 'open' } }), config)
+  assert.deepEqual(locked.filter((a) => a.type !== 'syncStatus').map((a) => a.type), ['note'])
 })
 
+// sydevs/SahajAtlasWeb#318 and sydevs/WeMeditateWeb#146: a 503 left a lease
+// and a `current` past its deadline, and every later fire read the ref as
+// contention. (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+test('sweep-lease reclaims a lease past its deadline, label or not', () => {
+  const stale = { current: { handler: 'address-review', deadline: '2026-10-24T23:30:00Z', attempt: 1 }, dispatches: [] }
+  const now = new Date('2026-10-27T12:00:00Z')
+  const locked = decide(leaseTarget, snap({ now, locked: true, record: stale, item: { number: 858, labels: ['bot:working'], body: '', state: 'open' } }), config)
+  assert.deepEqual(locked.filter((a) => a.type !== 'syncStatus').map((a) => a.type), ['timeout'], 'locked and late: the timeout path re-fires or hands back')
+  const bare = decide(leaseTarget, snap({ now, record: stale }), config)
+  assert.equal(bare[0].type, 'unlocked', 'no label and a session on record: read as the unlock it was, which releases the lease')
+})
 test('a 422 that is not "already exists" is an error, not contention', async () => {
   // GitHub answers 422 for a stale anchor sha and a malformed ref name too.
   // Reading either as contention suppresses the anomaly and leaves the item

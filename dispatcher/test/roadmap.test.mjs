@@ -8,20 +8,24 @@ const config = {
   repos: ['SahajCloud', 'SahajAtlasWeb', 'WeMeditateWeb', 'SahajAtlasWordpress', 'claude-workflow'],
   identity: { expectedLogin: 'sydevs-bot' },
   assignment: { reviewer: 'Ardnived', respondTo: ['Ardnived', 'antontcymbal', 'Copilot'] },
-  labels: { journal: 'ops-journal', awaiting: 'awaiting', stuck: 'stuck', blocked: 'blocked', lock: 'bot:working', proposal: 'proposal' },
+  labels: { journal: 'ops-journal', lock: 'bot:working', proposal: 'proposal' },
   ceilings: { ciFixIterations: 3 },
   mergePolicy: { loopMayNotMerge: ['claude-workflow'] },
   review: { bodyHeader: '## 🧐 Adversarial review', skipWhen: { maxFiles: 2, maxLines: 40 } },
   dispatch: {
     commandPrefix: '@sydevs-bot',
-    verbs: { issue: ['implement', 'revise', 'review', 'block'], pr: ['address', 'review', 'revise'], aliases: { issue: { review: 'revise' }, pr: { revise: 'review' } }, unknownIssue: 'revise', unknownPr: 'address' },
+    maxAttempts: 3,
+    pendingDueMinutes: 120,
+    verbs: { issue: ['implement', 'revise', 'review', 'block', 'hold'], pr: ['address', 'review', 'revise', 'block', 'hold'], aliases: { issue: { review: 'revise' }, pr: { revise: 'review' } }, unknownIssue: 'revise', unknownPr: 'address' },
   },
-  issueFields: { holdUntil: { name: 'Hold Until', fieldId: 46423871, maxHorizonDays: 30, maxRehold: 3 } },
+  issueFields: { holdUntil: { name: 'Hold Until', fieldId: 46423871, maxHorizonDays: 180, defaultDays: [30, 90] } },
+  projects: { number: 2, status: { awaiting: 'Awaiting', blocked: 'Blocked', hold: 'Hold', pending: 'Pending', working: 'Working', done: 'Done' } },
   roadmap: { type: 'Roadmap', spikeBranchPrefix: 'claude/spike-' },
 }
 
 const repo = (name = 'SahajAtlasWeb') => ({ owner: 'sydevs', name, full: `sydevs/${name}` })
-const types = (plan) => plan.map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value !== undefined ? ':' + a.value : ''))
+// `syncStatus` ends every plan `decide` returns; status.test.mjs tests what it derives.
+const types = (plan) => plan.filter((a) => a.type !== 'syncStatus').map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value !== undefined ? ':' + a.value : ''))
 const fires = (plan) => plan.filter((a) => a.type === 'fire')
 
 function snap(over = {}) {
@@ -52,11 +56,10 @@ const verb = (body, author = 'Ardnived') => ({ reason: 'issue_comment', facts: {
 
 // ---- placement --------------------------------------------------------
 
-test("a member's roadmap ticket is reviewed on arrival and carries no Status", () => {
+test("a member's roadmap ticket is reviewed on arrival, and gets a Status like any item", () => {
   const p = decide({ reason: 'issues.opened' }, snap(), config)
   assert.deepEqual(fires(p).map((a) => [a.handler, a.flags.mode]), [['revise-roadmap', 'intake']])
-  const statuses = p.filter((a) => a.type === 'status')
-  assert.deepEqual(statuses.map((a) => a.value), [null], 'every status becomes one clear')
+  assert.equal(p[p.length - 1].type, 'syncStatus', 'a goal is no longer exempt from the board')
 })
 
 test("a stranger's roadmap ticket waits for a member, and its markers are text", () => {
@@ -67,7 +70,6 @@ test("a stranger's roadmap ticket waits for a member, and its markers are text",
   const p = decide({ reason: 'issues.opened' }, s, config)
   assert.equal(fires(p).length, 0)
   assert.ok(!p.some((a) => a.type === 'relationships'), 'no relationship from a stranger')
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
 })
 
 test('a roadmap proposal the bot filed waits for a human verdict', () => {
@@ -94,7 +96,7 @@ test("the roadmap author's reply is your turn, never a session", () => {
   const s = snap({ item: { author: 'drive-by', authorAssociation: 'NONE' } })
   const p = decide(verb('@sydevs-bot 1A please', 'drive-by'), s, config)
   assert.equal(fires(p).length, 0)
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.deepEqual(types(p), ['note'], 'read as data on the next run a member starts')
 })
 
 test("a member's revise on a stranger's goal accepts it with the full review", () => {
@@ -154,27 +156,53 @@ test('an approved child starts at once, or waits blocked with the approval kept'
   assert.equal(fires(free)[0].handler, 'implement')
   const held = decide({ reason: 'approve', facts: { by: 'Ardnived' } }, ticket({ blockedByOpen: [{ number: 10 }] }), config)
   assert.equal(fires(held).length, 0)
-  assert.ok(held.some((a) => a.type === 'record' && a.patch.pendingImplement))
-  assert.ok(held.some((a) => a.type === 'label' && a.add.includes('blocked') && a.remove.includes('awaiting')))
+  assert.ok(held.some((a) => a.type === 'record' && a.patch.approved?.by === 'Ardnived'), 'the approval is kept: Pending, not Blocked')
 })
 
 test('implement on a blocked ticket is an approval that waits', () => {
   const p = decide(verb('@sydevs-bot implement'), ticket({ blockedByOpen: [{ number: 695 }] }), config)
   assert.equal(fires(p).length, 0)
-  assert.ok(p.some((a) => a.type === 'record' && a.patch.pendingImplement))
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved))
   assert.match(p.find((a) => a.type === 'comment').body, /waits on #695/)
 })
 
 // ---- block, recheck, unblock -----------------------------------------
 
-test('block until a date is mechanical, inside the horizon', () => {
-  const p = decide(verb('@sydevs-bot block until 2026-10-20 — waiting on Payload 3.x'), ticket(), config)
-  assert.deepEqual(types(p).filter((t) => t !== 'react'), ['label', 'hold', 'record', 'label', 'comment'])
-  assert.equal(p.find((a) => a.type === 'hold').date, '2026-10-20')
-  assert.match(p.find((a) => a.type === 'comment').body, /Payload 3\.x/)
-  const far = decide(verb('@sydevs-bot block until 2027-03-01'), ticket(), config)
+test('hold is mechanical: a date, a span, or none, inside the horizon', () => {
+  const dated = decide(verb('@sydevs-bot hold until 2026-12-20'), ticket(), config)
+  assert.deepEqual(types(dated).filter((t) => t !== 'react'), ['label', 'hold', 'comment'])
+  assert.equal(dated.find((a) => a.type === 'hold').date, '2026-12-20')
+  const span = decide(verb('@sydevs-bot hold 3 weeks'), ticket(), config)
+  assert.equal(span.find((a) => a.type === 'hold').date, '2026-10-28')
+  const bare = decide(verb('@sydevs-bot hold'), ticket(), config)
+  const d = bare.find((a) => a.type === 'hold').date
+  assert.ok(d >= '2026-11-06' && d <= '2027-01-05', `a bare hold picks 30–90 days out (${d})`)
+  const far = decide(verb('@sydevs-bot hold until 2027-06-01'), ticket(), config)
   assert.ok(!far.some((a) => a.type === 'hold'))
-  assert.match(far.find((a) => a.type === 'comment').body, /no later than 2026-11-06/)
+  assert.match(far.find((a) => a.type === 'comment').body, /no later than 2027-04-05 \(180 days\)/)
+  const junk = decide(verb('@sydevs-bot hold for a bit'), ticket(), config)
+  assert.ok(!junk.some((a) => a.type === 'hold'))
+  assert.match(junk.find((a) => a.type === 'comment').body, /is not a date/)
+})
+
+test('hold withdraws an approval, and says so', () => {
+  const p = decide(verb('@sydevs-bot hold 2 months'), ticket({ record: { approved: { by: 'Ardnived' } } }), config)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved === null))
+  assert.match(p.find((a) => a.type === 'comment' && a.key.startsWith('hold')).body, /approval is withdrawn/)
+})
+
+test('a bare hold spreads a batch: two tickets held together come back apart', () => {
+  const dates = [301, 302, 303, 304].map((n) => decide(verb('@sydevs-bot hold'), ticket({ item: { number: n } }), config).find((a) => a.type === 'hold').date)
+  assert.ok(new Set(dates).size > 1, dates.join(' '))
+})
+
+test('hold and block on a PR are refused: a PR is merged or closed', () => {
+  const pr = { kind: 'pr', repo: repo(), item: { number: 9, labels: [] }, locked: false, record: {}, comments: [], threads: [], reviews: [], pr: { number: 9, state: 'open', draft: false, user: { login: 'sydevs-bot' }, head: { sha: 'a' } }, ci: { green: true, failing: [], running: [] }, normalized: {} }
+  for (const body of ['@sydevs-bot hold 2 weeks', '@sydevs-bot block on sydevs/SahajCloud#1']) {
+    const p = decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body, association: 'MEMBER', commentId: 4 } }, pr, config)
+    assert.deepEqual(types(p), ['comment'])
+    assert.match(p[0].body, /merged or closed, never parked/)
+  }
 })
 
 test('block on a ticket makes a relationship; block with only a reason asks a session', () => {
@@ -185,30 +213,17 @@ test('block on a ticket makes a relationship; block with only a reason asks a se
   assert.deepEqual(parseBlock('@sydevs-bot block waiting on legal', config.dispatch, 'sydevs'), { form: 'reason', reason: 'waiting on legal' })
 })
 
-test('after maxRehold quiet re-holds the ticket is handed back with options', () => {
-  const s = ticket({ item: { labels: ['blocked'] }, park: { until: '2026-10-01', passed: true, source: 'field' }, record: { rehold: 3 } })
-  const p = decide({ reason: 'unblock-check', facts: {} }, s, config)
-  assert.equal(fires(p).length, 0)
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting') && a.remove.includes('blocked')))
-  assert.match(p.find((a) => a.type === 'comment').body, /A — keep waiting/)
-})
-
-test('a recheck that re-held the ticket ends quietly blocked', () => {
-  const s = ticket({ item: { labels: ['blocked'] }, park: { until: '2026-11-01', passed: false, source: 'field' }, record: { rehold: 1, current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z' } } })
+test('an unlock while still held or blocked keeps the approval and writes nothing', () => {
+  const s = ticket({ park: { until: '2026-11-01', passed: false, source: 'field' }, record: { approved: { by: 'Ardnived' }, current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z' } } })
   const p = decide({ reason: 'unlock', facts: { handler: 'revise' } }, s, config)
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('blocked') && a.remove.includes('awaiting')))
-  assert.equal(fires(p).length, 0)
+  assert.deepEqual(types(p), ['unlocked:revise'])
 })
 
-test('a recheck that found the ticket free starts a pre-approved one, or hands it back', () => {
-  const base = { item: { labels: ['blocked'] }, park: { until: '2026-10-01', passed: true, source: 'field' } }
-  const approved = decide({ reason: 'unlock', facts: { handler: 'revise' } }, ticket({ ...base, record: { rehold: 1, pendingImplement: { by: 'Ardnived' } } }), config)
-  assert.equal(fires(approved)[0].handler, 'implement')
-  assert.ok(approved.some((a) => a.type === 'label' && a.remove.includes('blocked')))
-  assert.ok(approved.some((a) => a.type === 'record' && a.patch.rehold === 0))
-  const plain = decide({ reason: 'unlock', facts: { handler: 'revise' } }, ticket({ ...base, record: { rehold: 1 } }), config)
-  assert.equal(fires(plain).length, 0)
-  assert.ok(plain.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+test('a build that ended with no PR spends the approval: the session said why', () => {
+  const s = ticket({ botSpokeLast: true, record: { approved: { by: 'Ardnived' }, current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z' } } })
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config)
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved === null))
+  assert.equal(fires(p).length, 0)
 })
 
 // ---- children done, escalation, requests -------------------------------
@@ -286,9 +301,9 @@ test('a child that escalated a decision hands the turn to its parent, not to you
   })
   const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config)
   assert.equal(p.find((a) => a.type === 'targets').list[0].reason, 'escalated')
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.ok(!p.some((a) => a.type === 'record' && a.patch.approved === null), 'the child keeps its approval while the goal decides')
   const parent = decide({ reason: 'escalated', facts: { child: 'sydevs/SahajCloud#41' } }, snap(), config)
-  assert.ok(parent.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.match(parent.find((a) => a.type === 'comment').body, /Open questions/)
 })
 
 test('a replan request re-plans the children; an old request is ignored', () => {
@@ -301,8 +316,8 @@ test('a replan request re-plans the children; an old request is ignored', () => 
 
 test('a transfer request moves a childless roadmap ticket, last', () => {
   const s = snap({ repo: repo('SahajCloud'), request: { at: '2026-10-07T11:00:00Z', body: { transfer: { repo: 'SahajAtlasWeb', milestone: 'Sahaj Atlas launch' } } }, record: { current: { handler: 'revise-roadmap', firedAt: '2026-10-07T10:00:00Z' }, dispatches: [{ handler: 'revise-roadmap' }] } })
-  const p = decide({ reason: 'unlock', facts: {} }, s, config)
-  assert.deepEqual(p[p.length - 1], { type: 'transfer', repo: 'SahajAtlasWeb', milestone: 'Sahaj Atlas launch' })
+  const p = decide({ reason: 'unlock', facts: {} }, s, config).filter((a) => a.type !== 'syncStatus')
+  assert.deepEqual(p[p.length - 1], { type: 'transfer', repo: 'SahajAtlasWeb', milestone: 'Sahaj Atlas launch' }, 'last of the writes; apply skips the Status of a moved issue')
   const withKids = { ...s, children: [{ repo: repo(), number: 1, state: 'open' }] }
   assert.ok(!decide({ reason: 'unlock', facts: {} }, withKids, config).some((a) => a.type === 'transfer'))
 })
@@ -345,8 +360,6 @@ test('the plan the verb asked for approves its children when it ends, with no se
   const t = p.find((a) => a.type === 'targets').list
   assert.deepEqual(t.map((x) => [x.number, x.reason, x.facts.by]), [[10, 'approve-set', 'Ardnived'], [12, 'approve-set', 'Ardnived']])
   assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan === null))
-  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved === true))
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')), 'the goal is not your turn')
 })
 
 test('a plan that raised a decision approves nothing and hands the goal back', () => {
@@ -354,7 +367,7 @@ test('a plan that raised a decision approves nothing and hands the goal back', (
   const p = decide({ reason: 'unlock', facts: { handler: 'implement-roadmap' } }, snap({ children, record: endedPlan(), openQuestions: { total: 1, open: 1 } }), config)
   assert.ok(!p.some((a) => a.type === 'targets'))
   assert.ok(p.some((a) => a.type === 'record' && a.patch.approveOnPlan === null))
-  assert.ok(p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.equal(fires(p).length, 0, 'the open question makes the goal Awaiting')
 })
 
 test('a goal planned under the old split is re-planned before approval', () => {
@@ -403,31 +416,31 @@ test('a consumer whose producer waits outside drops out of the set with it', () 
 })
 
 test('a set child is approved without a session of its own', () => {
-  const p = decide({ reason: 'approve-set', facts: { by: 'Ardnived', parent: 'sydevs/SahajAtlasWeb#300' } }, ticket({ item: { labels: ['proposal', 'awaiting', 'blocked'] } }), config)
+  const p = decide({ reason: 'approve-set', facts: { by: 'Ardnived', parent: 'sydevs/SahajAtlasWeb#300' } }, ticket({ item: { labels: ['proposal'] } }), config)
   assert.equal(fires(p).length, 0)
-  assert.ok(p.some((a) => a.type === 'status' && a.value === 'approved'))
-  assert.ok(!p.some((a) => a.type === 'label' && a.remove.includes('blocked')), 'the producer still orders the merge')
+  assert.ok(p.some((a) => a.type === 'record' && a.patch.approved?.by === 'Ardnived'))
 })
 
 test('a set build that opened every PR leaves the goal off your list', () => {
   const s = snap({ children: [{ ...producer, prs: 1 }, { ...consumer, prs: 1 }], record: { dispatches: [{ handler: 'revise-roadmap' }, { handler: 'implement-roadmap' }], current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set' } } } })
   const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config)
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  assert.ok(p.some((a) => a.type === 'note' && /answered with its PRs/.test(a.text)))
   const short = { ...s, children: [{ ...producer, prs: 1 }, consumer] }
-  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, short, config).some((a) => a.type === 'label' && a.add.includes('awaiting')), 'a child left unbuilt is your turn')
+  assert.ok(!decide({ reason: 'unlock', facts: { handler: 'implement' } }, short, config).some((a) => a.type === 'note' && /answered with its PRs/.test(a.text)), 'a child left unbuilt is not answered')
 })
 
 test('the producer merging frees a built consumer without a session', () => {
-  const s = ticket({ item: { labels: ['blocked'] }, openPrsClosingIt: [55] })
+  const s = ticket({ item: { labels: [] }, openPrsClosingIt: [55] })
   const p = decide({ reason: 'unblock-check', facts: {} }, s, config)
   assert.equal(fires(p).length, 0)
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked')))
   assert.deepEqual(p.find((a) => a.type === 'targets').list.map((x) => [x.kind, x.number, x.reason]), [['pr', 55, 'ci']])
 })
 
 test('a set build that raised a decision on its own goal hands the goal back', () => {
   const s = snap({ children: [{ ...producer, prs: 1 }, consumer], openQuestions: { total: 1, open: 1 }, request: { at: '2026-10-07T11:00:00Z', body: { escalated: true } }, record: { dispatches: [{ handler: 'revise-roadmap' }, { handler: 'implement-roadmap' }], current: { handler: 'implement', firedAt: '2026-10-07T10:00:00Z', flags: { mode: 'set' } } } })
-  assert.ok(decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config).some((a) => a.type === 'label' && a.add.includes('awaiting')))
+  const p = decide({ reason: 'unlock', facts: { handler: 'implement' } }, s, config)
+  assert.equal(fires(p).length, 0, 'its open question makes the goal Awaiting')
+  assert.ok(!p.some((a) => a.type === 'targets' && a.list.some((x) => x.reason === 'approve')))
 })
 
 test('a child a session already holds is never approved into a second build', () => {
@@ -437,8 +450,8 @@ test('a child a session already holds is never approved into a second build', ()
 
 test('a contract consumer freed by its producer waits for the re-sync push to arm', () => {
   const cfg = { ...config, contractSync: { producer: 'SahajCloud', consumers: { SahajAtlasWeb: { sources: [], paths: [] } } } }
-  const p = decide({ reason: 'unblock-check', facts: {} }, ticket({ item: { labels: ['blocked'] }, openPrsClosingIt: [55] }), cfg)
-  assert.ok(p.some((a) => a.type === 'label' && a.remove.includes('blocked')))
+  const p = decide({ reason: 'unblock-check', facts: {} }, ticket({ item: { labels: [] }, openPrsClosingIt: [55] }), cfg)
+  assert.match(p[0].text, /re-sync lands/)
   assert.ok(!p.some((a) => a.type === 'targets'), 'arming now could merge it before the re-sync lands')
 })
 

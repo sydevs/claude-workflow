@@ -146,15 +146,16 @@ test('unreadable annotations leave a failure with the change, never with infrast
   assert.deepEqual(s.ci.infra, [])
 })
 
-test('a merge scans every other open bot PR for conflicts, drafts included', async () => {
+test('a merge scans every other open PR the loop works for conflicts, drafts included', async () => {
   const gh = withRules([{ id: 1, name: 'Lint', status: 'completed', conclusion: 'success' }], { required: ['Lint'] })
   gh.rest.pulls.list = async () => ({ data: [
     { number: 742, draft: false, user: bot },
     { number: 801, draft: true, user: bot },
     { number: 802, draft: false, user: bot },
     { number: 803, draft: false, user: { login: 'Ardnived' } },
+    { number: 804, draft: false, user: { login: 'dependabot[bot]' } },
   ] })
   const merged = { ...target, reason: 'pull_request.closed', facts: { merged: true } }
   const s = await gather(gh, merged, config, when)
-  assert.deepEqual(s.otherOpenBotPrs, [801, 802])
+  assert.deepEqual(s.otherOpenBotPrs, [801, 802, 803], 'a member\'s PR is scanned too; an outsider\'s is not')
 })
