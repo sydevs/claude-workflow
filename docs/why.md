@@ -114,14 +114,6 @@ longer owns. 8 sessions across 6 days of 2026-10-04..17 were woken this way; two
 unsubscribed on their own judgement and one did not, the divergence the rule removes. This bounds
 the wakes; it cannot prevent the platform's first subscription.
 
-## You cannot push to a human's PR
-
-A cloud session may only push to `claude/*`, and a human's branch carries their commits and backs
-their open PR — two of the three rejection conditions, so this is a wall. A silent push would also
-leave the reviewer to re-derive what changed, so each thread gets its own reply. A stacked PR based
-on their branch merges in one click into theirs; based on `main` by mistake, it shows all their
-commits in your diff — unreviewable.
-
 ## An investigation must not be forced into a PR
 
 An empty PR filed to fit the pipeline costs a review slot and buries the real answer inside a
@@ -1104,14 +1096,15 @@ the ruleset cannot be read, and every check counts again.
 
 ## A stacked PR is never armed
 
-A PR whose base is another branch (a review-asks refactor stacked on its parent's branch, as
-SahajAtlasWeb#340 sits on #318's) has no ruleset behind it. GitHub refuses to arm auto-merge on one
-in a clean state ("Pull request is in clean status"), and if it accepted, it would merge an
-unreviewed change into the parent the moment it went green. So `mayArm` is false when the base is
-not the default branch: the reviewer's merge is the gate, and the parent carries the change to
-`main` under the ruleset. The refusal arrived as a GraphQL `UNPROCESSABLE` with no HTTP status,
-which the hand-over test did not recognise, so it threw and the pass never wrote the item's Status.
-`handOver` now reads `errors[].type` too.
+The loop does not stack. A PR based on another PR's branch has no ruleset behind it, so it needs a
+second review merged in order, the parent's squash and branch deletion retarget it with the parent's
+commits back in its diff, and it splits "a change you ask for on a PR is built on that PR" across
+two. SahajAtlasWeb#340, stacked on #318 by a rule that keyed on author, was the only one in the
+last 100 PRs of each repo (2026-10-27), and was merged back into #318. So a stacked PR found anyway
+reads Awaiting with one comment and runs nothing. Never arming it is the guard behind that: GitHub
+refused #340 only because it was clean ("Pull request is in clean status"); with checks pending it
+arms, and merges unreviewed when they pass. That refusal came as a GraphQL `UNPROCESSABLE` with no
+HTTP status, so `handOver` now reads `errors[].type` too.
 
 ## A write we cannot make is handed over, not thrown
 
@@ -1963,8 +1956,29 @@ every lane. Now a ready member PR gets the critic once, a reviewer request and a
 bot's. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
 refuses a request to the author (sydevs/SahajAtlasWeb#318). A member's draft is left alone until it
 is ready or they mention the bot, and only a thread the bot rooted or another person's review asks
-it for work. A session pushes only to `claude/*`, so a member branch outside it gets a patch in a comment.
+it for work. A member branch outside `claude/*` is reached through [the relay](#the-relay).
 Anyone else's PR answers a mention and nothing more.
+
+## The branch decides where a session pushes
+
+address-review asked "is this PR mine?" by its author, and opened a stacked PR on any other. On
+sydevs/SahajAtlasWeb#318, Ardnived's PR on the bot's own `claude/feat-147-submit-a-class` branch,
+that produced #340: 15 commits a session could have pushed straight to #318 (2026-10-27).
+#217 had fixed the same question in resolve-conflicts only. A cloud session can push to any
+`claude/*` branch, whoever opened the PR, and to nothing else, so the branch is the only fact that
+answers it. The dispatcher computes it once, as `flags.push` on every session it fires at a PR:
+`direct`, `relay`, or `none` for a fork or a PR the loop only answers. start-run holds the one rule.
+
+## The relay
+
+Member PRs are mostly on their own branches (`fix/*`, `feat/*`, Copilot's `copilot/*`), which a
+session cannot push to. Posting a patch in a comment handed the work back to the person, and a
+suggested change only covers lines in the diff. Actions' token can write any branch in the repo, so
+the session pushes to `claude/relay-<pr>-<sha>` on top of the PR's head and asks for it in a
+`sydevs-request`. On the unlock the dispatcher checks the request against the PR as gathered now,
+then fast-forwards the PR's branch (never forced), or merges server-side if the member pushed
+meanwhile. A conflict, a moved relay ref or a refused write (a commit touching `.github/workflows/`
+needs the token's `workflow` scope) is handed back in GitHub's words, and the relay branch is kept.
 
 ## An approved PR names what holds it
 
@@ -1996,6 +2010,13 @@ resolved a conflict.
 
 Each entry is a failure someone paid for, under a mechanism that no longer exists. It stays so the
 lesson is met, not re-learned. The line under each heading says what took its place.
+
+### You cannot push to a human's PR
+
+**Replaced by:** [The branch decides where a session pushes](#the-branch-decides-where-a-session-pushes), and [the relay](#the-relay) for a member's own branch.
+
+The rule keyed on author and answered with a stacked PR into the human's branch. On #318 that branch
+was `claude/*` and pushable, and #340 then needed a second review it could not be armed for.
 
 ### awaiting has one writer
 

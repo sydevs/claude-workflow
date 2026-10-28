@@ -127,12 +127,15 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any issue | `@sydevs-bot block until legal signs off` | A short session turns the reason into a blocker or a hold, and writes it into the body. |
 | Bot or member PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
-| Anyone else's PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads. Code changes arrive as a stacked PR into the branch. |
+| Anyone else's PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads, and builds nothing. |
 | Any PR | `@sydevs-bot hold` or `block …` | Refused: a PR is merged or closed. |
 
 A PR by a member (`assignment.respondTo`) gets what a bot PR gets once it is ready: the critic,
 the other member asked to review, fixes for CI and conflicts, and auto-merge. A member's draft is
-left alone until it is ready or you mention the bot.
+left alone until it is ready or you mention the bot. A fix lands on your branch: directly on a
+`claude/*` branch, and through the **relay** on your own (`fix/*`, `copilot/*`) — the session pushes
+to `claude/relay-<pr>-<sha>`, and Actions moves your branch to it, merging if you pushed meanwhile.
+Pull before your next push. The loop never stacks a PR on another; one it finds is handed back.
 
 `implement` is refused while the ticket's **Open questions** has an unticked item.
 
