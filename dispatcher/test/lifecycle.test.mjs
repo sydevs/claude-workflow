@@ -34,6 +34,7 @@ function pr(over = {}) {
   }
 }
 const hoursAgo = (h) => new Date(now.getTime() - h * 3600_000).toISOString()
+const handover = (gh) => gh.calls.filter(([k]) => k === 'createComment').map(([, a]) => a.body).find((b) => b.includes('step left for you'))
 
 // ---- the reconcile pass ---------------------------------------------------
 
@@ -169,6 +170,64 @@ test('the Pending clock starts when a wait the machinery owns begins, and stops 
   await apply({ gh: boardGh('Pending'), target: { repo, kind: 'issue', number: 9, reason: 'issues.closed' }, snapshot: done, plan: [{ type: 'syncStatus' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
   assert.equal(done.record.pendingSince, null)
   assert.equal(done.record.dueAttempts, 0)
+})
+
+test('a GraphQL refusal is handed over by its own words; an invalid input still throws', async () => {
+  // sydevs/SahajAtlasWeb#340: enablePullRequestAutoMerge answered a GraphQL
+  // UNPROCESSABLE, "Pull request is in clean status". That carries no HTTP
+  // status, so handOver rethrew it and the pass died before syncStatus.
+  const err = (type, message) => Object.assign(new Error(`Request failed due to following response errors: - ${message}`), { errors: [{ type, message }] })
+  const arming = (e) => {
+    const gh = boardGh('Pending')
+    const real = gh.graphql
+    gh.graphql = async (q, v) => (String(q).includes('enablePullRequestAutoMerge') ? Promise.reject(e) : real(q, v))
+    return gh
+  }
+  const snap = () => pr({ item: { number: 5, state: 'open', labels: [], nodeId: 'PR1' }, pull: { nodeId: 'PR1', autoMergeArmed: false } })
+  const run = (gh, snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'armAutoMerge' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
+
+  const clean = arming(err('UNPROCESSABLE', 'Pull request is in clean status'))
+  const s = snap()
+  await run(clean, s)
+  assert.match(handover(clean), /in clean status/, "handed over in GitHub's own words")
+  assert.equal(s.pr.autoMergeArmed, false, 'and nothing claims it is armed')
+
+  // Auto-merge off is a repo setting, not a bug, and GraphQL answers it
+  // UNPROCESSABLE too — so the words have to carry it.
+  const off = arming(err('UNPROCESSABLE', 'Pull request Auto merge is not allowed for this repository'))
+  await run(off, snap())
+  assert.match(handover(off), /not allowed for this repository/, 'auto-merge off is handed over')
+
+  // A permission we do not hold reads as a refusal from its type alone.
+  const forbidden = arming(err('FORBIDDEN', 'Your token has not been granted the scopes necessary'))
+  await run(forbidden, snap())
+  assert.ok(handover(forbidden), 'a FORBIDDEN type is a refusal, status or not')
+
+  // A wrong node id is a bug, and a loud job is how we find it.
+  await assert.rejects(() => run(arming(err('UNPROCESSABLE', "Could not resolve to a node with the global id of 'nope'")), snap()), /Could not resolve to a node/)
+})
+
+test('a REST refusal is handed over by its words; a REST 422 is invalid input and throws', async () => {
+  // 422 is the REST spelling of UNPROCESSABLE, so the same split applies: a
+  // reviewer login nobody can request a review from is a config bug, and a
+  // loud job is how we find it. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+  const requesting = (e) => {
+    const gh = boardGh('Awaiting')
+    gh.rest.pulls = { requestReviewers: async () => { throw e } }
+    return gh
+  }
+  const snap = () => pr({ pull: { user: { login: 'sydevs-bot' }, requestedReviewers: [] } })
+  const run = (gh, snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'requestReviewer' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
+
+  const forbidden = requesting(Object.assign(new Error('Resource not accessible by integration'), { status: 403 }))
+  const s = snap()
+  await run(forbidden, s)
+  assert.match(handover(forbidden), /not accessible/, 'a 403 is a permission, handed over')
+  assert.deepEqual(s.pr.requestedReviewers, [], 'and nobody is recorded as asked')
+
+  const typo = requesting(Object.assign(new Error('Reviews may only be requested from collaborators'), { status: 422 }))
+  await assert.rejects(() => run(typo, snap()), /only be requested from collaborators/)
+  assert.equal(handover(typo), undefined, 'a bug says nothing to the reviewer')
 })
 
 test('no pass but a person\'s verb approves a goal\'s children', () => {

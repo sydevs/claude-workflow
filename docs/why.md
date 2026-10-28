@@ -1104,7 +1104,8 @@ last 100 PRs of each repo (2026-10-27), and was merged back into #318. So a stac
 reads Awaiting with one comment and runs nothing. Never arming it is the guard behind that: GitHub
 refused #340 only because it was clean ("Pull request is in clean status"); with checks pending it
 arms, and merges unreviewed when they pass. That refusal came as a GraphQL `UNPROCESSABLE` with no
-HTTP status, so `handOver` now reads `errors[].type` too.
+HTTP status, which `handOver` now recognises by its words
+([A write we cannot make is handed over, not thrown](#a-write-we-cannot-make-is-handed-over-not-thrown)).
 
 ## A write we cannot make is handed over, not thrown
 
@@ -1116,14 +1117,26 @@ the step over: the plan finishes, the item gets `awaiting`, one comment names th
 could not take, and the journal records a `handed-over` anomaly. This is the third instance after
 the board and the journal: **the dispatcher's job is to get the work to a person or a session.**
 
+A refusal can also arrive with **no HTTP status at all**, so `handOver` reads `errors[].type` too
+— and only for `FORBIDDEN`. `UNPROCESSABLE` is GitHub calling the input invalid, which a wrong node
+id or a bad enum also answers, and that is a bug, which must still throw. So every other refusal is
+recognised by GitHub's sentence, the clean status that blocks arming and a repository with
+auto-merge switched off ("not allowed for this repository") among them. **A refusal this type test
+drops is added by the words GitHub answers with, never by its type.**
+
+The same line splits the REST writes. A 403 is a permission, and a 422 is the same invalid input
+`UNPROCESSABLE` carries — a `Hold Until` field id that does not exist, an `assignment.reviewer`
+nobody can request a review from — so it throws with its GraphQL twin. A branch rule can answer
+422 as well, and its sentence is what tells the two apart.
+
 ## Quote the refusal, do not name a cause
 
 The hand-over comment blamed the dispatch token for every refusal. Three merges failed that way
 with no usable explanation: the token was fine and the branch ruleset said no. A missing scope and a
-branch rule both answer 403, and the rule can also answer 405 or 422, which the old test missed. Only
-GitHub's sentence distinguishes them, and a guessed cause sends the reader to the wrong fix, such as
-rotating a credential that was never the problem. So the comment carries 220 characters of what
-GitHub said and names the step, nothing else — the runs' anomaly rule
+branch rule both answer 403, and the rule can also answer 405, or a 422 only its sentence tells
+from invalid input. Only GitHub's sentence distinguishes them, and a guessed cause sends the reader
+to the wrong fix, such as rotating a credential that was never the problem. So the comment carries
+220 characters of what GitHub said and names the step, nothing else — the runs' anomaly rule
 ([Report anomalies, do not explain them](#report-anomalies-do-not-explain-them)) applied to the
 dispatcher.
 
