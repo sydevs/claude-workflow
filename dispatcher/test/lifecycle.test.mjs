@@ -171,6 +171,36 @@ test('the Pending clock starts when a wait the machinery owns begins, and stops 
   assert.equal(done.record.dueAttempts, 0)
 })
 
+test('a GraphQL refusal is handed over by its own words; an invalid input still throws', async () => {
+  // sydevs/SahajAtlasWeb#340: enablePullRequestAutoMerge answered a GraphQL
+  // UNPROCESSABLE, "Pull request is in clean status". That carries no HTTP
+  // status, so handOver rethrew it and the pass died before syncStatus.
+  const err = (type, message) => Object.assign(new Error(`Request failed due to following response errors: - ${message}`), { errors: [{ type, message }] })
+  const arming = (e) => {
+    const gh = boardGh('Pending')
+    const real = gh.graphql
+    gh.graphql = async (q, v) => (String(q).includes('enablePullRequestAutoMerge') ? Promise.reject(e) : real(q, v))
+    return gh
+  }
+  const snap = () => pr({ item: { number: 5, state: 'open', labels: [], nodeId: 'PR1' }, pull: { nodeId: 'PR1', autoMergeArmed: false } })
+  const run = (gh, snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'armAutoMerge' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
+  const handover = (gh) => gh.calls.filter(([k]) => k === 'createComment').map(([, a]) => a.body).find((b) => b.includes('step left for you'))
+
+  const clean = arming(err('UNPROCESSABLE', 'Pull request is in clean status'))
+  const s = snap()
+  await run(clean, s)
+  assert.match(handover(clean), /in clean status/, "handed over in GitHub's own words")
+  assert.equal(s.pr.autoMergeArmed, false, 'and nothing claims it is armed')
+
+  // A permission we do not hold reads as a refusal from its type alone.
+  const forbidden = arming(err('FORBIDDEN', 'Your token has not been granted the scopes necessary'))
+  await run(forbidden, snap())
+  assert.ok(handover(forbidden), 'a FORBIDDEN type is a refusal, status or not')
+
+  // A wrong node id is a bug, and a loud job is how we find it.
+  await assert.rejects(() => run(arming(err('UNPROCESSABLE', "Could not resolve to a node with the global id of 'nope'")), snap()), /Could not resolve to a node/)
+})
+
 test('no pass but a person\'s verb approves a goal\'s children', () => {
   // The migration records `approved` on goals that were planned, so a
   // reconcile or an unblock that started their children would build tickets
