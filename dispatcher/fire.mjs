@@ -39,6 +39,9 @@ export function dispatchId({ repoName, number, handler, now, rand = Math.random 
   return `${repoName}-${number ?? 'repo'}-${handler}-${stamp}-${suffix}`
 }
 
+/** Where a session fired at a PR may push. (why: docs/why.md#the-branch-decides-where-a-session-pushes) */
+const PUSH = new Set(['direct', 'relay', 'none'])
+
 export function buildRecord({ handler, target, snapshot, flags, attempt, journalNumber, config, now, rand }) {
   const minutes = config.dispatch.timeoutsMinutes?.[handler] ?? 60
   const deadline = new Date(now.getTime() + minutes * 60_000).toISOString()
@@ -59,7 +62,7 @@ export function buildRecord({ handler, target, snapshot, flags, attempt, journal
     trigger: { type: target.facts?.triggerType || target.reason, id: target.facts?.commentId ?? target.facts?.reviewId ?? null, author: target.facts?.author || null },
     lock: itemless ? null : config.labels.lock,
     // `withdrawn` and `cleared` ride only when set, so every other record keeps its shape.
-    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}), ...(Number.isInteger(flags?.continuation) && flags.continuation > 0 ? { continuation: flags.continuation } : {}), ...(Array.isArray(flags?.children) && flags.children.length ? { children: flags.children } : {}), ...(typeof flags?.queueRun === 'string' ? { queueRun: flags.queueRun } : {}) },
+    flags: { onDemand: flags?.onDemand === true, delegated: flags?.delegated === true, mode: typeof flags?.mode === 'string' ? flags.mode : null, ...(flags?.withdrawn === true ? { withdrawn: true } : {}), ...(Array.isArray(flags?.cleared) && flags.cleared.length ? { cleared: flags.cleared } : {}), ...(Number.isInteger(flags?.continuation) && flags.continuation > 0 ? { continuation: flags.continuation } : {}), ...(Array.isArray(flags?.children) && flags.children.length ? { children: flags.children } : {}), ...(typeof flags?.queueRun === 'string' ? { queueRun: flags.queueRun } : {}), ...(PUSH.has(flags?.push) ? { push: flags.push } : {}) },
     attempt,
     fixCi: snapshot.record?.fixCi || 0,
     // `advisory` carries each red non-required check's link, so a deploy

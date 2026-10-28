@@ -12,6 +12,7 @@
  */
 
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
+import { pushRoute, relayRefusal } from './relay.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -40,6 +41,7 @@ export const hold = (date) => ({ type: 'hold', date })
 /** A pass on an item whose session ended with no unlock seen: archive it, release the lease. */
 export const archiveCurrent = () => ({ type: 'archiveCurrent' })
 export const transfer = (repo, milestone) => ({ type: 'transfer', repo, milestone })
+export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, sha })
 
 // ---- predicates ------------------------------------------------------
 const lower = (s) => String(s || '').toLowerCase()
@@ -790,8 +792,29 @@ function refuseUnresolvedBlockers(s, config) {
  * names a Status, because `apply` derives it from the state the plan left.
  * (why: docs/why.md#status-is-derived-never-read)
  */
+/**
+ * The session left its commits on a relay branch and asked for them to land.
+ * The push that lands them is the next event, so nothing else runs now.
+ * (why: docs/why.md#the-relay)
+ */
+function relayPlan(s, config, req) {
+  const why = relayRefusal(s, config, req, fullTreatment)
+  if (!why) return [relay(req)]
+  return [
+    handback(s, `the relay was refused: ${why}`),
+    commentOnce(`relay-refused ${req.sha}`, `The session left its work on \`${req.branch}\`, but I could not land it here: ${why}. The branch is kept; merge it yourself, or mention me (\`${config.dispatch.commandPrefix}\`) to try again.`),
+  ]
+}
+
+/** Every session fired at a PR carries where it may push. (why: docs/why.md#the-branch-decides-where-a-session-pushes) */
+function withPushRoute(plan, s, config) {
+  if (s.kind !== 'pr') return plan
+  const push = pushRoute(s, config, fullTreatment)
+  return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
+}
+
 export function decide(target, s, config) {
-  let plan = route(target, s, config)
+  let plan = withPushRoute(route(target, s, config), s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   if (untouched(s, config)) return plan
@@ -1067,7 +1090,11 @@ function route(target, s, config) {
       // A PR's next turn is derived like any other pass. An approved PR a
       // session just touched stays the machinery's: it is never asked about
       // again for a merge commit. (why: docs/why.md#a-resolved-conflict-is-not-a-new-question)
-      if (s.kind === 'pr') return plan.concat(evaluatePr(s, config))
+      if (s.kind === 'pr') {
+        const req = freshRequest(s)?.relay
+        if (req) return plan.concat(relayPlan(s, config, req))
+        return plan.concat(evaluatePr(s, config))
+      }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
       // so the verb that started it still reads as pending. Re-dispatching it

@@ -254,6 +254,7 @@ const REQUEST = /<!--\s*sydevs-request\s+(\{[\s\S]*?\})\s*-->/
  * - `replan: true` — a roadmap ticket's goal changed; re-plan its children
  * - `escalated: true` — a decision went up to this ticket's roadmap parent
  * - `transfer: { repo, milestone }` — move a roadmap ticket to its milestone's repo
+ * - `relay: { branch, head, sha }` — move a PR's branch to the commit a session left on a relay branch
  */
 export function parseRequest(body, repos = []) {
   const m = REQUEST.exec(String(body || ''))
@@ -266,6 +267,14 @@ export function parseRequest(body, repos = []) {
   if (j.continue === true) out.continue = true
   if (j.transfer && typeof j.transfer.repo === 'string' && repos.includes(j.transfer.repo)) {
     out.transfer = { repo: j.transfer.repo, milestone: typeof j.transfer.milestone === 'string' ? j.transfer.milestone : null }
+  }
+  // A relay names two branches and the commit to land. Each is shape-checked
+  // here; whether this PR may take it is decide's call. (why: docs/why.md#the-relay)
+  const r = j.relay
+  if (r && typeof r.branch === 'string' && /^[\w.\/-]{1,200}$/.test(r.branch)
+    && typeof r.head === 'string' && /^[^\s~^:?*[\\]{1,255}$/.test(r.head)
+    && typeof r.sha === 'string' && /^[0-9a-f]{40}$/.test(r.sha)) {
+    out.relay = { branch: r.branch, head: r.head, sha: r.sha }
   }
   return Object.keys(out).length ? out : null
 }
