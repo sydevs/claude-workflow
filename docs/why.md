@@ -1115,7 +1115,8 @@ not the default branch: the reviewer's merge is the gate, and the parent carries
 Each of the three reasons has its own arm in `prStatus`: a stacked PR is **Awaiting**, because
 merging it into its parent is the reviewer's and no wait would ever end it. Without that arm it
 derived `approved — auto-merge is owed` with a due, which the reconciler checks three times before
-it reports the PR overdue.
+it reports the PR overdue. That arm sits **below** the producer wait, which ends on its own when the
+producer closes: a stacked PR in a cross-repo set must not be merged ahead of it.
 
 ## A write we cannot make is handed over, not thrown
 

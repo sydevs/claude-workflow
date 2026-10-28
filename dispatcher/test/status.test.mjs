@@ -101,6 +101,10 @@ test('an approved stacked PR is yours to merge into its parent, not a wait that 
   // A conflict or red CI on a stacked PR is still the machinery's to repair.
   assert.equal(key(pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, mergeable: 'CONFLICTING' })), 'pending')
   assert.equal(key(pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, ci: { green: false, failing: ['build'], running: [] } })), 'pending')
+  // A producer wait ends on its own, so it holds — merging ahead of it is wrong.
+  const alsoWaiting = pr({ pull: { ...onParent }, normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] })
+  assert.equal(deriveStatus(alsoWaiting, config, now).key, 'pending')
+  assert.match(deriveStatus(alsoWaiting, config, now).reason, /merges after sydevs\/SahajCloud#1/)
 })
 
 test('a bot finding the bot has not answered is its own turn, not yours', () => {

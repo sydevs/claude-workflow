@@ -101,8 +101,9 @@ function prStatus(s, config, locked, rec) {
   if (loopMayNotMerge(s, config)) return out('awaiting', 'approved — merging it is yours')
   if (s.mergeable === 'CONFLICTING') return out('pending', 'approved — conflicts with its base', true)
   if (s.ci?.failing?.length) return out('pending', 'approved — CI is red', true)
-  // Nothing will ever arm a stacked PR, so a wait here would never end.
-  if (stacked(s)) return out('awaiting', `approved — merging it into ${pr.base.ref} is yours`)
   if (s.linkedBlockedOpen?.length) return out('pending', `approved — merges after ${s.linkedBlockedOpen.join(', ')}`)
+  // Nothing will ever arm a stacked PR, so a wait here would never end. Below
+  // the producer wait, which does end — and merging ahead of it is wrong.
+  if (stacked(s)) return out('awaiting', `approved — merging it into ${pr.base.ref} is yours`)
   return out('pending', pr.autoMergeArmed ? 'approved — the merge queue owes it' : 'approved — auto-merge is owed', true)
 }
