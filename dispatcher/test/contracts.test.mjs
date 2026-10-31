@@ -97,6 +97,9 @@ test('a PR is a sync only on the sync branch and within the copy', () => {
   assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, [copy[0], 'src/App.tsx']), false)
   assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', { ...pr, head: { ref: 'claude/feat-1-x' } }, copy), false)
   assert.equal(isContractSyncOnly(config, 'SahajCloud', pr, copy), false)
+  // An empty list satisfies `every`. It must not arm auto-merge on a list we never read.
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, []), false, 'an empty file list is not a sync')
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, undefined), false, 'an absent file list is not a sync')
 })
 
 test('a green sync draft skips the critic and says why', () => {

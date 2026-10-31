@@ -89,10 +89,13 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
  * Is this bot PR only a contract re-sync? True on the sync branch when every
  * file it changes is one of the copy's `paths`. Once `fix-ci` adapts consumer
  * code, a file outside the copy appears and the PR is reviewed like any other.
+ * A file list that is empty or absent proves nothing, and `[].every` is true,
+ * so an unreadable list is not a sync: the critic runs and nothing is armed.
  */
 export function isContractSyncOnly(config, repoName, pr, files) {
   const sync = config.contractSync
   const consumer = sync?.consumers?.[repoName]
   if (!consumer || !sync.branch || pr?.head?.ref !== sync.branch) return false
+  if (!Array.isArray(files) || !files.length) return false
   return files.every((f) => (consumer.paths || []).includes(f))
 }
