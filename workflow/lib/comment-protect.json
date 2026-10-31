@@ -65,6 +65,12 @@
       "pathGlob": ["components/**/*.tsx", "src/components/**/*.tsx", "src/views/**/*.tsx", "**/*.stories.tsx"],
       "pattern": "^/\\*\\*",
       "reason": "Storybook's reference page prints a component's leading JSDoc as its description, and each prop's JSDoc as that prop's row, so a description that only restates the prop's name is still the row's whole content. Deleting one fails no test: it is a silent docs regression in SahajAtlasWeb and WeMeditateWeb. Docblocks only, because a `//` comment is never printed and stays sweepable. The globs also cover SahajCloud's components, which costs nothing, because protection is fail-safe."
+    },
+    {
+      "id": "K6",
+      "name": "shortcut marker",
+      "pattern": "\\bshortcut:",
+      "reason": "A limit someone chose and the trigger to revisit it, written as `shortcut: <the limit>, <when to upgrade>` by implement-ticket/ladder.md and by ponytail locally, and listed by /ponytail-debt. A sweep may reword one; the limit and the trigger must survive. It over-matches a comment about a keyboard shortcut, which costs nothing, because protection is fail-safe."
     }
   ],
   "denyPaths": [

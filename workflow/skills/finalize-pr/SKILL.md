@@ -129,8 +129,8 @@ node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/comment-lint.mjs" --
 
 **Advisory. It never fails the gate.** It catches phrasings that are wrong whatever they describe —
 a sentence addressed to a diff reviewer, a pointer at a section number. Fix each, or say in the PR
-body why it stays. It skips anything carrying `⚠`, a `#NNN`, or a sync pointer, because the
-code-comments rule protects those.
+body why it stays. It skips anything carrying `⚠`, a `#NNN`, a sync pointer or a `shortcut:`
+marker, because the code-comments rule protects those.
 
 ### 3. Security review — conditional
 

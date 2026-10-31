@@ -87,8 +87,9 @@ test('the unscoped rules count the same on every path', () => {
     '// keep in sync with the widget',
     '// see #42',
     '// see lib/geo.ts',
+    '// shortcut: one process only, move to a shared store when we scale out',
   ].map((text) => ({ text }))
-  const want = { F1: 1, F2: 1, F3: 1, F4: 1, F5: 1, K1: 1, K2: 1, K3: 1, K4: 1 }
+  const want = { F1: 1, F2: 1, F3: 1, F4: 1, F5: 1, K1: 1, K2: 1, K3: 1, K4: 1, K6: 1 }
   for (const path of ['src/lib/geo.ts', 'components/atoms/Button/Button.tsx', 'sahaj-atlas.php']) {
     const { K5, ...rest } = census(fixtures, RULES, path)
     assert.deepEqual(rest, want, path)
