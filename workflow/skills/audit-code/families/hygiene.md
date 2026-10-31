@@ -4,7 +4,8 @@ Saturday's rotation. Look where cost accrues quietly: code nobody reads twice, d
 re-checks, and things we maintain that someone else already does.
 
 - **Simplicity and abstraction reduction** — an indirection with one caller, a config option
-  nobody sets, a wrapper that only renames. File a ticket that names what to collapse.
+  nobody sets, a wrapper that only renames, two helpers doing one job (name both paths and the
+  one to keep), near-copies that must change together. File a ticket that names what to collapse.
 - **Code comments** — follow [`../comment-sweep.md`](../comment-sweep.md). Pick the area by
   comment density, or a directory a recent PR's review flagged.
 - **Dead code and unused dependencies** — exports with no importer, routes and components with no
