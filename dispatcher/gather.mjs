@@ -9,7 +9,7 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment, fullTreatment } from './decide.mjs'
-import { isContractSyncOnly } from './contracts.mjs'
+import { changedPaths, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
@@ -308,8 +308,8 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
   // The file list is fetched only for the one PR it can decide.
   const syncBranch = isBot(pr.user?.login, config) && pr.head?.ref === config.contractSync?.branch
-  const files = syncBranch ? await gh.paginate(gh.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 }) : []
-  s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))
+  const paths = syncBranch ? await changedPaths(gh, { owner, repo, number }) : []
+  s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, paths)
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads

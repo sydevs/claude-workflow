@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { affectedConsumers, isContractSyncOnly, planContractSync, pickFeaturePr } from '../contracts.mjs'
+import { affectedConsumers, changedPaths, isContractSyncOnly, planContractSync, pickFeaturePr } from '../contracts.mjs'
 import { evaluatePr } from '../decide.mjs'
 
 const config = {
@@ -74,6 +74,11 @@ test('a goal sibling built beside the producer takes the re-sync on its branch',
   }
   const out = await planContractSync({ github: gh, context: ctx(), core, config })
   assert.deepEqual(out.map((c) => [c.name, c.featurePr, c.featureBranch]), [['WeMeditateWeb', null, ''], ['SahajAtlasWeb', 77, 'claude/feat-12-map']])
+})
+
+test('the shared path list carries a rename under both names', async () => {
+  const gh = github([{ filename: 'src/types.ts', previous_filename: 'src/payload-types.ts' }, { filename: 'src/app.ts' }])
+  assert.deepEqual(await changedPaths(gh, { owner: 'sydevs', repo: 'SahajCloud', number: 850 }), ['src/types.ts', 'src/payload-types.ts', 'src/app.ts'])
 })
 
 test('only an open bot PR on a claude branch is a feature PR', () => {
