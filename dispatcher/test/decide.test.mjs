@@ -375,6 +375,22 @@ test('unlock on an issue with a pending verb re-dispatches; silent end sets awai
   assert.ok(!spoke.some((a) => a.type === 'drain'), 'no queue to drain')
 })
 
+test('the dispatcher\'s own lock removal is not a session ending', () => {
+  const verb = [{ author: 'Ardnived', createdAt: '2026-09-08T12:00:00Z', body: '@sydevs-bot revise', id: 7 }]
+  // A failed fire released the lock: re-targeting the verb now would fire again at once, every lap.
+  const failed = issueSnap({ comments: verb, record: { pending: { handler: 'revise', reason: 'routines paused', retryAfter: null } } })
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: {} }, failed, config)), ['note'])
+  // A timeout's re-fire relocked it: attempt 2 is running, not done.
+  const refired = issueSnap({ locked: true, record: { current: { handler: 'implement', attempt: 2 } } })
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: {} }, refired, config)), ['note'])
+  // A lease refusal's pending waits on the session that is ending now.
+  const refused = issueSnap({ record: { current: { handler: 'implement' }, pending: { handler: 'revise', refused: true } } })
+  assert.equal(decide({ reason: 'unlock', facts: {} }, refused, config)[0].type, 'unlocked')
+  // And the failed fire is still retried, even with a recheck left over.
+  const later = issueSnap({ record: { recheck: true, pending: { handler: 'revise', reason: 'routines paused', retryAfter: null } } })
+  assert.deepEqual(types(decide({ reason: 'reconcile', facts: {} }, later, config)), ['retry'])
+})
+
 test('journal issues are ignored everywhere', () => {
   assert.deepEqual(types(decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'OWNER' } }, issueSnap({ item: { number: 1, labels: ['ops-journal'] } }), config)), ['note'])
 })

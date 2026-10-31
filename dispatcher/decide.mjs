@@ -127,6 +127,13 @@ const withdraw = (s) => (s.record?.approved ? [record({ approved: null })] : [])
  */
 const handback = (s, reason) => record({ handback: { reason, at: nowOf(s).toISOString() } })
 const clearHandback = (s) => (s.record?.handback ? [record({ handback: null })] : [])
+/**
+ * The dispatcher took the lock off itself: a timeout's re-fire has locked it
+ * again, or a failed fire left its handler pending. Its PAT still wakes
+ * `unlock`, which must not read that as a session ending. A lease refusal's
+ * pending is not this: there, the session that held the lease is ending.
+ */
+const ownUnlock = (s) => s.locked || Boolean(s.record?.pending && !s.record.pending.refused)
 
 /**
  * A member's roadmap ticket is reviewed once, unprompted. A stranger's
@@ -1090,6 +1097,7 @@ function route(target, s, config) {
     case 'conflict-scan':
       return evaluatePr(s, config)
     case 'unlock': {
+      if (ownUnlock(s)) return [note('the dispatcher removed its own lock — no session ended')]
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })
       if (CONTINUES.has(finished)) {
@@ -1201,7 +1209,7 @@ function route(target, s, config) {
       const rec = s.record || {}
       const cur = rec.current
       if (s.locked) return cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime() ? [{ type: 'timeout' }] : [note('a session holds it')]
-      if (cur || rec.recheck) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
+      if ((cur || rec.recheck) && !ownUnlock(s)) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       if (rec.pending) return !rec.pending.retryAfter || Date.parse(rec.pending.retryAfter) <= nowOf(s).getTime() ? [{ type: 'retry' }] : [note(`retry waits until ${rec.pending.retryAfter}`)]
       const p = config.dispatch.commandPrefix
       if (s.kind === 'issue' && s.park?.passed && rec.status === 'hold') {
