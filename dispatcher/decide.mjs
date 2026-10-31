@@ -253,9 +253,10 @@ export function isQuestion(root, config) {
 }
 
 /**
- * On a member's own PR the loop answers only the threads it rooted, and only
- * a review someone else left: a member's notes to themselves are not a
- * request. (why: docs/why.md#a-members-pr-gets-the-loop)
+ * On a member's own PR the loop answers the threads it rooted and the ones
+ * someone else rooted, and only a review someone else left: a member's notes
+ * to themselves are not a request, on either channel.
+ * (why: docs/why.md#a-members-pr-gets-the-loop)
  */
 export function needsAddressReview(snapshot, config) {
   const since = botLastWordAt(snapshot.comments, config)
@@ -267,7 +268,7 @@ export function needsAddressReview(snapshot, config) {
     if (!cs.length) continue
     const root = cs[0]
     const last = cs[cs.length - 1]
-    if (memberPr && !isBot(root.author, config)) continue
+    if (memberPr && !isBot(root.author, config) && lower(root.author) === lower(author)) continue
     if (respondTo(last.author, config) && !isBot(last.author, config)) return 'a thread waits on a reply'
     if (isQuestion(root, config)) continue
     if (isBot(root.author, config) && !cs.slice(1).some((c) => isBot(c.author, config))) return 'own-rooted thread unanswered'
