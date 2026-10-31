@@ -1186,12 +1186,8 @@ function route(target, s, config) {
       if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
-    case 'sweep-retry':
-      return [{ type: 'retry' }]
     case 'sweep-timeout':
       return [{ type: 'timeout' }]
-    case 'sweep-recheck':
-      return route({ ...target, reason: 'unlock', facts: {} }, s, config)
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {
