@@ -873,6 +873,13 @@ test('a human reply in a question thread fires address-review', () => {
   assert.equal(p[0].text, 'a thread waits on a reply')
 })
 
+// A review whose only content is inline comments has an empty body: its thread is what asks.
+test('an inline-only review fires address-review through its thread', () => {
+  const inline = { user: { login: 'Ardnived' }, state: 'COMMENTED', body: '', submitted_at: '2026-10-09T11:00:00Z' }
+  const s = prSnap({ reviews: [criticReview, inline], threads: [{ isResolved: false, comments: [{ author: 'Ardnived', createdAt: '2026-10-09T11:00:00Z', body: 'Rename this.' }] }] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
+})
+
 test('a plain own-rooted thread is still owed an answer beside a question', () => {
   const s = prSnap({ reviews: [criticReview], threads: [questionThread(), { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: 'finding' }] }] })
   assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
@@ -958,7 +965,7 @@ test('the orphan notice asks for a mention or a push, never a plain comment', ()
 
 // ---- a question review is not the critic's -------------------------------
 
-const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at, inline_count: 0 })
+const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at })
 
 test('a question review neither counts as the critic nor answers a review verb', () => {
   const s = prSnap({ reviews: [questionReview('2026-10-09T10:00:00Z')] })

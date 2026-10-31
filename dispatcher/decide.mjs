@@ -277,7 +277,7 @@ export function needsAddressReview(snapshot, config) {
     if (memberPr && lower(r.user?.login) === lower(author)) continue
     if (since && r.submitted_at <= since) continue
     const state = String(r.state || '').toUpperCase()
-    if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim()) || r.inline_count > 0) return 'a review asks for changes'
+    if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim())) return 'a review asks for changes'
   }
   // A plain comment is the reviewer talking to the PR; only a mention is
   // talking to the bot. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)

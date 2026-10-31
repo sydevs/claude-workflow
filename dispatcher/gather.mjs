@@ -297,9 +297,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   })
   const { checkRuns, statuses } = gate
   setRepoWorkflows(`${owner}/${repo}`, !(config.ci?.noCi || []).includes(repo))
-  const inlineCounts = new Map()
-  for (const t of threads) for (const c of t.comments) inlineCounts.set(c.author, (inlineCounts.get(c.author) || 0) + 1)
-  const reviewsShaped = reviews.map((r) => ({ user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at, inline_count: 0 }))
+  const reviewsShaped = reviews.map((r) => ({ user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at }))
   const normalized = normalizeMcp({
     pr, checkRuns, statuses,
     reviewThreads: { review_threads: threads.map((t) => ({ is_resolved: t.isResolved })) },
