@@ -46,6 +46,14 @@ Two lenses carry the most weight, in this order:
    never flag its change as scope. **Never recommend moving part of this PR to a follow-up or a
    second PR.** A part that does not belong is a finding to remove it; a part missing is a
    finding to build it here.
+
+   **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** For every
+   file, function, hook, type, constant or dependency the diff adds, ask whether the repo already
+   has it (name the path), the platform does it (name the API), or an installed package does it
+   (name it). A named answer is a finding. A guess with no name is not. A `shortcut:` comment that
+   names its limit is a decision, unless the expected load already crosses it. This check never
+   raises a test, scale or speed point.
+   (why: docs/why.md#the-builder-keeps-the-floor-the-critic-keeps-the-profile)
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
    `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access
@@ -113,7 +121,8 @@ assessment, which is where it reads better anyway.
    is the part the reviewer reads — write it as the three sentences that matter.
 2. **Findings**, ranked `blocker` / `should-fix` / `consider`, one line each, pointing at its
    inline thread.
-3. **What was checked** — the files read, the consumer sides followed, the queries run, with
+3. **What was checked** — the files read, the new pieces the ladder walked, the consumer sides
+   followed, the queries run, with
    enough evidence that a clean verdict is checkable. A clean report with no evidence of reading
    is not a review. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
