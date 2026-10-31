@@ -86,13 +86,13 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
 }
 
 /**
- * Is this bot PR only a contract re-sync? True on the sync branch when it
- * changes no more files than the copy has. Once `fix-ci` adapts consumer
- * code, the count grows past the copy and the PR is reviewed like any other.
+ * Is this bot PR only a contract re-sync? True on the sync branch when every
+ * file it changes is one of the copy's `paths`. Once `fix-ci` adapts consumer
+ * code, a file outside the copy appears and the PR is reviewed like any other.
  */
-export function isContractSyncOnly(config, repoName, pr) {
+export function isContractSyncOnly(config, repoName, pr, files) {
   const sync = config.contractSync
   const consumer = sync?.consumers?.[repoName]
   if (!consumer || !sync.branch || pr?.head?.ref !== sync.branch) return false
-  return (pr.changed_files ?? Infinity) <= (consumer.paths || []).length
+  return files.every((f) => (consumer.paths || []).includes(f))
 }

@@ -89,11 +89,14 @@ test('the plan skips an unmerged PR and a merge into another branch', async () =
 })
 
 test('a PR is a sync only on the sync branch and within the copy', () => {
-  const pr = { head: { ref: 'claude/chore-sync-contracts' }, changed_files: 2 }
-  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr), true)
-  assert.equal(isContractSyncOnly(config, 'WeMeditateWeb', pr), false, 'fix-ci touched a second file')
-  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', { ...pr, head: { ref: 'claude/feat-1-x' } }), false)
-  assert.equal(isContractSyncOnly(config, 'SahajCloud', pr), false)
+  const pr = { head: { ref: 'claude/chore-sync-contracts' } }
+  const copy = ['src/types/payload/payload-types.ts', 'src/types/payload/response-types.ts']
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, copy), true)
+  assert.equal(isContractSyncOnly(config, 'WeMeditateWeb', pr, ['server/payload-types.ts', 'server/atlas-client.ts']), false, 'fix-ci touched a second file')
+  // A count within the copy's is not a sync: fix-ci edited code beside one copied file.
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, [copy[0], 'src/App.tsx']), false)
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', { ...pr, head: { ref: 'claude/feat-1-x' } }, copy), false)
+  assert.equal(isContractSyncOnly(config, 'SahajCloud', pr, copy), false)
 })
 
 test('a green sync draft skips the critic and says why', () => {

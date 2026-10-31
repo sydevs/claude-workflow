@@ -308,7 +308,10 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha, repo: pr.head?.repo?.full_name || null }, base: { ref: pr.base?.ref, defaultBranch: pr.base?.repo?.default_branch || null }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
-  s.pr.contractSyncOnly = isBot(pr.user?.login, config) && isContractSyncOnly(config, repo, pr)
+  // The file list is fetched only for the one PR it can decide.
+  const syncBranch = isBot(pr.user?.login, config) && pr.head?.ref === config.contractSync?.branch
+  const files = syncBranch ? await gh.paginate(gh.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 }) : []
+  s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads
