@@ -276,6 +276,17 @@ reviewer's full backfilled review-comment history across the five repos and ship
 introduced this rung. The reviewer correcting their own portrait in that review was its first
 calibration pass.
 
+## The builder keeps the floor, the critic keeps the profile
+
+Ponytail never cuts trust-boundary validation, data-loss handling, security or accessibility. The
+profile records the reviewer deleting protections nobody had measured — SahajCloud#761's dedupe
+window, #765's redaction — and dropping a validation to simplify (#653). It also records that they
+never ask for more tests. One rule for both sides would either have the builder strip guards or
+have the critic raise findings the profile forbids. So the builder keeps Ponytail's floor and adds
+no speculative machinery, naming the exposure in the PR body instead. The critic keeps the profile,
+and its ladder check never raises a test, scale or speed point. A guard the reviewer may still
+remove is then a line they can see, not a silent build.
+
 ---
 
 # finalize-pr
@@ -1227,6 +1238,19 @@ weeks. `ListPlugins` returns nothing in a routine — **14 sessions across four 
 lenses, `/code-review`, `/security-review` unprompted. So the step names both and says to check
 which it has. The heading above is the same class with a different missing thing, so each keeps its
 own story.
+
+## The ladder is ported, not installed
+
+Ponytail's ladder asks, in order: does it need to exist, then the repo, the platform, an installed
+package, one line, the minimum. That is what the profile's first two values keep asking for, yet
+until 2026-10-31 only `review-pr` read the profile. The builders had no reuse-first rule, so bloat
+was built first and then reviewed out, one critic pass per PR. SahajAtlasWeb#243 and #247 passed
+that pass clean on every thread, and the reviewer still asked why the diff needed so many helpers.
+Installing the plugin reaches no routine: the cloud-environment docs state that a cloud session
+loads no plugin from any settings file. So the prompt is ported like `change-outline.md`, trimmed
+to the rungs and the floor. Its levels, its reply footer and its comment advice are dropped:
+finalize-pr's report and the code-comments rule already carry the last two. The header names the
+commit it was cut from, so a re-sync is a diff, not a rewrite. Maintainers run the plugin locally.
 
 ## A contract sync is a PR, not a ticket
 

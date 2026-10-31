@@ -89,7 +89,7 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 
 | Decision | Do |
 | --- | --- |
-| **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
+| **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`, built by `implement-ticket/ladder.md` and the profile's *Values, ranked*. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
 | **Rebut a fact** | Only when the ask rests on a premise the code disproves. Reply with the evidence — a file and line, or the ticket line it satisfies. **On a human's thread, leave it open.** Only they settle it. |
 | **Rebut the critic** | On a thread the own login rooted, any point may be rebutted with evidence. **Resolve it:** your evidence settles a bot's point. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
 | **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |

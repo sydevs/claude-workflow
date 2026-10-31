@@ -28,8 +28,10 @@ repos, so every line in a copy costs tokens daily.
   justification of the justification. A five-line block rarely survives intact.
 - **A one-line summary on a public function or endpoint is fine.** Restating a single clear line
   never is.
-- **Never delete a tool directive, a `⚠` line, a cross-repo sync pointer, or a `#NNN` breadcrumb.**
-  The next section says what each is and why.
+- **Never delete a tool directive, a `⚠` line, a cross-repo sync pointer, a `#NNN` breadcrumb, or
+  a `shortcut:` marker.** The next section says what each is and why.
+- **A limit you accept is `shortcut: <the limit>, <when to upgrade>`**, one line beside the code it
+  limits. One with no trigger is the one that rots.
 - **TODOs are fine and need no issue ID.** A TODO is a marker, not a substitute for the work.
 
 ## What to protect, in every repo
@@ -48,6 +50,8 @@ Never delete these. `workflow/lib/comment-protect.json` holds the machine-readab
   `<sahaj-atlas>` a height is the opt-in for a contained map lives in four files across three repos,
   one of them a CSS comment with no type system behind it.
 - **Issue breadcrumbs** — a `#NNN` carries evidence a compressed comment cannot.
+- **`shortcut:` markers** — a limit someone chose, and when to revisit it. `/ponytail-debt` lists
+  them. A sweep may reword one, but the limit and the trigger survive.
 
 ## Why this exists
 

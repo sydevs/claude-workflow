@@ -96,7 +96,7 @@ export function addedComments(baseSrc, headSrc, path, ts) {
  * alternative, not a note to a reviewer. Six of six matches on `used to be`
  * were that shape, so the phrase left the rule and this guard stayed.
  */
-const PROTECTED = /\u26A0|(?<![\w\/])#\d{1,4}\b|((keep|kept|stay|stays) in sync|must match|source of truth)/i
+const PROTECTED = /\u26A0|(?<![\w\/])#\d{1,4}\b|((keep|kept|stay|stays) in sync|must match|source of truth)|\bshortcut:/i
 
 export function findings(comments) {
   const out = []
@@ -138,6 +138,7 @@ function selftest() {
     ['// updated to use the v2 client (#812)', null],
     ['// Bacs needs 3 clear working days, not +3 calendar days (WAGE-1234)', null],
     ['// keep in sync with the router target groups', null],
+    ['// shortcut: as requested, one process only; move to a shared store at two', null],
     ['// timeout must stay under the interval — ALB rule', null],
     ['// the cache, which is what lets an editor see a save they just made', null],
     ['// Here\u2019s the thing: we retry twice', 'ai-aside'],

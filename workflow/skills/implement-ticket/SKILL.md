@@ -85,7 +85,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    checkout up as preflight says, then `/workflow:dev-server` if the work needs one.
 
 7. **Implement** in incremental conventional commits, HEREDOC bodies, with the repo's
-   `Co-Authored-By` trailer.
+   `Co-Authored-By` trailer. **Follow [`ladder.md`](ladder.md)**, and read *Values, ranked* in
+   `review.profilePath` from the claude-workflow checkout first: the critic and the reviewer
+   judge the diff by both.
 
    **Watch the deadline. Never plan around it.** Work until the ticket is built. Only when the
    record's `deadline` leaves no room to finish and still run step 11, hand off:
