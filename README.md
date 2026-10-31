@@ -236,4 +236,5 @@ node --test dispatcher/test/*.test.mjs
 
 ## Licence
 
-MIT. `finalize-pr/change-outline.md` is adapted from humanlayer's `visual-pr` (MIT).
+MIT. `finalize-pr/change-outline.md` is adapted from humanlayer's `visual-pr` (MIT), and
+`implement-ticket/ladder.md` from DietrichGebert's `ponytail` (MIT).
