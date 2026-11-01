@@ -9,7 +9,7 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment, fullTreatment } from './decide.mjs'
-import { isContractSyncOnly } from './contracts.mjs'
+import { changedPaths, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
@@ -297,9 +297,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   })
   const { checkRuns, statuses } = gate
   setRepoWorkflows(`${owner}/${repo}`, !(config.ci?.noCi || []).includes(repo))
-  const inlineCounts = new Map()
-  for (const t of threads) for (const c of t.comments) inlineCounts.set(c.author, (inlineCounts.get(c.author) || 0) + 1)
-  const reviewsShaped = reviews.map((r) => ({ user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at, inline_count: 0 }))
+  const reviewsShaped = reviews.map((r) => ({ user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at }))
   const normalized = normalizeMcp({
     pr, checkRuns, statuses,
     reviewThreads: { review_threads: threads.map((t) => ({ is_resolved: t.isResolved })) },
@@ -308,7 +306,10 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha, repo: pr.head?.repo?.full_name || null }, base: { ref: pr.base?.ref, defaultBranch: pr.base?.repo?.default_branch || null }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
-  s.pr.contractSyncOnly = isBot(pr.user?.login, config) && isContractSyncOnly(config, repo, pr)
+  // The file list is fetched only for the one PR it can decide.
+  const syncBranch = isBot(pr.user?.login, config) && pr.head?.ref === config.contractSync?.branch
+  const paths = syncBranch ? await changedPaths(gh, { owner, repo, number }) : []
+  s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, paths)
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads

@@ -24,6 +24,16 @@ export function affectedConsumers(config, repoName, changedFiles) {
 }
 
 /**
+ * Every path a PR changes, a rename's old name included. The sync rule reads
+ * this twice — the plan below, and `contractSyncOnly` in gather.mjs — so the
+ * fetch and the rename pair live here once and cannot drift apart.
+ */
+export async function changedPaths(github, { owner, repo, number }) {
+  const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 })
+  return files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean))
+}
+
+/**
  * The `contracts-plan` job: list the merged PR's files, a rename's old name
  * included, and name the consumers to re-sync. Only a merge into the default
  * branch counts, because every consumer syncs from `main`.
@@ -40,9 +50,7 @@ export async function planContractSync({ github, context, core, config }) {
     core.info(`#${pr.number} merged into ${pr.base?.ref}, not the default branch`)
     return []
   }
-  const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 })
-  const names = files.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean))
-  const out = affectedConsumers(config, repo, names)
+  const out = affectedConsumers(config, repo, await changedPaths(github, { owner, repo, number: pr.number }))
   core.info(`#${pr.number} → ${out.length ? out.map((c) => c.name).join(', ') : 'no consumer'} to re-sync`)
   const plan = []
   for (const c of out) {
@@ -86,13 +94,16 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
 }
 
 /**
- * Is this bot PR only a contract re-sync? True on the sync branch when it
- * changes no more files than the copy has. Once `fix-ci` adapts consumer
- * code, the count grows past the copy and the PR is reviewed like any other.
+ * Is this bot PR only a contract re-sync? True on the sync branch when every
+ * file it changes is one of the copy's `paths`. Once `fix-ci` adapts consumer
+ * code, a file outside the copy appears and the PR is reviewed like any other.
+ * A file list that is empty or absent proves nothing, and `[].every` is true,
+ * so an unreadable list is not a sync: the critic runs and nothing is armed.
  */
-export function isContractSyncOnly(config, repoName, pr) {
+export function isContractSyncOnly(config, repoName, pr, files) {
   const sync = config.contractSync
   const consumer = sync?.consumers?.[repoName]
   if (!consumer || !sync.branch || pr?.head?.ref !== sync.branch) return false
-  return (pr.changed_files ?? Infinity) <= (consumer.paths || []).length
+  if (!Array.isArray(files) || !files.length) return false
+  return files.every((f) => (consumer.paths || []).includes(f))
 }

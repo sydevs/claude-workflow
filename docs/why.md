@@ -1992,8 +1992,10 @@ A member's PR (`assignment.respondTo`) got nothing unless mentioned, so their ow
 every lane. Now a ready member PR gets the critic once, a reviewer request and auto-merge like the
 bot's. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
 refuses a request to the author (sydevs/SahajAtlasWeb#318). A member's draft is left alone until it
-is ready or they mention the bot, and only a thread the bot rooted or another person's review asks
-it for work. A member branch outside `claude/*` is reached through [the relay](#the-relay).
+is ready or they mention the bot, and only a thread the bot or another person rooted, or another
+person's review, asks it for work: the author's own threads are notes to themselves. An inline-only
+review reaches the bot as its threads, since the review body it would be read from is empty. A
+member branch outside `claude/*` is reached through [the relay](#the-relay).
 Anyone else's PR answers a mention and nothing more.
 
 ## The branch decides where a session pushes

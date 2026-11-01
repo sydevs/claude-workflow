@@ -120,6 +120,14 @@ test("on a member's PR only a thread the bot rooted, or someone else's review, a
   assert.ok(evaluatePr(theirs, config).some((a) => a.type === 'fire' && a.handler === 'address-review'))
 })
 
+test("on a member's PR an inline-only review by another person asks the bot", () => {
+  const theirs = { isResolved: false, comments: [{ author: 'antontcymbal', body: 'rename it', createdAt: hoursAgo(0) }] }
+  // A review with no body: the ask lives only in its inline comments.
+  const reviews = [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(2) }, { user: { login: 'antontcymbal' }, state: 'COMMENTED', body: '', submitted_at: hoursAgo(0) }]
+  const s = pr({ pull: { user: { login: 'Ardnived' } }, threads: [theirs], reviews, normalized: { reviewDecision: null } })
+  assert.ok(evaluatePr(s, config).some((a) => a.type === 'fire' && a.handler === 'address-review'))
+})
+
 test('an outside PR answers a mention and nothing else', () => {
   const s = pr({ pull: { user: { login: 'dependabot[bot]' } } })
   assert.deepEqual(evaluatePr(s, config), [])

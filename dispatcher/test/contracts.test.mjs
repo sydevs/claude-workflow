@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { affectedConsumers, isContractSyncOnly, planContractSync, pickFeaturePr } from '../contracts.mjs'
+import { affectedConsumers, changedPaths, isContractSyncOnly, planContractSync, pickFeaturePr } from '../contracts.mjs'
 import { evaluatePr } from '../decide.mjs'
 
 const config = {
@@ -76,6 +76,11 @@ test('a goal sibling built beside the producer takes the re-sync on its branch',
   assert.deepEqual(out.map((c) => [c.name, c.featurePr, c.featureBranch]), [['WeMeditateWeb', null, ''], ['SahajAtlasWeb', 77, 'claude/feat-12-map']])
 })
 
+test('the shared path list carries a rename under both names', async () => {
+  const gh = github([{ filename: 'src/types.ts', previous_filename: 'src/payload-types.ts' }, { filename: 'src/app.ts' }])
+  assert.deepEqual(await changedPaths(gh, { owner: 'sydevs', repo: 'SahajCloud', number: 850 }), ['src/types.ts', 'src/payload-types.ts', 'src/app.ts'])
+})
+
 test('only an open bot PR on a claude branch is a feature PR', () => {
   const pr = (over) => ({ number: 1, state: 'OPEN', headRefName: 'claude/feat-1-x', author: { login: 'sydevs-bot' }, ...over })
   assert.deepEqual(pickFeaturePr([pr()], 'sydevs-bot'), { number: 1, branch: 'claude/feat-1-x' })
@@ -89,11 +94,17 @@ test('the plan skips an unmerged PR and a merge into another branch', async () =
 })
 
 test('a PR is a sync only on the sync branch and within the copy', () => {
-  const pr = { head: { ref: 'claude/chore-sync-contracts' }, changed_files: 2 }
-  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr), true)
-  assert.equal(isContractSyncOnly(config, 'WeMeditateWeb', pr), false, 'fix-ci touched a second file')
-  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', { ...pr, head: { ref: 'claude/feat-1-x' } }), false)
-  assert.equal(isContractSyncOnly(config, 'SahajCloud', pr), false)
+  const pr = { head: { ref: 'claude/chore-sync-contracts' } }
+  const copy = ['src/types/payload/payload-types.ts', 'src/types/payload/response-types.ts']
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, copy), true)
+  assert.equal(isContractSyncOnly(config, 'WeMeditateWeb', pr, ['server/payload-types.ts', 'server/atlas-client.ts']), false, 'fix-ci touched a second file')
+  // A count within the copy's is not a sync: fix-ci edited code beside one copied file.
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, [copy[0], 'src/App.tsx']), false)
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', { ...pr, head: { ref: 'claude/feat-1-x' } }, copy), false)
+  assert.equal(isContractSyncOnly(config, 'SahajCloud', pr, copy), false)
+  // An empty list satisfies `every`. It must not arm auto-merge on a list we never read.
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, []), false, 'an empty file list is not a sync')
+  assert.equal(isContractSyncOnly(config, 'SahajAtlasWeb', pr, undefined), false, 'an absent file list is not a sync')
 })
 
 test('a green sync draft skips the critic and says why', () => {

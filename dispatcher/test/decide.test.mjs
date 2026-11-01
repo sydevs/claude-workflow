@@ -375,6 +375,22 @@ test('unlock on an issue with a pending verb re-dispatches; silent end sets awai
   assert.ok(!spoke.some((a) => a.type === 'drain'), 'no queue to drain')
 })
 
+test('the dispatcher\'s own lock removal is not a session ending', () => {
+  const verb = [{ author: 'Ardnived', createdAt: '2026-09-08T12:00:00Z', body: '@sydevs-bot revise', id: 7 }]
+  // A failed fire released the lock: re-targeting the verb now would fire again at once, every lap.
+  const failed = issueSnap({ comments: verb, record: { pending: { handler: 'revise', reason: 'routines paused', retryAfter: null } } })
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: {} }, failed, config)), ['note'])
+  // A timeout's re-fire relocked it: attempt 2 is running, not done.
+  const refired = issueSnap({ locked: true, record: { current: { handler: 'implement', attempt: 2 } } })
+  assert.deepEqual(types(decide({ reason: 'unlock', facts: {} }, refired, config)), ['note'])
+  // A lease refusal's pending waits on the session that is ending now.
+  const refused = issueSnap({ record: { current: { handler: 'implement' }, pending: { handler: 'revise', refused: true } } })
+  assert.equal(decide({ reason: 'unlock', facts: {} }, refused, config)[0].type, 'unlocked')
+  // And the failed fire is still retried, even with a recheck left over.
+  const later = issueSnap({ record: { recheck: true, pending: { handler: 'revise', reason: 'routines paused', retryAfter: null } } })
+  assert.deepEqual(types(decide({ reason: 'reconcile', facts: {} }, later, config)), ['retry'])
+})
+
 test('journal issues are ignored everywhere', () => {
   assert.deepEqual(types(decide({ reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot implement', association: 'OWNER' } }, issueSnap({ item: { number: 1, labels: ['ops-journal'] } }), config)), ['note'])
 })
@@ -857,6 +873,13 @@ test('a human reply in a question thread fires address-review', () => {
   assert.equal(p[0].text, 'a thread waits on a reply')
 })
 
+// A review whose only content is inline comments has an empty body: its thread is what asks.
+test('an inline-only review fires address-review through its thread', () => {
+  const inline = { user: { login: 'Ardnived' }, state: 'COMMENTED', body: '', submitted_at: '2026-10-09T11:00:00Z' }
+  const s = prSnap({ reviews: [criticReview, inline], threads: [{ isResolved: false, comments: [{ author: 'Ardnived', createdAt: '2026-10-09T11:00:00Z', body: 'Rename this.' }] }] })
+  assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
+})
+
 test('a plain own-rooted thread is still owed an answer beside a question', () => {
   const s = prSnap({ reviews: [criticReview], threads: [questionThread(), { isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: '2026-10-09T10:00:00Z', body: 'finding' }] }] })
   assert.deepEqual(types(evaluatePr(s, config)), ['note', 'fire:address-review'])
@@ -942,7 +965,7 @@ test('the orphan notice asks for a mention or a push, never a plain comment', ()
 
 // ---- a question review is not the critic's -------------------------------
 
-const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at, inline_count: 0 })
+const questionReview = (submitted_at) => ({ user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '1 question(s) for the reviewer, one per thread.', submitted_at })
 
 test('a question review neither counts as the critic nor answers a review verb', () => {
   const s = prSnap({ reviews: [questionReview('2026-10-09T10:00:00Z')] })

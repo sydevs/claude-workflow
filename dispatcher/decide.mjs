@@ -127,6 +127,13 @@ const withdraw = (s) => (s.record?.approved ? [record({ approved: null })] : [])
  */
 const handback = (s, reason) => record({ handback: { reason, at: nowOf(s).toISOString() } })
 const clearHandback = (s) => (s.record?.handback ? [record({ handback: null })] : [])
+/**
+ * The dispatcher took the lock off itself: a timeout's re-fire has locked it
+ * again, or a failed fire left its handler pending. Its PAT still wakes
+ * `unlock`, which must not read that as a session ending. A lease refusal's
+ * pending is not this: there, the session that held the lease is ending.
+ */
+const ownUnlock = (s) => s.locked || Boolean(s.record?.pending && !s.record.pending.refused)
 
 /**
  * A member's roadmap ticket is reviewed once, unprompted. A stranger's
@@ -246,9 +253,10 @@ export function isQuestion(root, config) {
 }
 
 /**
- * On a member's own PR the loop answers only the threads it rooted, and only
- * a review someone else left: a member's notes to themselves are not a
- * request. (why: docs/why.md#a-members-pr-gets-the-loop)
+ * On a member's own PR the loop answers the threads it rooted and the ones
+ * someone else rooted, and only a review someone else left: a member's notes
+ * to themselves are not a request, on either channel.
+ * (why: docs/why.md#a-members-pr-gets-the-loop)
  */
 export function needsAddressReview(snapshot, config) {
   const since = botLastWordAt(snapshot.comments, config)
@@ -260,7 +268,7 @@ export function needsAddressReview(snapshot, config) {
     if (!cs.length) continue
     const root = cs[0]
     const last = cs[cs.length - 1]
-    if (memberPr && !isBot(root.author, config)) continue
+    if (memberPr && !isBot(root.author, config) && lower(root.author) === lower(author)) continue
     if (respondTo(last.author, config) && !isBot(last.author, config)) return 'a thread waits on a reply'
     if (isQuestion(root, config)) continue
     if (isBot(root.author, config) && !cs.slice(1).some((c) => isBot(c.author, config))) return 'own-rooted thread unanswered'
@@ -270,7 +278,7 @@ export function needsAddressReview(snapshot, config) {
     if (memberPr && lower(r.user?.login) === lower(author)) continue
     if (since && r.submitted_at <= since) continue
     const state = String(r.state || '').toUpperCase()
-    if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim()) || r.inline_count > 0) return 'a review asks for changes'
+    if (state === 'CHANGES_REQUESTED' || (r.body && r.body.trim())) return 'a review asks for changes'
   }
   // A plain comment is the reviewer talking to the PR; only a mention is
   // talking to the bot. (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
@@ -1090,6 +1098,7 @@ function route(target, s, config) {
     case 'conflict-scan':
       return evaluatePr(s, config)
     case 'unlock': {
+      if (ownUnlock(s)) return [note('the dispatcher removed its own lock — no session ended')]
       const finished = facts.handler || s.record?.current?.handler || null
       plan.push({ type: 'unlocked', handler: finished })
       if (CONTINUES.has(finished)) {
@@ -1178,12 +1187,8 @@ function route(target, s, config) {
       if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
-    case 'sweep-retry':
-      return [{ type: 'retry' }]
     case 'sweep-timeout':
       return [{ type: 'timeout' }]
-    case 'sweep-recheck':
-      return route({ ...target, reason: 'unlock', facts: {} }, s, config)
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {
@@ -1201,7 +1206,7 @@ function route(target, s, config) {
       const rec = s.record || {}
       const cur = rec.current
       if (s.locked) return cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime() ? [{ type: 'timeout' }] : [note('a session holds it')]
-      if (cur || rec.recheck) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
+      if ((cur || rec.recheck) && !ownUnlock(s)) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       if (rec.pending) return !rec.pending.retryAfter || Date.parse(rec.pending.retryAfter) <= nowOf(s).getTime() ? [{ type: 'retry' }] : [note(`retry waits until ${rec.pending.retryAfter}`)]
       const p = config.dispatch.commandPrefix
       if (s.kind === 'issue' && s.park?.passed && rec.status === 'hold') {
