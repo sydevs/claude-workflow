@@ -95,7 +95,9 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    branch overwrites it, so the diff comes back empty. With no checkout, use
    `pull_request_read method:get_files` / `get_diff`.
 4. **The surrounding code** — Read/Grep the touched files whole, and the consumer side of any
-   contract surface. The diff alone cannot answer either heavy lens.
+   contract surface. The diff alone cannot answer either heavy lens. **Read a file as the branch
+   has it with `git show origin/<branch>:<path>`.** A checkout is refused as local destruction,
+   and a critic must not touch the branch.
 
 ## Produce the review
 
