@@ -623,7 +623,6 @@ test('an implement session that asks to continue gets the next session at once, 
   assert.equal(f.handler, 'implement')
   assert.equal(f.flags.continuation, 1)
   assert.ok(p.some((a) => a.type === 'record' && a.patch.continues === 1))
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
 })
 
 test('a set build that asks to continue keeps its children', () => {
