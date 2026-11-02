@@ -8,7 +8,7 @@ const config = {
   repos: ['SahajCloud', 'SahajAtlasWeb', 'WeMeditateWeb', 'SahajAtlasWordpress', 'claude-workflow'],
   identity: { expectedLogin: 'sydevs-bot' },
   assignment: { reviewer: 'Ardnived', respondTo: ['Ardnived'] },
-  labels: { journal: 'ops-journal', awaiting: 'awaiting', stuck: 'stuck', blocked: 'blocked', lock: 'bot:working', proposal: 'proposal' },
+  labels: { journal: 'ops-journal', lock: 'bot:working', proposal: 'proposal' },
   ceilings: { ciFixIterations: 3 },
   mergePolicy: { loopMayNotMerge: ['claude-workflow'] },
   review: { bodyHeader: '## 🧐 Adversarial review', skipWhen: { maxFiles: 2, maxLines: 40 } },

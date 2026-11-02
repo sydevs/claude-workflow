@@ -330,7 +330,6 @@ test('a spike PR is left to the session that pushed it', () => {
 test('a goal created with its type is locked by one leg and never marked awaiting by the other', () => {
   // SahajAtlasWeb#256: `typed` took the lock, then `opened` added awaiting.
   const p = decide({ reason: 'issues.opened' }, snap({ locked: true }), config)
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
   assert.equal(fires(p).length, 0, 'the session that holds the lock is the only one')
 })
 
