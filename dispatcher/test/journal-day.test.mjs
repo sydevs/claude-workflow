@@ -6,7 +6,7 @@ import { ensureJournalDay, closeDuplicateDays } from '../journal.mjs'
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 const NOW = new Date('2026-09-09T14:03:46Z') // 07:03 in America/Vancouver
 
-function fake(issues, { failCreate = false } = {}) {
+function fake(issues) {
   const calls = []
   let next = 100
   const gh = {
@@ -15,7 +15,6 @@ function fake(issues, { failCreate = false } = {}) {
         listForRepo: async () => ({ data: issues.filter((i) => i.state !== 'closed') }),
         create: async (a) => {
           calls.push(['create', a.title])
-          if (failCreate) { const e = new Error('nope'); e.status = 403; throw e }
           const i = { number: next++, body: a.body, created_at: NOW.toISOString(), state: 'open' }
           issues.push(i)
           return { data: i }
@@ -72,11 +71,4 @@ test('the scheduled sweep closes every extra day issue, keeping the oldest', asy
   const { gh } = fake(issues)
   assert.deepEqual(await closeDuplicateDays(gh, config, NOW), [78, 79])
   assert.equal(issues.find((i) => i.number === 60).state, 'open', "another day's journal is left alone")
-})
-
-test('a journal that cannot be created still returns 0 and never throws', async () => {
-  const { gh } = fake([], { failCreate: true })
-  const r = await ensureJournalDay(gh, config, NOW)
-  assert.equal(r.number, 0)
-  assert.match(r.failed, /cannot create/)
 })

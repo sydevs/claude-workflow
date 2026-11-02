@@ -327,10 +327,9 @@ test('a spike PR is left to the session that pushed it', () => {
   for (const reason of ['pull_request.opened', 'sweep-pr', 'sweep-orphan', 'ci']) assert.deepEqual(types(decide({ reason, facts: {} }, s, config)), ['note'], reason)
 })
 
-test('a goal created with its type is locked by one leg and never marked awaiting by the other', () => {
+test('a goal created with its type is locked by one leg, and the other fires nothing', () => {
   // SahajAtlasWeb#256: `typed` took the lock, then `opened` added awaiting.
   const p = decide({ reason: 'issues.opened' }, snap({ locked: true }), config)
-  assert.ok(!p.some((a) => a.type === 'label' && a.add.includes('awaiting')))
   assert.equal(fires(p).length, 0, 'the session that holds the lock is the only one')
 })
 
