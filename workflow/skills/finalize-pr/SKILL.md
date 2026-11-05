@@ -34,7 +34,7 @@ repo:
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
 | `packageManager` | Any command you construct |
-| `previewUrl.pattern` / `.seed` | Step 7 — the PR-number host, and how to fill it with data |
+| `previewUrl.pattern` / `.seed` / `.auth` | Step 7 — the PR-number host, how to fill it, and how to sign in to a gated preview (`workflow/lib/preview-auth.mjs`) |
 
 Never hard-code a repo's gate command, trigger paths, or package manager into this skill.
 
@@ -229,9 +229,13 @@ usually does not. Two to four deep links, each naming what it shows:
 
 ```markdown
 ## Preview
-- [Pages list](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages) — the new `status` column
-- [Any page's editor](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages/1) — per-locale publish state
+- [Pages list](<host>/admin/collections/pages) — the new `status` column
+- [Any page's editor](<host>/admin/collections/pages/1) — per-locale publish state
 ```
+
+`<host>` is `previewUrl.pattern` with the number filled. **Never spell one here**: a repo's preview
+host is that repo's own config value, and the pair this example used to name became unreachable the
+day sydevs/SahajCloud#1081 shut Railway's address.
 
 The build takes minutes, so a link may 404 briefly. That is expected and needs no caveat in the
 body. **Never write "preview pending" for a constructed host** — the host does not depend on the
@@ -275,7 +279,11 @@ characters.
 A link to an empty list is not a preview. A deploy provisions a sign-in and nothing more, so a
 new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-data)
 
-- **Check what each link needs, signed in.** The repo guide says how to sign in. Link a document
+- **Ask the helper first**, and let it decide: `echo '{"previewUrl":<the block>,"pr":<n>}' | node
+  "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`. It answers the host,
+  whether this repo seeds previews, and — with `.auth` — the sign-in request and Access headers.
+- **Check what each link needs, signed in.** With `.auth`, send the helper's `signIn` request with
+  its `headers` and read its `tokenField`. Otherwise the repo guide says how. Link a document
   by id, not a list, and only a document the preview's API returned.
 - **Seed whatever is missing.** Run `previewUrl.seed` against the host. Seed the smallest set
   that shows the change. **Never seed real people's contact details.** Seeded data survives later
