@@ -17,24 +17,69 @@
  *
  * Usage, from `finalize-pr` and `review-pr`:
  *
- *   echo '{"previewUrl":{…},"pr":7}' | node <claude-workflow>/workflow/lib/preview-auth.mjs
+ *   jq -c '{previewUrl} + {pr: 7}' .claude/workflow.json | node <claude-workflow>/workflow/lib/preview-auth.mjs
  *
  * stdin: `{ previewUrl, pr }` — the repo's `previewUrl` block and the PR number.
- * stdout: `{ host, seedsPreviews, access, signIn, accounts, seed }`. `access`
- * names each token variable and says only whether it is set, never its value.
- * `signIn` is null where the repo publishes no gated preview.
+ * stdout: `{ host, seedsPreviews, access, signIn, seed }`. `access` names each
+ * token variable and says only whether it is set, never its value. `signIn` is
+ * null where the repo publishes no gated preview.
  * exit: 0, or 1 when stdin holds no JSON or `loop-config.json` is missing.
  */
 
 import { loadLoopConfig, flag } from './config.mjs'
 import { extractJson } from './payload.mjs'
 
-/** `previewUrl.pattern` with `{pr}` filled, or null when either is missing. */
+const text = (value) => (typeof value === 'string' && value ? value : null)
+
+/**
+ * `previewUrl.pattern` with `{pr}` filled, or null.
+ *
+ * ⚠ **`https:` only, and the credentials are why.** A session sends the Access
+ * service token to whatever this returns, so a `http:` pattern would put the
+ * pair on the wire in cleartext and a `file:` one would make a request of the
+ * disk. A pattern is a protected-path config value rather than caller input,
+ * but the cost of one typo here is a leaked token, so it is checked where it is
+ * read rather than trusted where it is written.
+ */
 export function previewHost(previewUrl, pr) {
-  const pattern = previewUrl?.pattern
-  if (typeof pattern !== 'string' || !pattern) return null
-  if (pr === undefined || pr === null || String(pr) === '') return null
-  return pattern.replaceAll('{pr}', String(pr)).replace(/\/+$/, '')
+  const pattern = text(previewUrl?.pattern)
+  if (!pattern) return null
+  // Digits only: an interpolated `1@evil.example/x` would otherwise move the
+  // whole origin, since the `{pr}` slot sits inside the hostname.
+  if (!/^\d+$/.test(String(pr))) return null
+
+  let url
+  try {
+    url = new URL(pattern.replaceAll('{pr}', String(pr)))
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    return null
+  }
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, '')
+}
+
+/**
+ * `host` + a route from the repo's own config, or null when the result would
+ * not land on `host`.
+ *
+ * ⚠ **A route is joined, never resolved.** `new URL(path, host)` would let
+ * `//evil.example/x` or `@evil.example/x` repoint the origin, and the caller
+ * then sends the Access token there. The origin is compared after the join
+ * because that is the property worth asserting — not any one of the spellings
+ * that break it.
+ */
+function routeOn(host, path) {
+  if (!host || !path || !path.startsWith('/') || path.startsWith('//')) return null
+  if (/[@\\\s]|\.\./.test(path)) return null
+  const url = `${host}${path}`
+  try {
+    if (new URL(url).origin !== new URL(host).origin) return null
+  } catch {
+    return null
+  }
+  return url
 }
 
 /**
@@ -46,21 +91,27 @@ export function previewHost(previewUrl, pr) {
  * `set` is reported per variable because the token is a pair: one half present
  * is a misconfiguration, and Cloudflare logs a blank client id as a failed
  * service-token attempt rather than ignoring it.
+ *
+ * ⚠ **So `headers` needs both halves SET, not merely named.** The names are
+ * configured in every repo, so emitting the pair on a name alone hands a session
+ * two headers that expand to empty — which is the failed attempt above, reported
+ * to the run as a working credential. SahajCloud's `accessTokenHeaders` answers
+ * the same question the same way; two answers here would be one too many.
  */
 export function accessPlan(config, env = process.env) {
   const block = config?.previewAccess || {}
-  const name = (key) => (typeof block[key] === 'string' && block[key] ? block[key] : null)
-  const idVar = name('clientIdEnvVar')
-  const secretVar = name('clientSecretEnvVar')
-  const ref = (variable) => ['$', variable].join('')
+  const idVar = text(block.clientIdEnvVar)
+  const secretVar = text(block.clientSecretEnvVar)
+  const clientId = { envVar: idVar, set: Boolean(idVar && env[idVar]) }
+  const clientSecret = { envVar: secretVar, set: Boolean(secretVar && env[secretVar]) }
   return {
-    clientId: { envVar: idVar, set: Boolean(idVar && env[idVar]) },
-    clientSecret: { envVar: secretVar, set: Boolean(secretVar && env[secretVar]) },
+    clientId,
+    clientSecret,
     // Shell references, so the command a session runs carries the value without
     // this plan ever holding it.
     headers:
-      idVar && secretVar
-        ? [`CF-Access-Client-Id: ${ref(idVar)}`, `CF-Access-Client-Secret: ${ref(secretVar)}`]
+      clientId.set && clientSecret.set
+        ? [`CF-Access-Client-Id: $${idVar}`, `CF-Access-Client-Secret: $${secretVar}`]
         : [],
   }
 }
@@ -69,11 +120,15 @@ export function accessPlan(config, env = process.env) {
  * Everything a session needs, from the repo's `previewUrl` block and the PR.
  *
  * `seedsPreviews` is the one verdict both skills read. It is true where the repo
- * declares `previewUrl.auth` or `.seed` — a config key, not a repo name typed
- * into a skill — and it is what turns the body line that admits "no data" from
- * an accepted disclosure into a finding: where a repo's own CI goes red on a
- * preview it could not fill, the red check is the gate and a sentence is not.
+ * declares a usable `previewUrl.seed` or `.auth` — a config key, not a repo name
+ * typed into a skill — and it is what turns the body line that admits "no data"
+ * from an accepted disclosure into a finding: where a repo's own CI goes red on
+ * a preview it could not fill, the red check is the gate and a sentence is not.
  * (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
+ *
+ * ⚠ **Usable, not merely present.** An `auth` block too incomplete to sign in
+ * with would otherwise raise a finding on every empty preview in a repo where no
+ * run can do anything about it — a `should-fix` no author can comply with.
  *
  * The route and the account are the producing repo's, carried in its own
  * `.auth` block; nothing here knows either, so nothing here goes stale when
@@ -83,29 +138,28 @@ export function authPlan(input, config, env = process.env) {
   const previewUrl = input?.previewUrl || {}
   const auth = previewUrl.auth || null
   const host = previewHost(previewUrl, input?.pr)
-  const seed = typeof previewUrl.seed === 'string' && previewUrl.seed ? previewUrl.seed : null
+  const seed = text(previewUrl.seed)
 
-  const path = typeof auth?.signInPath === 'string' ? auth.signInPath : null
-  const account = typeof auth?.account === 'string' ? auth.account : null
-  const field = typeof auth?.accountField === 'string' ? auth.accountField : 'email'
+  const url = routeOn(host, text(auth?.signInPath))
+  const account = text(auth?.account)
+  const signIn = url && account && {
+    method: 'POST',
+    url,
+    body: { [text(auth.accountField) ?? 'email']: account },
+    // Where the session reads the session token out of the answer.
+    tokenField: text(auth.tokenField) ?? 'token',
+  }
 
+  const access = accessPlan(config, env)
   return {
     host,
-    seedsPreviews: Boolean(auth || seed),
-    access: accessPlan(config, env),
-    signIn:
-      host && path && account
-        ? {
-            method: 'POST',
-            url: `${host}${path}`,
-            body: { [field]: account },
-            // Where the session reads the session token out of the answer.
-            tokenField: typeof auth.tokenField === 'string' ? auth.tokenField : 'token',
-          }
-        : null,
-    // The page listing which accounts the preview holds, for a run that wants
-    // one other than the configured account.
-    accounts: host && typeof auth?.accountsPage === 'string' ? `${host}${auth.accountsPage}` : null,
+    seedsPreviews: Boolean(seed || signIn),
+    // ⚠ The pair goes out only with a gated request. A repo that declares no
+    // `.auth` has no Access in front of it, so attaching them there would send
+    // the token to an ordinary host — and a preview host a repo has since moved
+    // is a name anyone may claim.
+    access: signIn ? access : { ...access, headers: [] },
+    signIn: signIn || null,
     seed,
   }
 }
@@ -113,13 +167,13 @@ export function authPlan(input, config, env = process.env) {
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())
 if (isMain) {
   const argv = process.argv.slice(2)
-  let text = ''
+  let stdin = ''
   process.stdin.on('data', (d) => {
-    text += d
+    stdin += d
   })
   process.stdin.on('end', () => {
     try {
-      const input = extractJson(text)
+      const input = extractJson(stdin)
       const config = loadLoopConfig(flag(argv, 'config'))
       console.log(JSON.stringify(authPlan(input, config), null, 2))
     } catch (err) {
