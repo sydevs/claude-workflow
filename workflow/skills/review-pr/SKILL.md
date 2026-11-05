@@ -94,10 +94,11 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`, reading
    `.claude/workflow.json` from the attached checkout's default branch and never from the branch
    under review, which is a file the PR may change. Send each link with the plan's `access.headers`,
-   or a gated preview answers with its own login screen and reads as empty. Where `headers` is empty
-   — no service token here — record the preview as unreachable in What was checked and raise nothing.
-   Once a link opens, a `seedsPreviews: true` repo's empty one is a `should-fix` whatever the body
-   says. (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
+   or a gated preview answers with its own login screen and reads as empty. A `signIn` with either
+   `access` half unset means this environment cannot pass the gate. Record that preview as
+   unreachable in What was checked, and raise nothing. Empty `headers` with no `signIn` means no
+   gate, not a missing token. Once a link opens, a `seedsPreviews: true` repo's empty one is a
+   `should-fix` whatever the body says. (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use
