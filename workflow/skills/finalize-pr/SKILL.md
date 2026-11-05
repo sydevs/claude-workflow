@@ -283,11 +283,12 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
   It answers the host, whether this repo seeds previews, and — with `.auth` — the sign-in request
   and the Access headers.
 - **Check what each link needs, signed in.** With a `signIn`, send it with the plan's `headers` and
-  read its `tokenField`. An empty `headers` means this environment holds no service token, so the
-  preview is unreachable rather than empty — say which half `access` reports unset, and raise
-  nothing about the data. Otherwise the repo guide says how. Link a document by id, not a list, and
-  only a document the preview's API returned. **Never print the token**: no `-v`, no `--trace`, and
-  never echo the command (`fix-ci` runs the same rule).
+  read its `tokenField`. A `signIn` with `access.clientId.set` or `.clientSecret.set` false means
+  this environment cannot pass the gate. Name the unset half, and raise nothing about the data.
+  Empty `headers` with no `signIn` means no gate, so check the data as ever. Otherwise the repo
+  guide says how. Link a document by id, not a list, and only a document the preview's API
+  returned. **Never print the token**: no `-v`, no `--trace`, and never echo the command
+  (`fix-ci` runs the same rule).
 - **Seed whatever is missing.** Run `previewUrl.seed` against the host. Seed the smallest set
   that shows the change. **Never seed real people's contact details, and never quote data the
   preview already held** — somebody may have filled it by hand from a real source, and this body is
