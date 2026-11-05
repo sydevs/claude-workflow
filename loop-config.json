@@ -286,6 +286,11 @@
     },
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
+  "previewAccess": {
+    "$comment": "The Cloudflare Access service token the loop uses to reach a gated PR preview. Its own token, separate from CI's, so either can be switched off without deleting the other — which is why there are two Service Auth policies rather than one on \"any service token\". workflow/lib/preview-auth.mjs is the one reader.",
+    "clientIdEnvVar": "PREVIEW_ACCESS_CLIENT_ID",
+    "clientSecretEnvVar": "PREVIEW_ACCESS_CLIENT_SECRET"
+  },
   "railway": {
     "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
     "apiBase": "https://backboard.railway.com/graphql/v2",
