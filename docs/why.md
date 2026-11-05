@@ -360,11 +360,16 @@ steps named `tests/fixtures/event-import-sample.csv`, never committed. The links
 Seeding the preview by hand afterwards found three import defects: nine of thirteen German
 addresses geocoded to the wrong town, which any reviewer with data would have seen in a minute.
 
-A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR. Anyone
-with the URL and the admin address can reach it, so the seed uses synthetic or anonymised people:
-the 874 seed replaced 495 coordinator identities with `atlas-manager-<id>@preview.invalid`. A
-Railway host builds only after its PR opens, so the run that opens the PR must wait. Leaving it to
-the next run failed: a single-phase PR with a clean critic has no next run before a human reads it.
+A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR. The 874
+anonymisation — 495 coordinator identities replaced with `atlas-manager-<id>@preview.invalid` — was
+done **by hand, once, on that one preview**. No code did it, and the content system had nothing safe
+to fill a preview with: its only data scripts imported real people's names and addresses. What makes
+"made-up data" true in code is the hand-authored fixture sydevs/SahajCloud#1081 commits and CI
+fills every preview from, and that is a structural property of CI rather than a test — the real-data
+files left the checkout in sydevs/SahajCloud#1079, so no CI run holds a real name to leak. It is
+still no promise at all about a preview somebody filled by hand. A Railway host builds only after
+its PR opens, so the run that opens the PR must wait. Leaving it to the next run failed: a
+single-phase PR with a clean critic has no next run before a human reads it.
 
 ## A red seed check outranks a line in the body
 
