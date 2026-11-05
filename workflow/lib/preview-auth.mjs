@@ -24,6 +24,10 @@
  * token variable and says only whether it is set, never its value. `signIn` is
  * null where the repo publishes no gated preview.
  * exit: 0, or 1 when stdin holds no JSON or `loop-config.json` is missing.
+ *
+ * With `--on-host <url>` it answers `ON_HOST` or `OFF_HOST` for that one URL
+ * instead of the plan — the check a caller makes before it attaches the Access
+ * pair to a link it read out of a PR body.
  */
 
 import { loadLoopConfig, flag } from './config.mjs'
@@ -80,6 +84,36 @@ function routeOn(host, path) {
     return null
   }
   return url
+}
+
+/** Every verdict this script can print. The skills key on these words. */
+export const VERDICTS = ['ON_HOST', 'OFF_HOST']
+
+/**
+ * Whether a URL may carry the Access service token: its origin is the plan's
+ * own `host`, and nothing else is.
+ *
+ * ⚠ **A `## Preview` link is whatever its poster wrote.** `review-pr` reads
+ * the links out of the body under review, and the dispatcher fires it on a
+ * stranger's PR whenever a person asks for one. Attaching the pair to a link on
+ * another origin would hand the token to whoever owns that name, so the origin
+ * is compared here rather than eyeballed in prose. `railway.mjs` allowlists a
+ * poster's host for the same reason.
+ */
+export function onHost(host, url) {
+  if (!host || !url) return false
+  let target
+  try {
+    target = new URL(String(url))
+  } catch {
+    return false
+  }
+  if (target.protocol !== 'https:') return false
+  try {
+    return target.origin === new URL(host).origin
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -175,7 +209,11 @@ if (isMain) {
     try {
       const input = extractJson(stdin)
       const config = loadLoopConfig(flag(argv, 'config'))
-      console.log(JSON.stringify(authPlan(input, config), null, 2))
+      const plan = authPlan(input, config)
+      const target = flag(argv, 'on-host')
+      // A verdict word, so a caller reads the answer and never an exit code.
+      const verdict = onHost(plan.host, target) ? 'ON_HOST' : 'OFF_HOST'
+      console.log(target ? verdict : JSON.stringify(plan, null, 2))
     } catch (err) {
       console.error(`preview-auth: ${err.message}`)
       process.exit(1)

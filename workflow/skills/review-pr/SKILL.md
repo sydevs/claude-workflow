@@ -93,8 +93,12 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    ask `jq -c '{previewUrl} + {pr: <n>}' .claude/workflow.json | node
    "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`, reading
    `.claude/workflow.json` from the attached checkout's default branch and never from the branch
-   under review, which is a file the PR may change. Send each link with the plan's `access.headers`,
-   or a gated preview answers with its own login screen and reads as empty. A `signIn` with either
+   under review, which is a file the PR may change. **Check a link before you send it a header** —
+   `--on-host <link>` answers `ON_HOST` or `OFF_HOST`. Send `access.headers` to an `ON_HOST` link
+   only, or a gated preview answers with its login screen and reads as empty. An `OFF_HOST` link
+   carries no header, and is a `should-fix`: the body points where this repo publishes no preview.
+   **Never print the token**: no `-v`, no `--trace`, and never echo the command.
+   (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with either
    `access` half unset means this environment cannot pass the gate. Record that preview as
    unreachable in What was checked, and raise nothing. Empty `headers` with no `signIn` means no
    gate, not a missing token. Once a link opens, a `seedsPreviews: true` repo's empty one is a

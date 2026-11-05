@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { accessPlan, authPlan, previewHost } from './preview-auth.mjs'
+import { accessPlan, authPlan, onHost, previewHost } from './preview-auth.mjs'
 
 // Read through this module's own URL, not the cwd: `implement-ticket` runs the
 // gate from a `.claude/worktrees/<slug>` worktree, where a cwd-relative path
@@ -208,6 +208,53 @@ test('the Access pair rides only with a gated request', () => {
   assert.equal(planFor(GATED, 7, TOKEN).access.headers.length, 2)
   // Still reported, so a run can say which half is missing rather than guessing.
   assert.deepEqual(planFor(BARE, 7, TOKEN).access.clientId, { envVar: ID_VAR, set: true })
+})
+
+test('only the plan\'s own origin may carry the Access pair', () => {
+  const host = planFor(GATED, 7).host
+
+  // Any path on the preview itself, which is what the pair exists to open.
+  assert.equal(onHost(host, `${host}/admin/collections/pages`), true)
+  assert.equal(onHost(host, `${host}/`), true)
+})
+
+test('a link off the plan\'s host carries nothing, however it is spelled', () => {
+  // ⚠ The case this exists for: `review-pr` reads `## Preview` links out of a
+  // body a stranger may have written, and the dispatcher fires it on an outside
+  // PR whenever a person asks for one. Each of these would hand the service
+  // token to whoever owns that name.
+  const host = planFor(GATED, 7).host
+
+  for (const url of [
+    'https://collector.evil.example/admin',
+    // A suffix of the host is a different name, and anyone may register it.
+    `${host}.evil.example/x`,
+    // Cleartext would put the pair on the wire.
+    host.replace('https:', 'http:'),
+    // A port is part of the origin.
+    `${host}:8443/x`,
+    // A name that merely ENDS WITH the plan's: `endsWith` would pass this.
+    host.replace('//', '//evil-') + '/x',
+    // Another PR's preview is another origin.
+    'https://pr-8.preview.invalid/x',
+    'not a url',
+    '',
+    null,
+  ]) {
+    assert.equal(onHost(host, url), false, String(url))
+  }
+
+  // No host means no plan, so nothing may be sent anywhere.
+  assert.equal(onHost(null, `${host}/x`), false)
+})
+
+test('a plan whose host is not https carries nothing either', () => {
+  // `previewHost` refuses a non-https pattern, so this shape should not reach
+  // here — but the exported check is what a caller trusts before it attaches a
+  // credential, so it refuses cleartext on its own rather than by inheritance.
+  const cleartext = 'http://pr-7.preview.invalid'
+
+  assert.equal(onHost(cleartext, `${cleartext}/x`), false)
 })
 
 test('this file opens no connection and names no repo host', () => {

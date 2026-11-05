@@ -283,8 +283,10 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
   It answers the host, whether this repo seeds previews, and — with `.auth` — the sign-in request
   and the Access headers.
 - **Check what each link needs, signed in.** With a `signIn`, send it with the plan's `headers` and
-  read its `tokenField`. A `signIn` with `access.clientId.set` or `.clientSecret.set` false means
-  this environment cannot pass the gate. Name the unset half, and raise nothing about the data.
+  read its `tokenField`. Send the pair to an `ON_HOST` link only — `--on-host <link>` answers, and
+  a link you did not build from `previewUrl.pattern` may sit on another origin.
+  (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with
+  `access.clientId.set` or `.clientSecret.set` false means this environment cannot pass the gate. Name the unset half, and raise nothing about the data.
   Empty `headers` with no `signIn` means no gate, so check the data as ever. Otherwise the repo
   guide says how. Link a document by id, not a list, and only a document the preview's API
   returned. **Never print the token**: no `-v`, no `--trace`, and never echo the command

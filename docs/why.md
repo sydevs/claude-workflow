@@ -387,6 +387,23 @@ write, so the rule is **conditional and never a removal**.
 `workflow/lib/preview-auth.mjs` answers which case a repo is in, from that repo's own config, so
 neither skill names a repo.
 
+## A preview link is whatever its poster wrote
+
+The Access service token opens every PR preview of a gated repo. `review-pr` reads the `## Preview`
+links out of the body under review and opens each one, and the dispatcher fires it on a stranger's
+PR whenever a person types the review verb (`dispatcher/decide.mjs`, the `onDemand` path). So "send
+each link the plan's headers" handed anyone who can open a PR a way to name their own host in the
+body and collect the pair from the logs.
+
+The branch that introduced the helper had already hardened the script against leaving the host:
+`routeOn` joins the sign-in route and then compares the composed origin. The prose then left by a
+different door — the module validated the one URL it built, while the skill attached the same
+headers to URLs it never saw. `onHost` closes it where a rule can be evaluated, and
+`railway.mjs` allowlists an outside poster's host for the same reason.
+
+A link off the host is also a finding in its own right: a body that points somewhere the repo does
+not publish previews is a body a reviewer cannot check.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, Phases, then an optional `## Changes` file list, so a reviewer
