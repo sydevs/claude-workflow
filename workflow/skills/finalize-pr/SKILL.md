@@ -299,6 +299,9 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
 - **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
   Write one line naming what is missing. Never leave a link that lands on nothing without saying
   so.
+- **Where the helper answers `seedsPreviews: true`, that line is a disclosure and not a pass.**
+  Say in the report that the repo's own seed check will red this PR until the fill succeeds.
+  (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
@@ -335,7 +338,8 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    `pull_request_write method:update`.
 4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
    in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
-   `fix-ci` deploy pass — never this step's.
+   `fix-ci` deploy pass — never this step's. Where `seedsPreviews` is true, say that the seed check
+   will red the PR until a later push fills it.
 
 ### 7c. Ask the reviewer, on the line
 

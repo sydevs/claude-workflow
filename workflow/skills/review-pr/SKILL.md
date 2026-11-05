@@ -89,7 +89,10 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    not a required check, so it may still be building: a link that does not open yet goes in What
    was checked, not in the findings. A link that shows no data with no line in the body saying
    why, or an input the body names that does not exist, is a `should-fix`
-   (`/workflow:finalize-pr` step 7).
+   (`/workflow:finalize-pr` step 7). **Where this repo seeds previews, the line excuses nothing** —
+   ask `workflow/lib/preview-auth.mjs` with the repo's `previewUrl` block and the PR number, and
+   treat a `seedsPreviews: true` repo's empty link as a `should-fix` whatever the body says.
+   (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use

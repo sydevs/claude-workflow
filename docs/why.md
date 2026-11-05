@@ -366,6 +366,21 @@ the 874 seed replaced 495 coordinator identities with `atlas-manager-<id>@previe
 Railway host builds only after its PR opens, so the run that opens the PR must wait. Leaving it to
 the next run failed: a single-phase PR with a clean critic has no next run before a human reads it.
 
+## A red seed check outranks a line in the body
+
+[A preview link must open on data](#a-preview-link-must-open-on-data) left one way out: a run that
+could not seed wrote a line saying so, and every check accepted the line. sydevs/SahajCloud#1073
+shipped its Registrations page with `Data: not seeded` and a console snippet to paste, and that read
+as compliance. The line was the right answer while nothing could seed a preview — the loop had no
+way to sign in to one at all.
+
+Where a repo's own CI goes red on a preview it exists but could not fill, the line is no longer the
+best available answer: the check is the gate, and a sentence in the body cannot substitute for it.
+Where no such check exists, in the other four repos, the line is still the only honest thing to
+write, so the rule is **conditional and never a removal**.
+`workflow/lib/preview-auth.mjs` answers which case a repo is in, from that repo's own config, so
+neither skill names a repo.
+
 ## Show the shape, not the file list
 
 The body used to open with Summary, Phases, then an optional `## Changes` file list, so a reviewer
