@@ -287,6 +287,7 @@ private repo:
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
+| `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's preview seed and smoke steps — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. **Not the loop's** — the loop holds its own pair in §4, so either can be switched off without deleting the other. |
 
 > ⚠ **A missing permission on the PAT reads as something else entirely.** Three separate live
 > failures traced back to it: `projectV2` returning `null` with no GraphQL error, `POST /issues`
@@ -448,6 +449,8 @@ SENTRY_CLAUDE_WORKFLOW_TOKEN=<the Token, not the Client Secret>
 MAILPIT_URL=https://<mailpit-host>
 MAILPIT_UI_AUTH=<user>:<password>
 SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
+PREVIEW_ACCESS_CLIENT_ID=<the claude-loop Access service token's client id>
+PREVIEW_ACCESS_CLIENT_SECRET=<its client secret>
 # one read-only key per vendor API a review experiment may query — never a write scope
 ```
 
@@ -455,7 +458,37 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 > Scope every token to the minimum: the Sentry token is Issues-only, and the SahajCloud key is a
 > read-scoped client. The Mailpit login reads every captured message, which is acceptable only because
 > Mailpit holds fixtures and preview traffic: previews have their own databases, and production mail
-> goes to Resend. Never put a production admin credential here.
+> goes to Resend. The preview Access token opens **every** PR preview of the gated repo, as a service
+> identity whose every use Cloudflare logs, and nothing on the live site — whose address it cannot
+> change. It is `claude-loop`, its own Service Auth policy, so switching it off leaves CI's
+> `github-ci` token working and a person can still open a preview; one policy on "any service token"
+> would have made switching one off a deletion. Never put a production admin credential here.
+
+**The preview Access token.** `PREVIEW_ACCESS_CLIENT_ID` / `PREVIEW_ACCESS_CLIENT_SECRET` are the
+`claude-loop` service token's pair, named by `previewAccess` in `loop-config.json`. The script reads
+only whether each is **set**; the values are read by the shell that sends the request, which is why
+the skills forbid `-v` and echoing the command. With them a run signs in to a gated preview as any
+manager that preview holds, so `finalize-pr` can fill one and link pages that show the change.
+Without them it cannot reach a gated preview at all, and writes the `Data: not seeded yet`
+disclosure instead.
+
+⚠ **A service token is account-scoped, so what it opens is decided by the Access policy, not by
+the token.** Pasting the pair here grants nothing until someone creates it that way, and the
+paragraph above is a promise only these steps keep:
+
+1. In Cloudflare Zero Trust, create a service token named `claude-loop`.
+2. On the Access application covering the **preview** hostname pattern — and no application
+   covering a live hostname — add a Service Auth policy whose only rule admits `claude-loop`.
+   Never a policy on "any service token": switching one identity off would then be a deletion.
+3. Verify both halves. Against a preview hostname the pair should answer the app; against the
+   **live** hostname it must answer `403`. A pair that opens production is the failure this
+   checks for, and nothing in the loop can detect it.
+
+⚠ **Both halves of the switch are config.** The token alone does nothing: a repo publishes a gated
+preview by declaring `previewUrl.auth` — `{ signInPath, account, accountField?, tokenField? }` — in
+its own `.claude/workflow.json`, beside `previewUrl.pattern` and `.seed`. Until a repo carries that
+block, `seedsPreviews` is false everywhere and these variables are read by nothing. That file is a
+protected path, so the edit is a person's.
 
 **Railway.** A workspace token, made at railway.com/account/tokens with the workspace that holds
 SahajCloud picked, stored under the name `railway.tokenEnvVar` gives in `loop-config.json`. A

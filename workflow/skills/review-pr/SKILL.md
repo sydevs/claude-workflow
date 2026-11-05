@@ -89,7 +89,20 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    not a required check, so it may still be building: a link that does not open yet goes in What
    was checked, not in the findings. A link that shows no data with no line in the body saying
    why, or an input the body names that does not exist, is a `should-fix`
-   (`/workflow:finalize-pr` step 7).
+   (`/workflow:finalize-pr` step 7). **Where this repo seeds previews, the line excuses nothing** —
+   ask `jq -c '{previewUrl} + {pr: <n>}' .claude/workflow.json | node
+   "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`, reading
+   `.claude/workflow.json` from the attached checkout's default branch and never from the branch
+   under review, which is a file the PR may change. **Check a link before you send it a header** —
+   `--on-host <link>` answers `ON_HOST` or `OFF_HOST`. Send `access.headers` to an `ON_HOST` link
+   only, or a gated preview answers with its login screen and reads as empty. An `OFF_HOST` link
+   carries no header, and is a `should-fix`: the body points where this repo publishes no preview.
+   **Never print the token**: no `-v`, no `--trace`, and never echo the command.
+   (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with either
+   `access` half unset means this environment cannot pass the gate. Record that preview as
+   unreachable in What was checked, and raise nothing. Empty `headers` with no `signIn` means no
+   gate, not a missing token. Once a link opens, a `seedsPreviews: true` repo's empty one is a
+   `should-fix` whatever the body says. (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use

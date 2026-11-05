@@ -286,6 +286,11 @@
     },
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
+  "previewAccess": {
+    "$comment": "The loop's own Cloudflare Access service token for a gated PR preview, separate from CI's so either can be switched off without deleting the other.",
+    "clientIdEnvVar": "PREVIEW_ACCESS_CLIENT_ID",
+    "clientSecretEnvVar": "PREVIEW_ACCESS_CLIENT_SECRET"
+  },
   "railway": {
     "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
     "apiBase": "https://backboard.railway.com/graphql/v2",

@@ -360,11 +360,49 @@ steps named `tests/fixtures/event-import-sample.csv`, never committed. The links
 Seeding the preview by hand afterwards found three import defects: nine of thirteen German
 addresses geocoded to the wrong town, which any reviewer with data would have seen in a minute.
 
-A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR. Anyone
-with the URL and the admin address can reach it, so the seed uses synthetic or anonymised people:
-the 874 seed replaced 495 coordinator identities with `atlas-manager-<id>@preview.invalid`. A
-Railway host builds only after its PR opens, so the run that opens the PR must wait. Leaving it to
-the next run failed: a single-phase PR with a clean critic has no next run before a human reads it.
+A Railway preview keeps its Postgres volume across deploys, so seeding costs one run per PR. The 874
+anonymisation — 495 coordinator identities replaced with `atlas-manager-<id>@preview.invalid` — was
+done **by hand, once, on that one preview**. No code did it, and the content system had nothing safe
+to fill a preview with: its only data scripts imported real people's names and addresses. What will make
+"made-up data" true in code is the hand-authored fixture sydevs/SahajCloud#1082 commits and CI
+fills every preview from, once that merges — a structural property of CI rather than a test, since
+the real-data files left the checkout in sydevs/SahajCloud#1079, so no CI run's working tree holds a
+real name to leak (they remain in git history). It is
+still no promise at all about a preview somebody filled by hand. A Railway host builds only after
+its PR opens, so the run that opens the PR must wait. Leaving it to the next run failed: a
+single-phase PR with a clean critic has no next run before a human reads it.
+
+## A red seed check outranks a line in the body
+
+[A preview link must open on data](#a-preview-link-must-open-on-data) left one way out: a run that
+could not seed wrote a line saying so, and every check accepted the line. sydevs/SahajCloud#1073
+shipped its Registrations page with `Data: not seeded` and a console snippet to paste, and that read
+as compliance. The line was the right answer while nothing could seed a preview — the loop had no
+way to sign in to one at all.
+
+Where a repo's own CI goes red on a preview it exists but could not fill, the line is no longer the
+best available answer: the check is the gate, and a sentence in the body cannot substitute for it.
+Where no such check exists, in the other four repos, the line is still the only honest thing to
+write, so the rule is **conditional and never a removal**.
+`workflow/lib/preview-auth.mjs` answers which case a repo is in, from that repo's own config, so
+neither skill names a repo.
+
+## A preview link is whatever its poster wrote
+
+The Access service token opens every PR preview of a gated repo. `review-pr` reads the `## Preview`
+links out of the body under review and opens each one, and the dispatcher fires it on a stranger's
+PR whenever a person types the review verb (`dispatcher/decide.mjs`, the `onDemand` path). So "send
+each link the plan's headers" handed anyone who can open a PR a way to name their own host in the
+body and collect the pair from the logs.
+
+The branch that introduced the helper had already hardened the script against leaving the host:
+`routeOn` joins the sign-in route and then compares the composed origin. The prose then left by a
+different door — the module validated the one URL it built, while the skill attached the same
+headers to URLs it never saw. `onHost` closes it where a rule can be evaluated, and
+`railway.mjs` allowlists an outside poster's host for the same reason.
+
+A link off the host is also a finding in its own right: a body that points somewhere the repo does
+not publish previews is a body a reviewer cannot check.
 
 ## Show the shape, not the file list
 

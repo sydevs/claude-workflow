@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { check, fit, DEFAULT_BUDGETS, DEFAULT_MARKER, DEFAULT_MARKER_REQUIRED, VERDICTS } from './budget.mjs'
+import { VERDICTS as PREVIEW_VERDICTS } from './preview-auth.mjs'
 import { loadLoopConfig } from './config.mjs'
 import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -249,8 +250,8 @@ test('every budgeted kind declares whether it carries the marker', () => {
   assert.deepEqual(required.filter((kind) => !(kind in loop.writing.budgets)), [])
 })
 
-// The skills key on the printed verdict word, so a word a skill names and the
-// script cannot print is prose/script drift — the class `rule-delta.mjs` and
+// The skills key on the printed verdict word, so a word a skill names and no
+// script can print is prose/script drift — the class `rule-delta.mjs` and
 // the `--kind` test above exist to close. Requiring `means` or `→` after the
 // word missed `MISSING_MARKER`, the one verdict this change adds to prose, so
 // every backticked ALL-CAPS token counts and the non-verdicts are named here.
@@ -278,5 +279,8 @@ test('every verdict word a skill names is one the script can print', () => {
     }
   }
   assert.ok(named.has('MISSING_MARKER'), 'the scan misses the verdict it was widened for')
-  assert.deepEqual([...named].filter((word) => !VERDICTS.includes(word)), [])
+  // Every script that prints a verdict exports its own list, so this is their
+  // union: a word belongs to whichever script prints it, not to this one.
+  const printable = [...VERDICTS, ...PREVIEW_VERDICTS]
+  assert.deepEqual([...named].filter((word) => !printable.includes(word)), [])
 })
