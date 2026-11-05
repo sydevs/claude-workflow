@@ -287,7 +287,7 @@
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
   "previewAccess": {
-    "$comment": "The Cloudflare Access service token the loop uses to reach a gated PR preview. Its own token, separate from CI's, so either can be switched off without deleting the other — which is why there are two Service Auth policies rather than one on \"any service token\". workflow/lib/preview-auth.mjs is the one reader.",
+    "$comment": "The loop's own Cloudflare Access service token for a gated PR preview, separate from CI's so either can be switched off without deleting the other.",
     "clientIdEnvVar": "PREVIEW_ACCESS_CLIENT_ID",
     "clientSecretEnvVar": "PREVIEW_ACCESS_CLIENT_SECRET"
   },

@@ -90,9 +90,14 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    was checked, not in the findings. A link that shows no data with no line in the body saying
    why, or an input the body names that does not exist, is a `should-fix`
    (`/workflow:finalize-pr` step 7). **Where this repo seeds previews, the line excuses nothing** —
-   ask `workflow/lib/preview-auth.mjs` with the repo's `previewUrl` block and the PR number, and
-   treat a `seedsPreviews: true` repo's empty link as a `should-fix` whatever the body says.
-   (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
+   ask `jq -c '{previewUrl} + {pr: <n>}' .claude/workflow.json | node
+   "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`, reading
+   `.claude/workflow.json` from the attached checkout's default branch and never from the branch
+   under review, which is a file the PR may change. Send each link with the plan's `access.headers`,
+   or a gated preview answers with its own login screen and reads as empty. Where `headers` is empty
+   — no service token here — record the preview as unreachable in What was checked and raise nothing.
+   Once a link opens, a `seedsPreviews: true` repo's empty one is a `should-fix` whatever the body
+   says. (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use
