@@ -34,7 +34,7 @@ repo:
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
 | `packageManager` | Any command you construct |
-| `previewUrl.pattern` / `.seed` | Step 7 — the PR-number host, and how to fill it with data |
+| `previewUrl.pattern` / `.seed` / `.auth` | Step 7 — the PR-number host, how to fill it, and how to sign in to a gated preview. `.auth` is `{ signInPath, account, accountField?, tokenField? }`. Its `account` must be an address the gate does not treat as the credential, because this file is public. `workflow/lib/preview-auth.mjs` reads all three |
 
 Never hard-code a repo's gate command, trigger paths, or package manager into this skill.
 
@@ -229,9 +229,12 @@ usually does not. Two to four deep links, each naming what it shows:
 
 ```markdown
 ## Preview
-- [Pages list](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages) — the new `status` column
-- [Any page's editor](https://sahajcloud-sahajcloud-pr-742.up.railway.app/admin/collections/pages/1) — per-locale publish state
+- [Pages list](<host>/admin/collections/pages) — the new `status` column
+- [Any page's editor](<host>/admin/collections/pages/1) — per-locale publish state
 ```
+
+`<host>` is `previewUrl.pattern` with the number filled. **Never spell one here**: a repo's preview
+host is that repo's own config value, so a host spelled here goes stale the day that repo moves it.
 
 The build takes minutes, so a link may 404 briefly. That is expected and needs no caveat in the
 body. **Never write "preview pending" for a constructed host** — the host does not depend on the
@@ -275,11 +278,24 @@ characters.
 A link to an empty list is not a preview. A deploy provisions a sign-in and nothing more, so a
 new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-data)
 
-- **Check what each link needs, signed in.** The repo guide says how to sign in. Link a document
-  by id, not a list, and only a document the preview's API returned.
+- **Ask the helper first**, and let it decide: `jq -c '{previewUrl} + {pr: <n>}'
+  .claude/workflow.json | node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`.
+  It answers the host, whether this repo seeds previews, and — with `.auth` — the sign-in request
+  and the Access headers.
+- **Check what each link needs, signed in.** With a `signIn`, send it with the plan's `headers` and
+  read its `tokenField`. Send the pair to an `ON_HOST` link only — `--on-host <link>` answers, and
+  a link you did not build from `previewUrl.pattern` may sit on another origin.
+  (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with
+  `access.clientId.set` or `.clientSecret.set` false means this environment cannot pass the gate. Name the unset half, and raise nothing about the data.
+  Empty `headers` with no `signIn` means no gate, so check the data as ever. Otherwise the repo
+  guide says how. Link a document by id, not a list, and only a document the preview's API
+  returned. **Never print the token**: no `-v`, no `--trace`, and never echo the command
+  (`fix-ci` runs the same rule).
 - **Seed whatever is missing.** Run `previewUrl.seed` against the host. Seed the smallest set
-  that shows the change. **Never seed real people's contact details.** Seeded data survives later
-  pushes, so check it before you seed again.
+  that shows the change. **Never seed real people's contact details, and never quote data the
+  preview already held** — somebody may have filled it by hand from a real source, and this body is
+  public. Link such a document by id. Seeded data survives later pushes, so check it before you
+  seed again.
 - **Put the reviewer's inputs in the body.** If the change takes a file, such as an upload, put it
   inline in a `<details>` block. Or name a path that `git ls-files` lists on the branch. **Never
   name a fixture you have not checked.**
@@ -291,6 +307,10 @@ new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-d
 - **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
   Write one line naming what is missing. Never leave a link that lands on nothing without saying
   so.
+- **Where the helper answers `seedsPreviews: true`, that line is a disclosure and not a pass.**
+  Where a preview was discovered and the fill did not succeed, say in the report that the repo's own
+  seed check reds this PR until it does. With no preview discovered, that check only warns.
+  (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
@@ -327,7 +347,8 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    `pull_request_write method:update`.
 4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
    in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
-   `fix-ci` deploy pass — never this step's.
+   `fix-ci` deploy pass — never this step's. The disclosure rule is the last bullet of *Every link
+   opens on data*.
 
 ### 7c. Ask the reviewer, on the line
 
@@ -381,7 +402,8 @@ to memory.
 - **Always** operate on the full branch diff, not the last commit.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
-- **Never** link a preview page that shows no data, unless a line in the body says why.
+- **Never** link a preview page that shows no data, unless a line in the body says why — and
+  where the repo seeds previews, that line is a disclosure, not a pass.
 - **Never** put a decision in the PR body. It is a question thread (step 7c).
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
