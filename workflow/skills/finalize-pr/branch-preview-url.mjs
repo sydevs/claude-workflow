@@ -46,8 +46,8 @@
  *
  * ## It is handed the text. It does not fetch it.
  *
- * A routine cannot reach the GitHub API by any client
- * (why: docs/why.md#a-routine-cannot-reach-the-github-api). So the caller
+ * No script under `workflow/` fetches from GitHub
+ * (why: docs/why.md#a-script-here-never-fetches). So the caller
  * gathers the Cloudflare bot's comment bodies and each Cloudflare check
  * run's `output.summary` (with MCP in a routine, any way locally) and pipes
  * them in here. One code path runs identically everywhere.
