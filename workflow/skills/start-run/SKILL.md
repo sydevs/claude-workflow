@@ -68,8 +68,9 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   `gh api -X GET search/issues -f q='<query>' --jq '<projection>'` — `-f per_page=1 --jq
   .total_count` for a count, `--jq '.items[].number'` for a list. **Always project.** One
   unprojected page is a quarter-megabyte of issue objects. Build the query from
-  `loop-config.json` values and fixed qualifiers, never from a title, a body or a comment. Never
-  write through `gh` or `curl`, and a script still never fetches.
+  `loop-config.json` values and fixed qualifiers, never from a title, a body or a comment. **A
+  duplicate hunt has no fallback**, because its terms are free text: list with `list_issues` and
+  match locally. Never write through `gh` or `curl`, and a script still never fetches.
   (why: docs/why.md#a-routine-cannot-reach-the-github-api)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
