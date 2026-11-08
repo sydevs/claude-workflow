@@ -317,7 +317,7 @@ markdown-mangling that made `gh --body` unusable:
 
 ```
 mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:true title:"…" body:"…"
-mcp__github__pull_request_write    method:update  pullNumber:<n>  title:"…"  body:"…"
+mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"…" body:"…"
 ```
 
 - **No PR** → **create it as a draft. Set no assignee and request no reviewer.** A PR is ours by
@@ -344,7 +344,7 @@ shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
    `loop-config.json`. **Run one waiter at a time.** Between reads, wait with a single background
    `sleep`, because Claude Code refuses a foreground one. Never read CI while you wait.
 3. **Success** → seed and verify per *Every link opens on data*. Then refresh the body in one
-   `pull_request_write method:update`.
+   `update_pull_request` call.
 4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
    in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
    `fix-ci` deploy pass — never this step's. The disclosure rule is the last bullet of *Every link

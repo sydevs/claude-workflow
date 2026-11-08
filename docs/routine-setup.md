@@ -559,11 +559,12 @@ Three rules in that script, each bought with a dead run and commented in place a
 only, never `set -e`, across the database block. A private cluster directory, never the package's
 half-configured one. `/var/run/postgresql` created before `pg_ctl` starts.
 
-⚠ **A routine cannot reach the GitHub API, by any client, with or without a credential.** Not `gh`
-(it is not in the routine image), not raw HTTP. `git`, `jq`, `yq`, `ripgrep`, and `node` (v22) are
-present, and `git` fetch and push work through the credential helper. Everything else GitHub-shaped
-goes through the MCP tools only — a script never fetches from GitHub itself. Full evidence and the
-proxy mechanism live in `docs/why.md#a-routine-cannot-reach-the-github-api`. Do not re-test this.
+⚠ **A routine writes to GitHub through the MCP tools only, and no script under `workflow/` fetches
+from GitHub at all.** `git`, `jq`, `yq`, `ripgrep`, `node` (v22) and `gh` are present, and `git`
+fetch and push work through the credential helper. `gh` serves one read: the search fallback
+`start-run` names, for a `mcp__github__search_*` tool absent from the session. Everything else
+GitHub-shaped is an MCP call. The 2026-09-02 measurement that once made this absolute, and its
+2026-11-08 re-measurement, are both in `docs/why.md#a-routine-cannot-reach-the-github-api`.
 
 **GitHub access** is the piece most likely to be missing, and its failure looks like something
 else. An unconnected session 403s on every `gh` call with `GitHub access is not enabled for this

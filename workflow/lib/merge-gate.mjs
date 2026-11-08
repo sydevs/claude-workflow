@@ -21,12 +21,12 @@
  *
  * ## Why it does no fetching
  *
- * A routine cannot reach the GitHub API by any client. Measured 2026-09-02:
- * `gh` is absent from the image. Installing it does not help. `gh api
- * repos/...` returns `403 GitHub access is not enabled for this session`,
- * byte-identical with or without an auth header, so the proxy refuses the
- * path, not the credential. `curl` 403s the same way, on this path and on
- * GraphQL. Only `mcp__github__*` has a route.
+ * A script that fetches from GitHub passes on a laptop and fails silently in
+ * a routine, whichever clients the network allows that week. Four such
+ * scripts shipped here once and were abandoned within a day
+ * (why: docs/why.md#a-script-here-never-fetches). The 2026-09-02 measurement
+ * that made the ban look like a network fact, and its 2026-11-08
+ * re-measurement, are in docs/why.md#a-routine-cannot-reach-the-github-api.
  *
  * So the verdict functions here are PURE. They take data the caller already
  * fetched (with MCP in a routine, with `gh` locally) and return a decision.
