@@ -102,7 +102,7 @@ Closes #NNN
 ## Refresh
 
 One rule for every run that refreshes a body, `finalize-pr` and `address-review` alike. Start from
-the body you read, never from nothing: `pull_request_write method:update` replaces it whole.
+the body you read, never from nothing: `mcp__github__update_pull_request` replaces it whole.
 Re-derive what the new commits made false — the Change outline from the full
 `origin/<base>...HEAD` diff, the Summary, Test results — and keep everything still true: preview
 lines, links another run added. A body merely incomplete stays; the run's comment
