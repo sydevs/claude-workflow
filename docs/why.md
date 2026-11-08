@@ -466,6 +466,25 @@ and the awaiting-you table are all searches. `/user` answering 200 makes the tok
 the repo look missing. **So a script never fetches.** `docs/routine-setup.md` claimed for weeks
 that `gh` "ships in the image", the licence to write scripts that pass locally and fail silently.
 
+**Re-measured 2026-11-08: the path allowlist is gone.** `gh` ships at `/usr/local/bin/gh`
+(2.89.0), and the proxy answers.
+`gh api -X GET search/issues -f q='<repo: qualifiers> is:issue is:open label:proposal'` returned
+`total_count` 14; the `type:Roadmap` query 25; `gh api repos/sydevs/claude-workflow` the
+repository. The table above is history. Two of the things it decided still hold, for reasons that
+were never about the proxy. **A script never fetches**, because a script that fetches passes on a
+laptop and fails silently in a routine, whatever the network allows. And **a write goes through
+`mcp__github__*`**, which is scoped to the session's own repositories, so a mistyped owner cannot
+reach a repository nobody attached.
+
+What changed is the read, and the reason to change the rule is not that `gh` works — it is that
+`mcp__github__search_*` comes and goes. It was absent on 2026-11-01, 11-02, 11-03, 11-04 and
+11-08, and present in other sessions the same week (#233). Five audit nights each spent five
+`list_issues` calls on a proposal ceiling that is one indexed search, and journalled it as
+friction; `improve-loop`'s escalation count and roadmap set were floors from reads rather than
+counts for two weeks running. So `start-run` names `gh api -X GET search/…` as the fallback **for
+a search, and nothing else**: the ceiling that mattered was never the credential, it was that
+search is cross-repository by design and no `list_*` call expresses `reviewed-by:` or `type:`.
+
 ## A routine cannot send SMTP
 
 A routine reaches the network only through an HTTPS proxy, so SMTP to Mailpit's Railway TCP proxy
