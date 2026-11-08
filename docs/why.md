@@ -485,6 +485,11 @@ counts for two weeks running. So `start-run` names `gh api -X GET search/…` as
 a search, and nothing else**: the ceiling that mattered was never the credential, it was that
 search is cross-repository by design and no `list_*` call expresses `reviewed-by:` or `type:`.
 
+**And the fallback is projected, because the saving is otherwise spent on output.** The proposal
+ceiling is one integer. The bare command answers it with 195,787 bytes — 30 issue objects in
+full — against 2 bytes for `-f per_page=1 --jq .total_count`, measured 2026-11-08. The five
+`list_issues` calls it buys out cost less than that.
+
 ## A routine cannot send SMTP
 
 A routine reaches the network only through an HTTPS proxy, so SMTP to Mailpit's Railway TCP proxy
