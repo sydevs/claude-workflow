@@ -194,12 +194,12 @@ shape-level problems.**
   components?"*, and beside it *"Would it make sense to generalize these styles so they could be
   used on any table across from the CMS? I think we already have tables that could make use of
   them"* — where the review had raised one finding, a correctness one.
-  **A diff that adds to a file makes that file the reviewer's unit.** So where the diff grows a
-  file materially, read the file whole and ask value 1's questions of all of it: the pieces the
-  diff did not add, the siblings outside the file that could use what it holds, and what in it is
-  custom where the platform now has an answer. Name what held as well as what should go — a pass
-  that reports nothing is the answer they are owed, and the one the reviewer cannot get by
-  reading the diff themselves.
+  **A diff that adds to a file makes that file the reviewer's unit.** Gather step 4 already reads
+  the touched files whole. Where the diff grows one materially, ask value 1's questions of the
+  parts it did not add: the pieces already there, the siblings outside the file that could use
+  what it holds, and what in it is custom where the platform now has an answer. Name what held as
+  well as what should go — a pass that reports nothing is the answer they are owed, and the one
+  the reviewer cannot get by reading the diff themselves.
 
 - **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
   was near-absent and told the review not to manufacture findings there. Three PRs in one week
