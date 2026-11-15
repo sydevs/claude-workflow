@@ -6,7 +6,7 @@ allowed-tools: Bash(gh issue:*), Bash(gh api:*), Read, Grep
 
 # Format ticket
 
-## Tooling: MCP everywhere, `gh` for two things
+## Tooling: MCP everywhere, `gh` for three things
 
 Every GitHub operation in a handler uses `mcp__github__*`. That is not a cloud concession — it
 is the better interface in both places: bodies pass as parameters (no `mktemp`, no `--body-file`,
@@ -17,9 +17,11 @@ instructions reads the same locally and in a routine.
 them with `gh`. A cloud session writes the body marker instead, and the dispatcher converts it —
 see below. **The second is a search**, where the `mcp__github__search_*` tool is absent from the
 session: `start-run` names the projected `gh api -X GET search/issues` fallback and the one rule
-for building its query. Sub-issues do have an MCP tool: `mcp__github__sub_issue_write`. `git`
-itself is still `git`. The two attended local skills, `file-ticket` and `settle-roadmap`, also use `gh` for what
-MCP lacks — milestones, transfers, and a raw body read.
+for building its query. **The third is reading a body before you edit one**, which `start-run`
+names: no MCP write tool takes a patch, so the edit starts from a `gh api … --jq .body` read.
+Sub-issues do have an MCP tool: `mcp__github__sub_issue_write`. `git` itself is still `git`. The
+two attended local skills, `file-ticket` and `settle-roadmap`, also use `gh` for what MCP lacks —
+milestones and transfers.
 
 This is the one definition of a well-formed sydevs ticket. `file-ticket`, `write-ticket`, the
 roadmap skills, the audits and the handlers all read this rather than carry their own copy — the

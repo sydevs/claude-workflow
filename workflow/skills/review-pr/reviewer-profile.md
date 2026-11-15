@@ -181,6 +181,26 @@ shape-level problems.**
      the PRs behind it. When several bullets turn out to be one value, fold them into the
      section above where that value belongs and delete the bullets. -->
 
+- **2026-11-15 — the question is asked of the file as it stands, not only of what the diff adds.**
+  Value 1's three readings all count what a diff introduces. Three PRs in one week asked instead
+  for a pass over the whole file, including code the diff never touched, and this review raised
+  none of them. [SahajCloud#1123](https://github.com/sydevs/SahajCloud/pull/1123): *"We've added
+  quite a bit of code here. Look at this file as a whole and find opportunities to streamline and
+  simplify this code. Remove unnecessary indirection"* — the review had posted three findings,
+  each on a piece. [SahajCloud#1149](https://github.com/sydevs/SahajCloud/pull/1149): *"Review
+  this file and ensure it is as resilient as possible against future PayloadCMS updates."*
+  [SahajCloud#1147](https://github.com/sydevs/SahajCloud/pull/1147): *"Review this entire file,
+  can we reduce the custom CSS at all by relying on Payload built-ins or our other custom
+  components?"*, and beside it *"Would it make sense to generalize these styles so they could be
+  used on any table across from the CMS? I think we already have tables that could make use of
+  them"* — where the review had raised one finding, a correctness one.
+  **A diff that adds to a file makes that file the reviewer's unit.** Gather step 4 already reads
+  the touched files whole. Where the diff grows one materially, ask value 1's questions of the
+  parts it did not add: the pieces already there, the siblings outside the file that could use
+  what it holds, and what in it is custom where the platform now has an answer. Name what held as
+  well as what should go — a pass that reports nothing is the answer they are owed, and the one
+  the reviewer cannot get by reading the diff themselves.
+
 - **2026-09-20 — a name is a claim, and a wrong one is a wrong claim.** The profile said naming
   was near-absent and told the review not to manufacture findings there. Three PRs in one week
   say otherwise, and this review passed every one of them clean on naming.

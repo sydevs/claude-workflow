@@ -481,14 +481,45 @@ What changed is the read, and the reason to change the rule is not that `gh` wor
 11-08, and present in other sessions the same week (#233). Five audit nights each spent five
 `list_issues` calls on a proposal ceiling that is one indexed search, and journalled it as
 friction; `improve-loop`'s escalation count and roadmap set were floors from reads rather than
-counts for two weeks running. So `start-run` names `gh api -X GET search/…` as the fallback **for
-a search, and nothing else**: the ceiling that mattered was never the credential, it was that
-search is cross-repository by design and no `list_*` call expresses `reviewed-by:` or `type:`.
+counts for two weeks running. So `start-run` names `gh api -X GET search/…` as the fallback for a
+search: the ceiling that mattered was never the credential, it was that search is
+cross-repository by design and no `list_*` call expresses `reviewed-by:` or `type:`. A body read
+joined it a week later, for its own reason — see below.
 
 **And the fallback is projected, because the saving is otherwise spent on output.** The proposal
 ceiling is one integer. The bare command answers it with 195,787 bytes — 30 issue objects in
 full — against 2 bytes for `-f per_page=1 --jq .total_count`, measured 2026-11-08. The five
 `list_issues` calls it buys out cost less than that.
+
+## A body is read to disk before it is edited
+
+A ticket body is the spec and a PR body is the map, and both are state the next run grounds from
+(docs/why.md#ground-from-the-body-never-the-thread). Neither
+`mcp__github__update_pull_request` nor `issue_write` takes a patch: each replaces the whole body.
+And no MCP read puts a body in a file — `issue_read` and `pull_request_read` return it as
+JSON-escaped text inside a tool result. So a run that wants to change one line has to re-emit
+every other line from what it can see, and a 20 KB body re-emitted by hand is a corruption risk
+that no gate catches.
+
+Runs priced that risk and mostly declined it. In the week to 2026-11-14, 17 sessions across 6
+days reported the retype, and the record shows what it cost: sydevs/SahajCloud#1082's `⚠` line
+survived a third flagging, #1075 kept saying "two snapshot-only migrations" when there were
+three, #1155's ToggleGroup block still described pre-merge code, and three joined changes shipped
+with no `## Summary` bullet the join rule requires — *"Resending this PR's ~30k-character body to
+add one line risked corrupting it"*. One run moved code rather than correct a ticket criterion
+that said 302 where the code answered 307, because the ticket body was 30 KB.
+
+Four runs found the answer themselves and ran it against the rule: `gh api repos/<org>/<repo>/pulls/<n>
+--jq .body`, edit, write back through MCP, diff the readback — *"`start-run` allows `gh` for a
+search only, so that read is outside the rule"* (sydevs/SahajCloud#1135, #1134, #1105, #1104).
+The rule was wrong, not the runs. A read is the one thing `gh` adds here that MCP cannot, the
+write still goes through `mcp__github__*` where the repository scope lives, and the readback diff
+is what makes the round trip checkable rather than hopeful.
+
+This does not reach the other half of the same tool gap. `issue_read method:get` has no field
+projection, so `start-run`'s lock re-check — once before the first write and once before every
+push — pays the whole body each time: about 15k tokens a check on a 30 KB PR
+(sydevs/SahajCloud#1088, 2026-11-10). A fix there is the MCP server's, not a rule's.
 
 ## A routine cannot send SMTP
 
@@ -622,8 +653,15 @@ on stdin and the marker through `loadLoopConfig()`.
 
 - **A sibling of `writing.budgets`, not a shape change.** Turning each budget into
   `{chars, marker}` would break `budget.mjs`'s two number lookups, the fallback's `deepEqual`, and
-  every `--kind` call. `journalEntry` is absent from `writing.markerRequired`: `finish-run` posts
-  no marker, which is also why `--fit` never checks.
+  every `--kind` call. `journalEntry` is absent from `writing.markerRequired` because
+  `finish-run` posts no marker.
+- **`--fit` answers the rule too, before it cuts.** It applied no marker rule at all, so
+  `--fit --kind comment` printed `OK` on a comment carrying no `identity.commentMarker` — the one
+  answer `start-run` says it cannot give. Two runs read that `OK` and posted unmarked
+  (sydevs/SahajCloud#1127 and #1135, 2026-11-12). The marker counts toward the limit, so a body
+  cut without it is cut to the wrong length. `journalEntry`, the one kind `finish-run` fits, is
+  outside `markerRequired`, so no shipped caller changes behaviour and the fix's own tests are
+  its only exercise.
 - **Presence, not position.** A loop comment carries the harness footer after the marker, so an
   ends-with test would fail a correct artefact. What #233 shipped was no marker at all.
 - **Unconditional, not behind a flag.** A run that forgot a flag would get the silence this rule

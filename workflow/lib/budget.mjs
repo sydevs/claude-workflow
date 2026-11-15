@@ -115,6 +115,10 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
 /**
  * Cut an over-budget journal body to fit, instead of asking a run to guess.
  *
+ * **It answers the marker rule too, before it cuts anything**, because a body
+ * cut without the marker is cut to the wrong length.
+ * (why: docs/why.md#the-marker-check-belongs-in-the-script)
+ *
  * `check()` answers over or under and nothing else. A run that went over used
  * to regenerate the whole body and re-check. One 2026-09-07 run did that
  * thirteen times across eleven minutes to shed 1,557 characters.
@@ -147,11 +151,16 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
  * reflection PR opens, and cutting from the end of Did took it first. It still
  * counts: an entry that is over once Did is gone is OVER, as any other is.
  */
-export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
-  const limit = budgets?.[kind]
-  if (typeof limit !== 'number') {
-    return { text: String(text), dropped: 0, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
+export function fit(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
+  // Both pre-cut refusals are `check()`'s, asked for rather than copied, so the
+  // unbudgeted-kind rule and the `markerRequired` polarity are each written
+  // once. Only the verb a caller is told to repeat differs.
+  const pre = check(text, kind, budgets, options)
+  if (pre.verdict === 'UNBUDGETED' || pre.verdict === 'MISSING_MARKER') {
+    return { text: String(text), dropped: 0, chars: pre.chars, limit: pre.limit,
+      verdict: pre.verdict, reason: pre.reason.replace(/re-check$/, 're-fit') }
   }
+  const limit = pre.limit
   let lines = String(text).split('\n')
   let dropped = 0
 
@@ -233,7 +242,7 @@ if (isMain) {
     if (wantsFit) {
       // The fitted body goes to stdout so the caller can redirect it. The
       // verdict goes to stderr, so a redirect never swallows the report.
-      const f = fit(text, kind, budgets)
+      const f = fit(text, kind, budgets, { markerRequired, marker })
       process.stdout.write(f.text)
       console.error(`${f.verdict} — ${f.reason} (${source})`)
       process.exit(f.verdict === 'OK' ? 0 : 1)

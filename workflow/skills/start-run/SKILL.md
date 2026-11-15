@@ -63,7 +63,7 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   reviewer request, the draft flag. Status is derived from what you leave, never set.
   Never add `labels.lock`. Only `finish-run` removes it. Fields, body markers and a milestone are
   not state: set them where your skill says. (why: docs/why.md#status-is-derived-never-read)
-- **GitHub through `mcp__github__*`. One exception: a search.** Where the
+- **GitHub through `mcp__github__*`. Two reads excepted: a search, and a body.** Where the
   `mcp__github__search_*` tool your skill names is absent, run
   `gh api -X GET search/issues -f q='<query>' --jq '<projection>'` — `-f per_page=1 --jq
   .total_count` for a count, `--jq '.items[].number'` for a list. **Always project.** One
@@ -72,6 +72,11 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   duplicate hunt has no fallback**, because its terms are free text: list with `list_issues` and
   match locally. Never write through `gh` or `curl`, and a script still never fetches.
   (why: docs/why.md#a-routine-cannot-reach-the-github-api)
+- **Editing a body starts by reading it to disk:** `gh api
+  repos/<org>/<repo>/<pulls|issues>/<n> --jq .body > body.md`. Edit the file, write the whole
+  file back through `update_pull_request` or `issue_write`, then diff a fresh read against it.
+  Neither tool takes a patch, so a body retyped from the thread ships stale or corrupted.
+  (why: docs/why.md#a-body-is-read-to-disk-before-it-is-edited)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)
 - **File every incidental finding.** A product repo's ask-first guidance does not bind a run with
