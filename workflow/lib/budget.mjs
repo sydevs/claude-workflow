@@ -152,16 +152,15 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
  * counts: an entry that is over once Did is gone is OVER, as any other is.
  */
 export function fit(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
-  const { markerRequired = DEFAULT_MARKER_REQUIRED, marker = DEFAULT_MARKER } = options
-  const limit = budgets?.[kind]
-  if (typeof limit !== 'number') {
-    return { text: String(text), dropped: 0, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
+  // Both pre-cut refusals are `check()`'s, asked for rather than copied, so the
+  // unbudgeted-kind rule and the `markerRequired` polarity are each written
+  // once. Only the verb a caller is told to repeat differs.
+  const pre = check(text, kind, budgets, options)
+  if (pre.verdict === 'UNBUDGETED' || pre.verdict === 'MISSING_MARKER') {
+    return { text: String(text), dropped: 0, chars: pre.chars, limit: pre.limit,
+      verdict: pre.verdict, reason: pre.reason.replace(/re-check$/, 're-fit') }
   }
-  if (marker && markerRequired.includes(kind) && !String(text).includes(marker)) {
-    return { text: String(text), dropped: 0, chars: String(text).length, limit,
-      verdict: 'MISSING_MARKER',
-      reason: `${kind} carries no identity.commentMarker — append it and re-fit` }
-  }
+  const limit = pre.limit
   let lines = String(text).split('\n')
   let dropped = 0
 
