@@ -115,14 +115,9 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
 /**
  * Cut an over-budget journal body to fit, instead of asking a run to guess.
  *
- * **It answers the marker rule too, before it cuts anything.** `fit()` used to
- * skip the rule `check()` applies, so `--fit --kind comment` printed `OK` on a
- * comment carrying no `identity.commentMarker` — which `start-run` says is the
- * one answer it cannot give. Two runs read that `OK` and posted unmarked
- * (sydevs/SahajCloud#1127 and #1135, 2026-11-12). The marker also counts
- * toward the limit, so a body cut without it is cut to the wrong length.
- * `journalEntry`, the one kind `finish-run` fits, is outside
- * `markerRequired`, so the fitter's own path is unchanged.
+ * **It answers the marker rule too, before it cuts anything**, because a body
+ * cut without the marker is cut to the wrong length.
+ * (why: docs/why.md#the-marker-check-belongs-in-the-script)
  *
  * `check()` answers over or under and nothing else. A run that went over used
  * to regenerate the whole body and re-check. One 2026-09-07 run did that

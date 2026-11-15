@@ -653,8 +653,15 @@ on stdin and the marker through `loadLoopConfig()`.
 
 - **A sibling of `writing.budgets`, not a shape change.** Turning each budget into
   `{chars, marker}` would break `budget.mjs`'s two number lookups, the fallback's `deepEqual`, and
-  every `--kind` call. `journalEntry` is absent from `writing.markerRequired`: `finish-run` posts
-  no marker, which is also why `--fit` never checks.
+  every `--kind` call. `journalEntry` is absent from `writing.markerRequired` because
+  `finish-run` posts no marker.
+- **`--fit` answers the rule too, before it cuts.** It applied no marker rule at all, so
+  `--fit --kind comment` printed `OK` on a comment carrying no `identity.commentMarker` — the one
+  answer `start-run` says it cannot give. Two runs read that `OK` and posted unmarked
+  (sydevs/SahajCloud#1127 and #1135, 2026-11-12). The marker counts toward the limit, so a body
+  cut without it is cut to the wrong length. `journalEntry`, the one kind `finish-run` fits, is
+  outside `markerRequired`, so no shipped caller changes behaviour and the fix's own tests are
+  its only exercise.
 - **Presence, not position.** A loop comment carries the harness footer after the marker, so an
   ends-with test would fail a correct artefact. What #233 shipped was no marker at all.
 - **Unconditional, not behind a flag.** A run that forgot a flag would get the silence this rule
