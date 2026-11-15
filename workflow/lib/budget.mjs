@@ -115,6 +115,15 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
 /**
  * Cut an over-budget journal body to fit, instead of asking a run to guess.
  *
+ * **It answers the marker rule too, before it cuts anything.** `fit()` used to
+ * skip the rule `check()` applies, so `--fit --kind comment` printed `OK` on a
+ * comment carrying no `identity.commentMarker` — which `start-run` says is the
+ * one answer it cannot give. Two runs read that `OK` and posted unmarked
+ * (sydevs/SahajCloud#1127 and #1135, 2026-11-12). The marker also counts
+ * toward the limit, so a body cut without it is cut to the wrong length.
+ * `journalEntry`, the one kind `finish-run` fits, is outside
+ * `markerRequired`, so the fitter's own path is unchanged.
+ *
  * `check()` answers over or under and nothing else. A run that went over used
  * to regenerate the whole body and re-check. One 2026-09-07 run did that
  * thirteen times across eleven minutes to shed 1,557 characters.
@@ -147,10 +156,16 @@ const endsDid = (l) => SECTION_HEADING.test(l) || USAGE_HEADING.test(l)
  * reflection PR opens, and cutting from the end of Did took it first. It still
  * counts: an entry that is over once Did is gone is OVER, as any other is.
  */
-export function fit(text, kind, budgets = DEFAULT_BUDGETS) {
+export function fit(text, kind, budgets = DEFAULT_BUDGETS, options = {}) {
+  const { markerRequired = DEFAULT_MARKER_REQUIRED, marker = DEFAULT_MARKER } = options
   const limit = budgets?.[kind]
   if (typeof limit !== 'number') {
     return { text: String(text), dropped: 0, verdict: 'UNBUDGETED', reason: `no budget for "${kind}"` }
+  }
+  if (marker && markerRequired.includes(kind) && !String(text).includes(marker)) {
+    return { text: String(text), dropped: 0, chars: String(text).length, limit,
+      verdict: 'MISSING_MARKER',
+      reason: `${kind} carries no identity.commentMarker — append it and re-fit` }
   }
   let lines = String(text).split('\n')
   let dropped = 0
@@ -233,7 +248,7 @@ if (isMain) {
     if (wantsFit) {
       // The fitted body goes to stdout so the caller can redirect it. The
       // verdict goes to stderr, so a redirect never swallows the report.
-      const f = fit(text, kind, budgets)
+      const f = fit(text, kind, budgets, { markerRequired, marker })
       process.stdout.write(f.text)
       console.error(`${f.verdict} — ${f.reason} (${source})`)
       process.exit(f.verdict === 'OK' ? 0 : 1)

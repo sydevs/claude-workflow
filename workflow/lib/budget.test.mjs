@@ -130,6 +130,29 @@ test('an unbudgeted kind is reported, not cut', () => {
   assert.equal(f.dropped, 0)
 })
 
+// fit() answered OK on an unmarked comment while check() answered
+// MISSING_MARKER on the same text, so a run that only fits could post
+// unmarked. The marker also counts toward the limit.
+test('fit answers MISSING_MARKER on a kind that requires one, and cuts nothing', () => {
+  const opts = { markerRequired: ['comment'], marker: '<sub>marker</sub>' }
+  const f = fit(entry('z'.repeat(4000)), 'comment', budgets, opts)
+  assert.equal(f.verdict, 'MISSING_MARKER')
+  assert.equal(f.dropped, 0)
+  assert.equal(f.text, entry('z'.repeat(4000)), 'the text comes back untouched')
+})
+
+test('fit cuts once the marker is there', () => {
+  const opts = { markerRequired: ['comment'], marker: '<sub>marker</sub>' }
+  const f = fit(`${entry('z'.repeat(4000))}\n<sub>marker</sub>`, 'comment', budgets, opts)
+  assert.ok(f.dropped > 0)
+  assert.ok(f.text.includes('<sub>marker</sub>'), 'and never cuts the marker itself')
+})
+
+// journalEntry is outside markerRequired, so finish-run's own call is unchanged.
+test('fit leaves a journal entry alone, marker or not', () => {
+  assert.equal(fit(entry(), 'journalEntry', budgets).verdict, 'OK')
+})
+
 // `budget.mjs`'s own doc comment requires the fallback to equal the config,
 // and the CLI reports which path it took — so a drift makes two runs of the
 // same command disagree about the limit. Checked here instead of by hand.
