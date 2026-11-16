@@ -56,7 +56,9 @@ filing its plan: the split is binding, and adoption already placed the existing 
    joins work to it through start-run's table, not here.
 2. **Write the body** in the implementation template, from the code: `## Approach` with
    `file:line` references naming the seam, the call sites and the tests to touch; criteria that
-   are true or false; a checklist a run executes cold. A roadmap child also gets `## Goal context`
+   are true or false; a checklist a run executes cold, which in a repo whose `.claude/workflow.json`
+   declares `fixture` includes a line naming the fixture records the change needs (format-ticket's
+   *Verification checklist*). A roadmap child also gets `## Goal context`
    and `## Interfaces`, and **zero open questions** — a decision goes to the parent instead (see
    Escalate). Size never shapes the body: one repo's work is one ticket, built in one session.
 3. **File it** per format-ticket's "Filing from a cloud run": type, Priority, `Blocked by:` lines.
