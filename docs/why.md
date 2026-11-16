@@ -544,7 +544,9 @@ assignment answered *whose is this* and *is it finished* at once, ambiguous in e
 that mattered. Two invariants make the new model work:
 
 - **A PR opens as a draft and is marked ready exactly once.** It never reverts, so `draft:false`
-  means "has been ready at least once", and the adversarial review fires once only.
+  means "has been ready at least once", and the adversarial review fires once only. This is the
+  bot's PR. A member's own PR is opened or marked ready by the member when the branch is complete,
+  because the dispatcher leaves a member's draft alone and runs the loop only on a ready one.
 - **The loop never writes a PR's assignee, at all.** It finds its own PRs by `author:<bot>`. An
   early migration assigned the bot to every open PR so `assignee:<bot>` would find them, which
   doubled up with the reviewer's own assignment and made the field mean two things at once.
