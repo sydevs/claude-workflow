@@ -1170,10 +1170,11 @@ cutover slated it for deletion; only `Stage` goes.
 
 `bot:working` sits on the issue an implement session was given; its PR carries no lock. But the
 session owns the **branch** and keeps running for minutes after `finalize-pr` pushes. Every PR
-event asked only whether the PR was locked. CI usually hides that window, but `claude-workflow` has
-no CI, so `ci.noCi` calls a draft green the instant it opens, and the critic would fire against a
-branch implement was still pushing to. So a PR is held while any issue it closes carries the lock,
-at one issue read per bot-PR event: one session per piece of work, not per item.
+event asked only whether the PR was locked. CI usually hides that window, but `claude-workflow` ran
+no CI then, so `ci.noCi` called a draft green the instant it opened, and the critic would fire
+against a branch implement was still pushing to. The repo has CI now and the hold stays: a check
+run takes seconds to appear, and a push lands in one. So a PR is held while any issue it closes
+carries the lock, at one issue read per bot-PR event: one session per piece of work, not per item.
 
 ## A PR is the answer to an implement verb
 
