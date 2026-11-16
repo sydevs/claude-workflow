@@ -120,9 +120,10 @@ test("a member's reviewer is asked after the critic and its threads, not before"
   const small = pr({ ...own, pull: { ...own.pull, changed_files: 1, additions: 3, deletions: 1 } })
   assert.deepEqual(types(evaluatePr(small, config)), ['requestReviewer', 'comment', 'armAutoMerge'])
   assert.ok(evaluatePr(small, config).some((a) => a.type === 'comment' && a.key === 'critic-skipped' && a.body.startsWith('Adversarial review skipped: 1 file(s), 4 changed line(s)')))
-  // Once the reviewer is asked, a later pass plans no note, so it lists no comments.
+  // A member who asked for the reviewer themselves still gets the note: that is
+  // the case it exists for, and apply skips the request it duplicates.
   const asked = pr({ ...own, pull: { ...own.pull, changed_files: 1, additions: 3, deletions: 1, requestedReviewers: ['antontcymbal'] } })
-  assert.ok(!types(evaluatePr(asked, config)).includes('comment'))
+  assert.ok(evaluatePr(asked, config).some((a) => a.type === 'comment' && a.key === 'critic-skipped'))
   // A small PR the critic was forced on needs no note.
   const forced = pr({ ...own, pull: { ...own.pull, changed_files: 1, additions: 3, deletions: 1 }, reviews: [critic] })
   assert.ok(!types(evaluatePr(forced, config)).includes('comment'))

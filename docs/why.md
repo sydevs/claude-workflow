@@ -1019,8 +1019,8 @@ the rebuttals, and a two-file, twenty-line PR rarely has the shape problem the c
 find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip.
 `@sydevs-bot review` forces a review at any size. A small member PR gets the same note when its
 reviewer is asked, once per PR rather than per head: that path runs on every pass of a ready PR the
-member keeps pushing to, and the note is planned only while no reviewer is requested, so a quiet
-pass lists no comments.
+member keeps pushing to. A member who requested the reviewer themselves still gets it: that is the
+case it exists for, and `commentOnce` keeps it to one.
 
 ## There is no WIP cap
 

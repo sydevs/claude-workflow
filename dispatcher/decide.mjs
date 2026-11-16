@@ -574,9 +574,9 @@ function evaluateGreenPr(s, config) {
   if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
   const plan = member ? [requestReviewer()] : []
   // Said once per PR, not per head: this path runs on every pass, and a member
-  // pushes to a ready PR. Planned only while no reviewer is asked, so a quiet
-  // pass costs no comment listing.
-  if (member && !ownReview(s, config) && !s.pr?.requestedReviewers?.length) plan.push(criticSkipped(pr, config, 'critic-skipped'))
+  // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
+  // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
+  if (member && !ownReview(s, config)) plan.push(criticSkipped(pr, config, 'critic-skipped'))
 
   // The dispatcher no longer merges. GitHub does, once the ruleset is
   // satisfied — one approval, every thread resolved, CI green — and the queue
