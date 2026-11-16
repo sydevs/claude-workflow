@@ -13,7 +13,7 @@ const BRANCH = 'claude/relay-318-aaaaaaa'
 const err = (status, message) => Object.assign(new Error(message), { status })
 
 /** A fake with just the git and merge calls the relay makes. */
-function fakeGit({ relayAt = SHA, update, merge } = {}) {
+function fakeGit({ relayAt = SHA, update, merge, compare = 'diverged' } = {}) {
   const calls = []
   const gh = {
     calls,
@@ -27,7 +27,10 @@ function fakeGit({ relayAt = SHA, update, merge } = {}) {
         updateRef: async (a) => { calls.push(['updateRef', a.ref, a.sha, a.force]); if (update) throw update; return { data: {} } },
         deleteRef: async (a) => { calls.push(['deleteRef', a.ref]); return { data: {} } },
       },
-      repos: { merge: async (a) => { calls.push(['merge', a.base, a.head]); if (merge) throw merge; return { status: 201, data: {} } } },
+      repos: {
+        merge: async (a) => { calls.push(['merge', a.base, a.head]); if (merge) throw merge; return { status: 201, data: {} } },
+        compareCommitsWithBasehead: async (a) => { calls.push(['compare', a.basehead]); if (compare instanceof Error) throw compare; return { data: { status: compare } } },
+      },
     },
   }
   return gh
@@ -75,7 +78,24 @@ test('relay: a relay branch at another commit, or missing, is refused before any
     const r = await applyRelay(gh, repo, req)
     assert.equal(r.landed, false)
     assert.match(r.refusal.why, relayAt ? /not the requested aaaaaaa/ : /does not exist/)
-    assert.deepEqual(gh.calls.map((c) => c[0]), ['getRef'])
+    assert.deepEqual(gh.calls.map((c) => c[0]), ['getRef', 'compare'])
+  }
+})
+
+test('relay: a branch already gone because an earlier run landed it is not handed back (SahajCloud#1167)', async () => {
+  for (const compare of ['identical', 'ahead']) {
+    const gh = fakeGit({ relayAt: null, compare })
+    const r = await applyRelay(gh, repo, req)
+    assert.deepEqual(r, { landed: true, refusal: null })
+    assert.deepEqual(gh.calls, [['getRef', `heads/${BRANCH}`], ['compare', `${SHA}...feat/theirs`]], 'no write, no delete')
+  }
+})
+
+test('relay: a commit the PR branch does not hold, or cannot be compared, is still refused', async () => {
+  for (const compare of ['behind', 'diverged', err(404, 'Not Found')]) {
+    const r = await applyRelay(fakeGit({ relayAt: null, compare }), repo, req)
+    assert.equal(r.landed, false)
+    assert.match(r.refusal.why, /does not exist/)
   }
 })
 
@@ -90,7 +110,7 @@ const prSnap = (over = {}) => ({
   kind: 'pr',
   repo: { owner: 'sydevs', name: 'SahajAtlasWeb', full: 'sydevs/SahajAtlasWeb' },
   item: { number: 318, labels: [] },
-  pr: { number: 318, state: 'open', draft: false, user: { login: 'Ardnived' }, head: { ref: 'feat/theirs', sha: SHA, repo: 'sydevs/SahajAtlasWeb' }, base: { ref: 'main', defaultBranch: 'main' }, ...over },
+  pr: { number: 318, state: 'open', draft: false, user: { login: 'Ardnived' }, head: { ref: 'feat/theirs', sha: 'c'.repeat(40), repo: 'sydevs/SahajAtlasWeb' }, base: { ref: 'main', defaultBranch: 'main' }, ...over },
 })
 
 test('push route: the branch decides, never the author', () => {
@@ -141,6 +161,13 @@ test('unlock: a refused relay hands the PR back, naming the branch', () => {
   assert.ok(plan.some((a) => a.type === 'record' && a.patch.handback?.reason.startsWith('the relay was refused')))
   assert.ok(plan.some((a) => a.type === 'comment' && a.body.includes('claude/relay-1-aaaaaaa')))
   assert.ok(!plan.some((a) => a.type === 'relay' || a.type === 'fire'))
+})
+
+test('unlock: a relay already at the PR head is not applied again (SahajCloud#1167)', () => {
+  const s = unlocked({ pr: { ...prSnap().pr, head: { ...prSnap().pr.head, sha: SHA } } })
+  const plan = decide({ reason: 'unlock', facts: {} }, s, config)
+  assert.ok(!plan.some((a) => a.type === 'relay'))
+  assert.ok(!plan.some((a) => a.type === 'record' && a.patch.handback))
 })
 
 test('unlock: a relay request older than the session that just ended is ignored', () => {

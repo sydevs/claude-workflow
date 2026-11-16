@@ -43,6 +43,17 @@ export function relayRefusal(s, config, req, fullTreatment) {
   return null
 }
 
+/** Whether `head` already contains `sha`: the same commit, or one after it. */
+async function holds(gh, args, head, sha) {
+  try {
+    const { data } = await gh.rest.repos.compareCommitsWithBasehead({ ...args, basehead: `${sha}...${head}`, per_page: 1 })
+    return data?.status === 'identical' || data?.status === 'ahead'
+  } catch (e) {
+    if ([404, 422].includes(e?.status)) return false
+    throw e
+  }
+}
+
 const words = (e) => String(e?.message || '').replace(/\s+/g, ' ').trim().slice(0, 220)
 
 /**
@@ -59,6 +70,13 @@ export async function applyRelay(gh, { owner, repo }, { branch, head, sha }, log
     if (e?.status !== 404) throw e
   }
   if (at !== sha) {
+    // Two runs can read the same request: the first lands it and deletes the
+    // relay branch, the second finds no branch. A PR branch that already holds
+    // the commit is a relay applied, not refused. (why: docs/why.md#the-relay)
+    if (await holds(gh, args, head, sha)) {
+      log(`relay ${branch}: ${head} already holds ${sha.slice(0, 7)}`)
+      return { landed: true, refusal: null }
+    }
     return { landed: false, refusal: { what: 'apply the relay', why: at ? `${branch} is at ${at.slice(0, 7)}, not the requested ${sha.slice(0, 7)}` : `${branch} does not exist` } }
   }
   let landed = false
