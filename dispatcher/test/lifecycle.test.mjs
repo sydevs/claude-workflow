@@ -99,11 +99,34 @@ test('an approved PR with a question thread names the thread, once per thread', 
 
 test("a member's ready PR gets the critic and a reviewer; their draft is left alone", () => {
   const ready = pr({ pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null } })
-  assert.deepEqual(types(evaluatePr(ready, config)), ['requestReviewer', 'fire:review-pr'])
+  assert.deepEqual(types(evaluatePr(ready, config)), ['fire:review-pr'], 'the critic first; nobody is asked to review yet')
   const reviewed = pr({ pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null }, reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(1) }] })
-  assert.deepEqual(types(evaluatePr(reviewed, config)), ['requestReviewer', 'armAutoMerge'])
+  assert.deepEqual(types(evaluatePr(reviewed, config)), ['requestReviewer', 'armAutoMerge'], 'asked once the critic has run')
   const draft = pr({ pull: { user: { login: 'Ardnived' }, draft: true } })
   assert.deepEqual(types(evaluatePr(draft, config)), ['note'])
+})
+
+test("a member's reviewer is asked after the critic and its threads, not before", () => {
+  const critic = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(2) }
+  const own = { pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null } }
+  // The critic's finding still waits on address-review: no reviewer yet.
+  const open = pr({ ...own, reviews: [critic], threads: [{ isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: hoursAgo(2), body: 'finding' }] }] })
+  assert.ok(!types(evaluatePr(open, config)).includes('requestReviewer'))
+  assert.ok(types(evaluatePr(open, config)).includes('fire:address-review'))
+  // CI still running: nothing is asked.
+  const waiting = pr({ ...own, reviews: [critic], ci: { failing: [], running: ['Lint, Test & Smoke'], green: false, reason: 'running' } })
+  assert.ok(!types(evaluatePr(waiting, config)).includes('requestReviewer'))
+  // A PR under review.skipWhen has no critic to wait for.
+  const small = pr({ ...own, pull: { ...own.pull, changed_files: 1, additions: 3, deletions: 1 } })
+  assert.deepEqual(types(evaluatePr(small, config)), ['requestReviewer', 'armAutoMerge'])
+})
+
+test("ready_for_review on a member's PR does not ask for a reviewer before the critic; a bot's does", () => {
+  const target = { repo, kind: 'pr', number: 5, reason: 'pull_request.ready_for_review', facts: {} }
+  const member = pr({ pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null } })
+  assert.deepEqual(types(decide(target, member, config)).filter((t) => t === 'requestReviewer' || t.startsWith('fire')), ['fire:review-pr'])
+  const bot = pr({ pull: { user: { login: 'sydevs-bot' }, autoMergeArmed: false }, normalized: { reviewDecision: null } })
+  assert.ok(types(decide(target, bot, config)).includes('requestReviewer'))
 })
 
 test("a mention on a member's draft is a request of its own", () => {

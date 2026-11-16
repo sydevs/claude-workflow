@@ -563,10 +563,12 @@ function evaluateGreenPr(s, config) {
   }
 
   // A member's PR reaches ready without the bot's draft pass, so it gets the
-  // critic and the reviewer request here, once.
-  // (why: docs/why.md#a-members-pr-gets-the-loop)
+  // critic here, once, and the reviewer request only after it: the same gates
+  // as a bot draft's markReady. CI is green (evaluatePr got here), address-review
+  // has answered the threads (it ran first), and the critic has run or the PR is
+  // under `review.skipWhen`. (why: docs/why.md#a-members-pr-gets-the-loop)
   const member = !isBot(pr.user?.login, config)
-  if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [requestReviewer(), fire('review-pr')]
+  if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
   const plan = member ? [requestReviewer()] : []
 
   // The dispatcher no longer merges. GitHub does, once the ruleset is
@@ -1077,7 +1079,8 @@ function route(target, s, config) {
     case 'linked-in-flight':
       return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
-      return [requestReviewer()].concat(evaluatePr(s, config))
+      // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
+      return (isBot(s.pr?.user?.login, config) ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.
       if (!facts.pusherIsBot) plan.push(...clearHandback(s))
