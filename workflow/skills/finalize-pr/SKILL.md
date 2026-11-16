@@ -299,7 +299,7 @@ preview.** (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
 
 ```markdown
 ## Preview
-- [Event 1000004, Registrations tab](<host>/admin/collections/events/1000004) — a full event with 3 registrations
+- [Event 1025001, Registrations tab](<host>/admin/collections/events/1025001/registrations) — a full event with 3 registrations
 ```
 
 **A diff touching no `fixture.surfacePaths` may write `No preview surface` in place of links. A diff
