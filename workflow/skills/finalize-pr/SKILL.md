@@ -334,7 +334,8 @@ mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"�
 - **PR exists** → refresh **title and body** as `pr-template.md`'s *Refresh* says. **Leave the
   assignee alone**, and **never put a ready PR back into draft** — the dispatcher reads draft as
   "the loop is still working", so a ready PR would drop out of the reviewer's queue. Locally, on a
-  member's own draft whose branch is complete, mark it ready (`gh pr ready <n>`).
+  member's own draft whose branch is complete, mark it ready: add `draft:false` to the refresh
+  call above.
 
 ### 7b. Wait for the preview, only when step 7 needs it
 
