@@ -1110,8 +1110,10 @@ function route(target, s, config) {
       // session just touched stays the machinery's: it is never asked about
       // again for a merge commit. (why: docs/why.md#a-resolved-conflict-is-not-a-new-question)
       if (s.kind === 'pr') {
+        // A head already at the requested commit means an earlier run landed it.
+        // (why: docs/why.md#the-relay)
         const req = freshRequest(s)?.relay
-        if (req) return plan.concat(relayPlan(s, config, req))
+        if (req && req.sha !== s.pr?.head?.sha) return plan.concat(relayPlan(s, config, req))
         return plan.concat(evaluatePr(s, config))
       }
       const v = pendingVerb(s, config, 'issue')
