@@ -166,3 +166,4 @@ apply. Check for an open branch or PR before you create one.
 
 A person invoked the skill by name, with an argument. No record, no lock, no journal. Steps 2, 3
 and 5 do not apply. You still push and end, and you report to the person instead.
+`/workflow:finalize-pr` step 7 owns the draft flag here: a member's complete branch opens ready.

@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR as a draft. Never waits for CI, never marks ready, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
+description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR: a draft for the bot's run, ready for a member's own branch. Never waits for CI, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
 disable-model-invocation: true
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
@@ -10,8 +10,8 @@ allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 
 The reusable **ship pipeline**: take the branch's accumulated local commits and ship them —
 simplify → review → conditional security review → lean gate → docs sync → push → open or refresh
-the PR as a draft → report. CI, the critic, mark-ready, and the merge are events the dispatcher
-acts on after you end. (why: docs/why.md#push-and-end)
+the PR (a draft in a cloud run; ready when a member runs it) → report. CI, the critic, the
+reviewer request, and the merge are events the dispatcher acts on after you end. (why: docs/why.md#push-and-end)
 
 Phase 3 of Implement → Adjust → **Finalize**. `/implement-ticket` calls this at the end. You also
 run it directly once you are happy with a batch of local-only Adjust-phase commits — it turns
@@ -49,9 +49,9 @@ take the non-interactive branch and record the decision in the report instead.
 [ -n "$CLAUDE_CODE_REMOTE_SESSION_ID" ] && NONINTERACTIVE=1
 ```
 
-The one place this changes behaviour is pre-flight. Locally, unexpected uncommitted changes stop
-and ask. On a runner nobody can answer, so abort with the file list rather than commit files
-nobody has looked at.
+It changes two steps. **Pre-flight**: locally, unexpected uncommitted changes stop and ask. On a
+runner nobody can answer, so abort with the file list rather than commit files nobody has looked
+at. **Step 7**: a cloud run opens the PR as a draft, a member's own complete branch opens ready.
 
 ## Invocation
 
@@ -312,21 +312,26 @@ Create or refresh with MCP, which takes the body directly — no temp file, and 
 markdown-mangling that made `gh --body` unusable:
 
 ```
-mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:true title:"…" body:"…"
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:<true|false> title:"…" body:"…"
 mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"…" body:"…"
 ```
 
-- **No PR** → **create it as a draft. Set no assignee and request no reviewer.** A PR is ours by
+- **No PR** → **create it, drafted by the rule below. Set no assignee and request no reviewer.** A PR is ours by
   `author:<bot>`. The dispatcher requests `assignment.reviewer` when it marks the PR ready, after
   CI and the adversarial review — a request at open puts unfinished work in their queue.
 
-  **Every PR opens as a draft, without exception.** Draft means *the loop is still working on
-  this*. The dispatcher clears the flag once CI is green and the critic has run, or at once for a
-  PR under `review.skipWhen`. (why: docs/why.md#draft-is-the-prs-baton,
+  **In a cloud run (the runner check above), every PR opens as a draft, without exception.** Draft means
+  *the loop is still working on this*. The dispatcher clears the flag once CI is green and the
+  critic has run, or at once for a PR under `review.skipWhen`. **Run locally by a member on their
+  own branch, open it ready (`draft:false`) once the branch is complete**: the dispatcher leaves a
+  member's draft alone, and gives a ready one the critic, CI fixes and a reviewer request. Keep a
+  draft only for work still in progress. (why: docs/why.md#draft-is-the-prs-baton,
   docs/why.md#the-critic-skips-small-prs)
 - **PR exists** → refresh **title and body** as `pr-template.md`'s *Refresh* says. **Leave the
   assignee alone**, and **never put a ready PR back into draft** — the dispatcher reads draft as
-  "the loop is still working", so a ready PR would drop out of the reviewer's queue.
+  "the loop is still working", so a ready PR would drop out of the reviewer's queue. Locally, on a
+  member's own draft whose branch is complete, mark it ready: add `draft:false` to the refresh
+  call above.
 
 ### 7c. Ask the reviewer, on the line
 
@@ -358,16 +363,18 @@ their reply fires `address-review`. Name each question in the report.
 
 ### 8. Push and end
 
-**This skill never watches CI, never marks a PR ready, and never merges.** It waits for nothing. Nothing in the loop
-merges: the dispatcher arms auto-merge at mark-ready and GitHub's ruleset and queue do the rest.
+**This skill never watches CI and never merges. In a cloud run it never marks a PR ready.** It waits for nothing. Nothing in the loop
+merges: the dispatcher arms auto-merge once a PR is ready and GitHub's ruleset and queue do the rest.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
 "green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)
 
 - **A conflicted PR schedules zero CI runs.** Merge `origin/<base>` in and resolve before you push,
   so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
-- **Locally, on your own PR**: the dispatcher acts only on the bot's PRs. Tell the person to mark
-  it ready once CI is green. Never wait for CI yourself.
+- **Locally, on your own PR**: the dispatcher leaves a member's draft alone and runs the loop on
+  a ready one. Mark a complete branch ready now, without waiting for CI. The dispatcher requests
+  the reviewer and fires the critic in one plan, so both start together — a draft gets neither.
+  Ready is not merge: every ruleset requires an approval. Never wait for CI yourself.
 
 Then report: PR URL, dismissed findings with reasons, and the acceptance criteria a human should
 verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the user to save it
@@ -383,11 +390,11 @@ to memory.
   `fixture` block. **Never** open, sign in to or wait for a preview.
 - **Never** put a decision in the PR body. It is a question thread (step 7c).
 - **Always** run the docs sync before pushing.
-- **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
-  the critic agree.
+- **Always** open the bot's PR (a cloud run) as a draft, and **never** clear the flag on it — the
+  dispatcher does, once CI and the critic agree. A member's own PR, run locally, opens ready.
 - **Never** wait, for CI or for a deploy, and **never** merge. Push and end.
 - **Never** set an assignee, and **never** request a reviewer — the dispatcher requests
-  `assignment.reviewer` at ready.
+  `assignment.reviewer` once the PR is ready.
 - **Never** write a label or a board Status here. Opening the PR is an event. The dispatcher
   derives its Status within seconds. (why: docs/why.md#status-is-derived-never-read)
 - **Never** hard-code a gate command, trigger path, or package manager — read `workflow.json`.

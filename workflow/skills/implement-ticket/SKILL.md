@@ -1,6 +1,6 @@
 ---
 name: implement-ticket
-description: Implement one authorised ticket — or a roadmap goal's cross-repo set — whole, in one session, in isolated worktrees. Open a draft PR through /finalize-pr only once every criterion is met, push, and end. Fired by the dispatcher on `@sydevs-bot implement`, and on its own continue request. Runnable locally with an issue number.
+description: Implement one authorised ticket — or a roadmap goal's cross-repo set — whole, in one session, in isolated worktrees. Open the PR through /finalize-pr only once every criterion is met, push, and end. Fired by the dispatcher on `@sydevs-bot implement`, and on its own continue request. Runnable locally with an issue number.
 argument-hint: '[issue-number] [--no-worktree]'
 disable-model-invocation: true
 effort: max
@@ -125,7 +125,7 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     `/view/<id>` links.
 
 11. **Ship, once every acceptance criterion is met.** Hand to `/workflow:finalize-pr`. It
-    reviews the whole branch, opens the PR **as a draft** and pushes. Never hand-roll the push or
+    reviews the whole branch, opens the PR — **a draft in a cloud run** — and pushes. Never hand-roll the push or
     the PR, and never open it on a partial build: an open PR is what calls the critic and the
     reviewer. **Re-check the lock before the push** (preflight).
 
@@ -135,8 +135,9 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
     (why: docs/why.md#push-and-end)
 
 13. **Touch no state.** Opening the PR is the event. The dispatcher derives the ticket's Status
-    (Done while its PR is open) and the PR's, reads CI, fires the critic, marks the PR ready, and
-    requests the reviewer. You write no Status, no label but the lock, no assignee, no draft flag.
+    (Done while its PR is open) and the PR's, reads CI, fires the critic, marks the bot's PR
+    ready, and requests the reviewer. You write no Status, no label but the lock, and no assignee.
+    The draft flag is `/workflow:finalize-pr` step 7's.
     (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 14. **Report** in the journal entry: the PR, what needs manual verification, what you filed on
@@ -173,7 +174,8 @@ worktree and branch. (why: docs/why.md#a-cross-repo-set-is-built-together)
 - **Never write state** (start-run's list). The dispatcher owns it.
 - **Never edit files in the main checkout while a worktree is active.**
 - **Never hand-roll shipping** — `/workflow:finalize-pr` is the only path to a PR.
-- **Never wait for CI, mark a PR ready, or merge.** Push and end.
+- **Never wait for CI or merge, and never mark a PR ready yourself** — `/workflow:finalize-pr`
+  step 7 decides the draft flag. Push and end.
 - **Never remove a worktree before its branch is pushed.**
 - **Never write a test fixture without verifying its shape against the real configuration.**
 - **Never open a second branch or PR for a ticket that has one.** A docs- or test-only finding
