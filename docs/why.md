@@ -2089,8 +2089,11 @@ dispatcher makes now passes through `installRetry`, which retries a 5xx or a dro
 ## A member's PR gets the loop
 
 A member's PR (`assignment.respondTo`) got nothing unless mentioned, so their own PRs sat outside
-every lane. Now a ready member PR gets the critic once, a reviewer request and auto-merge like the
-bot's. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
+every lane. Now a ready member PR gets the critic once, auto-merge, and a reviewer request like the
+bot's. The reviewer is asked after the automated pass, as on a bot draft, where markReady and the
+request wait for a green CI, the critic and its answered threads (or `review.skipWhen`): a human
+who is pinged while the critic is still running reads a PR that is about to change. Every ruleset
+needs an approval, so a ready PR cannot merge before that human acts. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
 refuses a request to the author (sydevs/SahajAtlasWeb#318). A member's draft is left alone until it
 is ready or they mention the bot, and only a thread the bot or another person rooted, or another
 person's review, asks it for work: the author's own threads are notes to themselves. An inline-only
