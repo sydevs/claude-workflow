@@ -1017,7 +1017,10 @@ and a closed PR clears `awaiting` and `stuck` instead of gaining them.
 An adversarial review costs an Opus session, a CI cycle, and a round of the reviewer's attention on
 the rebuttals, and a two-file, twenty-line PR rarely has the shape problem the critic exists to
 find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip.
-`@sydevs-bot review` forces a review at any size.
+`@sydevs-bot review` forces a review at any size. A small member PR gets the same note when its
+reviewer is asked, once per PR rather than per head: that path runs on every pass of a ready PR the
+member keeps pushing to, and the note is planned only while no reviewer is requested, so a quiet
+pass lists no comments.
 
 ## There is no WIP cap
 
