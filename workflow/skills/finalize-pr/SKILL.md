@@ -394,9 +394,9 @@ request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-
 - **A conflicted PR schedules zero CI runs.** Merge `origin/<base>` in and resolve before you push,
   so CI fires on the push. (why: docs/why.md#a-conflicted-pr-schedules-zero-ci-runs)
 - **Locally, on your own PR**: the dispatcher leaves a member's draft alone and runs the loop on
-  a ready one. A complete branch is marked ready now, without waiting for CI, so the automated
-  review runs before a person is asked. Ready is not merge: every ruleset requires an approval.
-  Never wait for CI yourself.
+  a ready one. Mark a complete branch ready now, without waiting for CI. The dispatcher requests
+  the reviewer and fires the critic in one plan, so both start together — a draft gets neither.
+  Ready is not merge: every ruleset requires an approval. Never wait for CI yourself.
 
 Then report: PR URL, dismissed findings with reasons, and the acceptance criteria a human should
 verify by hand. If the session surfaced a durable, non-obvious gotcha, nudge the user to save it
