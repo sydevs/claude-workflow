@@ -131,12 +131,13 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any PR | `@sydevs-bot hold` or `block …` | Refused: a PR is merged or closed. |
 
 A PR by a member (`assignment.respondTo`) gets what a bot PR gets once it is ready: the critic,
-fixes for CI and conflicts, auto-merge, and then, once the critic has run and its threads are
-answered, the other member asked to review. A member's draft is
-left alone until it is ready or you mention the bot. A fix lands on your branch: directly on a
-`claude/*` branch, and through the **relay** on your own (`fix/*`, `copilot/*`) — the session pushes
-to `claude/relay-<pr>-<sha>`, and Actions moves your branch to it, merging if you pushed meanwhile.
-Pull before your next push. The loop never stacks a PR on another; one it finds is handed back.
+fixes for CI and conflicts, auto-merge, and then, once CI and the critic and its threads are done,
+the other member asked to review (a small PR skips the critic, and is asked at once). A member's
+draft is left alone until it is ready or you mention the bot. A fix lands on your branch: directly
+on a `claude/*` branch, and through the **relay** on your own (`fix/*`, `copilot/*`) — the session
+pushes to `claude/relay-<pr>-<sha>`, and Actions moves your branch to it, merging if you pushed
+meanwhile. Pull before your next push. The loop never stacks a PR on another; one it finds is
+handed back.
 
 `implement` is refused while the ticket's **Open questions** has an unticked item.
 
