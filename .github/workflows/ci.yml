@@ -55,7 +55,6 @@ jobs:
       # `${CLAUDE_PLUGIN_ROOT}/lib/<script>`. Tests are excluded — they run
       # from the checkout, never from an install.
       - name: Plugin version is bumped with plugin changes
-        if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
