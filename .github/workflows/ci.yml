@@ -1,8 +1,9 @@
 # CI for this repo's own pull requests. Until this file, nothing ran the
 # tests before a merge, and a merge here is the deploy to every consumer.
 #
-# It runs what `leanGate.command` in .claude/workflow.json runs by hand, plus
-# the dispatcher tests (in no gate before) and a JSON parse of every config.
+# It reads `leanGate.command` from .claude/workflow.json and runs it, so the
+# gate has one definition, plus the dispatcher tests (in no gate before) and
+# a JSON parse of every config.
 # It checks out the PR's merge commit and runs it with no secrets and a
 # read-only token, so a PR can run its own tests and nothing else.
 #
@@ -41,14 +42,23 @@ jobs:
           git ls-files '*.json' | while read -r f; do
             node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$f" || { echo "::error file=$f::invalid JSON"; exit 1; }
           done
-      - name: Dispatcher and workflow/lib tests
-        run: node --test dispatcher/test/*.test.mjs workflow/lib/*.test.mjs
-      # The same check `claude plugin validate` is run by hand for. The CLI
-      # needs no login for it. Pinned, so a CLI release cannot redden a PR.
-      - name: Plugin manifest and skill frontmatter
+      # dispatcher/ is in no other gate: `leanGate.command` covers the
+      # plugin, and `.claude/` is a protected path, so adding these to it
+      # needs an attended run.
+      - name: Dispatcher tests
+        run: node --test dispatcher/test/*.test.mjs
+      # The gate is defined once, in .claude/workflow.json, and run here
+      # exactly as a maintainer runs it by hand — so an edit there reaches
+      # CI with no second copy to keep in step. Its first half is `claude
+      # plugin validate`, which needs no login. The CLI is pinned, so a CLI
+      # release cannot redden a PR.
+      - name: Lean gate
         run: |
+          set -euo pipefail
           npm install --global @anthropic-ai/claude-code@2.1.311
-          claude plugin validate ./workflow --strict
+          gate=$(jq -er '.leanGate.command' .claude/workflow.json)
+          echo "$gate"
+          bash -euo pipefail -c "$gate"
       # CLAUDE.md: an installed plugin is keyed by `version`, so a change to
       # anything the plugin ships that leaves it alone never reaches an
       # install. `workflow/lib` ships too: skills call its scripts as
