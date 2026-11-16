@@ -798,8 +798,9 @@ This settles sydevs/claude-workflow#160: an `@sydevs-bot` request needs no speci
 The ban came from SahajCloud#769: three conflict essays in twenty-five minutes, costly for the
 essays, not the merges, so a clean merge earns one line and a semantic conflict aborts the merge,
 not the run. Accepted cost: *changes since your last review* now includes what the base gained.
-Retired reasons, not to come back: `claude-workflow` has no merge queue (`ci.noCi`); a preview
-builds the branch head ([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs));
+Retired reasons, not to come back: `claude-workflow` has no merge queue (and `ci.noCi` listed it
+then); a preview builds the branch head
+([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs));
 and the re-flagged approval ([A review list arrives one page at a time](#a-review-list-arrives-one-page-at-a-time))
 is gone, as the `synchronize` handler makes a bot push a `note` now.
 
