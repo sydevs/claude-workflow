@@ -48,9 +48,9 @@ take the non-interactive branch and record the decision in the report instead.
 [ -n "$CLAUDE_CODE_REMOTE_SESSION_ID" ] && NONINTERACTIVE=1
 ```
 
-The one place this changes behaviour is pre-flight. Locally, unexpected uncommitted changes stop
-and ask. On a runner nobody can answer, so abort with the file list rather than commit files
-nobody has looked at.
+It changes two steps. **Pre-flight**: locally, unexpected uncommitted changes stop and ask. On a
+runner nobody can answer, so abort with the file list rather than commit files nobody has looked
+at. **Step 7**: a cloud run opens the PR as a draft, a member's own complete branch opens ready.
 
 ## Invocation
 
@@ -316,11 +316,11 @@ Create or refresh with MCP, which takes the body directly — no temp file, and 
 markdown-mangling that made `gh --body` unusable:
 
 ```
-mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:true title:"…" body:"…"
+mcp__github__create_pull_request   owner:$ORG repo:$REPO head:<branch> base:<base> draft:<true|false> title:"…" body:"…"
 mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"…" body:"…"
 ```
 
-- **No PR** → **create it as a draft. Set no assignee and request no reviewer.** A PR is ours by
+- **No PR** → **create it, drafted by the rule below. Set no assignee and request no reviewer.** A PR is ours by
   `author:<bot>`. The dispatcher requests `assignment.reviewer` when it marks the PR ready, after
   CI and the adversarial review — a request at open puts unfinished work in their queue.
 
