@@ -34,7 +34,8 @@ repo:
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
 | `packageManager` | Any command you construct |
-| `previewUrl.pattern` / `.seed` / `.auth` | Step 7 — the PR-number host, how to fill it, and how to sign in to a gated preview. `.auth` is `{ signInPath, account, accountField?, tokenField? }`. Its `account` must be an address the gate does not treat as the credential, because this file is public. `workflow/lib/preview-auth.mjs` reads all three |
+| `previewUrl.pattern` | Step 7 — the PR-number host |
+| `fixture.path` / `.link` / `.surfacePaths` | Step 7, *Every link opens on data* — where the repo's committed preview data lives, the admin link to one record (`{pr}`, `{collection}`, `{id}`), and the paths whose change needs a link. Absent: the repo has no fixture, and step 7 keeps plain links with no data rule |
 
 Never hard-code a repo's gate command, trigger paths, or package manager into this skill.
 
@@ -275,42 +276,37 @@ characters.
 
 ### Every link opens on data
 
-A link to an empty list is not a preview. A deploy provisions a sign-in and nothing more, so a
-new preview starts with no data. (why: docs/why.md#a-preview-link-must-open-on-data)
+**Where `.claude/workflow.json` has a `fixture` block**, every preview opens on a committed fixture,
+so a link opens on data because a record exists in the diff, never because anyone seeded it. This
+step reads files and builds strings. **It never opens, signs in to, seeds or waits for the
+preview.** (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
 
-- **Ask the helper first**, and let it decide: `jq -c '{previewUrl} + {pr: <n>}'
-  .claude/workflow.json | node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`.
-  It answers the host, whether this repo seeds previews, and — with `.auth` — the sign-in request
-  and the Access headers.
-- **Check what each link needs, signed in.** With a `signIn`, send it with the plan's `headers` and
-  read its `tokenField`. Send the pair to an `ON_HOST` link only — `--on-host <link>` answers, and
-  a link you did not build from `previewUrl.pattern` may sit on another origin.
-  (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with
-  `access.clientId.set` or `.clientSecret.set` false means this environment cannot pass the gate. Name the unset half, and raise nothing about the data.
-  Empty `headers` with no `signIn` means no gate, so check the data as ever. Otherwise the repo
-  guide says how. Link a document by id, not a list, and only a document the preview's API
-  returned. **Never print the token**: no `-v`, no `--trace`, and never echo the command
-  (`fix-ci` runs the same rule).
-- **Seed whatever is missing.** Run `previewUrl.seed` against the host. Seed the smallest set
-  that shows the change. **Never seed real people's contact details, and never quote data the
-  preview already held** — somebody may have filled it by hand from a real source, and this body is
-  public. Link such a document by id. Seeded data survives later pushes, so check it before you
-  seed again.
-- **Put the reviewer's inputs in the body.** If the change takes a file, such as an upload, put it
-  inline in a `<details>` block. Or name a path that `git ls-files` lists on the branch. **Never
-  name a fixture you have not checked.**
-- **Say what each link does on that data.** If it does something the change does not claim, say
-  so on that link's line.
-- **No preview yet** means the PR is new, or this push has not deployed. Wait for it in step 7b,
-  then seed and verify. If step 7b times out, write the links anyway, plus one line:
-  `Data: not seeded yet`. No later run is promised to seed it, so the line stays as a disclosure.
-- **Cannot seed** means `previewUrl.seed` is unset, no credential is present, or the seed failed.
-  Write one line naming what is missing. Never leave a link that lands on nothing without saying
-  so.
-- **Where the helper answers `seedsPreviews: true`, that line is a disclosure and not a pass.**
-  Where a preview was discovered and the fill did not succeed, say in the report that the repo's own
-  seed check reds this PR until it does. With no preview discovered, that check only warns.
-  (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
+1. **List the surfaces the diff changes.** A surface is a collection or admin view under
+   `fixture.surfacePaths` that the full branch diff touches: a collection's fields, an admin
+   component, a tab, an import or action.
+2. **For each surface, cite the fixture entries that show it on this branch.** Entries live under
+   `fixture.path`, one file per collection, each with an explicit numeric `id`. Read the file as the
+   branch has it and name `<collection>` + `id`. **If no entry shows the change, add one under
+   `fixture.path` in this PR**, with the smallest record that does. **Never cite an id you have not
+   read in a file on the branch.** Fixture data is made up: never copy a real person's contact
+   details into it.
+3. **Build each link from `fixture.link`**, with `{pr}`, `{collection}` and `{id}` filled. Add the
+   tab or sub-path where the admin view needs one. Never spell the host here.
+4. **Say on each link's line what that record shows**, and anything it does that the change does not
+   claim.
+5. **Put the reviewer's other inputs in the body.** A file the change takes goes inline in a
+   `<details>` block, or is a path `git ls-files` lists on the branch.
+
+```markdown
+## Preview
+- [Event 1000004, Registrations tab](<host>/admin/collections/events/1000004) — a full event with 3 registrations
+```
+
+**A diff touching no `fixture.surfacePaths` may write `No preview surface` in place of links. A diff
+touching any of them may not.** A link with no cited record is a `should-fix` in review.
+
+**Where there is no `fixture` block**, write plain links to the changed routes as above, and apply
+no data rule: the preview may be empty, and the body needs no line saying so.
 
 Create or refresh with MCP, which takes the body directly — no temp file, and none of the
 markdown-mangling that made `gh --body` unusable:
@@ -331,24 +327,6 @@ mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"�
 - **PR exists** → refresh **title and body** as `pr-template.md`'s *Refresh* says. **Leave the
   assignee alone**, and **never put a ready PR back into draft** — the dispatcher reads draft as
   "the loop is still working", so a ready PR would drop out of the reviewer's queue.
-
-### 7b. Wait for the preview, only when step 7 needs it
-
-**This is the one wait the pipeline allows.** Wait only when the preview cannot show the change
-until this push deploys. Either it has no data yet, or this push changes what a linked page
-shows. Otherwise skip this step. (why: docs/why.md#push-and-end)
-
-1. Read the deploy's status on the head SHA with MCP. `pull_request_read method:get_status`
-   returns Railway's commit status. Cloudflare reports a check run instead.
-2. Read it again every `preview.pollSeconds`, for at most `preview.deployWaitMinutes`, both from
-   `loop-config.json`. **Run one waiter at a time.** Between reads, wait with a single background
-   `sleep`, because Claude Code refuses a foreground one. Never read CI while you wait.
-3. **Success** → seed and verify per *Every link opens on data*. Then refresh the body in one
-   `update_pull_request` call.
-4. **Failure, or timeout** → write the `Data: not seeded yet` line, name the status you last saw
-   in the report, and end. A failed deploy is the dispatcher's to route — its advisory note, or a
-   `fix-ci` deploy pass — never this step's. The disclosure rule is the last bullet of *Every link
-   opens on data*.
 
 ### 7c. Ask the reviewer, on the line
 
@@ -380,8 +358,7 @@ their reply fires `address-review`. Name each question in the report.
 
 ### 8. Push and end
 
-**This skill never watches CI, never marks a PR ready, and never merges.** Its one wait is the
-preview deploy in step 7b. Nothing in the loop
+**This skill never watches CI, never marks a PR ready, and never merges.** It waits for nothing. Nothing in the loop
 merges: the dispatcher arms auto-merge at mark-ready and GitHub's ruleset and queue do the rest.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
 "green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
@@ -402,14 +379,13 @@ to memory.
 - **Always** operate on the full branch diff, not the last commit.
 - **Always** refresh a stale PR title **and** body when re-running on an existing PR.
 - **Always** follow `pr-template.md`'s headings, and always include Preview where the repo has one.
-- **Never** link a preview page that shows no data, unless a line in the body says why — and
-  where the repo seeds previews, that line is a disclosure, not a pass.
+- **Never** link a preview you did not build from a cited fixture record, where the repo has a
+  `fixture` block. **Never** open, sign in to or wait for a preview.
 - **Never** put a decision in the PR body. It is a question thread (step 7c).
 - **Always** run the docs sync before pushing.
 - **Always** open a PR as a draft. **Never** clear the flag — the dispatcher does, once CI and
   the critic agree.
-- **Never** wait for CI, and **never** merge. Push and end. The only wait is step 7b's preview
-  deploy, and only when step 7 needs that deploy.
+- **Never** wait, for CI or for a deploy, and **never** merge. Push and end.
 - **Never** set an assignee, and **never** request a reviewer — the dispatcher requests
   `assignment.reviewer` at ready.
 - **Never** write a label or a board Status here. Opening the PR is an event. The dispatcher
