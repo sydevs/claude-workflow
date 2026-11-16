@@ -324,7 +324,7 @@ mcp__github__update_pull_request   owner:$ORG repo:$REPO pullNumber:<n> title:"â
   `author:<bot>`. The dispatcher requests `assignment.reviewer` when it marks the PR ready, after
   CI and the adversarial review â€” a request at open puts unfinished work in their queue.
 
-  **In a cloud run (`NONINTERACTIVE`), every PR opens as a draft, without exception.** Draft means
+  **In a cloud run (the runner check above), every PR opens as a draft, without exception.** Draft means
   *the loop is still working on this*. The dispatcher clears the flag once CI is green and the
   critic has run, or at once for a PR under `review.skipWhen`. **Run locally by a member on their
   own branch, open it ready (`draft:false`) once the branch is complete**: the dispatcher leaves a
