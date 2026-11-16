@@ -50,21 +50,24 @@ jobs:
           npm install --global @anthropic-ai/claude-code@2.1.311
           claude plugin validate ./workflow --strict
       # CLAUDE.md: an installed plugin is keyed by `version`, so a change to
-      # a skill or a hook that leaves it alone never reaches an install.
-      - name: Plugin version is bumped with skill or hook changes
+      # anything the plugin ships that leaves it alone never reaches an
+      # install. `workflow/lib` ships too: skills call its scripts as
+      # `${CLAUDE_PLUGIN_ROOT}/lib/<script>`. Tests are excluded — they run
+      # from the checkout, never from an install.
+      - name: Plugin version is bumped with plugin changes
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- workflow/skills workflow/hooks)
-          [ -n "$changed" ] || { echo "No skill or hook changed."; exit 0; }
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- workflow/skills workflow/hooks workflow/lib ':!*.test.mjs')
+          [ -n "$changed" ] || { echo "Nothing the plugin ships changed."; exit 0; }
           version() { git show "$1:workflow/.claude-plugin/plugin.json" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).version)'; }
           before=$(version "$BASE_SHA")
           after=$(version "$HEAD_SHA")
           if [ "$before" = "$after" ]; then
-            echo "::error file=workflow/.claude-plugin/plugin.json::Skills or hooks changed but version is still $before. An installed plugin never updates without a version bump (CLAUDE.md)."
+            echo "::error file=workflow/.claude-plugin/plugin.json::Plugin files changed but version is still $before. An installed plugin never updates without a version bump (CLAUDE.md)."
             echo "$changed"
             exit 1
           fi
