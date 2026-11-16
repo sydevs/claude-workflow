@@ -2119,6 +2119,13 @@ then fast-forwards the PR's branch (never forced), or merges server-side if the 
 meanwhile. A conflict, a moved relay ref or a refused write (a commit touching `.github/workflows/`
 needs the token's `workflow` scope) is handed back in GitHub's words, and the relay branch is kept.
 
+Landing a relay is idempotent. Until the next session fires, every run on the PR reads the same
+request, so two runs can each try to land it: on SahajCloud#1167 a `reconcile` fast-forwarded the
+branch and deleted the relay, and the `unlock` 16 seconds later found no relay branch and handed
+back work that had already landed. A request whose commit is already the PR's head is therefore
+skipped, and a missing or moved relay branch is refused only when the PR's branch does not already
+contain the requested commit.
+
 ## An approved PR names what holds it
 
 GitHub merges only once every thread is resolved, and an approved PR held by a bot question thread
