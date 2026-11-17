@@ -62,7 +62,8 @@ nightly audit, work starts only on an event. Each session does one job, pushes, 
 - **The completion check.** When a goal's last child closes, `revise-roadmap` compares what shipped
   with *What success looks like*. It closes the goal, or names the gap and the goal reads Awaiting.
 - **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
-  green. `claude-workflow` is never auto-merged, because merging it is the deploy.
+  green, then the merge queue. On your own PR, where GitHub refuses your approval, the bot gives it
+  once CI is green and its review has run (`mergePolicy.proxyApprove`).
 
 Every open issue and PR — Roadmap tickets too — has one board **Status**, derived by the
 dispatcher after every event from the item's own state. Nobody sets it; a drag on the board is put
@@ -127,6 +128,7 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any issue | `@sydevs-bot block until legal signs off` | A short session turns the reason into a blocker or a hold, and writes it into the body. |
 | Bot or member PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
+| Your own PR (`mergePolicy.proxyApprove`) | `@sydevs-bot approve` | Vouches for the bot's commit at the head, so the bot approves it for you. Refused anywhere else. |
 | Anyone else's PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads, and builds nothing. |
 | Any PR | `@sydevs-bot hold` or `block …` | Refused: a PR is merged or closed. |
 

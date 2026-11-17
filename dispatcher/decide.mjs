@@ -25,6 +25,10 @@ export const commentOnce = (key, body) => ({ type: 'comment', key, body })
 export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
 export const armAutoMerge = () => ({ type: 'armAutoMerge' })
+/** Approve the owner's own PR at `sha`, standing in for the approval GitHub refuses its author. */
+export const proxyApprove = (sha) => ({ type: 'proxyApprove', sha })
+/** Dismiss the bot's own approvals, by review id: a commit of its own sits on top of them. */
+export const dismissProxy = (ids) => ({ type: 'dismissProxy', ids })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
@@ -72,6 +76,14 @@ export function hasAccess(association) {
 }
 export function isReviewer(login, config) {
   return lower(login) === lower(config.assignment?.reviewer)
+}
+/**
+ * The author's own PR is approved by the bot (`mergePolicy.proxyApprove`):
+ * GitHub refuses an author's approval, and the owner's PR has nobody else's
+ * to wait for. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ */
+export function proxyApproves(login, config) {
+  return Boolean(login) && (config.mergePolicy?.proxyApprove || []).some((l) => lower(l) === lower(login))
 }
 /**
  * A PR the loop works in full: the bot's own, or one a `respondTo` login
@@ -288,10 +300,10 @@ export function needsAddressReview(snapshot, config) {
   return mention ? 'a mention waits on a reply' : null
 }
 
-/** A mention asking for a reply. `review` asks for the critic, which `pendingReviewVerb` handles. */
+/** A mention asking for a reply. `review` asks for the critic, which `pendingReviewVerb` handles; `approve` is read by `proxyPlan`. */
 function isAddressMention(body, config) {
   const v = parseVerb(body, config.dispatch, 'pr')
-  return v.mentioned && v.verb !== 'review'
+  return v.mentioned && v.verb !== 'review' && v.verb !== 'approve'
 }
 
 function pendingReviewVerb(snapshot, config) {
@@ -572,7 +584,9 @@ function evaluateGreenPr(s, config) {
   // under `review.skipWhen`. (why: docs/why.md#a-members-pr-gets-the-loop)
   const member = !isBot(pr.user?.login, config)
   if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
-  const plan = member ? [requestReviewer()] : []
+  // The owner's own PR has no one to ask: the bot approves it at this point
+  // instead. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+  const plan = !member ? [] : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
   // Said once per PR, not per head: this path runs on every pass, and a member
   // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
   // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
@@ -593,6 +607,38 @@ function evaluateGreenPr(s, config) {
     }
   }
   return plan
+}
+
+/**
+ * The owner's PR, past the gates a bot draft passes at mark-ready: CI green,
+ * the critic run or skipped, its threads answered. The approval is pinned to
+ * the head read here, and never covers a commit of the bot's own the author
+ * has not vouched for with `approve`: the loop pushes fixes onto member PRs.
+ * The ruleset keeps an approval through later pushes, so one the bot's own
+ * commit has since buried is dismissed.
+ * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ */
+function proxyPlan(s, config) {
+  const head = s.pr.head?.sha
+  // gather reads the head commit for this PR; unread, nothing is approved.
+  if (!head || !s.headCommittedAt) return [note('head commit unread — no approval on this pass')]
+  const approvals = (s.reviews || []).filter((r) => isBot(r.user?.login, config) && r.state === 'APPROVED')
+  if (!isBot(s.headAuthor, config)) return approvals.length ? [] : [proxyApprove(head)]
+  if (approvals.some((r) => r.commit_id === head)) return []
+  if (vouched(s, config)) return [proxyApprove(head)]
+  const buried = approvals.map((r) => r.id).filter(Boolean)
+  return [
+    ...(buried.length ? [dismissProxy(buried)] : []),
+    commentOnce(`proxy-held ${head}`, `The newest commit, ${head.slice(0, 7)}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`.`),
+  ]
+}
+
+/** The author said `approve` after the head commit was made. */
+function vouched(s, config) {
+  const author = s.pr.user?.login
+  const at = s.headCommittedAt
+  return (s.comments || []).some((c) => lower(c.author) === lower(author) && c.createdAt > at
+    && parseVerb(c.body, config.dispatch, 'pr').verb === 'approve')
 }
 
 /**
@@ -993,6 +1039,14 @@ function route(target, s, config) {
         // (why: docs/why.md#a-bot-pr-answers-a-mention-or-a-review)
         if (!v.mentioned) return [note(`${fullTreatment(s.pr?.user?.login, config) ? 'worked' : 'outside'} PR comment, no mention — ignored`)]
         if (v.verb === 'hold' || v.verb === 'block') return refusePrPark(s, config, facts, v.verb)
+        // `approve` vouches for the author's own PR only; anyone else approves
+        // in GitHub's review. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+        if (v.verb === 'approve') {
+          if (!(proxyApproves(s.pr?.user?.login, config) && lower(facts.author) === lower(s.pr?.user?.login))) {
+            return [commentOnce(`approve-refused ${facts.commentId || ''}`, `\`approve\` stands in only for the author of their own PR, where GitHub refuses theirs. Approve this one in a review.`)]
+          }
+          if (s.pr?.draft) return [note('approve on a draft — read once it is ready')]
+        }
         // A member's draft is left alone, so a mention there is a request on its own.
         const memberDraft = s.pr?.draft && !isBot(s.pr?.user?.login, config)
         if (fullTreatment(s.pr?.user?.login, config) && !memberDraft) return clearHandback(s).concat(evaluatePr(s, config))

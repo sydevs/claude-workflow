@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, isDispatcherComment, fullTreatment } from './decide.mjs'
+import { isBot, isDispatcherComment, fullTreatment, proxyApproves } from './decide.mjs'
 import { changedPaths, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
@@ -297,12 +297,15 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   })
   const { checkRuns, statuses } = gate
   setRepoWorkflows(`${owner}/${repo}`, !(config.ci?.noCi || []).includes(repo))
-  const reviewsShaped = reviews.map((r) => ({ user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at }))
+  const reviewsShaped = reviews.map((r) => ({ id: r.id, user: { login: r.user?.login }, state: r.state, body: r.body, submitted_at: r.submitted_at, commit_id: r.commit_id }))
+  // The bot's approval is the owner's on their own PR, so it counts here as the
+  // reviewer's would. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+  const proxy = proxyApproves(pr.user?.login, config)
   const normalized = normalizeMcp({
     pr, checkRuns, statuses,
     reviewThreads: { review_threads: threads.map((t) => ({ is_resolved: t.isResolved })) },
     reviews: reviewsShaped,
-    reviewAuthority: [config.assignment.reviewer],
+    reviewAuthority: [config.assignment.reviewer, ...(proxy ? [config.identity.expectedLogin] : [])],
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha, repo: pr.head?.repo?.full_name || null }, base: { ref: pr.base?.ref, defaultBranch: pr.base?.repo?.default_branch || null }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)
@@ -320,12 +323,16 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // Who pushed the head matters only once the repair cap is reached: a
   // person's push is what the cap comment promises restarts it.
   // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
+  // It matters on the owner's PR too, which the bot approves only over a
+  // head that is not its own. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
   s.headAuthor = null
-  if (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3)) {
+  s.headCommittedAt = null
+  if (proxy || (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3))) {
     try {
       const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
       s.headAuthor = c.author?.login || c.committer?.login || null
-    } catch { /* unknown author: the cap holds */ }
+      s.headCommittedAt = c.commit?.committer?.date || null
+    } catch { /* unknown author: the cap holds, and nothing is vouched for */ }
   }
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)

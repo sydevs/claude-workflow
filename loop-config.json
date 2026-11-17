@@ -128,7 +128,8 @@
         "review",
         "revise",
         "block",
-        "hold"
+        "hold",
+        "approve"
       ],
       "aliases": {
         "issue": {
@@ -201,9 +202,12 @@
     ]
   },
   "mergePolicy": {
-    "$comment": "Repos where the loop may open and revise PRs, never merge them, whatever the gate says. claude-workflow ships the instructions every run executes, so merging there is the deploy, done only by a human. The repo is ticketless, so review is its only gate.",
+    "$comment": "loopMayNotMerge: repos never armed, whatever the gate says. proxyApprove: authors whose own ready PR the bot approves once CI is green and the critic has run, because GitHub refuses their approval and the ruleset needs one. Rules in dispatcher/decide.mjs.",
     "loopMayNotMerge": [
       "claude-workflow"
+    ],
+    "proxyApprove": [
+      "Ardnived"
     ]
   },
   "auditCalendar": {

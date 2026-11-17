@@ -262,6 +262,29 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (armed) snapshot.pr.autoMergeArmed = true
         break
       }
+      // The owner's own PR, approved where GitHub refuses its author, pinned
+      // to the head the plan read. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+      case 'proxyApprove': {
+        if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
+        log(`approve ${String(a.sha).slice(0, 7)} for its author`)
+        if (dryRun) break
+        await handOver('approve the owner\'s PR', () => gh.rest.pulls.createReview({
+          ...args, pull_number: t.number, commit_id: a.sha, event: 'APPROVE',
+          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run, so it merges through the queue. ${config.identity.commentMarker || ''}`.trim(),
+        }))
+        break
+      }
+      case 'dismissProxy': {
+        for (const id of a.ids) {
+          log(`dismiss own approval ${id}`)
+          if (dryRun) continue
+          await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
+            ...args, pull_number: t.number, review_id: id,
+            message: `A commit of ${bot}'s own is now the head, and this approval did not cover it.`,
+          }))
+        }
+        break
+      }
       case 'sentry': {
         const token = env.SENTRY_CLAUDE_WORKFLOW_TOKEN
         log(`sentry resolve ${a.id} (issue #${a.issue})`)

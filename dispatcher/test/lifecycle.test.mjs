@@ -97,10 +97,11 @@ test('an approved PR with a question thread names the thread, once per thread', 
 
 // ---- a member's PR (why: docs/why.md#a-members-pr-gets-the-loop)
 
+// antontcymbal: a member whose PR the bot does not approve (mergePolicy.proxyApprove).
 test("a member's ready PR gets the critic and a reviewer; their draft is left alone", () => {
-  const ready = pr({ pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null } })
+  const ready = pr({ pull: { user: { login: 'antontcymbal' }, autoMergeArmed: false }, normalized: { reviewDecision: null } })
   assert.deepEqual(types(evaluatePr(ready, config)), ['fire:review-pr'], 'the critic first; nobody is asked to review yet')
-  const reviewed = pr({ pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null }, reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(1) }] })
+  const reviewed = pr({ pull: { user: { login: 'antontcymbal' }, autoMergeArmed: false }, normalized: { reviewDecision: null }, reviews: [{ user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(1) }] })
   assert.deepEqual(types(evaluatePr(reviewed, config)), ['requestReviewer', 'armAutoMerge'], 'asked once the critic has run')
   const draft = pr({ pull: { user: { login: 'Ardnived' }, draft: true } })
   assert.deepEqual(types(evaluatePr(draft, config)), ['note'])
@@ -108,7 +109,7 @@ test("a member's ready PR gets the critic and a reviewer; their draft is left al
 
 test("a member's reviewer is asked after the critic and its threads, not before", () => {
   const critic = { user: { login: 'sydevs-bot' }, body: '## 🧐 Adversarial review', submitted_at: hoursAgo(2) }
-  const own = { pull: { user: { login: 'Ardnived' }, autoMergeArmed: false }, normalized: { reviewDecision: null } }
+  const own = { pull: { user: { login: 'antontcymbal' }, autoMergeArmed: false }, normalized: { reviewDecision: null } }
   // The critic's finding still waits on address-review: no reviewer yet.
   const open = pr({ ...own, reviews: [critic], threads: [{ isResolved: false, comments: [{ author: 'sydevs-bot', createdAt: hoursAgo(2), body: 'finding' }] }] })
   assert.ok(!types(evaluatePr(open, config)).includes('requestReviewer'))

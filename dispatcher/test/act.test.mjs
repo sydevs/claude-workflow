@@ -35,6 +35,8 @@ function fakeGithub(world) {
         listReviews: async () => ({ data: world.reviews || [] }),
         list: async () => ({ data: Object.values(world.prs) }),
         requestReviewers: async (a) => rec('requestReviewers', a),
+        createReview: async (a) => rec('createReview', a),
+        dismissReview: async (a) => rec('dismissReview', a),
         merge: async (a) => rec('merge', a),
       },
       checks: { listForRef: async () => ({ data: { check_runs: world.checks || [] } }) },
@@ -42,6 +44,10 @@ function fakeGithub(world) {
         get: async () => ({ data: { default_branch: 'main' } }),
         getCombinedStatusForRef: async () => ({ data: { statuses: [] } }),
         listPullRequestsAssociatedWithCommit: async () => ({ data: Object.values(world.prs) }),
+        getCommit: async () => {
+          if (!world.headCommit) { const e = new Error('Not Found'); e.status = 404; throw e }
+          return { data: world.headCommit }
+        },
       },
       git: {
         createRef: async (a) => {
@@ -196,10 +202,31 @@ test('a PR the reviewer wrote asks the other member for a review, never its auth
   const world = { issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [], user: { login: 'Ardnived' }, pull_request: {}, html_url: 'u', comments: 0 } }, comments: {}, prs: { 5: pr }, checks: [{ name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'success' }] }
   const github = fakeGithub(world)
   const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'pull_request.ready_for_review', event: 'pull_request.ready_for_review', facts: {} }
-  await act({ github, context: {}, core, config, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  // With no proxy approval for the reviewer, as before mergePolicy.proxyApprove named them.
+  const noProxy = { ...config, mergePolicy: { ...config.mergePolicy, proxyApprove: [] } }
+  await act({ github, context: {}, core, config: noProxy, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
   const asked = github.calls.filter((c) => c.name === 'requestReviewers').flatMap((c) => c.args.reviewers)
   assert.deepEqual(asked, ['antontcymbal'], 'nothing asked Ardnived to review Ardnived; the other member is asked')
   assert.ok(!github.calls.some((c) => c.name === 'createComment' && /step left for you/.test(c.args.body)), 'and nothing was handed over')
+})
+
+test('the owner\'s own ready PR is approved by the bot at its head, and nobody is asked to review', async () => {
+  // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+  const pr = { number: 5, node_id: 'PR1', state: 'open', draft: false, merged: false, user: { login: 'Ardnived' }, head: { ref: 'fix/theirs', sha: 'abc' }, base: { ref: 'main' }, mergeable: true, mergeable_state: 'clean', changed_files: 1, additions: 3, deletions: 1, requested_reviewers: [] }
+  const world = { issues: { 5: { number: 5, node_id: 'PR1', state: 'open', title: 'x', body: '', labels: [], user: { login: 'Ardnived' }, pull_request: {}, html_url: 'u', comments: 0 } }, comments: {}, prs: { 5: pr }, checks: [{ name: 'Lint, Test & Smoke', status: 'completed', conclusion: 'success' }], headCommit: { author: { login: 'Ardnived' }, commit: { committer: { date: '2026-09-08T11:00:00Z' } } } }
+  const github = fakeGithub(world)
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 5, reason: 'pull_request.ready_for_review', event: 'pull_request.ready_for_review', facts: {} }
+  const proxy = { ...config, mergePolicy: { ...config.mergePolicy, proxyApprove: ['Ardnived'] } }
+  await act({ github, context: {}, core, config: proxy, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const reviews = github.calls.filter((c) => c.name === 'createReview')
+  assert.equal(reviews.length, 1)
+  assert.equal(reviews[0].args.event, 'APPROVE')
+  assert.equal(reviews[0].args.commit_id, 'abc')
+  assert.ok(!github.calls.some((c) => c.name === 'requestReviewers'))
+  // The head unread: no approval.
+  const blind = fakeGithub({ ...world, headCommit: null })
+  await act({ github: blind, context: {}, core, config: proxy, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.ok(!blind.calls.some((c) => c.name === 'createReview'))
 })
 
 test('a write the token is refused hands the step to a human, and the plan finishes', async () => {
