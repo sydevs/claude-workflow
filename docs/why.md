@@ -2137,6 +2137,13 @@ rather than giving it. `getCommit` resolves `author` to null when the commit's e
 account, and the first cut read that as "not the bot" and approved — the one case the hold exists
 for, passed through by the field meant to catch it.
 
+The vouch is measured from the bot's own hold comment for that head, not from the commit's
+committer date. A session commits to a relay branch and Actions lands it when the session ends,
+up to `dispatch.timeoutsMinutes` later ([The relay](#the-relay)), so the commit's date is older
+than the vouch written for the head it replaced, and a date comparison carried that vouch onto
+code the author had never seen. The ask is the clock because the ask is what asks for the vouch:
+it cannot precede the commit it is about.
+
 ## The branch decides where a session pushes
 
 address-review asked "is this PR mine?" by its author, and opened a stacked PR on any other. On
