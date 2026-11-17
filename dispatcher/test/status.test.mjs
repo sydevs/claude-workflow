@@ -76,6 +76,10 @@ test('a PR: review is yours, the queue is the machinery\'s, and a question threa
   assert.equal(key(pr({ pull: { state: 'closed', merged: true } })), 'done')
   assert.equal(key(pr({ item: { number: 5, state: 'open', labels: ['bot:working'] } })), 'working')
   assert.equal(key(pr({ normalized: { reviewDecision: 'APPROVED' } })), 'pending', 'approved and armed')
+  // (why: docs/why.md#the-owner-arms-their-own-pr)
+  const owner = { user: { login: config.mergePolicy.proxyApprove[0] } }
+  assert.equal(key(pr({ pull: { ...owner, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' } })), 'awaiting', 'the owner\'s approved PR waits for them to arm it')
+  assert.equal(key(pr({ pull: { ...owner, autoMergeArmed: true }, normalized: { reviewDecision: 'APPROVED' } })), 'pending', 'and is the queue\'s once they have')
   // sydevs/SahajAtlasWeb#328 and sydevs/WeMeditateWeb#198: approved, armed,
   // and held by an open question nobody was told about.
   assert.equal(key(pr({ normalized: { reviewDecision: 'APPROVED' }, threads: [question] })), 'awaiting')

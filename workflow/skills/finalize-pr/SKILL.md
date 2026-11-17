@@ -364,7 +364,7 @@ their reply fires `address-review`. Name each question in the report.
 ### 8. Push and end
 
 **This skill never watches CI and never merges. In a cloud run it never marks a PR ready.** It waits for nothing. Nothing in the loop
-merges: the dispatcher arms auto-merge once a PR is ready and GitHub's ruleset and queue do the rest.
+merges: the dispatcher arms auto-merge once a PR is ready and GitHub's ruleset and queue do the rest. On a `mergePolicy.proxyApprove` author's own PR, the author arms it.
 CI completion is an event. The dispatcher reads it through `workflow/lib/merge-gate.mjs`, the one definition of
 "green": red → `fix-ci`, green on a draft → the adversarial review, then ready and the reviewer
 request, approval → the merge. (why: docs/why.md#push-and-end, docs/why.md#ci-truth-lives-in-check-runs)

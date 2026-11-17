@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr } from './decide.mjs'
+import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -103,5 +103,8 @@ function prStatus(s, config, locked, rec) {
   if (s.mergeable === 'CONFLICTING') return out('pending', 'approved — conflicts with its base', true)
   if (s.ci?.failing?.length) return out('pending', 'approved — CI is red', true)
   if (s.linkedBlockedOpen?.length) return out('pending', `approved — merges after ${s.linkedBlockedOpen.join(', ')}`)
-  return out('pending', pr.autoMergeArmed ? 'approved — the merge queue owes it' : 'approved — auto-merge is owed', true)
+  if (pr.autoMergeArmed) return out('pending', 'approved — the merge queue owes it', true)
+  // (why: docs/why.md#the-owner-arms-their-own-pr)
+  if (proxyApproves(author, config)) return out('awaiting', 'approved — enable auto-merge when you want it merged')
+  return out('pending', 'approved — auto-merge is owed', true)
 }

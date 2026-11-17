@@ -282,3 +282,17 @@ test('no pass but a person\'s verb approves a goal\'s children', () => {
   const unplanned = decide({ ...reconcile, reason: 'unblock-check', facts: { closedNumber: 3 } }, g({ children: [], record: { approved: { by: 'Ardnived' } } }), config)
   assert.ok(unplanned.some((a) => a.type === 'fire' && a.handler === 'implement-roadmap'), 'an approved, unplanned goal is planned when its blocker closes')
 })
+
+// (why: docs/why.md#the-owner-arms-their-own-pr)
+test('disarming turns auto-merge off by the PR\'s node id, and only when it is on', async () => {
+  const gh = boardGh('Pending')
+  const real = gh.graphql
+  gh.graphql = async (q, v) => { if (String(q).includes('disablePullRequestAutoMerge')) gh.calls.push(['disarm', v.id]); return real(q, v) }
+  const run = (snapshot) => apply({ gh, target: { repo, kind: 'pr', number: 5, reason: 'reconcile' }, snapshot, plan: [{ type: 'disarmAutoMerge' }], config, env: {}, dryRun: false, core: { info: () => {} }, now })
+  const armed = pr({ item: { number: 5, state: 'open', labels: [], nodeId: 'PR1' }, pull: { nodeId: 'PR1', autoMergeArmed: true, autoMergeBy: 'sydevs-bot' } })
+  await run(armed)
+  assert.deepEqual(gh.calls.filter(([k]) => k === 'disarm'), [['disarm', 'PR1']])
+  assert.equal(armed.pr.autoMergeArmed, false)
+  await run(armed)
+  assert.equal(gh.calls.filter(([k]) => k === 'disarm').length, 1, 'already off: nothing sent')
+})

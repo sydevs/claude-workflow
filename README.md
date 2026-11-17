@@ -63,7 +63,8 @@ nightly audit, work starts only on an event. Each session does one job, pushes, 
   with *What success looks like*. It closes the goal, or names the gap and the goal reads Awaiting.
 - **Merging.** GitHub merges a PR once the ruleset is met: your approval, every thread resolved, CI
   green, then the merge queue. On your own PR, where GitHub refuses your approval, the bot gives it
-  once CI is green and its review has run (`mergePolicy.proxyApprove`).
+  once CI is green and its review has run (`mergePolicy.proxyApprove`), but never arms auto-merge
+  there: you enable it when you want the PR merged.
 
 Every open issue and PR — Roadmap tickets too — has one board **Status**, derived by the
 dispatcher after every event from the item's own state. Nobody sets it; a drag on the board is put
