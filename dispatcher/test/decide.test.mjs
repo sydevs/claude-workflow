@@ -1028,3 +1028,110 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
   const onMain = prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false, base: { ref: 'main', defaultBranch: 'main' } }, normalized: { reviewDecision: 'APPROVED' } })
   assert.deepEqual(types(evaluatePr(onMain, config)), ['armAutoMerge'])
 })
+
+// ---- the owner's own PR is approved by the bot ---------------------------
+// (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+{
+  const pc = {
+    ...config,
+    mergePolicy: { loopMayNotMerge: [], proxyApprove: ['Ardnived'] },
+    dispatch: { ...config.dispatch, verbs: { ...config.dispatch.verbs, pr: [...config.dispatch.verbs.pr, 'approve'] } },
+  }
+  const critic = { id: 1, user: { login: 'sydevs-bot' }, state: 'COMMENTED', body: '## 🧐 Adversarial review\nfine', submitted_at: '2026-11-17T10:00:00Z', commit_id: 'abc' }
+  const owned = (over = {}) => prSnap({
+    pr: { ...prSnap().pr, draft: false, user: { login: 'Ardnived' }, head: { sha: 'abc', ref: 'feat/x', repo: 'sydevs/SahajCloud' } },
+    reviews: [critic],
+    headAuthor: 'Ardnived',
+    headCommittedAt: '2026-11-17T09:00:00Z',
+    ...over,
+  })
+  const of = (plan, type) => plan.filter((a) => a.type === type)
+  // The bot's hold comment: what asks the author to vouch, and the clock the
+  // vouch is measured against.
+  const ASKED = '2026-11-17T09:05:00Z'
+  const held = (sha = 'abc', createdAt = ASKED) => ({ author: 'sydevs-bot', createdAt, id: 1, body: `<!-- sydevs-dispatcher: proxy-held ${sha} -->\nRead it, then say \`@sydevs-bot approve\`.` })
+
+  test('the owner\'s green, critiqued PR is approved at its head and armed, and asks no reviewer', () => {
+    const p = evaluatePr(owned(), pc)
+    assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
+    assert.equal(of(p, 'requestReviewer').length, 0)
+    assert.equal(of(p, 'armAutoMerge').length, 1)
+  })
+
+  test('another member\'s PR still asks the reviewer, and is never approved by the bot', () => {
+    const p = evaluatePr(owned({ pr: { ...owned().pr, user: { login: 'antontcymbal' } }, headAuthor: 'antontcymbal' }), pc)
+    assert.equal(of(p, 'proxyApprove').length, 0)
+    assert.equal(of(p, 'requestReviewer').length, 1)
+  })
+
+  test('no approval before the critic, while CI runs, or with the head commit or its author unread', () => {
+    assert.deepEqual(types(evaluatePr(owned({ reviews: [] }), pc)), ['fire:review-pr'])
+    assert.equal(of(evaluatePr(owned({ ci: running }), pc), 'proxyApprove').length, 0)
+    const unread = evaluatePr(owned({ headCommittedAt: null }), pc)
+    assert.equal(of(unread, 'proxyApprove').length, 0)
+    // GitHub resolves the commit's author to nobody: it could be the bot's own.
+    const nameless = evaluatePr(owned({ headAuthor: null }), pc)
+    assert.equal(of(nameless, 'proxyApprove').length, 0)
+    assert.equal(of(nameless, 'dismissProxy').length, 0)
+  })
+
+  test('an approval the bot already gave stands through the author\'s later pushes', () => {
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'old' }
+    const p = evaluatePr(owned({ reviews: [critic, approved] }), pc)
+    assert.equal(of(p, 'proxyApprove').length, 0)
+    assert.equal(of(p, 'dismissProxy').length, 0)
+  })
+
+  test('a head of the bot\'s own is held: no approval, an earlier one dismissed, and the author asked', () => {
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'old' }
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, approved] }), pc)
+    assert.equal(of(p, 'proxyApprove').length, 0)
+    assert.deepEqual(of(p, 'dismissProxy').map((a) => a.ids), [[9]])
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('@sydevs-bot approve')))
+  })
+
+  test('the author\'s `approve` after the bot\'s ask vouches for the head; one from before does not', () => {
+    const say = (createdAt) => [held(), { author: 'Ardnived', createdAt, body: '@sydevs-bot approve', id: 3 }]
+    const after = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: say('2026-11-17T09:30:00Z') }), pc)
+    assert.deepEqual(of(after, 'proxyApprove').map((a) => a.sha), ['abc'])
+    assert.equal(of(after, 'fire').length, 0, 'the verb is not a request for address-review')
+    const before = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: say('2026-11-17T08:30:00Z') }), pc)
+    assert.equal(of(before, 'proxyApprove').length, 0)
+    const other = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held(), { ...say('2026-11-17T09:30:00Z')[1], author: 'antontcymbal' }] }), pc)
+    assert.equal(of(other, 'proxyApprove').length, 0, 'only the author vouches')
+  })
+
+  // A relay commit is made minutes before Actions lands it, so a vouch for the
+  // head it replaces must not carry over to it.
+  test('a vouch cannot cover a bot commit made before it but landed after it', () => {
+    const say = { author: 'Ardnived', createdAt: '2026-11-17T09:20:00Z', id: 2, body: '@sydevs-bot approve' }
+    // C2 was committed at 09:00, before the vouch, and became the head after it.
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held('old'), say] }), pc)
+    assert.equal(of(p, 'proxyApprove').length, 0, 'the vouch was for the head it replaced')
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc'), 'the new head is held and asked about')
+  })
+
+  test('the vouch stands once the bot has asked about this head', () => {
+    const say = { author: 'Ardnived', createdAt: '2026-11-17T09:20:00Z', id: 2, body: '@sydevs-bot approve' }
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held(), say] }), pc)
+    assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
+  })
+
+  test('a bot approval at the bot\'s own head (the vouched one) is kept', () => {
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'abc' }
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, approved] }), pc)
+    assert.equal(of(p, 'proxyApprove').length + of(p, 'dismissProxy').length, 0)
+  })
+
+  test('`approve` from anyone but the owner-author is refused; from the author it re-evaluates', () => {
+    const ask = (author, s) => decide({ reason: 'issue_comment', facts: { author, body: '@sydevs-bot approve', association: 'MEMBER', commentId: 4 } }, s, pc)
+    const byOther = ask('antontcymbal', owned())
+    assert.ok(byOther.some((a) => a.type === 'comment' && a.key === 'approve-refused 4'))
+    const onBotPr = ask('Ardnived', owned({ pr: { ...owned().pr, user: { login: 'sydevs-bot' } } }))
+    assert.ok(onBotPr.some((a) => a.type === 'comment' && a.key === 'approve-refused 4'))
+    const own = ask('Ardnived', owned({ headAuthor: 'sydevs-bot', comments: [held(), { author: 'Ardnived', createdAt: '2026-11-17T09:30:00Z', body: '@sydevs-bot approve', id: 4 }] }))
+    assert.ok(own.some((a) => a.type === 'proxyApprove'))
+    const draft = ask('Ardnived', owned({ pr: { ...owned().pr, draft: true } }))
+    assert.equal(draft.filter((a) => a.type === 'fire' || a.type === 'proxyApprove').length, 0)
+  })
+}

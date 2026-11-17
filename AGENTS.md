@@ -178,8 +178,9 @@ A handler that finds one in its way hands the ticket back rather than attempting
 - **Use conventional commits.** Derive the scopes in use from `git log --oneline -30`. The body
   carries the *reasoning*, on purpose — it is the only record a prose change leaves behind.
 - **Branches are `claude/*`.** Cloud sessions cannot push anywhere else.
-- **Open the PR. Never merge it.** This repo is `loopMayNotMerge`: merging it is the deploy, so
-  no auto-merge is armed here and no queue runs. You merge it, deliberately.
+- **Open the PR. Never merge it.** Merging it is the deploy. The ruleset needs a person's
+  approval, the `test` check and the merge queue, as in the product repos, and GitHub merges once
+  they are met.
 - **No ticket is needed for anything in this repo.** `prAllowlistGlobs` is `**` — open the PR
   directly. This repo ships prose and config, so the PR body *is* the proposal. File a ticket only
   when the change needs a **decision** before code — competing designs, or a cost worth agreeing

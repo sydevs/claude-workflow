@@ -9,16 +9,10 @@ import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
-import { stripBlockedBy } from './markers.mjs'
+import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isReviewer, isHuman } from './decide.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
-
-const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
-
-function marker(text) {
-  return String(text || '').replace(/-->/g, '--&gt;')
-}
 
 /**
  * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
@@ -26,7 +20,7 @@ function marker(text) {
  * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 async function commentOnce(gh, t, bot, key, body, dryRun, log) {
-  const mark = `${DISPATCHER_MARK}${marker(key)} -->`
+  const mark = dispatcherMark(key)
   const comments = await gh.paginate(gh.rest.issues.listComments, { owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, per_page: 100 })
   if (comments.some((c) => isLogin(c.user?.login, bot) && String(c.body || '').startsWith(mark))) return log(`comment "${key}" already posted`)
   log(`comment: ${key}`)
@@ -260,6 +254,29 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           `mutation($id:ID!){ enablePullRequestAutoMerge(input:{pullRequestId:$id, mergeMethod:SQUASH}){ clientMutationId } }`,
           { id: snapshot.pr.nodeId }))
         if (armed) snapshot.pr.autoMergeArmed = true
+        break
+      }
+      // The owner's own PR, approved where GitHub refuses its author, pinned
+      // to the head the plan read. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+      case 'proxyApprove': {
+        if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
+        log(`approve ${String(a.sha).slice(0, 7)} for its author`)
+        if (dryRun) break
+        await handOver('approve the owner\'s PR', () => gh.rest.pulls.createReview({
+          ...args, pull_number: t.number, commit_id: a.sha, event: 'APPROVE',
+          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run, so it merges through the queue. ${config.identity.commentMarker || ''}`.trim(),
+        }))
+        break
+      }
+      case 'dismissProxy': {
+        for (const id of a.ids) {
+          log(`dismiss own approval ${id}`)
+          if (dryRun) continue
+          await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
+            ...args, pull_number: t.number, review_id: id,
+            message: `A commit of ${bot}'s own is now the head, and this approval did not cover it.`,
+          }))
+        }
         break
       }
       case 'sentry': {

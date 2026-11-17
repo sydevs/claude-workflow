@@ -946,8 +946,9 @@ testing in the four repos that have one. The dispatcher only **arms** auto-merge
 first moment GitHub permits it (auto-merge is refused on a draft, and every bot PR opens as one). A
 refused arming is handed over
 ([A write we cannot make is handed over, not thrown](#a-write-we-cannot-make-is-handed-over-not-thrown)).
-`mergePolicy.loopMayNotMerge` names repos never armed, because merging `claude-workflow` is the
-deploy and a ruleset cannot express *"a person decides this one."*
+`mergePolicy.loopMayNotMerge` names repos never armed. It named `claude-workflow` until its
+ruleset gained the same gate as the product repos: one approval, the `test` check, resolved threads
+and the queue. The approval is the person deciding, so arming no longer skips one (2026-11-17).
 
 ## The lock label is the lease
 
@@ -2099,13 +2100,49 @@ every lane. Now a ready member PR gets the critic once, auto-merge, and a review
 bot's. The reviewer is asked after the automated pass, as on a bot draft, where markReady and the
 request wait for a green CI, the critic and its answered threads (or `review.skipWhen`): a human
 who is pinged while the critic is still running reads a PR that is about to change. Every ruleset
-needs an approval, so a ready PR cannot merge before that human acts. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it: GitHub
+needs an approval, so a ready PR cannot merge before that human acts. The reviewer is `assignment.reviewer`, or the other member when the reviewer wrote it
+(and the owner's own PR is approved by the bot instead: [The owner's PR is approved by the bot](#the-owners-pr-is-approved-by-the-bot)): GitHub
 refuses a request to the author (sydevs/SahajAtlasWeb#318). A member's draft is left alone until it
 is ready or they mention the bot, and only a thread the bot or another person rooted, or another
 person's review, asks it for work: the author's own threads are notes to themselves. An inline-only
 review reaches the bot as its threads, since the review body it would be read from is empty. A
 member branch outside `claude/*` is reached through [the relay](#the-relay).
 Anyone else's PR answers a mention and nothing more.
+
+## The owner's PR is approved by the bot
+
+Every ruleset needs one approval, and GitHub refuses an author's own. A PR the owner opened from a
+local session (as Ardnived, not `sydevs-bot`) had nobody to approve it, so the owner disabled the
+auto-merge the dispatcher armed and merged with the admin bypass. That skipped the merge queue, and
+on SahajCloud 4 of 16 such merges (#1163, #1172, #1180, #1184, 2026-11-15 to 17) landed before
+`Lint, Test & Smoke` finished, and each of those runs then went red: on #1184 because the merge had
+torn down the Railway preview its smoke lane was reading.
+
+`mergePolicy.proxyApprove` names the authors whose own PR the bot approves, at the point a bot
+draft would be marked ready: CI green, the critic run (or the PR under `review.skipWhen`), its
+threads answered. From there the PR takes the same path as the bot's: the approval satisfies the
+ruleset, and the queue tests it against the base it lands on. No reviewer is requested: the
+approval it would wait for is given.
+
+The approval is pinned to the head it read, and never covers a commit of the bot's own. The loop
+pushes fixes onto member PRs (fix-ci, address-review, a relay), sometimes with behaviour nobody
+asked for, and the ruleset keeps an approval through later pushes. So when the head is the bot's,
+any earlier approval of its own is dismissed, and the PR waits for the author's
+`@sydevs-bot approve`, posted after that commit. A push of the author's own on top vouches for
+what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
+a review.
+
+Who pushed the head is therefore the whole guard, so an answer of *nobody* holds the approval
+rather than giving it. `getCommit` resolves `author` to null when the commit's email maps to no
+account, and the first cut read that as "not the bot" and approved — the one case the hold exists
+for, passed through by the field meant to catch it.
+
+The vouch is measured from the bot's own hold comment for that head, not from the commit's
+committer date. A session commits to a relay branch and Actions lands it when the session ends,
+up to `dispatch.timeoutsMinutes` later ([The relay](#the-relay)), so the commit's date is older
+than the vouch written for the head it replaced, and a date comparison carried that vouch onto
+code the author had never seen. The ask is the clock because the ask is what asks for the vouch:
+it cannot precede the commit it is about.
 
 ## The branch decides where a session pushes
 

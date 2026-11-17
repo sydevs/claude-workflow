@@ -9,11 +9,15 @@
 #
 # The workflow is named "CI" because workflow-state.yml listens for a
 # `workflow_run` of that name, so a red run reaches `fix-ci` on a bot PR.
-# Mark `CI / test` required in the ruleset to make it a merge gate.
+# The ruleset requires its `test` check, so it runs in the merge queue too.
 name: CI
 
 on:
   pull_request:
+  # The merge queue runs the required checks against a merge_group ref, not
+  # the PR head. Without this trigger the check never reports and the queue
+  # stalls forever. (why: docs/why.md#github-owns-the-merge)
+  merge_group:
 
 permissions: {}
 
@@ -66,8 +70,8 @@ jobs:
       # from the checkout, never from an install.
       - name: Plugin version is bumped with plugin changes
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
           changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- workflow/skills workflow/hooks workflow/lib ':!*.test.mjs')

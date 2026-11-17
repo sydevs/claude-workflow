@@ -83,7 +83,9 @@ test('a PR: review is yours, the queue is the machinery\'s, and a question threa
   assert.equal(key(pr({ pull: { draft: true } })), 'pending', 'a bot draft is still being built')
   assert.equal(key(pr({ pull: { draft: true, user: { login: 'Ardnived' } } })), 'awaiting', 'a member\'s draft is theirs')
   assert.equal(key(pr({ pull: { user: { login: 'dependabot[bot]' } }, normalized: { reviewDecision: 'APPROVED' } })), 'awaiting', 'an outside PR is only ever yours')
-  assert.equal(key(pr({ repo: { ...repo, name: 'claude-workflow' }, normalized: { reviewDecision: 'APPROVED' } })), 'awaiting', 'a repo the loop may not merge')
+  assert.equal(key(pr({ repo: { ...repo, name: 'claude-workflow' }, normalized: { reviewDecision: 'APPROVED' } })), 'pending', 'claude-workflow is armed like the rest')
+  const noMerge = { ...config, mergePolicy: { ...config.mergePolicy, loopMayNotMerge: ['claude-workflow'] } }
+  assert.equal(deriveStatus(pr({ repo: { ...repo, name: 'claude-workflow' }, normalized: { reviewDecision: 'APPROVED' } }), noMerge, now).key, 'awaiting', 'a repo the loop may not merge')
   assert.equal(key(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] })), 'pending')
   assert.equal(deriveStatus(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] }), config, now).due, false, 'waiting on its producer has no due')
 })
