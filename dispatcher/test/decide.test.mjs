@@ -1051,11 +1051,52 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
   const ASKED = '2026-11-17T09:05:00Z'
   const held = (sha = 'abc', createdAt = ASKED) => ({ author: 'sydevs-bot', createdAt, id: 1, body: `<!-- sydevs-dispatcher: proxy-held ${sha} -->\nRead it, then say \`@sydevs-bot approve\`.` })
 
-  test('the owner\'s green, critiqued PR is approved at its head and armed, and asks no reviewer', () => {
-    const p = evaluatePr(owned(), pc)
+  // sydevs/SahajCloud#1192 on 2026-11-17: approved by the bot, armed by the
+  // bot, and merged eleven minutes later with nobody having read it.
+  // (why: docs/why.md#the-owner-arms-their-own-pr)
+  test('the owner\'s green, critiqued PR is approved at its head, asks no reviewer, and is never armed', () => {
+    const p = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: false } }), pc)
     assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
     assert.equal(of(p, 'requestReviewer').length, 0)
+    assert.equal(of(p, 'armAutoMerge').length, 0)
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'abc' }
+    const later = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: false }, reviews: [critic, approved], normalized: { reviewDecision: 'APPROVED' } }), pc)
+    assert.equal(of(later, 'armAutoMerge').length, 0, 'not on a later pass either')
+  })
+
+  test('another member\'s PR is still armed', () => {
+    const p = evaluatePr(owned({ pr: { ...owned().pr, user: { login: 'antontcymbal' }, autoMergeArmed: false }, headAuthor: 'antontcymbal' }), pc)
     assert.equal(of(p, 'armAutoMerge').length, 1)
+  })
+
+  test('an auto-merge the bot armed on the owner\'s PR is disarmed first, and said once', () => {
+    const botArmed = owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, ci: running })
+    const p = evaluatePr(botArmed, pc)
+    assert.equal(p[0].type, 'disarmAutoMerge', 'ahead of everything, even while CI runs')
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-disarmed'))
+    const ownArm = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'Ardnived' } }), pc)
+    assert.equal(of(ownArm, 'disarmAutoMerge').length, 0, 'the owner\'s own arming stands')
+    const unread = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: null } }), pc)
+    assert.equal(of(unread, 'disarmAutoMerge').length, 1, 'an arming nobody is named for fails closed')
+    const member = evaluatePr(owned({ pr: { ...owned().pr, user: { login: 'antontcymbal' }, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, headAuthor: 'antontcymbal' }), pc)
+    assert.equal(of(member, 'disarmAutoMerge').length, 0, 'another member\'s PR keeps the bot\'s arming')
+    const locked = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, locked: true }), pc)
+    assert.equal(of(locked, 'disarmAutoMerge').length, 1, 'while a session holds the lease too: the queue does not wait for it')
+    assert.ok(of(locked, 'comment').some((c) => c.key === 'proxy-disarmed'), 'with the comment, which nothing plans again once it is off')
+  })
+
+  // sydevs/SahajAtlasWeb#318 carries the bot's approval and the bot's arming
+  // from 2026-10-28. It sits Awaiting and in step, so the sweep is the only
+  // pass it gets: a disarm `quietSweep` discards never reaches it.
+  test('a sweep of an Awaiting, bot-armed owner PR still disarms it', () => {
+    const stale = owned({
+      pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' },
+      record: { fixCi: 0, status: 'awaiting' },
+      normalized: { reviewDecision: 'APPROVED' },
+    })
+    const p = decide({ reason: 'sweep-pr', facts: {} }, stale, pc)
+    assert.equal(of(p, 'disarmAutoMerge').length, 1, 'the quiet sweep keeps it')
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-disarmed'), 'and says why')
   })
 
   test('another member\'s PR still asks the reviewer, and is never approved by the bot', () => {
@@ -1088,6 +1129,20 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(p, 'proxyApprove').length, 0)
     assert.deepEqual(of(p, 'dismissProxy').map((a) => a.ids), [[9]])
     assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('@sydevs-bot approve')))
+  })
+
+  // The owner's approved, unarmed PR now records Awaiting, so `quietSweep`
+  // judges its sweeps — and `proxyPlan` returns the dismissal with no move
+  // beside it.
+  test('a sweep of an Awaiting owner PR still dismisses an approval its own commit buried', () => {
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'old' }
+    const stale = owned({
+      headAuthor: 'sydevs-bot',
+      reviews: [critic, approved],
+      record: { fixCi: 0, status: 'awaiting' },
+      normalized: { reviewDecision: 'APPROVED' },
+    })
+    assert.deepEqual(of(decide({ reason: 'sweep-pr', facts: {} }, stale, pc), 'dismissProxy').map((a) => a.ids), [[9]])
   })
 
   test('the author\'s `approve` after the bot\'s ask vouches for the head; one from before does not', () => {

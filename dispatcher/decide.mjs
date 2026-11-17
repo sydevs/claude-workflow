@@ -26,6 +26,8 @@ export const commentOnce = (key, body) => ({ type: 'comment', key, body })
 export const markReady = () => ({ type: 'markReady' })
 export const requestReviewer = () => ({ type: 'requestReviewer' })
 export const armAutoMerge = () => ({ type: 'armAutoMerge' })
+/** Turn off an auto-merge the bot armed on the owner's own PR: arming it is theirs. */
+export const disarmAutoMerge = () => ({ type: 'disarmAutoMerge' })
 /** Approve the owner's own PR at `sha`, standing in for the approval GitHub refuses its author. */
 export const proxyApprove = (sha) => ({ type: 'proxyApprove', sha })
 /** Dismiss the bot's own approvals, by review id: a commit of its own sits on top of them. */
@@ -468,8 +470,10 @@ export function loopMayNotMerge(snapshot, config) {
 }
 
 // The actions that move an item. Every other action — a label, a comment, a
-// status, an anomaly — only restates where it already is.
-const MOVES = new Set(['fire', 'armAutoMerge', 'markReady', 'recheck', 'targets', 'rerunJobs'])
+// status, an anomaly — only restates where it already is. Turning a merge off,
+// or dismissing the approval that would allow one, moves an item as surely as
+// arming it does.
+const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'dismissProxy', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item last left Awaiting says nothing unless the
@@ -487,7 +491,39 @@ function quietSweep(plan, s, config) {
 }
 
 // ---- the one derivation every PR event funnels into ----------------------
+/**
+ * The owner arms their own PR; the bot never does. One the bot armed (before
+ * that rule, or by any path that forgot it) is disarmed on the first pass,
+ * ahead of everything else: with the bot's approval on it, the ruleset would
+ * merge it unread. Ahead of `evaluateOpenPr`'s lock guard too — a lease runs
+ * for hours and the queue does not wait for it. The comment goes with the
+ * disarm because nothing plans it again once auto-merge is off, and it carries
+ * a dispatcher marker, so no session reads it as a word of ours.
+ * (why: docs/why.md#the-owner-arms-their-own-pr)
+ */
 export function evaluatePr(s, config) {
+  const pr = s.pr
+  if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return evaluateOpenPr(s, config)
+  return [
+    disarmAutoMerge(),
+    // True whichever of them armed it: `botArmedOwnerPr` also fires on an
+    // arming GitHub names nobody for, which may be the owner's own.
+    commentOnce('proxy-disarmed', 'Auto-merge is off again: on your own PR, merging is yours. Enable it when you want this merged.'),
+    ...evaluateOpenPr(s, config),
+  ]
+}
+
+/**
+ * Armed by the bot, or by nobody GitHub would name: an unread arming fails
+ * closed. A draft is left alone, as everywhere: GitHub drops auto-merge when a
+ * PR goes back to draft.
+ */
+function botArmedOwnerPr(s, config) {
+  const by = s.pr?.autoMergeBy
+  return Boolean(s.pr?.autoMergeArmed) && !s.pr?.draft && (!by || isBot(by, config)) && proxyApproves(s.pr?.user?.login, config)
+}
+
+function evaluateOpenPr(s, config) {
   const pr = s.pr
   if (!pr || pr.state !== 'open') return []
   if (!fullTreatment(pr.user?.login, config)) return []
@@ -561,7 +597,9 @@ function evaluateGreenPr(s, config) {
   const waitsOn = s.linkedBlockedOpen?.length ? s.linkedBlockedOpen.join(', ') : null
   // evaluatePr stops a stacked PR before here; never arming one is the
   // guard behind that. (why: docs/why.md#a-stacked-pr-is-never-armed)
-  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stackedPr(s)
+  // The owner's own PR is approved by the bot, so arming it too would merge
+  // it with no person deciding. (why: docs/why.md#the-owner-arms-their-own-pr)
+  const mayArm = !loopMayNotMerge(s, config) && !waitsOn && !stackedPr(s) && !proxyApproves(pr.user?.login, config)
 
   if (pr.draft) {
     // implement opens the PR only once the ticket is built, so the critic
@@ -586,7 +624,8 @@ function evaluateGreenPr(s, config) {
   const member = !isBot(pr.user?.login, config)
   if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
   // The owner's own PR has no one to ask: the bot approves it at this point
-  // instead. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+  // instead, and `mayArm` leaves the merge to the owner.
+  // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
   const plan = !member ? [] : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
   // Said once per PR, not per head: this path runs on every pass, and a member
   // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no

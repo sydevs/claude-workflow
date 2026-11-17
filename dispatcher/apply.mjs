@@ -256,6 +256,17 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (armed) snapshot.pr.autoMergeArmed = true
         break
       }
+      // (why: docs/why.md#the-owner-arms-their-own-pr)
+      case 'disarmAutoMerge': {
+        if (!snapshot.pr?.autoMergeArmed) { log('auto-merge already off'); break }
+        log('disarm auto-merge the bot armed on the owner\'s PR')
+        if (dryRun) break
+        const off = await handOver('disarm auto-merge', () => gh.graphql(
+          `mutation($id:ID!){ disablePullRequestAutoMerge(input:{pullRequestId:$id}){ clientMutationId } }`,
+          { id: snapshot.pr.nodeId }))
+        if (off) { snapshot.pr.autoMergeArmed = false; snapshot.pr.autoMergeBy = null }
+        break
+      }
       // The owner's own PR, approved where GitHub refuses its author, pinned
       // to the head the plan read. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
       case 'proxyApprove': {
@@ -264,7 +275,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (dryRun) break
         await handOver('approve the owner\'s PR', () => gh.rest.pulls.createReview({
           ...args, pull_number: t.number, commit_id: a.sha, event: 'APPROVE',
-          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run, so it merges through the queue. ${config.identity.commentMarker || ''}`.trim(),
+          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run. Enable auto-merge when you want it merged: the queue tests it against its base. ${config.identity.commentMarker || ''}`.trim(),
         }))
         break
       }

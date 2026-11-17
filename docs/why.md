@@ -949,6 +949,8 @@ refused arming is handed over
 `mergePolicy.loopMayNotMerge` names repos never armed. It named `claude-workflow` until its
 ruleset gained the same gate as the product repos: one approval, the `test` check, resolved threads
 and the queue. The approval is the person deciding, so arming no longer skips one (2026-11-17).
+The exception is the owner's own PR, which the bot approves, so the owner arms it instead
+([The owner arms their own PR](#the-owner-arms-their-own-pr)).
 
 ## The lock label is the lease
 
@@ -1296,7 +1298,8 @@ a push, a verb — is an event the dispatcher already wakes on.** So a pass that
 and derives no move has found the state the last pass left: it runs the derivation and drops the
 plan. The gate is on the plan, not the fetch: `sweep-pr` still gathers, the only way to see a
 resolved thread or a refused write (why: docs/why.md#a-resolved-thread-fires-no-workflow). Those
-show up as a move (`merge`, `markReady`, `fire`), so they pass the gate.
+show up as a move (`armAutoMerge`, `disarmAutoMerge`, `dismissProxy`, `markReady`, `fire`), so they
+pass the gate.
 
 ## A review comment is feedback, whatever its association
 
@@ -2120,9 +2123,9 @@ torn down the Railway preview its smoke lane was reading.
 
 `mergePolicy.proxyApprove` names the authors whose own PR the bot approves, at the point a bot
 draft would be marked ready: CI green, the critic run (or the PR under `review.skipWhen`), its
-threads answered. From there the PR takes the same path as the bot's: the approval satisfies the
-ruleset, and the queue tests it against the base it lands on. No reviewer is requested: the
-approval it would wait for is given.
+threads answered. The approval satisfies the ruleset, and the queue tests the PR against the base
+it lands on once the owner arms it ([The owner arms their own PR](#the-owner-arms-their-own-pr)).
+No reviewer is requested: the approval it would wait for is given.
 
 The approval is pinned to the head it read, and never covers a commit of the bot's own. The loop
 pushes fixes onto member PRs (fix-ci, address-review, a relay), sometimes with behaviour nobody
@@ -2143,6 +2146,24 @@ up to `dispatch.timeoutsMinutes` later ([The relay](#the-relay)), so the commit'
 than the vouch written for the head it replaced, and a date comparison carried that vouch onto
 code the author had never seen. The ask is the clock because the ask is what asks for the vouch:
 it cannot precede the commit it is about.
+
+## The owner arms their own PR
+
+The first cut of the proxy approval also armed auto-merge, as on a bot PR, so nothing waited on the
+owner at all. A ready PR meant "the loop reviews this first", and it was read as "merge this".
+sydevs/SahajCloud#1192, one file and six lines, was opened ready from a local session: the critic
+skipped it under `review.skipWhen`, CI went green, the bot approved and armed it, and the queue
+merged it eleven minutes later, unread. Four more of the owner's PRs merged the same way within
+two hours of the rule shipping (SahajCloud#1188, #1189, SahajAtlasWeb#424, SahajAtlasWordpress#88),
+and SahajAtlasWeb#318, 97 files, sat approved and armed behind one unresolved thread.
+
+So on a `proxyApprove` author's PR the bot approves and never arms: enabling auto-merge is the
+owner's decision to merge, made in GitHub's own UI, and it still goes through the queue rather than
+the admin bypass the proxy approval replaced. An arming the bot made there (before this rule, or
+by any path that forgets it) is turned off on the PR's first pass, ahead of every other step, and
+the owner is told once, in words true whichever of them armed it. Who armed it is read from `auto_merge.enabled_by`, so the owner's own
+arming stands, and one GitHub names nobody for is turned off too: it could be the bot's. Status reads Awaiting, "enable auto-merge when you want it merged", from approval
+until they do.
 
 ## The branch decides where a session pushes
 
