@@ -54,13 +54,13 @@ own entries as tickets. Check this exclusion in every query you add to a skill.
 ## The gate
 
 **`claude plugin validate`, the first half of `leanGate.command`, is the entire automated gate
-for the plugin's prose** — there is no CI here. It checks only the plugin manifest and skill
+for the plugin's prose**; `.github/workflows/ci.yml` runs it, with both test suites, on every PR. It checks only the plugin manifest and skill
 frontmatter, never whether the prose is *right*, because the skills are prose. The lib suite, its
 second half, tests the `workflow/lib/` scripts that own mechanical rules. It must pass from the
 checkout **and** from a `.claude/worktrees/<slug>` worktree, because `implement-ticket` runs the
 gate from one.
 
-⚠ **`.github/workflows/` exists, and it is not CI.** It holds `dispatcher.yml` — the reusable
+⚠ **`.github/workflows/` is mostly not CI** (`ci.yml` is). It holds `dispatcher.yml` — the reusable
 workflow that observes every GitHub event in all five repos, classifies it, locks the item, fires
 the cloud session, and does every mechanical write — plus this repo's own thin caller. Editing it
 changes behaviour in every sydevs repo on the next event, with no merge anywhere else, so it

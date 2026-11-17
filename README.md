@@ -236,6 +236,22 @@ node --test workflow/lib/*.test.mjs
 node --test dispatcher/test/*.test.mjs
 ```
 
+`.github/workflows/ci.yml` runs the same tests on every pull request, validates the plugin, and
+fails a change to a skill or hook that leaves `version` in `plugin.json` alone.
+
+## Requirements
+
+On a laptop that runs the skills or their scripts:
+
+- **Node 22** for `workflow/lib`, the hooks and `dispatcher/`, with only `node:*` modules.
+- **git** and **gh**: scripts and hooks call `git`, and skills fall back to `gh api` for a search.
+- **jq**: skill snippets read `loop-config.json` and `.claude/workflow.json` with it.
+- **python3**: `ste-lint.py` and `skills/dev-server/dev-server.sh`.
+- **pnpm**: only where a repo's `workflow.json` names it (the formatting hooks run `pnpm exec`).
+
+No Railway CLI is needed here; `workflow/lib/railway.mjs` only reads Railway URLs. A cloud routine
+brings its own toolchain.
+
 ## Licence
 
 MIT. `finalize-pr/change-outline.md` is adapted from humanlayer's `visual-pr` (MIT), and

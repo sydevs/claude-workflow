@@ -459,7 +459,7 @@ test('implement on a blocked ticket approves it, says what it waits on, and fire
 })
 
 test('a PR whose linked issue is still locked belongs to that session alone', () => {
-  // claude-workflow has no CI, so a draft PR is green the moment it opens.
+  // A repo with no CI reads a draft green the moment it opens.
   // Without this the critic fires while implement is still pushing.
   const draft = (over) => prSnap({ pr: { ...prSnap().pr, draft: true, changed_files: 8, additions: 120 }, linkedIssues: [729], ...over })
   assert.deepEqual(types(evaluatePr(draft({ linkedLocked: [729] }), config)), ['note'], 'held')

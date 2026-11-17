@@ -800,8 +800,9 @@ This settles sydevs/claude-workflow#160: an `@sydevs-bot` request needs no speci
 The ban came from SahajCloud#769: three conflict essays in twenty-five minutes, costly for the
 essays, not the merges, so a clean merge earns one line and a semantic conflict aborts the merge,
 not the run. Accepted cost: *changes since your last review* now includes what the base gained.
-Retired reasons, not to come back: `claude-workflow` has no merge queue (`ci.noCi`); a preview
-builds the branch head ([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs));
+Retired reasons, not to come back: `claude-workflow` has no merge queue (and `ci.noCi` listed it
+then); a preview builds the branch head
+([A conflicted PR schedules zero CI runs](#a-conflicted-pr-schedules-zero-ci-runs));
 and the re-flagged approval ([A review list arrives one page at a time](#a-review-list-arrives-one-page-at-a-time))
 is gone, as the `synchronize` handler makes a bot push a `note` now.
 
@@ -1175,10 +1176,11 @@ cutover slated it for deletion; only `Stage` goes.
 
 `bot:working` sits on the issue an implement session was given; its PR carries no lock. But the
 session owns the **branch** and keeps running for minutes after `finalize-pr` pushes. Every PR
-event asked only whether the PR was locked. CI usually hides that window, but `claude-workflow` has
-no CI, so `ci.noCi` calls a draft green the instant it opens, and the critic would fire against a
-branch implement was still pushing to. So a PR is held while any issue it closes carries the lock,
-at one issue read per bot-PR event: one session per piece of work, not per item.
+event asked only whether the PR was locked. CI usually hides that window, but `claude-workflow` ran
+no CI then, so `ci.noCi` called a draft green the instant it opened, and the critic would fire
+against a branch implement was still pushing to. The repo has CI now and the hold stays: a check
+run takes seconds to appear, and a push lands in one. So a PR is held while any issue it closes
+carries the lock, at one issue read per bot-PR event: one session per piece of work, not per item.
 
 ## A PR is the answer to an implement verb
 

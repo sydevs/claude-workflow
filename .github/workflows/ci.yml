@@ -1,0 +1,83 @@
+# CI for this repo's own pull requests. Until this file, nothing ran the
+# tests before a merge, and a merge here is the deploy to every consumer.
+#
+# It reads `leanGate.command` from .claude/workflow.json and runs it, so the
+# gate has one definition, plus the dispatcher tests (in no gate before) and
+# a JSON parse of every config.
+# It checks out the PR's merge commit and runs it with no secrets and a
+# read-only token, so a PR can run its own tests and nothing else.
+#
+# The workflow is named "CI" because workflow-state.yml listens for a
+# `workflow_run` of that name, so a red run reaches `fix-ci` on a bot PR.
+# Mark `CI / test` required in the ruleset to make it a merge gate.
+name: CI
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Config files parse
+        run: |
+          set -euo pipefail
+          git ls-files '*.json' | while read -r f; do
+            node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$f" || { echo "::error file=$f::invalid JSON"; exit 1; }
+          done
+      # dispatcher/ is in no other gate: `leanGate.command` covers the
+      # plugin, and `.claude/` is a protected path, so adding these to it
+      # needs an attended run.
+      - name: Dispatcher tests
+        run: node --test dispatcher/test/*.test.mjs
+      # The gate is defined once, in .claude/workflow.json, and run here
+      # exactly as a maintainer runs it by hand — so an edit there reaches
+      # CI with no second copy to keep in step. Its first half is `claude
+      # plugin validate`, which needs no login. The CLI is pinned, so a CLI
+      # release cannot redden a PR.
+      - name: Lean gate
+        run: |
+          set -euo pipefail
+          npm install --global @anthropic-ai/claude-code@2.1.311
+          gate=$(jq -er '.leanGate.command' .claude/workflow.json)
+          echo "$gate"
+          bash -euo pipefail -c "$gate"
+      # CLAUDE.md: an installed plugin is keyed by `version`, so a change to
+      # anything the plugin ships that leaves it alone never reaches an
+      # install. `workflow/lib` ships too: skills call its scripts as
+      # `${CLAUDE_PLUGIN_ROOT}/lib/<script>`. Tests are excluded — they run
+      # from the checkout, never from an install.
+      - name: Plugin version is bumped with plugin changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- workflow/skills workflow/hooks workflow/lib ':!*.test.mjs')
+          [ -n "$changed" ] || { echo "Nothing the plugin ships changed."; exit 0; }
+          version() { git show "$1:workflow/.claude-plugin/plugin.json" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).version)'; }
+          before=$(version "$BASE_SHA")
+          after=$(version "$HEAD_SHA")
+          if [ "$before" = "$after" ]; then
+            echo "::error file=workflow/.claude-plugin/plugin.json::Plugin files changed but version is still $before. An installed plugin never updates without a version bump (CLAUDE.md)."
+            echo "$changed"
+            exit 1
+          fi
+          echo "version $before -> $after"
