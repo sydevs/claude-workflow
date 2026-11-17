@@ -1131,6 +1131,20 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('@sydevs-bot approve')))
   })
 
+  // The owner's approved, unarmed PR now records Awaiting, so `quietSweep`
+  // judges its sweeps — and `proxyPlan` returns the dismissal with no move
+  // beside it.
+  test('a sweep of an Awaiting owner PR still dismisses an approval its own commit buried', () => {
+    const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'old' }
+    const stale = owned({
+      headAuthor: 'sydevs-bot',
+      reviews: [critic, approved],
+      record: { fixCi: 0, status: 'awaiting' },
+      normalized: { reviewDecision: 'APPROVED' },
+    })
+    assert.deepEqual(of(decide({ reason: 'sweep-pr', facts: {} }, stale, pc), 'dismissProxy').map((a) => a.ids), [[9]])
+  })
+
   test('the author\'s `approve` after the bot\'s ask vouches for the head; one from before does not', () => {
     const say = (createdAt) => [held(), { author: 'Ardnived', createdAt, body: '@sydevs-bot approve', id: 3 }]
     const after = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: say('2026-11-17T09:30:00Z') }), pc)

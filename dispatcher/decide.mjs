@@ -470,9 +470,10 @@ export function loopMayNotMerge(snapshot, config) {
 }
 
 // The actions that move an item. Every other action — a label, a comment, a
-// status, an anomaly — only restates where it already is. Turning a merge off
-// moves an item as surely as arming one does.
-const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'markReady', 'recheck', 'targets', 'rerunJobs'])
+// status, an anomaly — only restates where it already is. Turning a merge off,
+// or dismissing the approval that would allow one, moves an item as surely as
+// arming it does.
+const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'dismissProxy', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item last left Awaiting says nothing unless the

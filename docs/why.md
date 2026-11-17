@@ -1298,7 +1298,8 @@ a push, a verb — is an event the dispatcher already wakes on.** So a pass that
 and derives no move has found the state the last pass left: it runs the derivation and drops the
 plan. The gate is on the plan, not the fetch: `sweep-pr` still gathers, the only way to see a
 resolved thread or a refused write (why: docs/why.md#a-resolved-thread-fires-no-workflow). Those
-show up as a move (`armAutoMerge`, `disarmAutoMerge`, `markReady`, `fire`), so they pass the gate.
+show up as a move (`armAutoMerge`, `disarmAutoMerge`, `dismissProxy`, `markReady`, `fire`), so they
+pass the gate.
 
 ## A review comment is feedback, whatever its association
 
