@@ -437,6 +437,12 @@ function deployPass(s, config) {
   return advisoryNote(s).concat(fire('fix-ci', { mode: 'deploy' }))
 }
 
+/** The note that a PR under `review.skipWhen` got no critic, and how to force one. */
+function criticSkipped(pr, config, key) {
+  const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
+  return commentOnce(key, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`)
+}
+
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
@@ -555,10 +561,7 @@ function evaluateGreenPr(s, config) {
     const plan = [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
     if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
-    if (small && !ownReview(s, config)) {
-      const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
-      plan.push(commentOnce(`critic-skipped ${pr.head?.sha}`, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`))
-    }
+    if (small && !ownReview(s, config)) plan.push(criticSkipped(pr, config, `critic-skipped ${pr.head?.sha}`))
     return plan
   }
 
@@ -570,6 +573,10 @@ function evaluateGreenPr(s, config) {
   const member = !isBot(pr.user?.login, config)
   if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
   const plan = member ? [requestReviewer()] : []
+  // Said once per PR, not per head: this path runs on every pass, and a member
+  // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
+  // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
+  if (member && !ownReview(s, config)) plan.push(criticSkipped(pr, config, 'critic-skipped'))
 
   // The dispatcher no longer merges. GitHub does, once the ruleset is
   // satisfied — one approval, every thread resolved, CI green — and the queue
