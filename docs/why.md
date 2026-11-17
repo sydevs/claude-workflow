@@ -2132,6 +2132,11 @@ any earlier approval of its own is dismissed, and the PR waits for the author's
 what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
 a review.
 
+Who pushed the head is therefore the whole guard, so an answer of *nobody* holds the approval
+rather than giving it. `getCommit` resolves `author` to null when the commit's email maps to no
+account, and the first cut read that as "not the bot" and approved — the one case the hold exists
+for, passed through by the field meant to catch it.
+
 ## The branch decides where a session pushes
 
 address-review asked "is this PR mine?" by its author, and opened a stacked PR on any other. On
