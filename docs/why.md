@@ -946,8 +946,9 @@ testing in the four repos that have one. The dispatcher only **arms** auto-merge
 first moment GitHub permits it (auto-merge is refused on a draft, and every bot PR opens as one). A
 refused arming is handed over
 ([A write we cannot make is handed over, not thrown](#a-write-we-cannot-make-is-handed-over-not-thrown)).
-`mergePolicy.loopMayNotMerge` names repos never armed, because merging `claude-workflow` is the
-deploy and a ruleset cannot express *"a person decides this one."*
+`mergePolicy.loopMayNotMerge` names repos never armed. It named `claude-workflow` until its
+ruleset gained the same gate as the product repos: one approval, the `test` check, resolved threads
+and the queue. The approval is the person deciding, so arming no longer skips one (2026-11-17).
 
 ## The lock label is the lease
 

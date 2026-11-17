@@ -203,9 +203,7 @@
   },
   "mergePolicy": {
     "$comment": "loopMayNotMerge: repos never armed, whatever the gate says. proxyApprove: authors whose own ready PR the bot approves once CI is green and the critic has run, because GitHub refuses their approval and the ruleset needs one. Rules in dispatcher/decide.mjs.",
-    "loopMayNotMerge": [
-      "claude-workflow"
-    ],
+    "loopMayNotMerge": [],
     "proxyApprove": [
       "Ardnived"
     ]
