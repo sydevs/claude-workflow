@@ -501,7 +501,9 @@ export function evaluatePr(s, config) {
   if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return evaluateOpenPr(s, config)
   return [
     disarmAutoMerge(),
-    commentOnce('proxy-disarmed', `Auto-merge was armed by ${config.identity.expectedLogin}, so it is off again: on your own PR, merging is yours. Enable auto-merge when you want it merged.`),
+    // True whichever of them armed it: `botArmedOwnerPr` also fires on an
+    // arming GitHub names nobody for, which may be the owner's own.
+    commentOnce('proxy-disarmed', 'Auto-merge is off again: on your own PR, merging is yours. Enable it when you want this merged.'),
     ...evaluateOpenPr(s, config),
   ]
 }

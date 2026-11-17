@@ -2160,7 +2160,7 @@ So on a `proxyApprove` author's PR the bot approves and never arms: enabling aut
 owner's decision to merge, made in GitHub's own UI, and it still goes through the queue rather than
 the admin bypass the proxy approval replaced. An arming the bot made there (before this rule, or
 by any path that forgets it) is turned off on the PR's first pass, ahead of every other step, and
-the owner is told once. Who armed it is read from `auto_merge.enabled_by`, so the owner's own
+the owner is told once, in words true whichever of them armed it. Who armed it is read from `auto_merge.enabled_by`, so the owner's own
 arming stands, and one GitHub names nobody for is turned off too: it could be the bot's. Status reads Awaiting, "enable auto-merge when you want it merged", from approval
 until they do.
 
