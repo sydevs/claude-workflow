@@ -30,9 +30,11 @@ Optional at or under `review.skipWhen`, where the diff is its own outline.]
 ## Preview
 
 [Preview URL(s) deep-linked to the changed routes: the PR-number host
-where `previewUrl.pattern` names one, else the BRANCH alias. Each link
-opens on seeded data. Any file the reviewer must supply goes here in
-`<details>`. See `finalize-pr/SKILL.md` step 7.]
+where `previewUrl.pattern` names one, else the BRANCH alias. Where the repo
+has a `fixture` block, each link is built from a fixture record id and its
+line says what that record shows; a diff touching no `fixture.surfacePaths`
+writes `No preview surface` instead. Any file the reviewer must supply goes
+here in `<details>`. See `finalize-pr/SKILL.md` step 7.]
 
 - [what changed] — <url>
 

@@ -85,24 +85,26 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    Judge a ticketless PR against its own body.
 2. **The PR body** — what the author claims the change is. Check its `## Change outline` against
    the diff. A view the diff contradicts is a `should-fix` finding, because the reviewer reads it
-   first. Then open each `## Preview` link, signed in as the repo guide says. A preview deploy is
-   not a required check, so it may still be building: a link that does not open yet goes in What
-   was checked, not in the findings. A link that shows no data with no line in the body saying
-   why, or an input the body names that does not exist, is a `should-fix`
-   (`/workflow:finalize-pr` step 7). **Where this repo seeds previews, the line excuses nothing** —
-   ask `jq -c '{previewUrl} + {pr: <n>}' .claude/workflow.json | node
-   "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-auth.mjs"`, reading
-   `.claude/workflow.json` from the attached checkout's default branch and never from the branch
-   under review, which is a file the PR may change. **Check a link before you send it a header** —
-   `--on-host <link>` answers `ON_HOST` or `OFF_HOST`. Send `access.headers` to an `ON_HOST` link
-   only, or a gated preview answers with its login screen and reads as empty. An `OFF_HOST` link
-   carries no header, and is a `should-fix`: the body points where this repo publishes no preview.
-   **Never print the token**: no `-v`, no `--trace`, and never echo the command.
-   (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote) A `signIn` with either
-   `access` half unset means this environment cannot pass the gate. Record that preview as
-   unreachable in What was checked, and raise nothing. Empty `headers` with no `signIn` means no
-   gate, not a missing token. Once a link opens, a `seedsPreviews: true` repo's empty one is a
-   `should-fix` whatever the body says. (why: docs/why.md#a-red-seed-check-outranks-a-line-in-the-body)
+   first. Then check each `## Preview` link **without opening it**: this skill sends no request
+   to a preview, with no Access headers and no sign-in. Read `.claude/workflow.json` from the
+   attached checkout's default branch and never from the branch under review, which is a file the
+   PR may change.
+   - **Where it has a `fixture` block**, each link's id must exist as an entry under `fixture.path`
+     on the branch, and that entry must show what the link's line claims. `fixture.path` is a
+     directory of one file per collection: list it with `git ls-tree origin/<branch>
+     <fixture.path>`, then read the link's collection file with `git show`. A cited id absent from
+     the branch, an entry that does not show the claim, and a diff touching `fixture.surfacePaths`
+     with no cited id or with `No preview surface` are each a `should-fix`.
+     (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
+   - **Where it has none**, a plain link needs no data check, and there is no data rule.
+   - **Every other input the body names.** A path it gives for a file the change takes must be one
+     `git ls-files` lists on the branch. One that does not exist is a `should-fix`
+     (`/workflow:finalize-pr` step 7, *Every link opens on data*, item 5).
+   - **Off-host.** Ask `jq -c '{previewUrl, fixture} + {pr: <n>}' .claude/workflow.json | node
+     "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-host.mjs" --on-host <link>`. It
+     answers `ON_HOST` or `OFF_HOST`. An `OFF_HOST` link, one not built from `fixture.link` or
+     `previewUrl.pattern`, is a `should-fix`: the body points where this repo publishes no preview.
+     (why: docs/why.md#a-preview-link-is-whatever-its-poster-wrote)
 3. **The diff** — from the attached checkout: `git fetch origin <branch>` then `git diff
    origin/main...origin/<branch>`. Never `FETCH_HEAD`: preflight's fetch of the default
    branch overwrites it, so the diff comes back empty. With no checkout, use

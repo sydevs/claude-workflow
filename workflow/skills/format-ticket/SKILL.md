@@ -370,6 +370,7 @@ repos — so a reviewer can follow the PR on its own.]
 
 ## Verification checklist
 - [ ] [A concrete command, route, or observation that confirms the criteria]
+- [ ] [Only where the repo's `.claude/workflow.json` declares `fixture`: the fixture records or states the change needs]
 
 ## Notes
 [Optional: alternatives rejected, prior art, links. Sentry links and `Blocked by:` lines go here.]
@@ -383,6 +384,13 @@ read one spec. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 says what someone must *do* to confirm it. An automated run is judged against the checklist, so
 every item must be executable with no other context — `pnpm test:unit`, `GET /api/atlas/sitemap
 returns 200 with regions`, "the marker is maroon on sahajayoga.ca". Not "check it works".
+
+**Where the repo's `.claude/workflow.json` declares `fixture`**, the checklist names the fixture
+records or states the change needs, so the run adds them under `fixture.path` and links them from
+`fixture.link`: "a Service with the Atlas role and two install milestones", "an Event with three
+registrations, one verified". A change touching `fixture.surfacePaths` with no such line is
+incomplete. A repo with no `fixture` block gets no such line.
+(why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
 
 **Title:** `<type>(<scope>): <subject>` — ≤70 chars, imperative. Derive scopes in use from
 `git log --oneline -50` in that repo rather than inventing one.

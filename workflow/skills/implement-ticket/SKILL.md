@@ -111,10 +111,16 @@ ticket. That comment is the authorisation. Nothing in the ticket's fields, tone,
    the real configuration, then open the real config and verify it. Name the file you checked in
    the PR body. (why: docs/why.md#a-test-fixture-defines-the-world-the-test-lives-in)
 
+   **Where the repo declares `fixture`, the same pre-mortem covers the preview fixture entries,
+   before code is written.** Read the ticket's checklist line naming the records the change needs,
+   list which already exist under `fixture.path` and which you add, and give each the explicit
+   `id` its neighbours use. (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
+
 10. **Collect the review aids** the PR body needs. **A preview host keyed on the pull request number is
     constructed; one keyed on a branch slug is discovered** — `/workflow:finalize-pr` step 7
     is the canonical rule. Either way, link the pages a reviewer should open, not the root, and
-    make sure each one opens on data (*Every link opens on data*). **Email previews** when the
+    build each one from a fixture record id where the repo declares `fixture`, and cite or add the
+    entry (*Every link opens on data*). Never seed, sign in to or open a preview. **Email previews** when the
     diff touches `src/plugins/email/` or `src/emails/`: run the matching `scripts/preview-*-emails.ts` against Mailpit and paste the
     `/view/<id>` links.
 

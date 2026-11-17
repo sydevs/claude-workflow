@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { check, fit, DEFAULT_BUDGETS, DEFAULT_MARKER, DEFAULT_MARKER_REQUIRED, VERDICTS } from './budget.mjs'
-import { VERDICTS as PREVIEW_VERDICTS } from './preview-auth.mjs'
+import { VERDICTS as PREVIEW_VERDICTS } from './preview-host.mjs'
 import { loadLoopConfig } from './config.mjs'
 import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync } from 'node:fs'

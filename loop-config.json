@@ -284,11 +284,6 @@
     },
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
-  "previewAccess": {
-    "$comment": "The loop's own Cloudflare Access service token for a gated PR preview, separate from CI's so either can be switched off without deleting the other.",
-    "clientIdEnvVar": "PREVIEW_ACCESS_CLIENT_ID",
-    "clientSecretEnvVar": "PREVIEW_ACCESS_CLIENT_SECRET"
-  },
   "railway": {
     "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
     "apiBase": "https://backboard.railway.com/graphql/v2",
@@ -306,11 +301,6 @@
   "storybook": {
     "$comment": "The one Storybook version every library pins, so their component manifests stay comparable.",
     "version": "10.6.1"
-  },
-  "preview": {
-    "$comment": "finalize-pr step 7b: the one bounded wait, for a preview deploy that step 7's links need (why: docs/why.md#push-and-end).",
-    "deployWaitMinutes": 20,
-    "pollSeconds": 60
   },
   "contractSync": {
     "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command: as a commit on the consumer PR its goal built beside it, else on main, in one bot PR on branch. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",

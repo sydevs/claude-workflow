@@ -56,8 +56,8 @@ dispatcher cannot re-run it. The stale-head check still applies.
 1. `node <claude-workflow>/workflow/lib/railway.mjs < record.json > railway.json`. Keep only a
    `deployments` entry whose `targetUrl` a failing status in `pull_request_read method:get_status`
    also carries. None left → journal it, and stop.
-2. Read each one's logs with `curl`. Never print the token. Read the errors and the last lines,
-   not the whole file.
+2. Read each one's logs with `curl`. **Never print the token**: no `-v`, no `--trace`, and never
+   echo the command. Read the errors and the last lines, not the whole file.
    ```bash
    jq -c '.deployments[0].request' railway.json | curl -sS "$(jq -r .apiBase railway.json)" \
      -H "Authorization: Bearer $(printenv "$(jq -r .tokenEnvVar railway.json)")" \
