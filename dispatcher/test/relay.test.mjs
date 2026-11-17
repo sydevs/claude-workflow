@@ -41,7 +41,7 @@ const repo = { owner: 'sydevs', repo: 'SahajAtlasWeb' }
 test('relay: a fast-forward lands it and deletes the relay branch', async () => {
   const gh = fakeGit()
   const r = await applyRelay(gh, repo, req)
-  assert.deepEqual(r, { landed: true, refusal: null })
+  assert.equal(r, null, 'no refusal')
   assert.deepEqual(gh.calls.map((c) => c[0]), ['getRef', 'updateRef', 'deleteRef'])
   assert.deepEqual(gh.calls[1], ['updateRef', 'heads/feat/theirs', SHA, false], 'never forced')
 })
@@ -49,7 +49,7 @@ test('relay: a fast-forward lands it and deletes the relay branch', async () => 
 test('relay: the member pushed meanwhile, so it merges server-side instead', async () => {
   const gh = fakeGit({ update: err(422, 'Update is not a fast forward') })
   const r = await applyRelay(gh, repo, req)
-  assert.equal(r.landed, true)
+  assert.equal(r, null, 'no refusal')
   assert.deepEqual(gh.calls.map((c) => c[0]), ['getRef', 'updateRef', 'merge', 'deleteRef'])
   assert.deepEqual(gh.calls[2], ['merge', 'feat/theirs', BRANCH])
 })
@@ -57,9 +57,8 @@ test('relay: the member pushed meanwhile, so it merges server-side instead', asy
 test('relay: a conflict is handed back and the relay branch is kept', async () => {
   const gh = fakeGit({ update: err(422, 'Update is not a fast forward'), merge: err(409, 'Merge conflict') })
   const r = await applyRelay(gh, repo, req)
-  assert.equal(r.landed, false)
-  assert.equal(r.refusal.what, 'merge the relay')
-  assert.match(r.refusal.why, /conflicts with feat\/theirs: Merge conflict/)
+  assert.equal(r.what, 'merge the relay')
+  assert.match(r.why, /conflicts with feat\/theirs: Merge conflict/)
   assert.ok(!gh.calls.some((c) => c[0] === 'deleteRef'), 'nothing is lost')
 })
 
@@ -67,8 +66,7 @@ test('relay: a workflow-scope refusal is handed back in GitHub\'s words, without
   const words = 'refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci.yml` without `workflow` scope'
   const gh = fakeGit({ update: err(422, words) })
   const r = await applyRelay(gh, repo, req)
-  assert.equal(r.landed, false)
-  assert.equal(r.refusal.why, words)
+  assert.deepEqual(r, { what: 'apply the relay', why: words }, 'the refusal carries nothing else')
   assert.ok(!gh.calls.some((c) => c[0] === 'merge'))
 })
 
@@ -76,8 +74,8 @@ test('relay: a relay branch at another commit, or missing, is refused before any
   for (const relayAt of ['b'.repeat(40), null]) {
     const gh = fakeGit({ relayAt })
     const r = await applyRelay(gh, repo, req)
-    assert.equal(r.landed, false)
-    assert.match(r.refusal.why, relayAt ? /not the requested aaaaaaa/ : /does not exist/)
+    assert.equal(r.what, 'apply the relay')
+    assert.match(r.why, relayAt ? /not the requested aaaaaaa/ : /does not exist/)
     assert.deepEqual(gh.calls.map((c) => c[0]), ['getRef', 'compare'])
   }
 })
@@ -86,7 +84,7 @@ test('relay: a branch already gone because an earlier run landed it is not hande
   for (const compare of ['identical', 'ahead']) {
     const gh = fakeGit({ relayAt: null, compare })
     const r = await applyRelay(gh, repo, req)
-    assert.deepEqual(r, { landed: true, refusal: null })
+    assert.equal(r, null, 'no refusal')
     assert.deepEqual(gh.calls, [['getRef', `heads/${BRANCH}`], ['compare', `${SHA}...feat/theirs`]], 'no write, no delete')
   }
 })
@@ -94,8 +92,8 @@ test('relay: a branch already gone because an earlier run landed it is not hande
 test('relay: a commit the PR branch does not hold, or cannot be compared, is still refused', async () => {
   for (const compare of ['behind', 'diverged', err(404, 'Not Found')]) {
     const r = await applyRelay(fakeGit({ relayAt: null, compare }), repo, req)
-    assert.equal(r.landed, false)
-    assert.match(r.refusal.why, /does not exist/)
+    assert.equal(r.what, 'apply the relay')
+    assert.match(r.why, /does not exist/)
   }
 })
 

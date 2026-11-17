@@ -376,7 +376,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'relay': {
         log(`relay ${a.branch} (${String(a.sha).slice(0, 7)}) → ${a.head}`)
         if (dryRun) break
-        const { refusal } = await applyRelay(gh, args, a, log)
+        const refusal = await applyRelay(gh, args, a, log)
         if (refusal) handedOver.push(refusal)
         break
       }

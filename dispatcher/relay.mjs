@@ -57,9 +57,10 @@ async function holds(gh, args, head, sha) {
 const words = (e) => String(e?.message || '').replace(/\s+/g, ' ').trim().slice(0, 220)
 
 /**
- * Moves the PR's branch to the relay. Returns `{ landed, refusal }`: a
- * refusal is `{ what, why }` for the hand-over, with GitHub's words in `why`.
- * Never throws for a refused or conflicting write; an unexpected error does.
+ * Moves the PR's branch to the relay. Returns a refusal `{ what, why }` for the
+ * hand-over, quoting GitHub in `why` where GitHub refused, or `null` when the
+ * PR's branch holds the commits. Never throws for a refused or conflicting
+ * write; an unexpected error does.
  */
 export async function applyRelay(gh, { owner, repo }, { branch, head, sha }, log = () => {}) {
   const args = { owner, repo }
@@ -75,30 +76,27 @@ export async function applyRelay(gh, { owner, repo }, { branch, head, sha }, log
     // the commit is a relay applied, not refused. (why: docs/why.md#the-relay)
     if (await holds(gh, args, head, sha)) {
       log(`relay ${branch}: ${head} already holds ${sha.slice(0, 7)}`)
-      return { landed: true, refusal: null }
+      return null
     }
-    return { landed: false, refusal: { what: 'apply the relay', why: at ? `${branch} is at ${at.slice(0, 7)}, not the requested ${sha.slice(0, 7)}` : `${branch} does not exist` } }
+    return { what: 'apply the relay', why: at ? `${branch} is at ${at.slice(0, 7)}, not the requested ${sha.slice(0, 7)}` : `${branch} does not exist` }
   }
-  let landed = false
   try {
     await gh.rest.git.updateRef({ ...args, ref: `heads/${head}`, sha, force: false })
-    landed = true
     log(`relay ${branch} fast-forwarded ${head} to ${sha.slice(0, 7)}`)
   } catch (e) {
     // 422 is GitHub's "not a fast forward": the member pushed meanwhile.
     // A workflow-scope refusal is a 422 too, and a merge would hit the same
     // wall, so it is handed back as said. (why: docs/why.md#quote-the-refusal-do-not-name-a-cause)
     if (e?.status !== 422 || /workflow/i.test(words(e))) {
-      if ([403, 404, 422].includes(e?.status)) return { landed: false, refusal: { what: 'apply the relay', why: words(e) } }
+      if ([403, 404, 422].includes(e?.status)) return { what: 'apply the relay', why: words(e) }
       throw e
     }
     try {
       const r = await gh.rest.repos.merge({ ...args, base: head, head: branch, commit_message: `Merge ${branch} into ${head}` })
-      landed = true
       log(r?.status === 204 ? `relay ${branch}: ${head} already holds it` : `relay ${branch} merged into ${head}`)
     } catch (e2) {
-      if (e2?.status === 409) return { landed: false, refusal: { what: 'merge the relay', why: `${branch} conflicts with ${head}: ${words(e2)}` } }
-      if ([403, 404, 422].includes(e2?.status)) return { landed: false, refusal: { what: 'merge the relay', why: words(e2) } }
+      if (e2?.status === 409) return { what: 'merge the relay', why: `${branch} conflicts with ${head}: ${words(e2)}` }
+      if ([403, 404, 422].includes(e2?.status)) return { what: 'merge the relay', why: words(e2) }
       throw e2
     }
   }
@@ -107,5 +105,5 @@ export async function applyRelay(gh, { owner, repo }, { branch, head, sha }, log
   } catch (e) {
     log(`relay branch ${branch} not deleted — ${e?.status || '?'} ${words(e)}`)
   }
-  return { landed, refusal: null }
+  return null
 }
