@@ -349,36 +349,6 @@ instead is never revisited, because the run ends at the push ([Push and end](#pu
 ([Link the branch alias, never a commit alias](#link-the-branch-alias-never-a-commit-alias)).
 `workflow/skills/finalize-pr/SKILL.md` owns the mechanism and the config key for the host kind.
 
-## A preview link must open on data
-
-SahajCloud#874 ran for eighteen phases. Its Preview section linked three admin pages (country list,
-state list, import batches). Every phase refreshed it, the critic read the body once, and no one
-opened a link. The preview database held one row, the admin account the deploy provisions, so the
-country list was empty and the Import tab the PR was about was unreachable. The links passed every
-check (right host, existing paths), because the rule never asked whether the route showed the
-change. Seeding the preview by hand afterwards found three import defects: nine of thirteen German
-addresses geocoded to the wrong town, which any reviewer with data would have seen in a minute.
-
-The rule stands: a link to an empty page is not a preview. What changed is where the data comes
-from. It used to be filled into a running preview by a run with a sign-in, which left the rule
-resting on a credential and a wait, and let 13 of the last 40 PRs ship with a disclosure line in place of data. Now the
-data is a file in the diff, and the link is built from its id
-([A preview loads a fixture committed in the diff](#a-preview-loads-a-fixture-committed-in-the-diff)).
-
-## A red load check outranks a line in the body
-
-A line in the body saying a link shows nothing was accepted while nothing could fill a preview.
-sydevs/SahajCloud#1073 shipped its Registrations page with a line saying the preview was unseeded and a console snippet
-to paste, and that read as compliance: a sentence passed every check.
-
-Where a repo has a fixture, no sentence stands in for the data. The app loads the fixture itself at
-boot, and the CI check that goes red is that load, gated by `/api/health`: a preview that is up but
-holds no fixture fails a check, so "the preview has data" is not something a run or a reviewer
-asserts. What `review-pr` checks is the diff: every changed surface cites a record that exists on
-the branch. The rule is **conditional and never a removal**: a repo with no `fixture` block keeps
-plain links and no data rule, and `finalize-pr` and `review-pr` key on the block, never on a repo
-name.
-
 ## A preview link is whatever its poster wrote
 
 `review-pr` reads the `## Preview` links out of the body under review, and the dispatcher fires it
@@ -396,10 +366,20 @@ reason.
 
 ## A preview loads a fixture committed in the diff
 
-The loop could link a SahajCloud preview but never tell whether it showed the change. To check, it
-needed a sign-in, a seed, and a wait for the deploy, and each of those failed on its own: the
-credential was a standing key to every preview, the seed ran by hand once per PR, and the wait held
-a lock doing nothing. The disclosure line that covered the gap passed every check.
+A link to an empty page is not a preview. SahajCloud#874 ran for eighteen phases linking three admin
+pages (country list, state list, import batches). Every phase refreshed them, the critic read the
+body once, and no one opened a link. The preview database held one row, the admin account the deploy
+provisions, so the country list was empty and the Import tab the PR was about was unreachable. The
+links passed every check — right host, existing paths — because the rule never asked whether the
+route showed the change. Seeding by hand afterwards found three import defects: nine of thirteen
+German addresses geocoded to the wrong town, which any reviewer with data would have seen in a
+minute.
+
+Filling a running preview needed a sign-in, a seed and a wait for the deploy, and each failed on its
+own: the credential was a standing key to every preview, the seed ran by hand once per PR, and the
+wait held a lock doing nothing. What covered the gap was a sentence. sydevs/SahajCloud#1073 shipped
+its Registrations page with a line saying the preview was unseeded and a console snippet to paste,
+and that read as compliance: 13 of the last 40 PRs shipped a disclosure line in place of data.
 
 sydevs/SahajCloud#1078 moved the data into the repo instead. Every preview loads a fixture committed
 under `src/fixture/`, one file per collection, each entry with a pinned numeric `id` of 1,000,000 or
@@ -413,12 +393,16 @@ more, so a record's address is known before anything deploys. The loop then work
   it, and `review-pr` checks that every changed surface cites a record that exists on the branch.
   "The preview shows the change" is a property of the diff, not a thing someone asserts after the
   fact.
+- **No sentence stands in for the data.** The app loads the fixture at boot, and the CI check that
+  goes red is that load, gated by `/api/health`. A preview that is up but holds no fixture fails a
+  check, so "the preview has data" is nothing a run or a reviewer gets to assert.
 
-The block is generic (`fixture.path`, `.link`, `.surfacePaths` in a repo's `.claude/workflow.json`),
-so no skill names a repo, and a repo without it keeps plain links. Pinned ids are the contract: a
-renumbered record turns every earlier link into a different record or a 404, so a fixture id is
-never reused. Tickets in such a repo name the fixture records they need in their Verification
-checklist, so the entry is planned before the code.
+The rule is **conditional and never a removal**. The block is generic (`fixture.path`, `.link`,
+`.surfacePaths` in a repo's `.claude/workflow.json`), so no skill names a repo, and a repo with no
+`fixture` block keeps plain links and no data rule: `finalize-pr` and `review-pr` key on the block,
+never on a repo name. Pinned ids are the contract: a renumbered record turns every earlier link into
+a different record or a 404, so a fixture id is never reused. Tickets in such a repo name the
+fixture records they need in their Verification checklist, so the entry is planned before the code.
 
 ## Show the shape, not the file list
 
