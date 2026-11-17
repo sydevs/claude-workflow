@@ -2135,6 +2135,13 @@ back work that had already landed. A request whose commit is already the PR's he
 skipped, and a missing or moved relay branch is refused only when the PR's branch does not already
 contain the requested commit.
 
+Deleting the relay ref is the last thing `applyRelay` does, so only the run that lands it deletes
+it, and a skip deletes nothing. Where an earlier run landed and deleted it, nothing is left. Where a
+member fast-forwarded the PR's branch by hand, `claude/relay-<pr>-<sha>` stays. Nothing reads that
+ref again, and clearing it would need a cleanup action of its own in `decide` and `apply`, one that
+writes no ref on the PR's branch, so the leftover is accepted and recorded instead
+(sydevs/claude-workflow#263).
+
 ## An approved PR names what holds it
 
 GitHub merges only once every thread is resolved, and an approved PR held by a bot question thread
