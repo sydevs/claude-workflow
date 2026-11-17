@@ -1060,11 +1060,15 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(p, 'requestReviewer').length, 1)
   })
 
-  test('no approval before the critic, while CI runs, or with the head commit unread', () => {
+  test('no approval before the critic, while CI runs, or with the head commit or its author unread', () => {
     assert.deepEqual(types(evaluatePr(owned({ reviews: [] }), pc)), ['fire:review-pr'])
     assert.equal(of(evaluatePr(owned({ ci: running }), pc), 'proxyApprove').length, 0)
     const unread = evaluatePr(owned({ headCommittedAt: null }), pc)
     assert.equal(of(unread, 'proxyApprove').length, 0)
+    // GitHub resolves the commit's author to nobody: it could be the bot's own.
+    const nameless = evaluatePr(owned({ headAuthor: null }), pc)
+    assert.equal(of(nameless, 'proxyApprove').length, 0)
+    assert.equal(of(nameless, 'dismissProxy').length, 0)
   })
 
   test('an approval the bot already gave stands through the author\'s later pushes', () => {

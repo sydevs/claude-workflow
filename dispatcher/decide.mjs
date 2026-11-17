@@ -621,7 +621,9 @@ function evaluateGreenPr(s, config) {
 function proxyPlan(s, config) {
   const head = s.pr.head?.sha
   // gather reads the head commit for this PR; unread, nothing is approved.
-  if (!head || !s.headCommittedAt) return [note('head commit unread — no approval on this pass')]
+  // `getCommit` resolves `author` to null when the commit's email maps to no
+  // account, and an unknown author could be the bot's own, so it fails closed.
+  if (!head || !s.headCommittedAt || !s.headAuthor) return [note('head commit or its author unread — no approval on this pass')]
   const approvals = (s.reviews || []).filter((r) => isBot(r.user?.login, config) && r.state === 'APPROVED')
   if (!isBot(s.headAuthor, config)) return approvals.length ? [] : [proxyApprove(head)]
   if (approvals.some((r) => r.commit_id === head)) return []
