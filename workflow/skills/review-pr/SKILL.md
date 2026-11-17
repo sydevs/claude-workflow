@@ -90,11 +90,16 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    attached checkout's default branch and never from the branch under review, which is a file the
    PR may change.
    - **Where it has a `fixture` block**, each link's id must exist as an entry under `fixture.path`
-     on the branch (`git show origin/<branch>:<path>`), and that entry must show what the link's
-     line claims. A cited id absent from the branch, an entry that does not show the claim, and a
-     diff touching `fixture.surfacePaths` with no cited id or with `No preview surface` are each a
-     `should-fix`. (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
+     on the branch, and that entry must show what the link's line claims. `fixture.path` is a
+     directory of one file per collection: list it with `git ls-tree origin/<branch>
+     <fixture.path>`, then read the link's collection file with `git show`. A cited id absent from
+     the branch, an entry that does not show the claim, and a diff touching `fixture.surfacePaths`
+     with no cited id or with `No preview surface` are each a `should-fix`.
+     (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff)
    - **Where it has none**, a plain link needs no data check, and there is no data rule.
+   - **Every other input the body names.** A path it gives for a file the change takes must be one
+     `git ls-files` lists on the branch. One that does not exist is a `should-fix`
+     (`/workflow:finalize-pr` step 7, *Every link opens on data*, item 5).
    - **Off-host.** Ask `jq -c '{previewUrl, fixture} + {pr: <n>}' .claude/workflow.json | node
      "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/preview-host.mjs" --on-host <link>`. It
      answers `ON_HOST` or `OFF_HOST`. An `OFF_HOST` link, one not built from `fixture.link` or
