@@ -1082,6 +1082,20 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(member, 'disarmAutoMerge').length, 0, 'another member\'s PR keeps the bot\'s arming')
   })
 
+  // sydevs/SahajAtlasWeb#318 carries the bot's approval and the bot's arming
+  // from 2026-10-28. It sits Awaiting and in step, so the sweep is the only
+  // pass it gets: a disarm `quietSweep` discards never reaches it.
+  test('a sweep of an Awaiting, bot-armed owner PR still disarms it', () => {
+    const stale = owned({
+      pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' },
+      record: { fixCi: 0, status: 'awaiting' },
+      normalized: { reviewDecision: 'APPROVED' },
+    })
+    const p = decide({ reason: 'sweep-pr', facts: {} }, stale, pc)
+    assert.equal(of(p, 'disarmAutoMerge').length, 1, 'the quiet sweep keeps it')
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-disarmed'), 'and says why')
+  })
+
   test('another member\'s PR still asks the reviewer, and is never approved by the bot', () => {
     const p = evaluatePr(owned({ pr: { ...owned().pr, user: { login: 'antontcymbal' } }, headAuthor: 'antontcymbal' }), pc)
     assert.equal(of(p, 'proxyApprove').length, 0)
