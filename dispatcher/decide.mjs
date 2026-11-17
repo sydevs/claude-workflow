@@ -494,7 +494,11 @@ function quietSweep(plan, s, config) {
  * The owner arms their own PR; the bot never does. One the bot armed (before
  * that rule, or by any path that forgot it) is disarmed on the first pass,
  * ahead of everything else: with the bot's approval on it, the ruleset would
- * merge it unread. (why: docs/why.md#the-owner-arms-their-own-pr)
+ * merge it unread. Ahead of `evaluateOpenPr`'s lock guard too — a lease runs
+ * for hours and the queue does not wait for it. The comment goes with the
+ * disarm because nothing plans it again once auto-merge is off, and it carries
+ * a dispatcher marker, so no session reads it as a word of ours.
+ * (why: docs/why.md#the-owner-arms-their-own-pr)
  */
 export function evaluatePr(s, config) {
   const pr = s.pr

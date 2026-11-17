@@ -1080,6 +1080,9 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(unread, 'disarmAutoMerge').length, 1, 'an arming nobody is named for fails closed')
     const member = evaluatePr(owned({ pr: { ...owned().pr, user: { login: 'antontcymbal' }, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, headAuthor: 'antontcymbal' }), pc)
     assert.equal(of(member, 'disarmAutoMerge').length, 0, 'another member\'s PR keeps the bot\'s arming')
+    const locked = evaluatePr(owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, locked: true }), pc)
+    assert.equal(of(locked, 'disarmAutoMerge').length, 1, 'while a session holds the lease too: the queue does not wait for it')
+    assert.ok(of(locked, 'comment').some((c) => c.key === 'proxy-disarmed'), 'with the comment, which nothing plans again once it is off')
   })
 
   // sydevs/SahajAtlasWeb#318 carries the bot's approval and the bot's arming
