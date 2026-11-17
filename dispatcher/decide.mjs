@@ -13,6 +13,7 @@
 
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { pushRoute, relayRefusal } from './relay.mjs'
+import { dispatcherMark } from './markers.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- action constructors ----------------------------------------------
@@ -635,11 +636,22 @@ function proxyPlan(s, config) {
   ]
 }
 
-/** The author said `approve` after the head commit was made. */
+/**
+ * The author said `approve` after the bot asked them to, about this head.
+ *
+ * The ask is the clock, not the commit's own date. A session commits to a relay
+ * branch and Actions lands it when the session ends, up to
+ * `dispatch.timeoutsMinutes` later, so a vouch for the head that commit
+ * replaced is newer than its committer date and would carry over to it — the
+ * one thing the hold exists to stop.
+ * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ */
 function vouched(s, config) {
   const author = s.pr.user?.login
-  const at = s.headCommittedAt
-  return (s.comments || []).some((c) => lower(c.author) === lower(author) && c.createdAt > at
+  const mark = dispatcherMark(`proxy-held ${s.pr.head?.sha}`)
+  const asked = (s.comments || []).find((c) => isBot(c.author, config) && String(c.body || '').startsWith(mark))
+  if (!asked) return false
+  return (s.comments || []).some((c) => lower(c.author) === lower(author) && c.createdAt > asked.createdAt
     && parseVerb(c.body, config.dispatch, 'pr').verb === 'approve')
 }
 

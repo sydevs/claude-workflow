@@ -9,16 +9,10 @@ import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
-import { stripBlockedBy } from './markers.mjs'
+import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isReviewer, isHuman } from './decide.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
-
-const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
-
-function marker(text) {
-  return String(text || '').replace(/-->/g, '--&gt;')
-}
 
 /**
  * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
@@ -26,7 +20,7 @@ function marker(text) {
  * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 async function commentOnce(gh, t, bot, key, body, dryRun, log) {
-  const mark = `${DISPATCHER_MARK}${marker(key)} -->`
+  const mark = dispatcherMark(key)
   const comments = await gh.paginate(gh.rest.issues.listComments, { owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, per_page: 100 })
   if (comments.some((c) => isLogin(c.user?.login, bot) && String(c.body || '').startsWith(mark))) return log(`comment "${key}" already posted`)
   log(`comment: ${key}`)

@@ -1046,6 +1046,10 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     ...over,
   })
   const of = (plan, type) => plan.filter((a) => a.type === type)
+  // The bot's hold comment: what asks the author to vouch, and the clock the
+  // vouch is measured against.
+  const ASKED = '2026-11-17T09:05:00Z'
+  const held = (sha = 'abc', createdAt = ASKED) => ({ author: 'sydevs-bot', createdAt, id: 1, body: `<!-- sydevs-dispatcher: proxy-held ${sha} -->\nRead it, then say \`@sydevs-bot approve\`.` })
 
   test('the owner\'s green, critiqued PR is approved at its head and armed, and asks no reviewer', () => {
     const p = evaluatePr(owned(), pc)
@@ -1086,15 +1090,31 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('@sydevs-bot approve')))
   })
 
-  test('the author\'s `approve` after the bot\'s commit vouches for it; one from before does not', () => {
-    const say = (createdAt) => [{ author: 'Ardnived', createdAt, body: '@sydevs-bot approve', id: 3 }]
+  test('the author\'s `approve` after the bot\'s ask vouches for the head; one from before does not', () => {
+    const say = (createdAt) => [held(), { author: 'Ardnived', createdAt, body: '@sydevs-bot approve', id: 3 }]
     const after = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: say('2026-11-17T09:30:00Z') }), pc)
     assert.deepEqual(of(after, 'proxyApprove').map((a) => a.sha), ['abc'])
     assert.equal(of(after, 'fire').length, 0, 'the verb is not a request for address-review')
     const before = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: say('2026-11-17T08:30:00Z') }), pc)
     assert.equal(of(before, 'proxyApprove').length, 0)
-    const other = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [{ ...say('2026-11-17T09:30:00Z')[0], author: 'antontcymbal' }] }), pc)
+    const other = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held(), { ...say('2026-11-17T09:30:00Z')[1], author: 'antontcymbal' }] }), pc)
     assert.equal(of(other, 'proxyApprove').length, 0, 'only the author vouches')
+  })
+
+  // A relay commit is made minutes before Actions lands it, so a vouch for the
+  // head it replaces must not carry over to it.
+  test('a vouch cannot cover a bot commit made before it but landed after it', () => {
+    const say = { author: 'Ardnived', createdAt: '2026-11-17T09:20:00Z', id: 2, body: '@sydevs-bot approve' }
+    // C2 was committed at 09:00, before the vouch, and became the head after it.
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held('old'), say] }), pc)
+    assert.equal(of(p, 'proxyApprove').length, 0, 'the vouch was for the head it replaced')
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc'), 'the new head is held and asked about')
+  })
+
+  test('the vouch stands once the bot has asked about this head', () => {
+    const say = { author: 'Ardnived', createdAt: '2026-11-17T09:20:00Z', id: 2, body: '@sydevs-bot approve' }
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held(), say] }), pc)
+    assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
   })
 
   test('a bot approval at the bot\'s own head (the vouched one) is kept', () => {
@@ -1109,7 +1129,7 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.ok(byOther.some((a) => a.type === 'comment' && a.key === 'approve-refused 4'))
     const onBotPr = ask('Ardnived', owned({ pr: { ...owned().pr, user: { login: 'sydevs-bot' } } }))
     assert.ok(onBotPr.some((a) => a.type === 'comment' && a.key === 'approve-refused 4'))
-    const own = ask('Ardnived', owned({ headAuthor: 'sydevs-bot', comments: [{ author: 'Ardnived', createdAt: '2026-11-17T09:30:00Z', body: '@sydevs-bot approve', id: 4 }] }))
+    const own = ask('Ardnived', owned({ headAuthor: 'sydevs-bot', comments: [held(), { author: 'Ardnived', createdAt: '2026-11-17T09:30:00Z', body: '@sydevs-bot approve', id: 4 }] }))
     assert.ok(own.some((a) => a.type === 'proxyApprove'))
     const draft = ask('Ardnived', owned({ pr: { ...owned().pr, draft: true } }))
     assert.equal(draft.filter((a) => a.type === 'fire' || a.type === 'proxyApprove').length, 0)

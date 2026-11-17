@@ -10,6 +10,17 @@
  * `sydevs-request` marker are read here too.
  */
 
+/**
+ * The mark `apply`'s `commentOnce` opens a once-per-key comment with. It lives
+ * here because `decide` reads one back: a vouch counts only after the bot has
+ * asked about that head. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ */
+export const DISPATCHER_MARK = '<!-- sydevs-dispatcher: '
+/** The opening mark of the once-per-key comment for `key`. */
+export function dispatcherMark(key) {
+  return `${DISPATCHER_MARK}${String(key || '').replace(/-->/g, '--&gt;')} -->`
+}
+
 /** Struck through, once the bullet is gone: `~~x~~`, or `**~~x~~**`. */
 const STRUCK = /^[*_`]*~~/
 
