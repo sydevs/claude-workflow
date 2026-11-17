@@ -319,12 +319,14 @@
       "SahajAtlasWeb": {
         "sources": [
           "src/payload-types.ts",
-          "src/collections/Events/endpoints/responseTypes.ts"
+          "src/collections/Events/endpoints/responseTypes.ts",
+          "src/lib/atlas/atlas-url-contract.json"
         ],
-        "command": "pnpm run types:cms",
+        "command": "pnpm run types:cms && curl -fsSL --retry 3 -o src/lib/shape/atlas-url-contract.json https://raw.githubusercontent.com/sydevs/SahajCloud/main/src/lib/atlas/atlas-url-contract.json",
         "paths": [
           "src/types/payload/payload-types.ts",
-          "src/types/payload/response-types.ts"
+          "src/types/payload/response-types.ts",
+          "src/lib/shape/atlas-url-contract.json"
         ]
       },
       "SahajAtlasWordpress": {
