@@ -66,7 +66,8 @@ the cloud session, and does every mechanical write — plus this repo's own thin
 changes behaviour in every sydevs repo on the next event, with no merge anywhere else, so it
 carries a skill's blast radius and the same rules: keep the edit small and reversible, and state
 what failure it prevents. `dispatcher/` beside it is the code, with
-`node --test dispatcher/test/*.test.mjs` as its gate.
+`node --test dispatcher/test/*.test.mjs` as its gate. `contract-verify.yml` is a second reusable
+workflow there, called by the three contract consumers, and carries the same blast radius.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
 One file there **is** CI, for the other four: `dependency-review.yml`, which each product repo's
