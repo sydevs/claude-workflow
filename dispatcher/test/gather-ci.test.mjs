@@ -159,3 +159,24 @@ test('a merge scans every other open PR the loop works for conflicts, drafts inc
   const s = await gather(gh, merged, config, when)
   assert.deepEqual(s.otherOpenBotPrs, [801, 802, 803], 'a member\'s PR is scanned too; an outsider\'s is not')
 })
+
+// ---- the contract check (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+
+test("a sync PR's head is vouched for only by the bot, and GitHub's decision is read once the check approved", async () => {
+  const marker = '<!-- sydevs-contract-check -->'
+  const gh = withRules([{ id: 1, name: 'Lint, Typecheck & Unit', status: 'completed', conclusion: 'success' }], { required: ['Lint, Typecheck & Unit'] })
+  const base = await gh.rest.pulls.get()
+  const pr = { ...base.data, number: 292, draft: false, head: { ref: config.contractSync.branch, sha: 'abc' } }
+  gh.rest.pulls.get = async () => ({ data: pr })
+  gh.rest.pulls.listFiles = async () => ({ data: [{ filename: 'server/payload-types.ts' }] })
+  gh.rest.pulls.listReviews = async () => ({ data: [{ id: 1, state: 'APPROVED', commit_id: 'abc', body: `${marker}\nok`, user: { login: 'github-actions[bot]' } }] })
+  gh.rest.repos.listCommitStatusesForRef = async () => ({ data: [
+    { context: config.contractSync.attestContext, state: 'success', creator: { login: 'someone' }, created_at: '2026-10-09T16:00:00Z' },
+    { context: config.contractSync.attestContext, state: 'success', creator: bot, created_at: '2026-10-09T16:50:00Z' },
+  ] })
+  const graphql = gh.graphql
+  gh.graphql = async (q, v) => (q.includes('reviewDecision') ? { repository: { pullRequest: { reviewDecision: 'REVIEW_REQUIRED' } } } : graphql(q, v))
+  const s = await gather(gh, { ...target, repo: { owner: 'sydevs', name: 'WeMeditateWeb', full: 'sydevs/WeMeditateWeb' }, number: 292 }, config, when)
+  assert.equal(s.pr.contractSyncOnly, true)
+  assert.deepEqual(s.pr.contractSync, { attestedAt: '2026-10-09T16:50:00Z', approvedByCheck: true, decision: 'REVIEW_REQUIRED' })
+})

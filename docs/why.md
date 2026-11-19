@@ -1378,6 +1378,39 @@ that needs a decision. The same holds for audit-contracts findings where the sou
 right (a misdescribing doc, a missing changelog entry, a dead command); a ticket is kept for when
 the code may be the wrong side.
 
+## A verified contract sync is approved by Actions
+
+A contract sync has one correct content, so a person reading it checks nothing a machine cannot,
+yet each one waited on the owner's approval: the ruleset needs one, and nothing in the loop could
+give it. The PAT is sydevs-bot, the PR's author, whose approval GitHub refuses. `contracts-sync`
+runs in the producer's event, so its `GITHUB_TOKEN` cannot approve in the consumer. Only a job in
+the consumer's own event can: `contracts-verify`.
+
+It does not re-derive the copy. `contracts-sync` already ran the consumer's command on `main` and
+wrote exactly those bytes, so it vouches for each commit it pushes to the sync branch with a
+`contractSync.attestContext` status, as sydevs-bot, and that status event wakes the check. A first
+cut re-ran the command in the consumer and diffed it: twice the toolchain, the same code from the
+same `main`, and a false mismatch whenever the producer moved between the two runs. The status
+counts only from sydevs-bot, since anyone who can push can post one. A session acts as sydevs-bot
+too, but only through the GitHub MCP server, which has no tool that writes a status.
+
+The check approves a ready bot PR into the default branch that changes nothing but the copy, when
+its head carries that status, with the consumer's token as `github-actions[bot]` (each consumer
+allows it: `can_approve_pull_request_reviews`). The approval is pinned to that head. A head the
+sync did not write (a hand edit, a fix-ci push) or that the gate refuses has the check's own
+earlier approval dismissed explicitly, by its body marker, never a person's: the consumers set
+`dismiss_stale_reviews_on_push` today, but the guarantee should not rest on a ruleset setting. The
+merge queue still runs CI.
+
+`decide` alone asks the reviewer, never at a contract-only sync's mark-ready: when the PR outgrows
+the copy, when the sync did not write its head, when GitHub's own `reviewDecision` shows the ruleset
+does not count the check's approval, or when the check has not approved a vouched-for head within
+`contractSync.approveWithinMinutes`, because the check failed or never ran. The approval fires no
+event, so the sweeper is what notices the last two. Every caller grants `pull-requests: write` on
+its dispatch job: a reusable job asking for more than its caller grants fails the whole run. The
+rulesets are unchanged: a bypass actor could not be scoped to these paths, and would skip the
+queue for every bot PR.
+
 ## The lease is a ref, not a label
 
 The label was taken too late to be a mutex: `gather` read `locked`, `decide` ran on that snapshot,

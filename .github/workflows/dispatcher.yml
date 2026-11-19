@@ -15,8 +15,9 @@
 # Two jobs: `resolve` maps the event to one or more items; `act` handles one
 # item per matrix leg, serialized per item by a concurrency group. Beside
 # them, `journal` keeps the day issue, `deps` fires a dependency fix only
-# when Dependabot has one due, and `contracts-plan` and `contracts-sync`
-# re-sync a consumer's copy of a producer's contract.
+# when Dependabot has one due, `contracts-plan` and `contracts-sync`
+# re-sync a consumer's copy of a producer's contract, and `contracts-verify`
+# approves a re-sync that `contracts-sync` wrote.
 #
 # why: sydevs/claude-workflow/docs/why.md#actions-observes-classifies-locks-and-fires
 name: Dispatcher
@@ -264,6 +265,7 @@ jobs:
       SOURCE_PR: ${{ matrix.consumer.sourcePr }}
       FEATURE_PR: ${{ matrix.consumer.featurePr }}
       FEATURE_BRANCH: ${{ matrix.consumer.featureBranch }}
+      ATTEST_CONTEXT: ${{ matrix.consumer.attestContext }}
     steps:
       # The consumer's own main, never a PR head, and its own sync script.
       - uses: actions/checkout@v7
@@ -287,6 +289,14 @@ jobs:
           set -euo pipefail
           git config user.name sydevs-bot
           git config user.email 322523691+sydevs-bot@users.noreply.github.com
+          # Vouches for a commit this job wrote on the sync branch, so the
+          # contracts-verify job can approve it. Only here: a commit on a
+          # feature PR is reviewed with the feature.
+          attest() {
+            [ -n "${ATTEST_CONTEXT:-}" ] || return 0
+            gh api -X POST "repos/$REPO/statuses/$(git rev-parse HEAD)" -f state=success \
+              -f context="$ATTEST_CONTEXT" -f description="Written by the contract sync" -f target_url="$SOURCE_PR" >/dev/null
+          }
           # The goal's consumer PR first, so the re-sync merges with the
           # feature. A push it refuses falls through to the sync PR.
           # Any failure here — the branch gone, the PR merged while this job
@@ -331,11 +341,13 @@ jobs:
           git commit -q -m "chore(contracts): re-sync from $SOURCE_PR"
           if [ -n "$open" ]; then
             git push -q origin "HEAD:$BRANCH"
+            attest
             echo "Updated #$open."
             exit 0
           fi
           # A branch left by a PR closed unmerged is replaced, not built on.
           git push -q --force origin "HEAD:$BRANCH"
+          attest
           body=$(printf '%s\n' \
             '## Summary' '' \
             "- Re-syncs this repo's copy of a SahajCloud contract, after $SOURCE_PR merged." \
@@ -346,3 +358,55 @@ jobs:
             'Opened by the dispatcher contract sync (`contractSync` in sydevs/claude-workflow `loop-config.json`), not from a ticket. A later producer merge adds its commit here while this PR is open.')
           gh pr create --repo "$REPO" --base main --head "$BRANCH" --draft \
             --title "chore(contracts): re-sync copied contracts from SahajCloud" --body "$body"
+
+  # A contract-sync PR has one correct content, so a person reading it checks
+  # nothing a machine cannot. `contracts-sync` posts `contractSync.attestContext`
+  # on every commit it pushes to the sync branch; this job approves a ready,
+  # contract-only sync PR whose head carries that status from sydevs-bot, and
+  # dismisses its own approval of an earlier head when the new one carries none.
+  # The approval uses this repo's own token, as github-actions[bot]: the PAT is
+  # sydevs-bot, the PR's author, whose approval GitHub refuses, and
+  # `contracts-sync` runs in the producer, whose token cannot approve here.
+  # `decide` asks the reviewer when the check cannot vouch. Nothing from the PR
+  # is checked out. Every caller grants `pull-requests: write` on its dispatch
+  # job; a caller that did not would fail this whole workflow.
+  # why: sydevs/claude-workflow/docs/why.md#a-verified-contract-sync-is-approved-by-actions
+  contracts-verify:
+    # Spares a runner on every other event. `claude/chore-sync-contracts` is
+    # contractSync.branch and `sydevs / contract-sync` is
+    # contractSync.attestContext, in loop-config.json: change both together.
+    if: >-
+      (github.event_name == 'pull_request_target'
+        && contains(fromJSON('["opened", "reopened", "synchronize", "ready_for_review"]'), github.event.action)
+        && github.event.pull_request.head.ref == 'claude/chore-sync-contracts')
+      || (github.event_name == 'status'
+        && github.event.context == 'sydevs / contract-sync'
+        && github.event.state == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - uses: actions/github-script@v9
+        env:
+          APPROVER_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        with:
+          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { verifyContractSync, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            await verifyContractSync({
+              github, approver: getOctokit(process.env.APPROVER_TOKEN), context, core,
+              config: loadConfig(`${cw}/loop-config.json`), dryRun: process.env.DRY_RUN === 'true',
+            })

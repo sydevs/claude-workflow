@@ -9,7 +9,7 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment, fullTreatment, proxyApproves } from './decide.mjs'
-import { changedPaths, isContractSyncOnly } from './contracts.mjs'
+import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
@@ -35,6 +35,18 @@ async function reviewThreads(gh, { owner, repo, number }) {
     isResolved: t.isResolved,
     comments: (t.comments.nodes || []).map((c) => ({ author: c.author?.login || '', createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
   }))
+}
+
+/** A sync PR's head: written by `contracts-sync`, approved by the check, and GitHub's verdict on that. */
+async function contractSyncFacts(gh, { owner, repo, number }, pr, reviews, config) {
+  const { data: statuses } = await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })
+  const approvedByCheck = (reviews || []).some((r) => r.state === 'APPROVED' && r.commit_id === pr.head.sha && String(r.body || '').includes(CHECK_APPROVAL_MARKER))
+  let decision = null
+  if (approvedByCheck) {
+    const d = await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })
+    decision = d.repository.pullRequest.reviewDecision || null
+  }
+  return { attestedAt: contractSyncAttestedAt(statuses, config), approvedByCheck, decision }
 }
 
 async function linkedIssues(gh, { owner, repo, number }) {
@@ -313,6 +325,10 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const syncBranch = isBot(pr.user?.login, config) && pr.head?.ref === config.contractSync?.branch
   const paths = syncBranch ? await changedPaths(gh, { owner, repo, number }) : []
   s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, paths)
+  // Whether the contract check can vouch for a sync PR's head, and whether
+  // the ruleset counts its approval: GitHub's own reviewDecision, read only
+  // once the check has approved. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+  s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads
