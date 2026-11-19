@@ -9,7 +9,7 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment, fullTreatment, proxyApproves } from './decide.mjs'
-import { changedPaths, isContractSyncOnly } from './contracts.mjs'
+import { changedPaths, contractVerifyStatus, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
@@ -292,7 +292,9 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // (why: docs/why.md#only-required-checks-are-ci)
   const gate = requiredOnly({
     checkRuns: { check_runs: (cr.check_runs || []).filter((c) => !ignore(c.name)).map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, details_url: c.details_url })) },
-    statuses: { statuses: (st.statuses || []).map((x) => ({ context: x.context, state: x.state, target_url: x.target_url || null, description: x.description || null })) },
+    // The contract check's verdict is the dispatcher's own, never CI: a
+    // mismatch asks the reviewer, it is not a red check to repair.
+    statuses: { statuses: (st.statuses || []).filter((x) => x.context !== config.contractSync?.verifyContext).map((x) => ({ context: x.context, state: x.state, target_url: x.target_url || null, description: x.description || null })) },
     required: await requiredContexts(gh, { owner, repo }, pr.base?.ref),
   })
   const { checkRuns, statuses } = gate
@@ -313,6 +315,12 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const syncBranch = isBot(pr.user?.login, config) && pr.head?.ref === config.contractSync?.branch
   const paths = syncBranch ? await changedPaths(gh, { owner, repo, number }) : []
   s.pr.contractSyncOnly = syncBranch && isContractSyncOnly(config, repo, pr, paths)
+  // Only the bot's own verdict counts: anyone who can push can post a status.
+  // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+  // The combined status names no creator, so the list is read, newest first.
+  s.pr.contractVerify = s.pr.contractSyncOnly
+    ? contractVerifyStatus((await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })).data, config)
+    : null
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   s.threads = threads

@@ -107,3 +107,94 @@ export function isContractSyncOnly(config, repoName, pr, files) {
   if (!Array.isArray(files) || !files.length) return false
   return files.every((f) => (consumer.paths || []).includes(f))
 }
+
+/**
+ * The contract check's newest verdict on a head, as `{ state, description }`,
+ * or null. `statuses` is the REST list, newest first. Only one sydevs-bot
+ * posted counts: anyone who can push can post a status. Pure.
+ */
+export function contractVerifyStatus(statuses, config) {
+  const ctx = config.contractSync?.verifyContext
+  const bot = String(config.identity?.expectedLogin || '').toLowerCase()
+  if (!ctx || !bot) return null
+  const v = (statuses || []).find((x) => x.context === ctx && String(x.creator?.login || '').toLowerCase() === bot)
+  return v ? { state: v.state, description: v.description || '' } : null
+}
+
+/**
+ * Whether the `contracts-verify` job may check this PR, as
+ * `{ verify, reason, sha, command, paths }`. Only an open, ready bot PR from
+ * this repo that changes nothing but the copy qualifies; anything else is left
+ * to the dispatcher, which asks the reviewer as on any other PR. Pure.
+ * (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+ */
+export function contractVerifyGate(config, repoName, pr, files) {
+  const skip = (reason) => ({ verify: false, reason })
+  const bot = String(config.identity?.expectedLogin || '').toLowerCase()
+  if (pr?.state !== 'open') return skip('not open')
+  if (pr.draft) return skip('a draft: checked once it is ready')
+  if (!bot || String(pr.user?.login || '').toLowerCase() !== bot) return skip('not opened by the bot')
+  if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return skip('the head is in another repository')
+  if (!isContractSyncOnly(config, repoName, pr, files)) return skip('it changes more than the copied contract')
+  const c = config.contractSync.consumers[repoName]
+  return { verify: true, reason: 'a contract-only sync', sha: pr.head.sha, command: c.command, paths: c.paths }
+}
+
+/** The `contracts-verify` job's first step: read the PR fresh, and gate it. */
+export async function planContractVerify({ github, context, core, config }) {
+  const { owner, repo } = context.repo
+  const number = context.payload.pull_request?.number
+  if (!number) return { verify: false, reason: 'no pull request in the event' }
+  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number })
+  const v = contractVerifyGate(config, repo, pr, await changedPaths(github, { owner, repo, number }))
+  core.info(`#${number}: ${v.verify ? 'verifying' : 'skipped'}, ${v.reason}`)
+  return v
+}
+
+/**
+ * The `contracts-verify` job's approval, with the consumer's own token: the
+ * PAT is sydevs-bot, the PR's author, whose approval GitHub refuses. Pinned to
+ * the head that was compared, so a later push leaves it stale. A head that
+ * moved is left to the run it started. Any approval at that head is this
+ * check's own: nothing else approves a contract-only sync.
+ */
+export async function approveContractSync({ github, context, core, sha, command }) {
+  const { owner, repo } = context.repo
+  const number = context.payload.pull_request.number
+  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number })
+  if (pr.head.sha !== sha) return core.info(`#${number}: the head moved past ${sha.slice(0, 7)}; its own run decides`)
+  const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
+  if (reviews.some((r) => r.state === 'APPROVED' && r.commit_id === sha)) return core.info(`#${number}: ${sha.slice(0, 7)} is already approved`)
+  core.info(`#${number}: ${sha.slice(0, 7)} matches its source; approving`)
+  await github.rest.pulls.createReview({
+    owner, repo, pull_number: number, commit_id: sha, event: 'APPROVE',
+    body: `The copied contract matches what \`${command}\` writes from \`main\`, byte for byte, and the PR changes nothing else. Approved by the contract check; the merge queue still runs CI.`,
+  })
+}
+
+/**
+ * The verdict, as `{ state, description }` for `contractSync.verifyContext`.
+ * Pure. `matched` is the compare step's output; `approved` is whether the
+ * approve step succeeded. Only `failure` and `error` make the dispatcher ask
+ * the reviewer. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+ */
+export function contractVerdict({ matched, approved, command }) {
+  if (matched === 'true' && approved) return { state: 'success', description: `Matches what ${command} writes on main` }
+  if (matched === 'false') return { state: 'failure', description: `Differs from what ${command} writes on main` }
+  return { state: 'error', description: 'The contract check did not finish' }
+}
+
+/**
+ * Post the verdict on the compared head, as sydevs-bot: a status posted with
+ * the consumer's own token would fire no event, and the dispatcher is woken by
+ * this one (`status` resolves to the PR).
+ */
+export async function reportContractVerify({ github, context, core, config, sha, verdict }) {
+  const { owner, repo } = context.repo
+  const description = verdict.description.length > 140 ? `${verdict.description.slice(0, 139)}…` : verdict.description
+  core.info(`${sha.slice(0, 7)}: ${verdict.state}, ${description}`)
+  await github.rest.repos.createCommitStatus({
+    owner, repo, sha, state: verdict.state, context: config.contractSync.verifyContext, description,
+    target_url: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+  })
+}

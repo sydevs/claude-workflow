@@ -159,3 +159,26 @@ test('a merge scans every other open PR the loop works for conflicts, drafts inc
   const s = await gather(gh, merged, config, when)
   assert.deepEqual(s.otherOpenBotPrs, [801, 802, 803], 'a member\'s PR is scanned too; an outsider\'s is not')
 })
+
+// ---- the contract check (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+
+test("the contract check's status is never CI, and its verdict is read from the bot's own post", async () => {
+  const ctx = config.contractSync.verifyContext
+  const gh = withRules([{ id: 1, name: 'Lint, Typecheck & Unit', status: 'completed', conclusion: 'success' }], {
+    statuses: [{ context: ctx, state: 'failure', description: 'Differs' }],
+    required: ['Lint, Typecheck & Unit'],
+  })
+  const base = await gh.rest.pulls.get()
+  const pr = { ...base.data, number: 292, draft: false, head: { ref: config.contractSync.branch, sha: 'abc' } }
+  gh.rest.pulls.get = async () => ({ data: pr })
+  gh.rest.pulls.listFiles = async () => ({ data: [{ filename: 'server/payload-types.ts' }] })
+  gh.rest.repos.listCommitStatusesForRef = async () => ({ data: [
+    { context: ctx, state: 'success', description: 'forged', creator: { login: 'someone' } },
+    { context: ctx, state: 'failure', description: 'Differs', creator: bot },
+  ] })
+  const s = await gather(gh, { ...target, repo: { owner: 'sydevs', name: 'WeMeditateWeb', full: 'sydevs/WeMeditateWeb' }, number: 292 }, config, when)
+  assert.equal(s.ci.green, true, s.ci.reason)
+  assert.deepEqual(s.ci.advisory, [], 'a mismatch is not an advisory red check')
+  assert.equal(s.pr.contractSyncOnly, true)
+  assert.deepEqual(s.pr.contractVerify, { state: 'failure', description: 'Differs' })
+})

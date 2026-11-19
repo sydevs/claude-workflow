@@ -609,7 +609,10 @@ function evaluateGreenPr(s, config) {
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
-    const plan = [markReady(), requestReviewer()]
+    // A contract-only sync asks nobody yet: the contract check approves one
+    // that matches its source, and `contractVerifyPlan` asks when it does not.
+    // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+    const plan = pr.contractSyncOnly ? [markReady()] : [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
     if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) plan.push(criticSkipped(pr, config, `critic-skipped ${pr.head?.sha}`))
@@ -626,7 +629,7 @@ function evaluateGreenPr(s, config) {
   // The owner's own PR has no one to ask: the bot approves it at this point
   // instead, and `mayArm` leaves the merge to the owner.
   // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
-  const plan = !member ? [] : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
+  const plan = !member ? contractVerifyPlan(s) : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
   // Said once per PR, not per head: this path runs on every pass, and a member
   // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
   // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
@@ -647,6 +650,18 @@ function evaluateGreenPr(s, config) {
     }
   }
   return plan
+}
+
+/**
+ * A contract-only sync asks its reviewer only once the contract check could
+ * not vouch for its head: the copy differs from its source, or the check did
+ * not finish. A match is approved by the check itself, and a pending or absent
+ * verdict waits for it. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+ */
+function contractVerifyPlan(s) {
+  const v = s.pr?.contractSyncOnly ? s.pr.contractVerify : null
+  if (!v || !['failure', 'error'].includes(v.state)) return []
+  return [requestReviewer(), commentOnce(`contract-verify ${s.pr.head?.sha}`, `Not approved automatically: ${v.description || 'the contract check failed'}. It needs a person's review.`)]
 }
 
 /**
@@ -1239,7 +1254,8 @@ function route(target, s, config) {
       return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
       // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
-      return (isBot(s.pr?.user?.login, config) ? [requestReviewer()] : []).concat(evaluatePr(s, config))
+      // A contract-only sync asks nobody here: `contractVerifyPlan` does, on a mismatch.
+      return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.
       if (!facts.pusherIsBot) plan.push(...clearHandback(s))

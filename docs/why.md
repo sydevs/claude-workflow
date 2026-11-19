@@ -1378,6 +1378,33 @@ that needs a decision. The same holds for audit-contracts findings where the sou
 right (a misdescribing doc, a missing changelog entry, a dead command); a ticket is kept for when
 the code may be the wrong side.
 
+## A verified contract sync is approved by Actions
+
+A contract sync has one correct content, so a person reading it checks nothing a machine cannot,
+yet each one waited on the owner's approval: the ruleset needs one, and nothing in the loop could
+give it. The PAT is sydevs-bot, the PR's author, whose approval GitHub refuses. `contracts-sync`
+runs in the producer's event, so its `GITHUB_TOKEN` cannot approve in the consumer. Only a job
+running in the consumer's own event can, which is why the bytes the sync just wrote are derived a
+second time there rather than vouched for at push time.
+
+`contracts-verify` in `dispatcher.yml` re-runs the consumer's `contractSync` command on its own
+`main` and compares the result with the PR head. A byte-for-byte match on a ready bot PR that
+changes nothing but the copy is approved with the consumer's token, as `github-actions[bot]`,
+which each consumer repo allows (`can_approve_pull_request_reviews`). The approval is pinned to
+the compared head, `dismiss_stale_reviews_on_push` drops it on a later push, and the merge queue
+still runs CI. Nothing from the PR executes: the head is only fetched and diffed, on
+`pull_request_target`, and the command and the script it runs come from `main`.
+
+The verdict is a commit status (`contractSync.verifyContext`), posted as sydevs-bot so its event
+wakes the dispatcher, and read only from sydevs-bot, since anyone who can push can post one.
+`decide` alone asks the reviewer: on `failure` (a hand edit, or a source that moved) or `error`
+(the check did not finish), never at a contract-only sync's mark-ready, and the status is kept
+out of CI so a mismatch is not repaired. Once `fix-ci` touches a file beside the copy,
+`isContractSyncOnly` is false and the PR is reviewed like any other. Every caller grants
+`pull-requests: write` on its dispatch job: a reusable job asking for more than its caller grants
+fails the whole run, not only that job. The rulesets are unchanged: a bypass actor could not be
+scoped to these paths, and would skip the queue for every bot PR.
+
 ## The lease is a ref, not a label
 
 The label was taken too late to be a mutex: `gather` read `locked`, `decide` ran on that snapshot,

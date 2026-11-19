@@ -4,6 +4,7 @@
  *   resolveTargets({ github, context, core, config })          — the `resolve` job
  *   act({ github, context, core, config, target, env, dryRun }) — one `act` matrix leg
  *   planContractSync({ github, context, core, config })        — the `contracts-plan` job
+ *   planContractVerify, approveContractSync, reportContractVerify — the `contracts-verify` job
  *   depsTick({ github, core, config, env, dryRun })             — the `deps` job
  *
  * `act` gathers a snapshot, decides a plan, applies it, and then handles any
@@ -21,7 +22,7 @@ import { apply } from './apply.mjs'
 import { ensureJournalDay, refreshTally, closeDuplicateDays, previousJournalDay, postAnomaly } from './journal.mjs'
 import { installRetry } from './retry.mjs'
 
-export { planContractSync } from './contracts.mjs'
+export { planContractSync, planContractVerify, approveContractSync, contractVerdict, reportContractVerify } from './contracts.mjs'
 export { depsTick } from './deps.mjs'
 
 export function loadConfig(path) {

@@ -197,6 +197,7 @@
       "dispatch / deps",
       "dispatch / contracts-plan",
       "dispatch / contracts-sync",
+      "dispatch / contracts-verify",
       "legacy",
       "state / state"
     ]
@@ -305,9 +306,10 @@
     "version": "10.6.1"
   },
   "contractSync": {
-    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command: as a commit on the consumer PR its goal built beside it, else on main, in one bot PR on branch. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket).",
+    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command: as a commit on the consumer PR its goal built beside it, else on main, in one bot PR on branch. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket). verifyContext is the commit status the contracts-verify job posts.",
     "producer": "SahajCloud",
     "branch": "claude/chore-sync-contracts",
+    "verifyContext": "sydevs / contract-verify",
     "consumers": {
       "WeMeditateWeb": {
         "sources": [
