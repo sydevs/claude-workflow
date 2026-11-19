@@ -31,6 +31,15 @@ permissions: {}
 
 jobs:
   verify:
+    # The called workflow decides when it runs, as `contracts-plan` does in
+    # dispatcher.yml. The caller's `on:` block also fires for issues, comments,
+    # statuses and a cron, and three callers' own `if:` can drift apart; this
+    # one cannot. `claude/chore-sync-contracts` is contractSync.branch in
+    # loop-config.json — change both together.
+    if: >-
+      github.event_name == 'pull_request_target'
+      && contains(fromJSON('["opened", "reopened", "synchronize", "ready_for_review"]'), github.event.action)
+      && github.event.pull_request.head.ref == 'claude/chore-sync-contracts'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
