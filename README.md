@@ -129,7 +129,7 @@ Start the comment with `@sydevs-bot`. Case does not matter.
 | Any issue | `@sydevs-bot block until legal signs off` | A short session turns the reason into a blocker or a hold, and writes it into the body. |
 | Bot or member PR | a review or thread reply; a comment only with a mention | `address-review` builds each ask on the PR, rebuts only a fact, and proposes any separate ticket as options for you to choose. |
 | Any PR | `@sydevs-bot review` (or `revise`) | `review-pr` writes one critic review. |
-| Your own PR (`mergePolicy.proxyApprove`) | `@sydevs-bot approve` | Vouches for the bot's commit at the head, so the bot approves it for you. Refused anywhere else. |
+| Your own PR (`mergePolicy.proxyApprove`) | `@sydevs-bot approve` | Vouches for the bot's commit at the head, so the bot approves it for you. Enabling auto-merge vouches too, while no thread waits on you. Refused anywhere else. |
 | Anyone else's PR | `@sydevs-bot address` (or a bare mention) | `address-review` answers the threads, and builds nothing. |
 | Any PR | `@sydevs-bot hold` or `block …` | Refused: a PR is merged or closed. |
 

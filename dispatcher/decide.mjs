@@ -669,14 +669,33 @@ function proxyPlan(s, config) {
   if (approvals.some((r) => r.commit_id === head)) return []
   if (vouched(s, config)) return [proxyApprove(head)]
   const buried = approvals.map((r) => r.id).filter(Boolean)
+  const short = head.slice(0, 7)
+  const waiting = threadsWaiting(s, config).length
+  // Armed, and held only by threads: say so, or the ask reads as owed twice.
+  const ask = armedByAuthor(s) && waiting
+    ? `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own. Your auto-merge vouches for it once nothing waits on you, and ${waiting} thread(s) still do: reply there or resolve them, or say \`${config.dispatch.commandPrefix} approve\`.`
+    : `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`, or enable auto-merge.`
   return [
     ...(buried.length ? [dismissProxy(buried)] : []),
-    commentOnce(`proxy-held ${head}`, `The newest commit, ${head.slice(0, 7)}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`.`),
+    commentOnce(`proxy-held ${head}`, ask),
   ]
 }
 
 /**
- * The author said `approve` after the bot asked them to, about this head.
+ * The author armed auto-merge themselves. The bot never arms an owner's PR,
+ * and one it did is disarmed, so this is the owner's decision to merge.
+ * (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+ */
+function armedByAuthor(s) {
+  const by = s.pr?.autoMergeBy
+  return Boolean(s.pr?.autoMergeArmed) && !s.pr?.draft && Boolean(by) && lower(by) === lower(s.pr?.user?.login)
+}
+
+/**
+ * The author vouches for the bot's head by arming auto-merge, while no thread
+ * waits on them, or by saying `approve` after the bot asked them to, about
+ * this head. A thread waiting on a person is the review asking for one, and
+ * arming does not answer it. (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
  *
  * The ask is the clock, not the commit's own date. A session commits to a relay
  * branch and Actions lands it when the session ends, up to
@@ -685,7 +704,8 @@ function proxyPlan(s, config) {
  * one thing the hold exists to stop.
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
-function vouched(s, config) {
+export function vouched(s, config) {
+  if (armedByAuthor(s) && !threadsWaiting(s, config).length) return true
   const author = s.pr.user?.login
   const mark = dispatcherMark(`proxy-held ${s.pr.head?.sha}`)
   const asked = (s.comments || []).find((c) => isBot(c.author, config) && String(c.body || '').startsWith(mark))

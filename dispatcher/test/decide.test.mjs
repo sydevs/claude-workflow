@@ -1172,6 +1172,24 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
   })
 
+  // sydevs/SahajCloud#1219: armed by its owner, then address-review pushed the
+  // critic's findings, and the bot held its approval for a vouch already given.
+  // (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+  test('the owner\'s own arming vouches for the bot\'s head, unless a thread waits on them', () => {
+    const armed = { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'Ardnived' }
+    const p = evaluatePr(owned({ pr: armed, headAuthor: 'sydevs-bot' }), pc)
+    assert.deepEqual(of(p, 'proxyApprove').map((a) => a.sha), ['abc'])
+    assert.equal(of(p, 'comment').length, 0, 'nothing is asked')
+    const replied = { id: 'T1', isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-11-17T09:10:00Z' }, { author: 'sydevs-bot', body: 'kept it — your call', createdAt: '2026-11-17T09:20:00Z' }] }
+    const waits = evaluatePr(owned({ pr: armed, headAuthor: 'sydevs-bot', threads: [replied] }), pc)
+    assert.equal(of(waits, 'proxyApprove').length, 0, 'the review asks for a person, and arming does not answer it')
+    assert.ok(of(waits, 'comment').some((c) => c.key === 'proxy-held abc' && /1 thread\(s\) still do/.test(c.body)))
+    const resolved = evaluatePr(owned({ pr: armed, headAuthor: 'sydevs-bot', threads: [{ ...replied, isResolved: true }] }), pc)
+    assert.equal(of(resolved, 'proxyApprove').length, 1, 'resolved, the arming vouches')
+    const unarmed = evaluatePr(owned({ headAuthor: 'sydevs-bot' }), pc)
+    assert.ok(of(unarmed, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('or enable auto-merge')))
+  })
+
   test('a bot approval at the bot\'s own head (the vouched one) is kept', () => {
     const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'abc' }
     const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, approved] }), pc)

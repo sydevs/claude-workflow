@@ -2131,8 +2131,9 @@ The approval is pinned to the head it read, and never covers a commit of the bot
 pushes fixes onto member PRs (fix-ci, address-review, a relay), sometimes with behaviour nobody
 asked for, and the ruleset keeps an approval through later pushes. So when the head is the bot's,
 any earlier approval of its own is dismissed, and the PR waits for the author's
-`@sydevs-bot approve`, posted after that commit. A push of the author's own on top vouches for
-what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
+`@sydevs-bot approve`, posted after that commit, or their own arming of auto-merge
+([The owner's arming vouches for the bot's commits](#the-owners-arming-vouches-for-the-bots-commits)).
+A push of the author's own on top vouches for what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
 a review.
 
 Who pushed the head is therefore the whole guard, so an answer of *nobody* holds the approval
@@ -2164,6 +2165,21 @@ by any path that forgets it) is turned off on the PR's first pass, ahead of ever
 the owner is told once, in words true whichever of them armed it. Who armed it is read from `auto_merge.enabled_by`, so the owner's own
 arming stands, and one GitHub names nobody for is turned off too: it could be the bot's. Status reads Awaiting, "enable auto-merge when you want it merged", from approval
 until they do.
+
+## The owner's arming vouches for the bot's commits
+
+sydevs/SahajCloud#1219 (2026-11-19) was armed by its owner at 16:17Z. The critic left three
+`consider` findings, address-review adopted them in three commits of the bot's own, and once CI
+went green the bot held its approval and asked for `@sydevs-bot approve`. The owner had already
+said to merge it.
+
+Arming auto-merge is the owner's decision to merge, made in GitHub's own UI, and the bot never
+arms an owner's PR itself ([The owner arms their own PR](#the-owner-arms-their-own-pr)). So an
+arming the author made (`auto_merge.enabled_by`) vouches for whatever head the bot pushes while
+it stands, as `approve` would. It does not cover a review that asks for a person: a thread waiting
+on the author (`threadsWaiting`) is the normal review process, and the ruleset will not merge
+past it either. The hold comment then says the arming is waiting on those threads. Once they are
+resolved, the next sweep approves.
 
 ## The branch decides where a session pushes
 
