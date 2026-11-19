@@ -197,6 +197,7 @@
       "dispatch / deps",
       "dispatch / contracts-plan",
       "dispatch / contracts-sync",
+      "verify-contract-sync / verify",
       "legacy",
       "state / state"
     ]
