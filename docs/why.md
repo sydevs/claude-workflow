@@ -2181,7 +2181,9 @@ it stands, as `approve` would. It does not cover a review that asks for a person
 on the author (`threadsWaiting`) is the normal review process, and the ruleset will not merge
 past it either. The hold comment then says the arming is waiting on those threads. Once they are
 resolved, the next sweep approves; `proxyApprove` is a move, so `quietSweep` does not swallow it
-over an item recorded Awaiting.
+over an item recorded Awaiting. The approval the arming earns drops its own "enable auto-merge"
+ask: on this path the owner has already done it, and the sentence was the stale half of a message
+whose other half still matters.
 
 On the owner's unapproved PR, Status is Pending while CI runs or the approval is owed, and
 Awaiting only when the bot holds it for a commit nobody vouched for, or a thread waits on them.

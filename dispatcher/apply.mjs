@@ -273,9 +273,13 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
         log(`approve ${String(a.sha).slice(0, 7)} for its author`)
         if (dryRun) break
+        // An arming is now what earns this approval as often as not, so asking
+        // for one reads as stale to the owner who just gave it.
+        // (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+        const arm = snapshot.pr?.autoMergeArmed ? '' : ' Enable auto-merge when you want it merged: the queue tests it against its base.'
         await handOver('approve the owner\'s PR', () => gh.rest.pulls.createReview({
           ...args, pull_number: t.number, commit_id: a.sha, event: 'APPROVE',
-          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run. Enable auto-merge when you want it merged: the queue tests it against its base. ${config.identity.commentMarker || ''}`.trim(),
+          body: `Approved for ${snapshot.pr.user?.login}, who wrote it: GitHub refuses an author's own approval. CI is green and the automated review has run.${arm} ${config.identity.commentMarker || ''}`.trim(),
         }))
         break
       }
