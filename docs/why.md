@@ -1386,8 +1386,11 @@ the PR it opened. `contract-verify.yml`, called from each consumer's `workflow-s
 the consumer's `contractSync` command on its own `main` and compares the result with the PR head.
 A byte-for-byte match on a ready bot PR that changes nothing but the copy is approved as
 `github-actions[bot]`, which each consumer repo allows (`can_approve_pull_request_reviews`). The
-approval is pinned to the compared head, `dismiss_stale_reviews_on_push` drops it on a later push,
-and the merge queue still runs CI. Nothing from the PR executes: the head is only fetched and
+approval is pinned to the compared head, and the check takes it back as soon as the PR leaves that
+head: the ruleset keeps an approval through later pushes
+([The owner's PR is approved by the bot](#the-owners-pr-is-approved-by-the-bot)), and a sync PR is
+armed and asks nobody, so a stale one would merge a commit nothing compared. Only the check's own
+approval carries its marker, so a person's is never dismissed. The merge queue still runs CI. Nothing from the PR executes: the head is only fetched and
 diffed, on `pull_request_target`. The dispatcher no longer asks the reviewer at a contract-only
 sync's mark-ready; the check asks instead, and says why, when the copy differs (a hand edit, or a
 source that moved) or the check does not finish. Once `fix-ci` touches a file beside the copy,

@@ -150,7 +150,7 @@ test('a green sync draft is marked ready without asking the reviewer: contract-v
 const verifyPr = (over = {}) => ({
   number: 292, state: 'open', draft: false, user: { login: 'sydevs-bot' },
   head: { sha: 'abc1234', ref: 'claude/chore-sync-contracts', repo: { full_name: 'sydevs/WeMeditateWeb' } },
-  base: { repo: { full_name: 'sydevs/WeMeditateWeb' } },
+  base: { ref: 'main', repo: { full_name: 'sydevs/WeMeditateWeb' } },
   ...over,
 })
 
@@ -167,6 +167,7 @@ test('contract-verify checks only a ready, same-repo bot PR that changes nothing
   assert.equal(no(verifyPr(), [...files, 'server/atlas-client.ts']), false, 'a file beside the copy')
   assert.equal(no(verifyPr(), []), false, 'an unread file list')
   assert.equal(no(verifyPr(), files, 'SahajCloud'), false, 'the producer')
+  assert.equal(no(verifyPr({ base: { ...verifyPr().base, ref: 'claude/feat-1' } })), false, 'retargeted off main')
 })
 
 function verifyGithub({ pr = verifyPr(), reviews = [], comments = [] } = {}) {
@@ -178,7 +179,7 @@ function verifyGithub({ pr = verifyPr(), reviews = [], comments = [] } = {}) {
     calls,
     paginate: async (fn) => (await fn()).data,
     rest: {
-      pulls: { get: async () => ({ data: pr }), listReviews, createReview: rec('createReview'), requestReviewers: rec('requestReviewers') },
+      pulls: { get: async () => ({ data: pr }), listReviews, createReview: rec('createReview'), requestReviewers: rec('requestReviewers'), dismissReview: rec('dismissReview') },
       issues: { listComments, createComment: rec('createComment') },
     },
   }
@@ -225,9 +226,43 @@ test('a mismatch or an unfinished check asks the reviewer and says why, once per
   assert.deepEqual(said.calls, [])
 })
 
+const APPROVED = (commit_id) => ({ id: 7, state: 'APPROVED', commit_id, body: "<!-- sydevs-contract-verify-approved -->\nThe copied contract matches" })
+
+test("a head the gate refuses loses this check's earlier approval", async () => {
+  const gh = verifyGithub({ reviews: [APPROVED('old0000')] })
+  await verify(gh, { verify: false, matched: null })
+  assert.deepEqual(gh.calls.map((c) => c.name), ['dismissReview', 'requestReviewers', 'createComment'])
+  assert.equal(gh.calls[0].args.review_id, 7)
+  assert.match(gh.calls[2].args.body, /changes more than the copied contract/)
+  // Nothing of ours approved: a draft or a person's sync PR is left alone.
+  const quiet = verifyGithub()
+  await verify(quiet, { verify: false, matched: null })
+  assert.deepEqual(quiet.calls, [])
+  // A person's approval carries no marker, so it is never dismissed.
+  const theirs = verifyGithub({ reviews: [{ id: 9, state: 'APPROVED', commit_id: 'old0000', body: 'looks right' }] })
+  await verify(theirs, { verify: false, matched: null })
+  assert.deepEqual(theirs.calls, [])
+})
+
+test('a mismatch at a new head drops the approval the old one got', async () => {
+  const gh = verifyGithub({ reviews: [APPROVED('old0000')] })
+  await verify(gh, { matched: false })
+  assert.deepEqual(gh.calls.map((c) => c.name), ['dismissReview', 'requestReviewers', 'createComment'])
+})
+
+test('a closed PR is left alone', async () => {
+  const gh = verifyGithub({ pr: verifyPr({ state: 'closed' }), reviews: [APPROVED('old0000')] })
+  await verify(gh, { verify: false, matched: null })
+  await verify(gh, { matched: true })
+  assert.deepEqual(gh.calls, [])
+})
+
 test('a dry run approves, asks and says nothing', async () => {
   const gh = verifyGithub()
   await verify(gh, { matched: true, dryRun: true })
   await verify(gh, { matched: false, dryRun: true })
+  const refused = verifyGithub({ reviews: [APPROVED('old0000')] })
+  await verify(refused, { verify: false, matched: null, dryRun: true })
   assert.deepEqual(gh.calls, [])
+  assert.deepEqual(refused.calls, [])
 })

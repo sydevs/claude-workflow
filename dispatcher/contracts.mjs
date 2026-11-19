@@ -122,6 +122,9 @@ export function contractVerifyGate(config, repoName, pr, files) {
   if (pr.draft) return skip('a draft: checked once it is ready')
   if (!bot || String(pr.user?.login || '').toLowerCase() !== bot) return skip('not opened by the bot')
   if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return skip('the head is in another repository')
+  // The sync command regenerates from `main`, so that is the only base the
+  // comparison describes. A retargeted PR is reviewed like any other.
+  if (pr.base?.ref !== 'main') return skip('it does not merge into main')
   if (!isContractSyncOnly(config, repoName, pr, files)) return skip('it changes more than the copied contract')
   const c = config.contractSync.consumers[repoName]
   return { verify: true, reason: 'a contract-only sync', sha: pr.head.sha, command: c.command, paths: c.paths }
@@ -138,20 +141,45 @@ export async function planContractVerify({ github, context, core, config }) {
   return v
 }
 
+/** Opens the approval this check writes, so a later run tells its own from a person's. */
+const APPROVED_MARKER = '<!-- sydevs-contract-verify-approved -->'
+
+/**
+ * This check's own approvals of a head the PR has since left. The ruleset keeps
+ * an approval through later pushes (why: docs/why.md#the-owners-pr-is-approved-by-the-bot),
+ * and a sync PR is armed and asks nobody, so a stale one merges a commit
+ * nothing compared. A person's approval carries no marker and is never touched.
+ */
+const staleApprovals = (reviews, head) =>
+  (reviews || []).filter((r) => r.state === 'APPROVED' && r.commit_id !== head && String(r.body || '').includes(APPROVED_MARKER))
+
 /**
  * The `contract-verify` job's last step. A match is approved, pinned to the
- * head that was compared, so a later push leaves the approval stale. Anything
- * else (a mismatch, or a check that never finished) asks the reviewer, with
- * the reason said once per head: the dispatcher did not ask, because a sync
- * is expected to verify. A head that moved is left to the run it started.
+ * head that was compared. Anything else (a mismatch, a check that never
+ * finished, or a head the gate now refuses) dismisses an approval this check
+ * gave an earlier head, then asks the reviewer, with the reason said once per
+ * head: the dispatcher did not ask, because a sync is expected to verify. A
+ * head that moved on is left to the run it started.
  */
-export async function finishContractVerify({ github, context, core, config, sha, command, matched, dryRun = false }) {
+export async function finishContractVerify({ github, context, core, config, sha, command, matched, verify = true, dryRun = false }) {
   const { owner, repo } = context.repo
-  const number = context.payload.pull_request.number
+  const number = context.payload.pull_request?.number
+  if (!number) return core.info('no pull request in the event')
   const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number })
-  if (pr.head.sha !== sha) return core.info(`#${number}: the head moved past ${sha.slice(0, 7)}; its own run decides`)
+  if (pr.state !== 'open') return core.info(`#${number}: closed; nothing to decide`)
+  const head = pr.head?.sha
+  const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
+  const stale = staleApprovals(reviews, head)
+  // The gate refuses this head, so the check can no longer vouch for the PR.
+  // Its own approval of an earlier head comes off and a person decides. Where
+  // it approved nothing, nothing is at risk: a draft or a person's sync PR
+  // gets no comment.
+  if (!verify) {
+    if (!stale.length) return core.info(`#${number}: not verified, and this check approved nothing`)
+    return finishAsk({ github, core, config, owner, repo, number, pr, sha: head, stale, dryRun, why: 'changes more than the copied contract' })
+  }
+  if (head !== sha) return core.info(`#${number}: the head moved past ${sha.slice(0, 7)}; its own run decides`)
   if (matched) {
-    const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
     // Any APPROVED review pinned to this head settles it — ours, since nothing
     // else approves a head it did not compare, or a person's, which counts too.
     if (reviews.some((r) => r.state === 'APPROVED' && r.commit_id === sha)) return core.info(`#${number}: ${sha.slice(0, 7)} is already approved`)
@@ -159,21 +187,32 @@ export async function finishContractVerify({ github, context, core, config, sha,
     if (dryRun) return
     await github.rest.pulls.createReview({
       owner, repo, pull_number: number, commit_id: sha, event: 'APPROVE',
-      body: `The copied contract matches what \`${command}\` writes from \`main\`, byte for byte, and the PR changes nothing else. Approved by the contract check; the merge queue still runs CI.`,
+      body: `${APPROVED_MARKER}\nThe copied contract matches what \`${command}\` writes from \`main\`, byte for byte, and the PR changes nothing else. Approved by the contract check; the merge queue still runs CI.`,
     })
     return
   }
+  const why = matched === false
+    ? `differs from what \`${command}\` writes from \`main\`: a hand edit, or a source that moved since the sync`
+    : 'could not be checked: the contract check did not finish'
+  return finishAsk({ github, core, config, owner, repo, number, pr, sha, stale, dryRun, why })
+}
+
+/** Drop a stale approval of ours, ask the reviewer, and say why once per head. */
+async function finishAsk({ github, core, config, owner, repo, number, pr, sha, stale, dryRun, why }) {
   const reviewer = config.assignment?.reviewer
   const marker = `<!-- sydevs-contract-verify ${sha} -->`
-  core.info(`#${number}: ${sha.slice(0, 7)} ${matched === false ? 'differs from its source' : 'was not verified'}; asking ${reviewer}`)
+  core.info(`#${number}: ${sha.slice(0, 7)} ${why}; dismissing ${stale.length} approval(s), asking ${reviewer}`)
   if (dryRun) return
+  for (const r of stale) {
+    await github.rest.pulls.dismissReview({
+      owner, repo, pull_number: number, review_id: r.id,
+      message: `The head moved past ${String(r.commit_id || '').slice(0, 7)}, the commit this check compared.`,
+    })
+  }
   if (reviewer && !(pr.requested_reviewers || []).some((u) => u.login?.toLowerCase() === reviewer.toLowerCase())) {
     await github.rest.pulls.requestReviewers({ owner, repo, pull_number: number, reviewers: [reviewer] })
   }
   const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 })
   if (comments.some((c) => String(c.body || '').includes(marker))) return
-  const why = matched === false
-    ? `differs from what \`${command}\` writes from \`main\`: a hand edit, or a source that moved since the sync`
-    : 'could not be checked: the contract check did not finish'
   await github.rest.issues.createComment({ owner, repo, issue_number: number, body: `${marker}\nNot approved automatically: the copied contract at ${sha.slice(0, 7)} ${why}. It needs a person's review.` })
 }

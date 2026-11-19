@@ -108,10 +108,13 @@ jobs:
             git diff --cached --stat "$SHA" -- $SYNC_PATHS
             echo "matched=false" >> "$GITHUB_OUTPUT"
           fi
-      # A cancelled run was superseded by a newer head, which decides instead.
-      - if: ${{ !cancelled() && steps.plan.outputs.verify == 'true' }}
+      # Runs even where the gate refused this head: an approval given to an
+      # earlier one has to come off. A cancelled run was superseded by a newer
+      # head, which decides instead.
+      - if: ${{ !cancelled() }}
         uses: actions/github-script@v9
         env:
+          VERIFY: ${{ steps.plan.outputs.verify }}
           SHA: ${{ steps.plan.outputs.sha }}
           SYNC_COMMAND: ${{ steps.plan.outputs.command }}
           MATCHED: ${{ steps.compare.outputs.matched }}
@@ -126,6 +129,7 @@ jobs:
               config: loadConfig(`${cw}/loop-config.json`),
               sha: process.env.SHA,
               command: process.env.SYNC_COMMAND,
+              verify: process.env.VERIFY === 'true',
               matched: m === 'true' ? true : m === 'false' ? false : null,
               dryRun: process.env.DRY_RUN === 'true',
             })
