@@ -660,14 +660,12 @@ function evaluateGreenPr(s, config) {
  */
 function proxyPlan(s, config) {
   const head = s.pr.head?.sha
-  // gather reads the head commit for this PR; unread, nothing is approved.
-  // `getCommit` resolves `author` to null when the commit's email maps to no
-  // account, and an unknown author could be the bot's own, so it fails closed.
-  if (!head || !s.headCommittedAt || !s.headAuthor) return [note('head commit or its author unread — no approval on this pass')]
+  const verdict = proxyVerdict(s, config)
+  if (verdict === 'unread') return [note('head commit or its author unread — no approval on this pass')]
   const approvals = (s.reviews || []).filter((r) => isBot(r.user?.login, config) && r.state === 'APPROVED')
   if (!isBot(s.headAuthor, config)) return approvals.length ? [] : [proxyApprove(head)]
   if (approvals.some((r) => r.commit_id === head)) return []
-  if (vouched(s, config)) return [proxyApprove(head)]
+  if (verdict === 'owed') return [proxyApprove(head)]
   const buried = approvals.map((r) => r.id).filter(Boolean)
   const short = head.slice(0, 7)
   const waiting = threadsWaiting(s, config).length
@@ -679,6 +677,24 @@ function proxyPlan(s, config) {
     ...(buried.length ? [dismissProxy(buried)] : []),
     commentOnce(`proxy-held ${head}`, ask),
   ]
+}
+
+/**
+ * What the bot's approval does on this pass, in one word: `unread` when the
+ * head commit or its author did not resolve, `held` when the head is the bot's
+ * own and nobody vouched for it, `owed` otherwise. `proxyPlan` acts on it and
+ * `status` reports it, so the board cannot promise a move the next pass
+ * refuses. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ *
+ * `getCommit` resolves `author` to null when the commit's email maps to no
+ * account, and an unknown author could be the bot's own, so `unread` fails
+ * closed: nothing is approved, and nothing is asked for either.
+ */
+export function proxyVerdict(s, config) {
+  const head = s.pr?.head?.sha
+  if (!head || !s.headCommittedAt || !s.headAuthor) return 'unread'
+  if (!isBot(s.headAuthor, config)) return 'owed'
+  return vouched(s, config) ? 'owed' : 'held'
 }
 
 /**

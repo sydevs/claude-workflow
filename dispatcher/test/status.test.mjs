@@ -63,7 +63,7 @@ function pr(over = {}) {
   return {
     kind: 'pr', repo, now,
     item: { number: 5, state: 'open', labels: [] },
-    record: {}, threads: [], reviews: [], comments: [],
+    record: {}, threads: [], reviews: [], comments: [], headCommittedAt: '2026-10-25T00:00:00Z',
     pr: { number: 5, state: 'open', draft: false, user: { login: 'sydevs-bot' }, head: { sha: 'abc' }, autoMergeArmed: true, ...pull },
     mergeable: 'MERGEABLE', ci: { green: true, failing: [], running: [] }, normalized: { reviewDecision: null },
     ...rest,
@@ -116,6 +116,12 @@ test('the owner\'s unapproved PR is the machinery\'s until the bot holds its app
   const heldWhileCi = st(owner({}, { headAuthor: 'sydevs-bot', ci: running }))
   assert.equal(heldWhileCi.key, 'awaiting', 'CI running over an unvouched bot head is still the owner\'s')
   assert.match(heldWhileCi.reason, /approve/)
+  // `proxyPlan`'s third outcome: no pass approves an unread head, so it is not
+  // a wait the machinery owns.
+  const unread = st(owner({}, { headAuthor: null }))
+  assert.equal(unread.key, 'awaiting', 'an unread head author is the owner\'s to clear')
+  assert.equal(unread.due, false)
+  assert.equal(st(owner({}, { headCommittedAt: null })).key, 'awaiting', 'an unread head commit too')
 })
 
 test('a bot finding the bot has not answered is its own turn, not yours', () => {

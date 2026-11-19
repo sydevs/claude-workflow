@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves, vouched } from './decide.mjs'
+import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves, proxyVerdict } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -116,12 +116,14 @@ function prStatus(s, config, locked, rec) {
  * the owner has not vouched for. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
 function ownerUnapproved(s, config) {
-  // The hold comes first: CI going green does not release it, so promising an
-  // approval while it stands is the SahajCloud#1219 shape again.
-  const head = s.pr.head?.sha
-  if (head && isBot(s.headAuthor, config) && !vouched(s, config)) {
-    return out('awaiting', `the newest commit, ${head.slice(0, 7)}, is the bot's — read it, then say \`${config.dispatch.commandPrefix} approve\` or enable auto-merge`)
+  // `proxyVerdict` is the plan's own answer, so the board never promises an
+  // approval the next pass refuses. Both of its refusals come before CI:
+  // CI going green releases neither.
+  const verdict = proxyVerdict(s, config)
+  if (verdict === 'held') {
+    return out('awaiting', `the newest commit, ${s.pr.head.sha.slice(0, 7)}, is the bot's — read it, then say \`${config.dispatch.commandPrefix} approve\` or enable auto-merge`)
   }
+  if (verdict === 'unread') return out('awaiting', 'GitHub maps the newest commit to no account, so the bot will not approve it — approve it in a review')
   if (!s.ci?.green) return out('pending', 'CI is running — the bot approves once it is green', true)
   return out('pending', 'the bot\'s approval is owed', true)
 }

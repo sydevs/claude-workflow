@@ -2188,7 +2188,11 @@ whose other half still matters.
 On the owner's unapproved PR, Status is Pending while CI runs or the approval is owed, and
 Awaiting only when the bot holds it for a commit nobody vouched for, or a thread waits on them.
 The hold is read before CI, because CI going green does not release it: #1219's board said "the
-bot approves once it is green" over the very head the next pass refused to approve.
+bot approves once it is green" over the very head the next pass refused to approve. Both come from
+`proxyVerdict`, the one word the plan itself acts on — `unread`, `held` or `owed` — rather than
+from Status re-deriving two of its three branches. An unread head commit is the third: no pass
+approves it, so it is the owner's to clear, not a Pending wait that sits due until the attempt
+cap hands it back.
 
 ## The branch decides where a session pushes
 
