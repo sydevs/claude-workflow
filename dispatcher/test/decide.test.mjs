@@ -1190,6 +1190,13 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.ok(of(unarmed, 'comment').some((c) => c.key === 'proxy-held abc' && c.body.includes('or enable auto-merge')))
   })
 
+  // A resolved thread fires no workflow, so the sweep is the pass that sees
+  // it, over an item recorded Awaiting.
+  test('a sweep of an Awaiting owner PR still gives the approval it now owes', () => {
+    const stale = owned({ pr: { ...owned().pr, autoMergeArmed: true, autoMergeBy: 'Ardnived' }, headAuthor: 'sydevs-bot', record: { fixCi: 0, status: 'awaiting' } })
+    assert.equal(of(decide({ reason: 'sweep-pr', facts: {} }, stale, pc), 'proxyApprove').length, 1)
+  })
+
   test('a bot approval at the bot\'s own head (the vouched one) is kept', () => {
     const approved = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'abc' }
     const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, approved] }), pc)

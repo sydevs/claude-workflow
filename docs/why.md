@@ -1298,8 +1298,8 @@ a push, a verb — is an event the dispatcher already wakes on.** So a pass that
 and derives no move has found the state the last pass left: it runs the derivation and drops the
 plan. The gate is on the plan, not the fetch: `sweep-pr` still gathers, the only way to see a
 resolved thread or a refused write (why: docs/why.md#a-resolved-thread-fires-no-workflow). Those
-show up as a move (`armAutoMerge`, `disarmAutoMerge`, `dismissProxy`, `markReady`, `fire`), so they
-pass the gate.
+show up as a move (`armAutoMerge`, `disarmAutoMerge`, `proxyApprove`, `dismissProxy`, `markReady`,
+`fire`), so they pass the gate.
 
 ## A review comment is feedback, whatever its association
 
@@ -2179,7 +2179,8 @@ arming the author made (`auto_merge.enabled_by`) vouches for whatever head the b
 it stands, as `approve` would. It does not cover a review that asks for a person: a thread waiting
 on the author (`threadsWaiting`) is the normal review process, and the ruleset will not merge
 past it either. The hold comment then says the arming is waiting on those threads. Once they are
-resolved, the next sweep approves.
+resolved, the next sweep approves; `proxyApprove` is a move, so `quietSweep` does not swallow it
+over an item recorded Awaiting.
 
 ## The branch decides where a session pushes
 
