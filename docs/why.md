@@ -1394,6 +1394,11 @@ source that moved) or the check does not finish. Once `fix-ci` touches a file be
 `isContractSyncOnly` is false and the PR is reviewed like any other. The rulesets are unchanged: a
 bypass actor could not be scoped to these paths, and would skip the queue for every bot PR.
 
+The check re-derives bytes `contracts-sync` has just written because that job cannot vouch for
+them. It runs in the producer's event, so its `GITHUB_TOKEN` carries no rights in the consumer,
+and the PAT it does hold is sydevs-bot, the sync PR's own author. Only a workflow running in the
+consumer can approve there, and a workflow that approves has to compare for itself.
+
 ## The lease is a ref, not a label
 
 The label was taken too late to be a mutex: `gather` read `locked`, `decide` ran on that snapshot,
