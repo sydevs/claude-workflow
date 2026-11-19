@@ -116,10 +116,12 @@ function prStatus(s, config, locked, rec) {
  * the owner has not vouched for. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
 function ownerUnapproved(s, config) {
-  if (!s.ci?.green) return out('pending', 'CI is running — the bot approves once it is green', true)
+  // The hold comes first: CI going green does not release it, so promising an
+  // approval while it stands is the SahajCloud#1219 shape again.
   const head = s.pr.head?.sha
   if (head && isBot(s.headAuthor, config) && !vouched(s, config)) {
     return out('awaiting', `the newest commit, ${head.slice(0, 7)}, is the bot's — read it, then say \`${config.dispatch.commandPrefix} approve\` or enable auto-merge`)
   }
+  if (!s.ci?.green) return out('pending', 'CI is running — the bot approves once it is green', true)
   return out('pending', 'the bot\'s approval is owed', true)
 }

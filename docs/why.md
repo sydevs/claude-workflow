@@ -2187,6 +2187,8 @@ whose other half still matters.
 
 On the owner's unapproved PR, Status is Pending while CI runs or the approval is owed, and
 Awaiting only when the bot holds it for a commit nobody vouched for, or a thread waits on them.
+The hold is read before CI, because CI going green does not release it: #1219's board said "the
+bot approves once it is green" over the very head the next pass refused to approve.
 
 ## The branch decides where a session pushes
 

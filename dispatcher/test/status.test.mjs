@@ -112,6 +112,10 @@ test('the owner\'s unapproved PR is the machinery\'s until the bot holds its app
   assert.equal(key(owner({ autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, { headAuthor: 'sydevs-bot' })), 'awaiting', 'an arming of the bot\'s own does not')
   const replied = { isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-10-25T00:00:00Z' }, { author: 'sydevs-bot', body: 'fixed in abc', createdAt: '2026-10-25T01:00:00Z' }] }
   assert.equal(key(owner(armed, { headAuthor: 'sydevs-bot', threads: [replied] })), 'awaiting', 'a thread waits on the owner, armed or not')
+  // CI finishing does not release the hold, so the wait is theirs while it runs.
+  const heldWhileCi = st(owner({}, { headAuthor: 'sydevs-bot', ci: running }))
+  assert.equal(heldWhileCi.key, 'awaiting', 'CI running over an unvouched bot head is still the owner\'s')
+  assert.match(heldWhileCi.reason, /approve/)
 })
 
 test('a bot finding the bot has not answered is its own turn, not yours', () => {
