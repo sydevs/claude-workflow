@@ -152,7 +152,9 @@ export async function finishContractVerify({ github, context, core, config, sha,
   if (pr.head.sha !== sha) return core.info(`#${number}: the head moved past ${sha.slice(0, 7)}; its own run decides`)
   if (matched) {
     const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
-    if (reviews.some((r) => r.state === 'APPROVED' && r.commit_id === sha && r.user?.login === 'github-actions[bot]')) return core.info(`#${number}: ${sha.slice(0, 7)} is already approved`)
+    // Any APPROVED review pinned to this head settles it — ours, since nothing
+    // else approves a head it did not compare, or a person's, which counts too.
+    if (reviews.some((r) => r.state === 'APPROVED' && r.commit_id === sha)) return core.info(`#${number}: ${sha.slice(0, 7)} is already approved`)
     core.info(`#${number}: ${sha.slice(0, 7)} matches its source; approving`)
     if (dryRun) return
     await github.rest.pulls.createReview({

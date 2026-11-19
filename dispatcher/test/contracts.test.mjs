@@ -196,6 +196,9 @@ test('a matching sync is approved, pinned to the head it compared, once', async 
   const again = verifyGithub({ reviews: [{ state: 'APPROVED', commit_id: 'abc1234', user: { login: 'github-actions[bot]' } }] })
   await verify(again, { matched: true })
   assert.deepEqual(again.calls, [])
+  const person = verifyGithub({ reviews: [{ state: 'APPROVED', commit_id: 'abc1234', user: { login: 'Ardnived' } }] })
+  await verify(person, { matched: true })
+  assert.deepEqual(person.calls, [])
 })
 
 test('a head that moved is left to its own run', async () => {
