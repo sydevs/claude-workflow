@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves } from './decide.mjs'
+import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves, proxyVerdict } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -97,6 +97,7 @@ function prStatus(s, config, locked, rec) {
   if (s.normalized?.reviewDecision !== 'APPROVED') {
     if (s.mergeable === 'CONFLICTING') return out('pending', 'conflicts with its base', true)
     if (s.ci?.failing?.length) return out('pending', 'CI is red', true)
+    if (proxyApproves(author, config)) return ownerUnapproved(s, config)
     return out('awaiting', 'review')
   }
   if (loopMayNotMerge(s, config)) return out('awaiting', 'approved — merging it is yours')
@@ -107,4 +108,22 @@ function prStatus(s, config, locked, rec) {
   // (why: docs/why.md#the-owner-arms-their-own-pr)
   if (proxyApproves(author, config)) return out('awaiting', 'approved — enable auto-merge when you want it merged')
   return out('pending', 'approved — auto-merge is owed', true)
+}
+
+/**
+ * The owner's PR is approved by the bot, not reviewed by a person, so it is
+ * the machinery's until the bot holds that approval for a commit of its own
+ * the owner has not vouched for. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ */
+function ownerUnapproved(s, config) {
+  // `proxyVerdict` is the plan's own answer, so the board never promises an
+  // approval the next pass refuses. Both of its refusals come before CI:
+  // CI going green releases neither.
+  const verdict = proxyVerdict(s, config)
+  if (verdict === 'held') {
+    return out('awaiting', `the newest commit, ${s.pr.head.sha.slice(0, 7)}, is the bot's — read it, then say \`${config.dispatch.commandPrefix} approve\` or enable auto-merge`)
+  }
+  if (verdict === 'unread') return out('awaiting', 'GitHub maps the newest commit to no account, so the bot will not approve it — approve it in a review')
+  if (!s.ci?.green) return out('pending', 'CI is running — the bot approves once it is green', true)
+  return out('pending', 'the bot\'s approval is owed', true)
 }

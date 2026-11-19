@@ -473,7 +473,7 @@ export function loopMayNotMerge(snapshot, config) {
 // status, an anomaly — only restates where it already is. Turning a merge off,
 // or dismissing the approval that would allow one, moves an item as surely as
 // arming it does.
-const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'dismissProxy', 'markReady', 'recheck', 'targets', 'rerunJobs'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'proxyApprove', 'dismissProxy', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item last left Awaiting says nothing unless the
@@ -660,23 +660,65 @@ function evaluateGreenPr(s, config) {
  */
 function proxyPlan(s, config) {
   const head = s.pr.head?.sha
-  // gather reads the head commit for this PR; unread, nothing is approved.
-  // `getCommit` resolves `author` to null when the commit's email maps to no
-  // account, and an unknown author could be the bot's own, so it fails closed.
-  if (!head || !s.headCommittedAt || !s.headAuthor) return [note('head commit or its author unread — no approval on this pass')]
+  const verdict = proxyVerdict(s, config)
+  if (verdict === 'unread') return [note('head commit or its author unread — no approval on this pass')]
   const approvals = (s.reviews || []).filter((r) => isBot(r.user?.login, config) && r.state === 'APPROVED')
   if (!isBot(s.headAuthor, config)) return approvals.length ? [] : [proxyApprove(head)]
   if (approvals.some((r) => r.commit_id === head)) return []
-  if (vouched(s, config)) return [proxyApprove(head)]
+  if (verdict === 'owed') return [proxyApprove(head)]
   const buried = approvals.map((r) => r.id).filter(Boolean)
+  const short = head.slice(0, 7)
+  const waiting = threadsWaiting(s, config).length
+  // Armed, and held only by threads: say so, or the ask reads as owed twice.
+  // Its own key, because an owner who arms after the unarmed ask has done what
+  // that ask told them to, and `commentOnce` would never say what is left.
+  const armedHold = armedByAuthor(s) && waiting
+  const ask = armedHold
+    ? `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own. Your auto-merge vouches for it once nothing waits on you, and ${waiting} thread(s) still do: reply there or resolve them, or say \`${config.dispatch.commandPrefix} approve\`.`
+    : `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`, or enable auto-merge.`
   return [
     ...(buried.length ? [dismissProxy(buried)] : []),
-    commentOnce(`proxy-held ${head}`, `The newest commit, ${head.slice(0, 7)}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`.`),
+    commentOnce(`${armedHold ? ARMED_HOLD_KEY : HOLD_KEY} ${head}`, ask),
   ]
 }
 
+/** The two keys the hold ask is posted under; `vouched` reads either back. */
+const HOLD_KEY = 'proxy-held'
+const ARMED_HOLD_KEY = 'proxy-held-armed'
+
 /**
- * The author said `approve` after the bot asked them to, about this head.
+ * What the bot's approval does on this pass, in one word: `unread` when the
+ * head commit or its author did not resolve, `held` when the head is the bot's
+ * own and nobody vouched for it, `owed` otherwise. `proxyPlan` acts on it and
+ * `status` reports it, so the board cannot promise a move the next pass
+ * refuses. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+ *
+ * `getCommit` resolves `author` to null when the commit's email maps to no
+ * account, and an unknown author could be the bot's own, so `unread` fails
+ * closed: nothing is approved, and nothing is asked for either.
+ */
+export function proxyVerdict(s, config) {
+  const head = s.pr?.head?.sha
+  if (!head || !s.headCommittedAt || !s.headAuthor) return 'unread'
+  if (!isBot(s.headAuthor, config)) return 'owed'
+  return vouched(s, config) ? 'owed' : 'held'
+}
+
+/**
+ * The author armed auto-merge themselves. The bot never arms an owner's PR,
+ * and one it did is disarmed, so this is the owner's decision to merge.
+ * (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+ */
+function armedByAuthor(s) {
+  const by = s.pr?.autoMergeBy
+  return Boolean(s.pr?.autoMergeArmed) && !s.pr?.draft && Boolean(by) && lower(by) === lower(s.pr?.user?.login)
+}
+
+/**
+ * The author vouches for the bot's head by arming auto-merge, while no thread
+ * waits on them, or by saying `approve` after the bot asked them to, about
+ * this head. A thread waiting on a person is the review asking for one, and
+ * arming does not answer it. (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
  *
  * The ask is the clock, not the commit's own date. A session commits to a relay
  * branch and Actions lands it when the session ends, up to
@@ -685,10 +727,13 @@ function proxyPlan(s, config) {
  * one thing the hold exists to stop.
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
-function vouched(s, config) {
+export function vouched(s, config) {
+  if (armedByAuthor(s) && !threadsWaiting(s, config).length) return true
   const author = s.pr.user?.login
-  const mark = dispatcherMark(`proxy-held ${s.pr.head?.sha}`)
-  const asked = (s.comments || []).find((c) => isBot(c.author, config) && String(c.body || '').startsWith(mark))
+  const marks = [HOLD_KEY, ARMED_HOLD_KEY].map((k) => dispatcherMark(`${k} ${s.pr.head?.sha}`))
+  // Either wording is an ask about this head, and the earliest is the clock.
+  const asked = (s.comments || []).filter((c) => isBot(c.author, config) && marks.some((m) => String(c.body || '').startsWith(m)))
+    .reduce((a, c) => (a && a.createdAt <= c.createdAt ? a : c), null)
   if (!asked) return false
   return (s.comments || []).some((c) => lower(c.author) === lower(author) && c.createdAt > asked.createdAt
     && parseVerb(c.body, config.dispatch, 'pr').verb === 'approve')

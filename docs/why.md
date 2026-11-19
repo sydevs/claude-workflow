@@ -1298,8 +1298,8 @@ a push, a verb — is an event the dispatcher already wakes on.** So a pass that
 and derives no move has found the state the last pass left: it runs the derivation and drops the
 plan. The gate is on the plan, not the fetch: `sweep-pr` still gathers, the only way to see a
 resolved thread or a refused write (why: docs/why.md#a-resolved-thread-fires-no-workflow). Those
-show up as a move (`armAutoMerge`, `disarmAutoMerge`, `dismissProxy`, `markReady`, `fire`), so they
-pass the gate.
+show up as a move (`armAutoMerge`, `disarmAutoMerge`, `proxyApprove`, `dismissProxy`, `markReady`,
+`fire`), so they pass the gate.
 
 ## A review comment is feedback, whatever its association
 
@@ -2131,8 +2131,9 @@ The approval is pinned to the head it read, and never covers a commit of the bot
 pushes fixes onto member PRs (fix-ci, address-review, a relay), sometimes with behaviour nobody
 asked for, and the ruleset keeps an approval through later pushes. So when the head is the bot's,
 any earlier approval of its own is dismissed, and the PR waits for the author's
-`@sydevs-bot approve`, posted after that commit. A push of the author's own on top vouches for
-what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
+`@sydevs-bot approve`, posted after that commit, or their own arming of auto-merge
+([The owner's arming vouches for the bot's commits](#the-owners-arming-vouches-for-the-bots-commits)).
+A push of the author's own on top vouches for what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
 a review.
 
 Who pushed the head is therefore the whole guard, so an answer of *nobody* holds the approval
@@ -2164,6 +2165,37 @@ by any path that forgets it) is turned off on the PR's first pass, ahead of ever
 the owner is told once, in words true whichever of them armed it. Who armed it is read from `auto_merge.enabled_by`, so the owner's own
 arming stands, and one GitHub names nobody for is turned off too: it could be the bot's. Status reads Awaiting, "enable auto-merge when you want it merged", from approval
 until they do.
+
+## The owner's arming vouches for the bot's commits
+
+sydevs/SahajCloud#1219 (2026-11-19) was armed by its owner at 16:17Z. The critic left three
+`consider` findings, address-review adopted them in three commits of the bot's own, and once CI
+went green the bot held its approval and asked for `@sydevs-bot approve`. The owner had already
+said to merge it. Until then the board read Awaiting "review" while CI ran, though the owner's PR
+has no reviewer to wait for: its next move was the machinery's.
+
+Arming auto-merge is the owner's decision to merge, made in GitHub's own UI, and the bot never
+arms an owner's PR itself ([The owner arms their own PR](#the-owner-arms-their-own-pr)). So an
+arming the author made (`auto_merge.enabled_by`) vouches for whatever head the bot pushes while
+it stands, as `approve` would. It does not cover a review that asks for a person: a thread waiting
+on the author (`threadsWaiting`) is the normal review process, and the ruleset will not merge
+past it either. The hold comment then says the arming is waiting on those threads. Once they are
+resolved, the next sweep approves; `proxyApprove` is a move, so `quietSweep` does not swallow it
+over an item recorded Awaiting. That wording is posted under its own `commentOnce` key: the two
+asks share a head, and an owner who arms *because* the unarmed ask told them to would otherwise
+never be told what is still waiting. `vouched` reads either key back, so the clock is unchanged.
+The approval the arming earns drops its own "enable auto-merge"
+ask: on this path the owner has already done it, and the sentence was the stale half of a message
+whose other half still matters.
+
+On the owner's unapproved PR, Status is Pending while CI runs or the approval is owed, and
+Awaiting only when the bot holds it for a commit nobody vouched for, or a thread waits on them.
+The hold is read before CI, because CI going green does not release it: #1219's board said "the
+bot approves once it is green" over the very head the next pass refused to approve. Both come from
+`proxyVerdict`, the one word the plan itself acts on — `unread`, `held` or `owed` — rather than
+from Status re-deriving two of its three branches. An unread head commit is the third: no pass
+approves it, so it is the owner's to clear, not a Pending wait that sits due until the attempt
+cap hands it back.
 
 ## The branch decides where a session pushes
 

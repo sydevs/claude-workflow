@@ -63,7 +63,7 @@ function pr(over = {}) {
   return {
     kind: 'pr', repo, now,
     item: { number: 5, state: 'open', labels: [] },
-    record: {}, threads: [], reviews: [], comments: [],
+    record: {}, threads: [], reviews: [], comments: [], headCommittedAt: '2026-10-25T00:00:00Z',
     pr: { number: 5, state: 'open', draft: false, user: { login: 'sydevs-bot' }, head: { sha: 'abc' }, autoMergeArmed: true, ...pull },
     mergeable: 'MERGEABLE', ci: { green: true, failing: [], running: [] }, normalized: { reviewDecision: null },
     ...rest,
@@ -92,6 +92,36 @@ test('a PR: review is yours, the queue is the machinery\'s, and a question threa
   assert.equal(deriveStatus(pr({ repo: { ...repo, name: 'claude-workflow' }, normalized: { reviewDecision: 'APPROVED' } }), noMerge, now).key, 'awaiting', 'a repo the loop may not merge')
   assert.equal(key(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] })), 'pending')
   assert.equal(deriveStatus(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] }), config, now).due, false, 'waiting on its producer has no due')
+})
+
+// sydevs/SahajCloud#1219 read Awaiting "review" while CI ran, armed by its
+// owner: nobody reviews the owner's PR, the bot approves it.
+// (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+test('the owner\'s unapproved PR is the machinery\'s until the bot holds its approval for them', () => {
+  const login = config.mergePolicy.proxyApprove[0]
+  const owner = (pull = {}, rest = {}) => pr({ pull: { user: { login }, autoMergeArmed: false, ...pull }, headAuthor: login, ...rest })
+  const running = { green: false, failing: [], running: [{ name: 'CI' }] }
+  const st = (s) => deriveStatus(s, config, now)
+  assert.deepEqual([st(owner({}, { ci: running })).key, st(owner({}, { ci: running })).due], ['pending', true], 'CI running')
+  assert.equal(key(owner()), 'pending', 'green, its own head: the approval is owed')
+  const held = st(owner({}, { headAuthor: 'sydevs-bot' }))
+  assert.equal(held.key, 'awaiting', 'the bot\'s head, unarmed: the owner vouches')
+  assert.match(held.reason, /approve/)
+  const armed = { autoMergeArmed: true, autoMergeBy: login }
+  assert.equal(key(owner(armed, { headAuthor: 'sydevs-bot' })), 'pending', 'armed by the owner: the arming vouches')
+  assert.equal(key(owner({ autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, { headAuthor: 'sydevs-bot' })), 'awaiting', 'an arming of the bot\'s own does not')
+  const replied = { isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-10-25T00:00:00Z' }, { author: 'sydevs-bot', body: 'fixed in abc', createdAt: '2026-10-25T01:00:00Z' }] }
+  assert.equal(key(owner(armed, { headAuthor: 'sydevs-bot', threads: [replied] })), 'awaiting', 'a thread waits on the owner, armed or not')
+  // CI finishing does not release the hold, so the wait is theirs while it runs.
+  const heldWhileCi = st(owner({}, { headAuthor: 'sydevs-bot', ci: running }))
+  assert.equal(heldWhileCi.key, 'awaiting', 'CI running over an unvouched bot head is still the owner\'s')
+  assert.match(heldWhileCi.reason, /approve/)
+  // `proxyPlan`'s third outcome: no pass approves an unread head, so it is not
+  // a wait the machinery owns.
+  const unread = st(owner({}, { headAuthor: null }))
+  assert.equal(unread.key, 'awaiting', 'an unread head author is the owner\'s to clear')
+  assert.equal(unread.due, false)
+  assert.equal(st(owner({}, { headCommittedAt: null })).key, 'awaiting', 'an unread head commit too')
 })
 
 test('a bot finding the bot has not answered is its own turn, not yours', () => {

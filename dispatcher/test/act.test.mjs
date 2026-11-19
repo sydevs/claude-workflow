@@ -222,7 +222,15 @@ test('the owner\'s own ready PR is approved by the bot at its head, and nobody i
   assert.equal(reviews.length, 1)
   assert.equal(reviews[0].args.event, 'APPROVE')
   assert.equal(reviews[0].args.commit_id, 'abc')
+  assert.ok(reviews[0].args.body.includes('Enable auto-merge'), 'unarmed, it asks for the arming')
   assert.ok(!github.calls.some((c) => c.name === 'requestReviewers'))
+  // Armed by the owner, the approval no longer asks for what they already did.
+  // (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+  const already = fakeGithub({ ...world, prs: { 5: { ...pr, auto_merge: { enabled_by: { login: 'Ardnived' } } } } })
+  await act({ github: already, context: {}, core, config: proxy, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  const armedReview = already.calls.find((c) => c.name === 'createReview')
+  assert.ok(armedReview, 'it is still approved')
+  assert.ok(!armedReview.args.body.includes('Enable auto-merge'))
   // The head unread: no approval.
   const blind = fakeGithub({ ...world, headCommit: null })
   await act({ github: blind, context: {}, core, config: proxy, target, env: {}, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
