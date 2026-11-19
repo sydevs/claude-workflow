@@ -609,7 +609,10 @@ function evaluateGreenPr(s, config) {
     // GitHub refuses auto-merge on a draft, so this is the first moment it can
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
-    const plan = [markReady(), requestReviewer()]
+    // A contract-only sync asks nobody: contract-verify.yml approves one that
+    // matches its source, and asks the reviewer itself when it does not.
+    // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+    const plan = pr.contractSyncOnly ? [markReady()] : [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
     if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) plan.push(criticSkipped(pr, config, `critic-skipped ${pr.head?.sha}`))
@@ -1239,7 +1242,8 @@ function route(target, s, config) {
       return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
       // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
-      return (isBot(s.pr?.user?.login, config) ? [requestReviewer()] : []).concat(evaluatePr(s, config))
+      // A contract-only sync asks nobody here: contract-verify.yml does, on a mismatch.
+      return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.
       if (!facts.pusherIsBot) plan.push(...clearHandback(s))

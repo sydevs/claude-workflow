@@ -1378,6 +1378,22 @@ that needs a decision. The same holds for audit-contracts findings where the sou
 right (a misdescribing doc, a missing changelog entry, a dead command); a ticket is kept for when
 the code may be the wrong side.
 
+## A verified contract sync is approved by Actions
+
+A contract sync has one correct content, so a person reading it checks nothing a machine cannot,
+yet each one waited on the owner's approval: the ruleset needs one, and sydevs-bot cannot approve
+the PR it opened. `contract-verify.yml`, called from each consumer's `workflow-state.yml`, re-runs
+the consumer's `contractSync` command on its own `main` and compares the result with the PR head.
+A byte-for-byte match on a ready bot PR that changes nothing but the copy is approved as
+`github-actions[bot]`, which each consumer repo allows (`can_approve_pull_request_reviews`). The
+approval is pinned to the compared head, `dismiss_stale_reviews_on_push` drops it on a later push,
+and the merge queue still runs CI. Nothing from the PR executes: the head is only fetched and
+diffed, on `pull_request_target`. The dispatcher no longer asks the reviewer at a contract-only
+sync's mark-ready; the check asks instead, and says why, when the copy differs (a hand edit, or a
+source that moved) or the check does not finish. Once `fix-ci` touches a file beside the copy,
+`isContractSyncOnly` is false and the PR is reviewed like any other. The rulesets are unchanged: a
+bypass actor could not be scoped to these paths, and would skip the queue for every bot PR.
+
 ## The lease is a ref, not a label
 
 The label was taken too late to be a mutex: `gather` read `locked`, `decide` ran on that snapshot,

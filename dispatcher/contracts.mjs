@@ -107,3 +107,71 @@ export function isContractSyncOnly(config, repoName, pr, files) {
   if (!Array.isArray(files) || !files.length) return false
   return files.every((f) => (consumer.paths || []).includes(f))
 }
+
+/**
+ * Whether the `contract-verify` workflow may check this PR, as
+ * `{ verify, reason, sha, command, paths }`. Only an open, ready bot PR from
+ * this repo that changes nothing but the copy qualifies; anything else is left
+ * to the dispatcher, which asks the reviewer as on any other PR. Pure.
+ * (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+ */
+export function contractVerifyGate(config, repoName, pr, files) {
+  const skip = (reason) => ({ verify: false, reason })
+  const bot = String(config.identity?.expectedLogin || '').toLowerCase()
+  if (pr?.state !== 'open') return skip('not open')
+  if (pr.draft) return skip('a draft: checked once it is ready')
+  if (!bot || String(pr.user?.login || '').toLowerCase() !== bot) return skip('not opened by the bot')
+  if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return skip('the head is in another repository')
+  if (!isContractSyncOnly(config, repoName, pr, files)) return skip('it changes more than the copied contract')
+  const c = config.contractSync.consumers[repoName]
+  return { verify: true, reason: 'a contract-only sync', sha: pr.head.sha, command: c.command, paths: c.paths }
+}
+
+/** The `contract-verify` job's first step: read the PR fresh, and gate it. */
+export async function planContractVerify({ github, context, core, config }) {
+  const { owner, repo } = context.repo
+  const number = context.payload.pull_request?.number
+  if (!number) return { verify: false, reason: 'no pull request in the event' }
+  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number })
+  const v = contractVerifyGate(config, repo, pr, await changedPaths(github, { owner, repo, number }))
+  core.info(`#${number}: ${v.verify ? 'verifying' : 'skipped'}, ${v.reason}`)
+  return v
+}
+
+/**
+ * The `contract-verify` job's last step. A match is approved, pinned to the
+ * head that was compared, so a later push leaves the approval stale. Anything
+ * else (a mismatch, or a check that never finished) asks the reviewer, with
+ * the reason said once per head: the dispatcher did not ask, because a sync
+ * is expected to verify. A head that moved is left to the run it started.
+ */
+export async function finishContractVerify({ github, context, core, config, sha, command, matched, dryRun = false }) {
+  const { owner, repo } = context.repo
+  const number = context.payload.pull_request.number
+  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number })
+  if (pr.head.sha !== sha) return core.info(`#${number}: the head moved past ${sha.slice(0, 7)}; its own run decides`)
+  if (matched) {
+    const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
+    if (reviews.some((r) => r.state === 'APPROVED' && r.commit_id === sha && r.user?.login === 'github-actions[bot]')) return core.info(`#${number}: ${sha.slice(0, 7)} is already approved`)
+    core.info(`#${number}: ${sha.slice(0, 7)} matches its source; approving`)
+    if (dryRun) return
+    await github.rest.pulls.createReview({
+      owner, repo, pull_number: number, commit_id: sha, event: 'APPROVE',
+      body: `The copied contract matches what \`${command}\` writes from \`main\`, byte for byte, and the PR changes nothing else. Approved by the contract check; the merge queue still runs CI.`,
+    })
+    return
+  }
+  const reviewer = config.assignment?.reviewer
+  const marker = `<!-- sydevs-contract-verify ${sha} -->`
+  core.info(`#${number}: ${sha.slice(0, 7)} ${matched === false ? 'differs from its source' : 'was not verified'}; asking ${reviewer}`)
+  if (dryRun) return
+  if (reviewer && !(pr.requested_reviewers || []).some((u) => u.login?.toLowerCase() === reviewer.toLowerCase())) {
+    await github.rest.pulls.requestReviewers({ owner, repo, pull_number: number, reviewers: [reviewer] })
+  }
+  const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 })
+  if (comments.some((c) => String(c.body || '').includes(marker))) return
+  const why = matched === false
+    ? `differs from what \`${command}\` writes from \`main\`: a hand edit, or a source that moved since the sync`
+    : 'could not be checked: the contract check did not finish'
+  await github.rest.issues.createComment({ owner, repo, issue_number: number, body: `${marker}\nNot approved automatically: the copied contract at ${sha.slice(0, 7)} ${why}. It needs a person's review.` })
+}

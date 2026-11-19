@@ -1,0 +1,122 @@
+# The contract check.
+#
+# A consumer's caller (workflow-state.yml) calls this on a PR on
+# `contractSync.branch`. It re-runs the consumer's sync command on the
+# consumer's own `main` and compares what that writes with the PR head. A
+# byte-for-byte match, on a bot PR that changes nothing else, is approved
+# here as github-actions[bot], the one approval the ruleset needs; the
+# dispatcher armed auto-merge at mark-ready, so the queue runs CI and merges
+# it. Anything else asks `assignment.reviewer` and says why.
+#
+# Safe on pull_request_target: nothing from the PR runs. The PR head is only
+# fetched and diffed. The command comes from loop-config.json on main here,
+# and the script it runs from the consumer's own main.
+#
+# Each caller grants `contents: read` and `pull-requests: write` on the job
+# that calls this; without them the approval is refused.
+#
+# why: sydevs/claude-workflow/docs/why.md#a-verified-contract-sync-is-approved-by-actions
+name: Contract verify
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: Log the verdict; approve, ask and comment nothing.
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    # A newer head supersedes an older one's check.
+    concurrency:
+      group: contract-verify-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: sydevs/claude-workflow
+          ref: main
+          path: cw
+          persist-credentials: false
+          sparse-checkout: |
+            loop-config.json
+            workflow/lib
+            dispatcher
+      - id: plan
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { planContractVerify, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            const v = await planContractVerify({ github, context, core, config: loadConfig(`${cw}/loop-config.json`) })
+            core.setOutput('verify', String(v.verify))
+            core.setOutput('sha', v.sha || '')
+            core.setOutput('command', v.command || '')
+            core.setOutput('paths', (v.paths || []).join(' '))
+      # The consumer's own main, never the PR head: the sync script runs from here.
+      - if: steps.plan.outputs.verify == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: consumer
+      # No `version:` input: pnpm's version comes from the consumer's `packageManager`.
+      - if: steps.plan.outputs.verify == 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: consumer/package.json
+      - if: steps.plan.outputs.verify == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - id: compare
+        if: steps.plan.outputs.verify == 'true'
+        working-directory: consumer
+        env:
+          SHA: ${{ steps.plan.outputs.sha }}
+          SYNC_COMMAND: ${{ steps.plan.outputs.command }}
+          SYNC_PATHS: ${{ steps.plan.outputs.paths }}
+        run: |
+          set -euo pipefail
+          bash -c "$SYNC_COMMAND"
+          git fetch -q --depth=1 origin "$SHA"
+          # Staged, so a copy main lacks is compared too. SYNC_PATHS is split on purpose.
+          # shellcheck disable=SC2086
+          git add -- $SYNC_PATHS
+          # shellcheck disable=SC2086
+          if git diff --cached --quiet "$SHA" -- $SYNC_PATHS; then
+            echo "matched=true" >> "$GITHUB_OUTPUT"
+          else
+            # shellcheck disable=SC2086
+            git diff --cached --stat "$SHA" -- $SYNC_PATHS
+            echo "matched=false" >> "$GITHUB_OUTPUT"
+          fi
+      # A cancelled run was superseded by a newer head, which decides instead.
+      - if: ${{ !cancelled() && steps.plan.outputs.verify == 'true' }}
+        uses: actions/github-script@v9
+        env:
+          SHA: ${{ steps.plan.outputs.sha }}
+          SYNC_COMMAND: ${{ steps.plan.outputs.command }}
+          MATCHED: ${{ steps.compare.outputs.matched }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        with:
+          script: |
+            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
+            const { finishContractVerify, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            const m = process.env.MATCHED
+            await finishContractVerify({
+              github, context, core,
+              config: loadConfig(`${cw}/loop-config.json`),
+              sha: process.env.SHA,
+              command: process.env.SYNC_COMMAND,
+              matched: m === 'true' ? true : m === 'false' ? false : null,
+              dryRun: process.env.DRY_RUN === 'true',
+            })
