@@ -2171,7 +2171,8 @@ until they do.
 sydevs/SahajCloud#1219 (2026-11-19) was armed by its owner at 16:17Z. The critic left three
 `consider` findings, address-review adopted them in three commits of the bot's own, and once CI
 went green the bot held its approval and asked for `@sydevs-bot approve`. The owner had already
-said to merge it.
+said to merge it. Until then the board read Awaiting "review" while CI ran, though the owner's PR
+has no reviewer to wait for: its next move was the machinery's.
 
 Arming auto-merge is the owner's decision to merge, made in GitHub's own UI, and the bot never
 arms an owner's PR itself ([The owner arms their own PR](#the-owner-arms-their-own-pr)). So an
@@ -2181,6 +2182,9 @@ on the author (`threadsWaiting`) is the normal review process, and the ruleset w
 past it either. The hold comment then says the arming is waiting on those threads. Once they are
 resolved, the next sweep approves; `proxyApprove` is a move, so `quietSweep` does not swallow it
 over an item recorded Awaiting.
+
+On the owner's unapproved PR, Status is Pending while CI runs or the approval is owed, and
+Awaiting only when the bot holds it for a commit nobody vouched for, or a thread waits on them.
 
 ## The branch decides where a session pushes
 

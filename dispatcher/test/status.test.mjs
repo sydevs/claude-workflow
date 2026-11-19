@@ -94,6 +94,26 @@ test('a PR: review is yours, the queue is the machinery\'s, and a question threa
   assert.equal(deriveStatus(pr({ normalized: { reviewDecision: 'APPROVED' }, linkedBlockedOpen: ['sydevs/SahajCloud#1'] }), config, now).due, false, 'waiting on its producer has no due')
 })
 
+// sydevs/SahajCloud#1219 read Awaiting "review" while CI ran, armed by its
+// owner: nobody reviews the owner's PR, the bot approves it.
+// (why: docs/why.md#the-owners-arming-vouches-for-the-bots-commits)
+test('the owner\'s unapproved PR is the machinery\'s until the bot holds its approval for them', () => {
+  const login = config.mergePolicy.proxyApprove[0]
+  const owner = (pull = {}, rest = {}) => pr({ pull: { user: { login }, autoMergeArmed: false, ...pull }, headAuthor: login, ...rest })
+  const running = { green: false, failing: [], running: [{ name: 'CI' }] }
+  const st = (s) => deriveStatus(s, config, now)
+  assert.deepEqual([st(owner({}, { ci: running })).key, st(owner({}, { ci: running })).due], ['pending', true], 'CI running')
+  assert.equal(key(owner()), 'pending', 'green, its own head: the approval is owed')
+  const held = st(owner({}, { headAuthor: 'sydevs-bot' }))
+  assert.equal(held.key, 'awaiting', 'the bot\'s head, unarmed: the owner vouches')
+  assert.match(held.reason, /approve/)
+  const armed = { autoMergeArmed: true, autoMergeBy: login }
+  assert.equal(key(owner(armed, { headAuthor: 'sydevs-bot' })), 'pending', 'armed by the owner: the arming vouches')
+  assert.equal(key(owner({ autoMergeArmed: true, autoMergeBy: 'sydevs-bot' }, { headAuthor: 'sydevs-bot' })), 'awaiting', 'an arming of the bot\'s own does not')
+  const replied = { isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-10-25T00:00:00Z' }, { author: 'sydevs-bot', body: 'fixed in abc', createdAt: '2026-10-25T01:00:00Z' }] }
+  assert.equal(key(owner(armed, { headAuthor: 'sydevs-bot', threads: [replied] })), 'awaiting', 'a thread waits on the owner, armed or not')
+})
+
 test('a bot finding the bot has not answered is its own turn, not yours', () => {
   const finding = { isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-10-25T00:00:00Z' }] }
   assert.equal(key(pr({ threads: [finding] })), 'pending', 'address-review owes the reply')
