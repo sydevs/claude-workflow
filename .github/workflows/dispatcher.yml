@@ -17,7 +17,7 @@
 # them, `journal` keeps the day issue, `deps` fires a dependency fix only
 # when Dependabot has one due, `contracts-plan` and `contracts-sync`
 # re-sync a consumer's copy of a producer's contract, and `contracts-verify`
-# approves a re-sync that matches its source.
+# approves a re-sync that `contracts-sync` wrote.
 #
 # why: sydevs/claude-workflow/docs/why.md#actions-observes-classifies-locks-and-fires
 name: Dispatcher
@@ -265,6 +265,7 @@ jobs:
       SOURCE_PR: ${{ matrix.consumer.sourcePr }}
       FEATURE_PR: ${{ matrix.consumer.featurePr }}
       FEATURE_BRANCH: ${{ matrix.consumer.featureBranch }}
+      ATTEST_CONTEXT: ${{ matrix.consumer.attestContext }}
     steps:
       # The consumer's own main, never a PR head, and its own sync script.
       - uses: actions/checkout@v7
@@ -288,6 +289,14 @@ jobs:
           set -euo pipefail
           git config user.name sydevs-bot
           git config user.email 322523691+sydevs-bot@users.noreply.github.com
+          # Vouches for a commit this job wrote on the sync branch, so the
+          # contracts-verify job can approve it. Only here: a commit on a
+          # feature PR is reviewed with the feature.
+          attest() {
+            [ -n "${ATTEST_CONTEXT:-}" ] || return 0
+            gh api -X POST "repos/$REPO/statuses/$(git rev-parse HEAD)" -f state=success \
+              -f context="$ATTEST_CONTEXT" -f description="Written by the contract sync" -f target_url="$SOURCE_PR" >/dev/null
+          }
           # The goal's consumer PR first, so the re-sync merges with the
           # feature. A push it refuses falls through to the sync PR.
           # Any failure here — the branch gone, the PR merged while this job
@@ -332,11 +341,13 @@ jobs:
           git commit -q -m "chore(contracts): re-sync from $SOURCE_PR"
           if [ -n "$open" ]; then
             git push -q origin "HEAD:$BRANCH"
+            attest
             echo "Updated #$open."
             exit 0
           fi
           # A branch left by a PR closed unmerged is replaced, not built on.
           git push -q --force origin "HEAD:$BRANCH"
+          attest
           body=$(printf '%s\n' \
             '## Summary' '' \
             "- Re-syncs this repo's copy of a SahajCloud contract, after $SOURCE_PR merged." \
@@ -348,34 +359,33 @@ jobs:
           gh pr create --repo "$REPO" --base main --head "$BRANCH" --draft \
             --title "chore(contracts): re-sync copied contracts from SahajCloud" --body "$body"
 
-  # A contract-sync PR has one correct content, so it is checked here, not by
-  # a person: the consumer's sync command is re-run on the consumer's own
-  # `main` and compared with the PR head. A byte-for-byte match on a ready bot
-  # PR that changes nothing but the copy is approved with this repo's own
-  # token, as github-actions[bot] — the PAT is sydevs-bot, the PR's author,
-  # whose approval GitHub refuses, and the sync job runs in the producer, whose
-  # token cannot approve here. The verdict is then posted as the
-  # `contractSync.verifyContext` status, as sydevs-bot so its event wakes the
-  # dispatcher, which asks the reviewer on a mismatch. Nothing from the PR
-  # runs: the head is only fetched and diffed, and the command and the script
-  # it runs come from `main`. Every caller grants `pull-requests: write` on its
-  # dispatch job; a caller that did not would fail this whole workflow.
+  # A contract-sync PR has one correct content, so a person reading it checks
+  # nothing a machine cannot. `contracts-sync` posts `contractSync.attestContext`
+  # on every commit it pushes to the sync branch; this job approves a ready,
+  # contract-only sync PR whose head carries that status from sydevs-bot, and
+  # dismisses its own approval of an earlier head when the new one carries none.
+  # The approval uses this repo's own token, as github-actions[bot]: the PAT is
+  # sydevs-bot, the PR's author, whose approval GitHub refuses, and
+  # `contracts-sync` runs in the producer, whose token cannot approve here.
+  # `decide` asks the reviewer when the check cannot vouch. Nothing from the PR
+  # is checked out. Every caller grants `pull-requests: write` on its dispatch
+  # job; a caller that did not would fail this whole workflow.
   # why: sydevs/claude-workflow/docs/why.md#a-verified-contract-sync-is-approved-by-actions
   contracts-verify:
-    # The gate in contracts.mjs decides; this only spares a runner on every
-    # other event. `claude/` is dispatch.sessionBranchPrefix.
+    # Spares a runner on every other event. `claude/chore-sync-contracts` is
+    # contractSync.branch and `sydevs / contract-sync` is
+    # contractSync.attestContext, in loop-config.json: change both together.
     if: >-
-      github.event_name == 'pull_request_target'
-      && contains(fromJSON('["opened", "reopened", "synchronize", "ready_for_review"]'), github.event.action)
-      && startsWith(github.event.pull_request.head.ref, 'claude/')
+      (github.event_name == 'pull_request_target'
+        && contains(fromJSON('["opened", "reopened", "synchronize", "ready_for_review"]'), github.event.action)
+        && github.event.pull_request.head.ref == 'claude/chore-sync-contracts')
+      || (github.event_name == 'status'
+        && github.event.context == 'sydevs / contract-sync'
+        && github.event.state == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       pull-requests: write
-    # A newer head supersedes an older one's check.
-    concurrency:
-      group: contract-verify-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -387,82 +397,16 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
-      - id: plan
-        uses: actions/github-script@v9
+      - uses: actions/github-script@v9
+        env:
+          APPROVER_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry-run }}
         with:
           github-token: ${{ secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
-            const { planContractVerify, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
-            const v = await planContractVerify({ github, context, core, config: loadConfig(`${cw}/loop-config.json`) })
-            core.setOutput('verify', String(v.verify))
-            core.setOutput('sha', v.sha || '')
-            core.setOutput('command', v.command || '')
-            core.setOutput('paths', (v.paths || []).join(' '))
-      # The consumer's own main, never the PR head: the sync script runs from here.
-      - if: steps.plan.outputs.verify == 'true'
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          token: ${{ secrets.SYDEVS_BOT_PAT }}
-          path: consumer
-      # No `version:` input: pnpm's version comes from the consumer's `packageManager`.
-      - if: steps.plan.outputs.verify == 'true'
-        uses: pnpm/action-setup@v6
-        with:
-          package_json_file: consumer/package.json
-      - if: steps.plan.outputs.verify == 'true'
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - id: compare
-        if: steps.plan.outputs.verify == 'true'
-        working-directory: consumer
-        env:
-          SHA: ${{ steps.plan.outputs.sha }}
-          SYNC_COMMAND: ${{ steps.plan.outputs.command }}
-          SYNC_PATHS: ${{ steps.plan.outputs.paths }}
-        run: |
-          set -euo pipefail
-          bash -c "$SYNC_COMMAND"
-          git fetch -q --depth=1 origin "$SHA"
-          # Staged, so a copy main lacks is compared too. SYNC_PATHS is split on purpose.
-          # shellcheck disable=SC2086
-          git add -- $SYNC_PATHS
-          # shellcheck disable=SC2086
-          if git diff --cached --quiet "$SHA" -- $SYNC_PATHS; then
-            echo "matched=true" >> "$GITHUB_OUTPUT"
-          else
-            # shellcheck disable=SC2086
-            git diff --cached --stat "$SHA" -- $SYNC_PATHS
-            echo "matched=false" >> "$GITHUB_OUTPUT"
-          fi
-      # This repo's own token: the only identity here that may approve the bot's PR.
-      - id: approve
-        if: steps.compare.outputs.matched == 'true' && !inputs.dry-run
-        uses: actions/github-script@v9
-        env:
-          SHA: ${{ steps.plan.outputs.sha }}
-          SYNC_COMMAND: ${{ steps.plan.outputs.command }}
-        with:
-          script: |
-            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
-            const { approveContractSync } = await import(`${cw}/dispatcher/index.mjs`)
-            await approveContractSync({ github, context, core, sha: process.env.SHA, command: process.env.SYNC_COMMAND })
-      # A cancelled run was superseded by a newer head, which reports instead.
-      # A plan that failed reports too, so no sync waits on a verdict that
-      # never comes; the dispatcher reads it only on a contract-only sync.
-      - if: ${{ !cancelled() && (steps.plan.outputs.verify == 'true' || steps.plan.outcome == 'failure') && !inputs.dry-run }}
-        uses: actions/github-script@v9
-        env:
-          SHA: ${{ steps.plan.outputs.sha || github.event.pull_request.head.sha }}
-          SYNC_COMMAND: ${{ steps.plan.outputs.command }}
-          MATCHED: ${{ steps.compare.outputs.matched }}
-          APPROVED: ${{ steps.approve.outcome == 'success' }}
-        with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
-          script: |
-            const cw = `${process.env.GITHUB_WORKSPACE}/cw`
-            const { contractVerdict, reportContractVerify, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
-            const verdict = contractVerdict({ matched: process.env.MATCHED, approved: process.env.APPROVED === 'true', command: process.env.SYNC_COMMAND })
-            await reportContractVerify({ github, context, core, config: loadConfig(`${cw}/loop-config.json`), sha: process.env.SHA, verdict })
+            const { verifyContractSync, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
+            await verifyContractSync({
+              github, approver: getOctokit(process.env.APPROVER_TOKEN), context, core,
+              config: loadConfig(`${cw}/loop-config.json`), dryRun: process.env.DRY_RUN === 'true',
+            })

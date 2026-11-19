@@ -610,7 +610,7 @@ function evaluateGreenPr(s, config) {
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     // A contract-only sync asks nobody yet: the contract check approves one
-    // that matches its source, and `contractVerifyPlan` asks when it does not.
+    // the sync wrote, and `contractSyncPlan` asks when it cannot.
     // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
     const plan = pr.contractSyncOnly ? [markReady()] : [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
@@ -629,7 +629,7 @@ function evaluateGreenPr(s, config) {
   // The owner's own PR has no one to ask: the bot approves it at this point
   // instead, and `mayArm` leaves the merge to the owner.
   // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
-  const plan = !member ? contractVerifyPlan(s) : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
+  const plan = !member ? contractSyncPlan(s, config) : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
   // Said once per PR, not per head: this path runs on every pass, and a member
   // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
   // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
@@ -653,15 +653,27 @@ function evaluateGreenPr(s, config) {
 }
 
 /**
- * A contract-only sync asks its reviewer only once the contract check could
- * not vouch for its head: the copy differs from its source, or the check did
- * not finish. A match is approved by the check itself, and a pending or absent
- * verdict waits for it. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
+ * A sync PR asks its reviewer once the contract check cannot carry it: the PR
+ * changes more than the copy, `contracts-sync` did not write its head (a hand
+ * edit, or a fix-ci push), the ruleset does not count the check's approval,
+ * or the check has not approved a head the sync wrote within
+ * `contractSync.approveWithinMinutes` (it failed, or never ran). Inside that
+ * window the head waits for it. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
  */
-function contractVerifyPlan(s) {
-  const v = s.pr?.contractSyncOnly ? s.pr.contractVerify : null
-  if (!v || !['failure', 'error'].includes(v.state)) return []
-  return [requestReviewer(), commentOnce(`contract-verify ${s.pr.head?.sha}`, `Not approved automatically: ${v.description || 'the contract check failed'}. It needs a person's review.`)]
+function contractSyncPlan(s, config) {
+  const c = s.pr?.contractSync
+  if (!c) return []
+  const late = c.attestedAt && !c.approvedByCheck
+    && nowOf(s) - new Date(c.attestedAt) > (config.contractSync?.approveWithinMinutes ?? 30) * 60_000
+  const why = !s.pr.contractSyncOnly ? 'it changes more than the copied contract'
+    : !c.attestedAt ? 'its head has commits the contract sync did not write'
+    : c.approvedByCheck && c.decision !== 'APPROVED' ? "the ruleset does not count the contract check's approval"
+    : late ? 'the contract check has not approved it'
+    : null
+  if (!why) return []
+  // Outgrowing the copy is said once per PR: each fix-ci push would repeat it.
+  const key = s.pr.contractSyncOnly ? `contract-check ${s.pr.head?.sha}` : 'contract-check outgrew'
+  return [requestReviewer(), commentOnce(key, `Not approved automatically: ${why}. It needs a person's review.`)]
 }
 
 /**
@@ -1254,7 +1266,7 @@ function route(target, s, config) {
       return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
       // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
-      // A contract-only sync asks nobody here: `contractVerifyPlan` does, on a mismatch.
+      // A contract-only sync asks nobody here: `contractSyncPlan` does, when the check cannot.
       return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.
