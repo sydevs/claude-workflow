@@ -2181,7 +2181,10 @@ it stands, as `approve` would. It does not cover a review that asks for a person
 on the author (`threadsWaiting`) is the normal review process, and the ruleset will not merge
 past it either. The hold comment then says the arming is waiting on those threads. Once they are
 resolved, the next sweep approves; `proxyApprove` is a move, so `quietSweep` does not swallow it
-over an item recorded Awaiting. The approval the arming earns drops its own "enable auto-merge"
+over an item recorded Awaiting. That wording is posted under its own `commentOnce` key: the two
+asks share a head, and an owner who arms *because* the unarmed ask told them to would otherwise
+never be told what is still waiting. `vouched` reads either key back, so the clock is unchanged.
+The approval the arming earns drops its own "enable auto-merge"
 ask: on this path the owner has already done it, and the sentence was the stale half of a message
 whose other half still matters.
 

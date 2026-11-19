@@ -1154,6 +1154,10 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(before, 'proxyApprove').length, 0)
     const other = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [held(), { ...say('2026-11-17T09:30:00Z')[1], author: 'antontcymbal' }] }), pc)
     assert.equal(of(other, 'proxyApprove').length, 0, 'only the author vouches')
+    // The armed wording is an ask about this head too, so it starts the clock.
+    const armedAsk = { ...held(), body: `<!-- sydevs-dispatcher: proxy-held-armed abc -->\n1 thread(s) still do.` }
+    const afterArmed = evaluatePr(owned({ headAuthor: 'sydevs-bot', comments: [armedAsk, say('2026-11-17T09:30:00Z')[1]] }), pc)
+    assert.deepEqual(of(afterArmed, 'proxyApprove').map((a) => a.sha), ['abc'])
   })
 
   // A relay commit is made minutes before Actions lands it, so a vouch for the
@@ -1183,7 +1187,9 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     const replied = { id: 'T1', isResolved: false, comments: [{ author: 'sydevs-bot', body: 'finding', createdAt: '2026-11-17T09:10:00Z' }, { author: 'sydevs-bot', body: 'kept it — your call', createdAt: '2026-11-17T09:20:00Z' }] }
     const waits = evaluatePr(owned({ pr: armed, headAuthor: 'sydevs-bot', threads: [replied] }), pc)
     assert.equal(of(waits, 'proxyApprove').length, 0, 'the review asks for a person, and arming does not answer it')
-    assert.ok(of(waits, 'comment').some((c) => c.key === 'proxy-held abc' && /1 thread\(s\) still do/.test(c.body)))
+    // Its own key: an owner who arms after the unarmed ask must still be told
+    // what is left, and `commentOnce` posts once per key.
+    assert.ok(of(waits, 'comment').some((c) => c.key === 'proxy-held-armed abc' && /1 thread\(s\) still do/.test(c.body)))
     const resolved = evaluatePr(owned({ pr: armed, headAuthor: 'sydevs-bot', threads: [{ ...replied, isResolved: true }] }), pc)
     assert.equal(of(resolved, 'proxyApprove').length, 1, 'resolved, the arming vouches')
     const unarmed = evaluatePr(owned({ headAuthor: 'sydevs-bot' }), pc)

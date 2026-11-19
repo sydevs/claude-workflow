@@ -670,14 +670,21 @@ function proxyPlan(s, config) {
   const short = head.slice(0, 7)
   const waiting = threadsWaiting(s, config).length
   // Armed, and held only by threads: say so, or the ask reads as owed twice.
-  const ask = armedByAuthor(s) && waiting
+  // Its own key, because an owner who arms after the unarmed ask has done what
+  // that ask told them to, and `commentOnce` would never say what is left.
+  const armedHold = armedByAuthor(s) && waiting
+  const ask = armedHold
     ? `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own. Your auto-merge vouches for it once nothing waits on you, and ${waiting} thread(s) still do: reply there or resolve them, or say \`${config.dispatch.commandPrefix} approve\`.`
     : `The newest commit, ${short}, is ${config.identity.expectedLogin}'s own, so it is not approved on your behalf. Read it, then say \`${config.dispatch.commandPrefix} approve\`, or enable auto-merge.`
   return [
     ...(buried.length ? [dismissProxy(buried)] : []),
-    commentOnce(`proxy-held ${head}`, ask),
+    commentOnce(`${armedHold ? ARMED_HOLD_KEY : HOLD_KEY} ${head}`, ask),
   ]
 }
+
+/** The two keys the hold ask is posted under; `vouched` reads either back. */
+const HOLD_KEY = 'proxy-held'
+const ARMED_HOLD_KEY = 'proxy-held-armed'
 
 /**
  * What the bot's approval does on this pass, in one word: `unread` when the
@@ -723,8 +730,10 @@ function armedByAuthor(s) {
 export function vouched(s, config) {
   if (armedByAuthor(s) && !threadsWaiting(s, config).length) return true
   const author = s.pr.user?.login
-  const mark = dispatcherMark(`proxy-held ${s.pr.head?.sha}`)
-  const asked = (s.comments || []).find((c) => isBot(c.author, config) && String(c.body || '').startsWith(mark))
+  const marks = [HOLD_KEY, ARMED_HOLD_KEY].map((k) => dispatcherMark(`${k} ${s.pr.head?.sha}`))
+  // Either wording is an ask about this head, and the earliest is the clock.
+  const asked = (s.comments || []).filter((c) => isBot(c.author, config) && marks.some((m) => String(c.body || '').startsWith(m)))
+    .reduce((a, c) => (a && a.createdAt <= c.createdAt ? a : c), null)
   if (!asked) return false
   return (s.comments || []).some((c) => lower(c.author) === lower(author) && c.createdAt > asked.createdAt
     && parseVerb(c.body, config.dispatch, 'pr').verb === 'approve')
