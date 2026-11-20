@@ -177,7 +177,9 @@ grep -rn "<changed setting / env var / command / behaviour>" \
 
 - **Check every surface that could describe what changed**: the root `AGENTS.md`, each touched
   directory's nested `AGENTS.md`, `docs/`, `.env.example`, deployment docs, and any skill whose
-  workflow the change alters. Update what the diff makes stale, and document what it introduces.
+  workflow the change alters. Fix or delete what the diff makes stale. Add prose only for a new
+  intent, contract or gotcha, never for mechanism the code shows — `docs/documentation.md` in
+  `claude-workflow` is the rule. (why: docs/why.md#docs-say-what-the-code-cannot)
 - **Grep beyond `.md` and `.json`** — guide-path references hide in `.env`, CSS, test files and
   `.distignore`. (why: docs/why.md#contract-surfaces-are-mandatory)
 - **Never edit anything under `.claude/`.** Guides are nested `AGENTS.md` files with a `CLAUDE.md`

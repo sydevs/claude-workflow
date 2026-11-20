@@ -322,6 +322,25 @@ SahajAtlasWeb README once spent months telling hosts to load a filename the buil
 References to guide paths also hide in `.env`, CSS, test files, and `.distignore`, so a docs sweep
 limited to markdown leaves links pointing at deleted files.
 
+## Docs say what the code cannot
+
+Docs sync used to say "update what the diff makes stale, **and document what it introduces**".
+Nothing pushed the other way, so every run added prose and none removed it. In a sample of the
+last 40 merged PRs per product repo (2026-11-19), the WordPress plugin's root `AGENTS.md` changed
+in 21 of them. SahajCloud's `src/AGENTS.md` and `scripts/AGENTS.md` changed in 8 each, largely as
+hand-kept file listings. SahajCloud#1203 added a `docs/rules/clients.md` paragraph explaining how
+a timer constant restarts — something the code already says.
+
+Each restated fact is one more place a change must reach. When one copy is missed, an agent reads
+it and trusts it, so a stale doc misleads where a missing one would only cost a file read. Guides
+also load into every session that reads their directory, so every line is paid for daily. The
+test is how often a sentence would have to change: mechanism changes on every refactor, a list of
+conditions on every fix, and an intent only when the purpose does. Only the last earns prose.
+
+The rule has no per-repo copies, unlike `code-comments.md`. That rule must steer every edit in a
+session. This one steers only the docs step and the review, both of which run from skills that
+can read the checkout.
+
 ## Link the branch alias, never a commit alias
 
 A commit alias pins to the SHA it was built from, so every later push silently makes it stale, and
