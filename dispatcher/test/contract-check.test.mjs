@@ -13,17 +13,19 @@ const root = fileURLToPath(new URL('../..', import.meta.url))
 const CHECK = join(root, '.github/actions/contract-check/check.sh')
 const CONFIG = join(root, 'loop-config.json')
 const COPY = 'server/payload-types.ts'
+const SIBLING = 'server/other-contract.json'
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' }).trim()
 
-/** A repo whose base commit holds `v1`, and a clone carrying one PR commit made by `change`. */
-function pr(change) {
+/** A repo whose base commit holds `v1`, plus `seed`, and a clone carrying one PR commit made by `change`. */
+function pr(change, seed = () => {}) {
   const dir = mkdtempSync(join(tmpdir(), 'contract-check-'))
   const origin = join(dir, 'origin')
   execFileSync('mkdir', ['-p', join(origin, 'server')])
   git(dir, 'init', '-q', '-b', 'main', origin)
   writeFileSync(join(origin, COPY), 'v1\n')
   writeFileSync(join(origin, 'other.txt'), 'a\n')
+  seed(origin)
   git(origin, 'add', '.')
   git(origin, 'commit', '-qm', 'base')
   const base = git(origin, 'rev-parse', 'HEAD')
@@ -60,6 +62,18 @@ test('a changed copy passes only when it is exactly what the command writes', ()
   assert.match(hand.out, /::error file=server\/payload-types\.ts,title=Contract check::/)
   const gone = check(pr((w) => unlinkSync(join(w, COPY))), 'v1\n')
   assert.equal(gone.code, 1, 'a deleted copy the command writes back is a change')
+})
+
+test('a copy synced correctly passes while a sibling copy the PR never touched has drifted', () => {
+  const p = pr((w) => writeFileSync(join(w, COPY), 'v2\n'), (o) => writeFileSync(join(o, SIBLING), 'w1\n'))
+  const sibling = join(p.dir, 'upstream-sibling')
+  writeFileSync(sibling, 'w2\n')
+  const r = check(p, 'v2\n', {
+    INPUT_PATHS: `${COPY} ${SIBLING}`,
+    INPUT_COMMAND: `cp ${join(p.dir, 'upstream')} ${COPY} && cp ${sibling} ${SIBLING}`,
+  })
+  assert.equal(r.code, 0, "drift in an untouched copy belongs to the contract sync, not to this PR")
+  assert.match(r.out, /Changed copies: server\/payload-types\.ts$/m)
 })
 
 test('a command that fails is infrastructure, re-run rather than repaired', () => {

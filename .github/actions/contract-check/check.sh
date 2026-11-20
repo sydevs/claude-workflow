@@ -33,9 +33,11 @@ for attempt in 1 2 3; do
     echo "::error title=$infra::\`$command\` failed, so the source could not be read. This is not the change: re-run the job."
     exit 1
   fi
-  # Status, not diff: it also sees a copy the PR deleted and the command wrote back.
+  # Only the copies this PR touched: a sibling copy that drifted on `main` is
+  # not this PR's to sync. Status, not diff, so it also sees a copy the PR
+  # deleted and the command wrote back.
   # shellcheck disable=SC2086
-  if [ -z "$(git status --porcelain -- $paths)" ]; then
+  if [ -z "$(git status --porcelain -- $touched)" ]; then
     echo "The changed copies match what \`$command\` writes."
     exit 0
   fi
@@ -46,9 +48,9 @@ for attempt in 1 2 3; do
 done
 
 # shellcheck disable=SC2086
-git --no-pager diff --stat -- $paths
+git --no-pager diff --stat -- $touched
 # shellcheck disable=SC2086
-git --no-pager diff -- $paths | head -n 200
+git --no-pager diff -- $touched | head -n 200
 for f in $touched; do
   echo "::error file=$f,title=Contract check::This PR changes a copied contract to something its source does not produce. Run \`$command\` and commit the result. A change to the contract itself lands in its source first."
 done
