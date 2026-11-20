@@ -907,6 +907,15 @@ model of the reviewer's *intent*, which generalizes to cases the week never show
 transcript of their incidents, which does not. It also keeps the weekly diff small enough for the
 reviewer to actually audit their own portrait.
 
+## The critic's recall is counted weekly
+
+Profile value 1 asked every layer to pay rent from the day it was seeded, and the 2026-11-15
+refinement asked the review to read a grown file whole. Each time the reviewer flagged what the
+critic passed, the reflection read a profile gap and added text, and the misses went on. A count
+shows whether a change to the critic's steps worked, which another paragraph cannot. Option picks
+and answers to the bot's questions are left out: they measure the builder's questions, not the
+critic's reading.
+
 ---
 
 # The plugin itself
