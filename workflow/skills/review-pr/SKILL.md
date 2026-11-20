@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a draft bot PR goes green, or on `@sydevs-bot review`. Runnable locally against a PR number.
+description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a bot or member PR goes green with no critic review yet, or on `@sydevs-bot review`. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max

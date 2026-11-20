@@ -49,6 +49,15 @@ test('green draft with no critic review fires the critic, never marks ready', ()
   assert.deepEqual(types(evaluatePr(prSnap(), config)), ['fire:review-pr'])
 })
 
+test('a bot PR opened ready gets the critic too, unless a person already approved it', () => {
+  const ready = { ...prSnap().pr, draft: false }
+  assert.deepEqual(types(evaluatePr(prSnap({ pr: ready }), config)), ['fire:review-pr'])
+  const approved = evaluatePr(prSnap({ pr: ready, normalized: { reviewDecision: 'APPROVED' } }), config)
+  assert.equal(approved.some((a) => a.handler === 'review-pr'), false)
+  const small = evaluatePr(prSnap({ pr: { ...ready, changed_files: 1, additions: 10, deletions: 5 } }), config)
+  assert.equal(small.some((a) => a.handler === 'review-pr'), false)
+})
+
 test('green draft under the size threshold is marked ready without a critic', () => {
   const p = evaluatePr(prSnap({ pr: { ...prSnap().pr, changed_files: 1, additions: 10, deletions: 5 } }), config)
   assert.deepEqual(types(p).slice(0, 2), ['markReady', 'requestReviewer'])

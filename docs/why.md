@@ -2234,6 +2234,14 @@ review reaches the bot as its threads, since the review body it would be read fr
 member branch outside `claude/*` is reached through [the relay](#the-relay).
 Anyone else's PR answers a mention and nothing more.
 
+## A bot PR opened ready still gets the critic
+
+The critic fired for a bot PR only while it was a draft, because every cloud run opens one. A
+session run by hand can open a bot-authored PR ready, and SahajAtlasWeb#442, #444 and #450, adding
+3,592, 1,464 and 645 lines, reached the reviewer with no critic at all. Such a PR now gets the
+critic as a member's ready PR does. An approval already given ends the debt: a critic thread then
+would only hold a PR a person has passed.
+
 ## The owner's PR is approved by the bot
 
 Every ruleset needs one approval, and GitHub refuses an author's own. A PR the owner opened from a

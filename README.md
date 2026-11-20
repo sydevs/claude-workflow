@@ -171,7 +171,7 @@ Fired by the dispatcher (GitHub Actions) on events:
 | `implement-roadmap` | the first `implement` on a goal; a re-plan request | one implementation ticket per repo, as sub-issues in merge order, absorbing existing tickets |
 | `write-ticket` | `revise` on a ticket; `block until <reason>` | the updated ticket, or an answer from the code |
 | `implement-ticket` | `implement`; a goal's approval; the blocker of an approved ticket closing; its own continue request | a draft PR once the ticket is built, or a goal's set of PRs |
-| `review-pr` | a bot draft PR going green (skipped for tiny PRs); `review` | one advisory critic review |
+| `review-pr` | a bot PR going green, draft or ready, with no critic review or approval yet (skipped for tiny PRs); `review` | one advisory critic review: findings, a sketch for each new piece it cannot justify, a second opinion on each open question |
 | `address-review` | a review, thread reply or mention on a bot PR; its own continue request | a commit per ask, a rebuttal only of a fact, or a ticket proposed as options — review-body points included |
 | `fix-ci` | a red required check on a bot PR, up to 3 times; a failed Railway preview, once per head | one fix commit, or a comment naming the log line |
 | `audit-deps` | the daily check finding a Dependabot alert due | PRs that fix the vulnerable dependencies in that repo |
