@@ -2331,18 +2331,12 @@ for a resolution that, by [A resolved conflict is not a new question](#a-resolve
 asks nothing. So on 2026-11-20 the setting went off again, and the dispatcher dismisses what it
 should have caught, itself.
 
-`buriedApprovals` reads the PR's commits after each reviewer's standing approval. A commit of the
-bot's own buries it: a fix-ci or address-review push, or a relay, is code the approver never saw.
-A merge of the base does not: two parents, the second off the PR (a relay's merge has its second
-parent on the PR, so it buries). A commit of the approver's own on top vouches again, the PR
-author's for the bot's proxy approval. A person's commit otherwise neither buries nor vouches, as
-before the ruleset change. A nameless commit, an approval whose commit left the PR, or a commit
-list never read, buries: unread fails closed.
-
-A person's buried approval is dismissed (`dismissStale`) on every pass, ahead of the lock guard as
-the disarm is: the queue merges an approved, armed bot PR the moment CI goes green, and does not
-wait for a lease. The bot's own approval stays `proxyPlan`'s, which also asks the owner, and an
-Actions app's is withdrawn by the job that gave it.
+`buriedApprovals` holds the conditions. The judgements under them: a commit of the bot's own is
+code the approver never saw, a merge of the base asks nothing new, a person's commit other than the
+approver's neither buries nor vouches as it did before the ruleset change, and anything unread
+buries, because a false dismissal costs a review round while a missed one merges code nobody read.
+A buried approval is withdrawn ahead of the lock guard, as the disarm is: the queue merges an
+approved, armed PR the moment CI goes green, and never waits for a lease.
 
 ## Unknown mergeability is not clean
 
