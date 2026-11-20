@@ -777,7 +777,7 @@ function refuseUnresolvedBlockers(s, config) {
  * (why: docs/why.md#the-relay)
  */
 function relayPlan(s, config, req) {
-  const why = relayRefusal(s, config, req, fullTreatment)
+  const why = relayRefusal(s, config, req)
   if (!why) return [relay(req)]
   return [
     handback(s, `the relay was refused: ${why}`),
@@ -788,7 +788,7 @@ function relayPlan(s, config, req) {
 /** Every session fired at a PR carries where it may push. (why: docs/why.md#the-branch-decides-where-a-session-pushes) */
 function withPushRoute(plan, s, config) {
   if (s.kind !== 'pr') return plan
-  const push = pushRoute(s, config, fullTreatment)
+  const push = pushRoute(s, config)
   return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
 }
 

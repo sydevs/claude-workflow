@@ -11,6 +11,8 @@
  * the relay branch is kept so nothing is lost. (why: docs/why.md#the-relay)
  */
 
+import { fullTreatment } from './predicates.mjs'
+
 /**
  * Where a session that works this PR may push, one of:
  *
@@ -21,7 +23,7 @@
  * The branch decides, never the author: a member's PR on a `claude/*` branch
  * is pushed to like the bot's own. (why: docs/why.md#the-branch-decides-where-a-session-pushes)
  */
-export function pushRoute(s, config, fullTreatment) {
+export function pushRoute(s, config) {
   const pr = s.pr
   if (!pr) return 'none'
   if (pr.head?.repo && pr.head.repo !== s.repo?.full) return 'none'
@@ -33,10 +35,10 @@ export function pushRoute(s, config, fullTreatment) {
  * Why a relay request may not be applied to this PR, or null when it may.
  * The request is the session's; only the PR, as gathered now, vouches for it.
  */
-export function relayRefusal(s, config, req, fullTreatment) {
+export function relayRefusal(s, config, req) {
   const pr = s.pr
   if (!pr || pr.state !== 'open') return 'the PR is not open'
-  if (pushRoute(s, config, fullTreatment) !== 'relay') return 'this PR is not a relay PR'
+  if (pushRoute(s, config) !== 'relay') return 'this PR is not a relay PR'
   const prefix = `${config.dispatch?.relayBranchPrefix || 'claude/relay-'}${pr.number}-`
   if (!String(req.branch).startsWith(prefix)) return `the relay branch \`${req.branch}\` is not \`${prefix}*\``
   if (req.head !== pr.head?.ref) return `the request names \`${req.head}\`, but the PR's branch is \`${pr.head?.ref}\``
