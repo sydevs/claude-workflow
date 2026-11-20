@@ -99,7 +99,9 @@ dependency PR is open. A quiet day costs no session.
 
 **CI, to the loop, is the ruleset's required checks.** A red preview deploy or Railway status is
 noted on the PR and fires nothing. Each product repo's CI also calls the shared
-`dependency-review.yml`, which fails a PR only for a vulnerable dependency it adds.
+`dependency-review.yml`, which fails a PR only for a vulnerable dependency it adds, and each
+contract consumer's calls `actions/contract-check`, which fails a PR only for a copied contract it
+changes to something its source does not produce.
 
 ## Skills you run
 
