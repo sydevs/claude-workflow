@@ -6,7 +6,7 @@
  * (why: docs/why.md#the-journal-day-is-a-local-date)
  */
 
-import { isBot } from './decide.mjs'
+import { isBot } from './plan.mjs'
 
 const DAY_MARKER = '<!-- ops-journal:'
 const TALLY_OPEN = '<!-- tally -->'
