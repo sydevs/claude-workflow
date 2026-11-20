@@ -47,9 +47,9 @@ already loaded in context. The usual "make it, run it, see it work" loop does no
 ### ⚠ The journal lives here too
 
 `claude-workflow` is both a worked repo and the home of the loop's daily journal: issues carrying
-the `ops-journal` label (`labels.journal` in `loop-config.json`). Journal issues are a diary,
-never work. Any worklist query must exclude them (`-label:ops-journal`), or the loop treats its
-own entries as tickets. Check this exclusion in every query you add to a skill.
+the label `labels.journal` names in `loop-config.json`. Journal issues are a diary, never work.
+Any worklist query must exclude that label, or the loop treats its own entries as tickets. Check
+this exclusion in every query you add to a skill.
 
 ## The gate
 
@@ -181,9 +181,9 @@ A handler that finds one in its way hands the ticket back rather than attempting
 - **Open the PR. Never merge it.** Merging it is the deploy. The ruleset needs a person's
   approval, the `test` check and the merge queue, as in the product repos, and GitHub merges once
   they are met.
-- **No ticket is needed for anything in this repo.** `prAllowlistGlobs` is `**` — open the PR
-  directly. This repo ships prose and config, so the PR body *is* the proposal. File a ticket only
-  when the change needs a **decision** before code — competing designs, or a cost worth agreeing
-  on before it is paid.
+- **No ticket is needed for anything in this repo.** `prAllowlistGlobs` in
+  `.claude/workflow.json` says so — open the PR directly. This repo ships prose and config, so
+  the PR body *is* the proposal. File a ticket only when the change needs a **decision** before
+  code — competing designs, or a cost worth agreeing on before it is paid.
 - There is no WIP cap — the human who types the verb is the throttle, so nothing upstream forces
   a pause and the skill/ceiling split above binds harder.
