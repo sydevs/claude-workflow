@@ -322,6 +322,18 @@ over small PRs. So a refactor of the code the diff touches, its callers, or the 
 what it builds is in scope, and preferred. A refactor of unrelated code is still scope creep: a PR
 that grows everywhere is the review load this rule exists to cut.
 
+## The critic gives a second opinion on each question
+
+About a third of the reviewer's inline comments in that month were bare option picks on the
+builder's question threads: 91 of 288. Where the bot had marked a default, the reviewer chose
+another option more often than not, roughly 30 times to 24, and usually the one with less code:
+"drop both" over "keep it (built)" (SahajCloud#1017), a per-collection rule over "the registry
+stays (built)" (#1013). A builder recommends what it already built. The critic, which did not
+build it, now picks on its own. Agreement on the built option settles the thread without the
+person, and the holistic assessment names it so they can reopen it. Only a disagreement waits on
+them, now with two views. The builder's own default leans the same way: less to maintain, over a
+smaller diff.
+
 ---
 
 # finalize-pr

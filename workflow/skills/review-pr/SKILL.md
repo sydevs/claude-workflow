@@ -146,6 +146,21 @@ builder's reasoning nor your own bug-hunt shapes what it finds.
    line it names, sketch included. A piece the streamliner kept gets no thread. *What was
    checked* gives the two counts.
 
+## Give a second opinion on each open question
+
+The builder recommends the option it built, and the reviewer picks a different one more often
+than not. (why: docs/why.md#the-critic-gives-a-second-opinion-on-each-question) Take each
+unresolved thread whose root carries `review.questionMarker` and has no reply from a person:
+
+- **Judge the options on the code and the ticket.** Which option the builder built is not evidence. Prefer
+  the one that leaves less to maintain, even when it makes this PR bigger.
+- **Your pick is the built option** → reply `Second opinion: <letter>` with one line of reason,
+  then resolve the thread. The review body names each one you settled.
+- **Any other pick** → reply with your pick and what each option costs, and leave the thread open
+  for the person.
+
+Measure each reply with `--kind reviewReply`, and end it with `identity.commentMarker`.
+
 ## Produce the review
 
 Use the pending-review flow, submitted as `COMMENT` — a session can neither approve nor request
@@ -181,11 +196,12 @@ budget counts the marker, so no run buys room by dropping it.
 
 ## Verdicts
 
-- **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
-  draft flag, not a label. The unresolved threads *are* the handoff — when you unlock, the
-  dispatcher fires `address-review`, which adopts or rebuts each one.
+- **Findings** → submit the review and **stop**. Change nothing beyond the second opinions: not
+  the assignee, not the draft flag, not a label. The unresolved threads *are* the handoff — when
+  you unlock, the dispatcher fires `address-review`, which adopts or rebuts each one.
 - **Clean** → submit the review with the body only, no inline comments, and **touch nothing
-  else**. The dispatcher marks the PR ready and requests the reviewer once CI is green.
+  beyond the second opinions**. The dispatcher marks the PR ready and requests the reviewer once
+  CI is green.
 
 **Why a COMMENT review, never "Changes requested".** GitHub rejects `APPROVE` and
 `REQUEST_CHANGES` on a PR you authored, and the bot authored it. The threads carry the effect: an
@@ -207,8 +223,8 @@ the header is the idempotency key on this path only. Journal that you used the f
 - **One review per PR, ever**, unless `flags.onDemand`. An existing critic review on arrival —
   led by `review.bodyHeader` — means stop and report that nothing was posted.
 - **Starting review threads is this skill's exclusive channel**, except question threads, whose
-  root carries `review.questionMarker`. Leave those to the person. Reply threads belong to
-  `address-review`.
+  root carries `review.questionMarker`. Answer those only with one second opinion each. Every
+  other reply belongs to `address-review`.
 - **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.
 - **Never duplicate the author-side pass.** Style, formatting, spelling and casing are not yours.
