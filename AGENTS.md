@@ -47,9 +47,9 @@ already loaded in context. The usual "make it, run it, see it work" loop does no
 ### ⚠ The journal lives here too
 
 `claude-workflow` is both a worked repo and the home of the loop's daily journal: issues carrying
-the `ops-journal` label (`labels.journal` in `loop-config.json`). Journal issues are a diary,
-never work. Any worklist query must exclude them (`-label:ops-journal`), or the loop treats its
-own entries as tickets. Check this exclusion in every query you add to a skill.
+the label `labels.journal` names in `loop-config.json`. Journal issues are a diary, never work.
+Any worklist query must exclude that label, or the loop treats its own entries as tickets. Check
+this exclusion in every query you add to a skill.
 
 ## The gate
 
@@ -99,9 +99,8 @@ Before you add prose to a run-loaded skill, check the rule is not stated elsewhe
 the story in `docs/why.md`, behind an anchor. (why: docs/why.md#the-rules-cost-more-than-the-output)
 
 Everything the loop writes carries a character budget from `writing.budgets`, checked by
-`workflow/lib/budget.mjs`, `<details>` included. That script also decides whether a comment
-carries `identity.commentMarker`, from `writing.markerRequired`. Read the verdict word it prints,
-never its exit code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
+`workflow/lib/budget.mjs`, `<details>` included. Read the verdict word it prints, never its exit
+code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
 
 **Run `rule-delta.mjs` on any PR that rewrites a skill**, and say in the body what each removal was:
 
@@ -109,11 +108,9 @@ never its exit code. (why: docs/why.md#a-verdict-word-not-an-exit-code)
 node workflow/lib/rule-delta.mjs --base origin/main workflow/skills
 ```
 
-`ste-lint.py` measures a skill's **style**. `rule-delta.mjs` measures its **content**. A rewrite
-can pass the first and fail the second, shrinking and reading cleaner while it drops a rule
-outright. Neither is part of the automated gate — `leanGate.command` alone — but both are run
-steps: `improve-loop` runs `rule-delta.mjs` on a skill edit, `audit-code` runs
-`ste-lint.py --json` on its comments angle.
+`workflow/lib/ste-lint.py` measures a skill's **style**. `rule-delta.mjs` measures its
+**content**. A rewrite can pass the first and fail the second, shrinking and reading cleaner while
+it drops a rule outright. Neither is part of the automated gate.
 (why: docs/why.md#lint-measures-style-not-content)
 
 **Nothing in a skill hard-codes a number or a label name.** Those values come from
@@ -184,10 +181,9 @@ A handler that finds one in its way hands the ticket back rather than attempting
 - **Open the PR. Never merge it.** Merging it is the deploy. The ruleset needs a person's
   approval, the `test` check and the merge queue, as in the product repos, and GitHub merges once
   they are met.
-- **No ticket is needed for anything in this repo.** `prAllowlistGlobs` is `**` — open the PR
-  directly. This repo ships prose and config, so the PR body *is* the proposal. File a ticket only
-  when the change needs a **decision** before code — competing designs, or a cost worth agreeing
-  on before it is paid.
-- There is no WIP cap — the human who types the verb is the throttle. The skill/ceiling split
-  above binds harder now that nothing upstream forces a pause, and a PR carrying more than one
-  behaviour still owes one commit per behaviour.
+- **No ticket is needed for anything in this repo.** `prAllowlistGlobs` in
+  `.claude/workflow.json` says so — open the PR directly. This repo ships prose and config, so
+  the PR body *is* the proposal. File a ticket only when the change needs a **decision** before
+  code — competing designs, or a cost worth agreeing on before it is paid.
+- There is no WIP cap — the human who types the verb is the throttle, so nothing upstream forces
+  a pause and the skill/ceiling split above binds harder.
