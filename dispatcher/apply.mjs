@@ -283,26 +283,21 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         }))
         break
       }
-      case 'dismissProxy': {
-        for (const id of a.ids) {
-          log(`dismiss own approval ${id}`)
-          if (dryRun) continue
-          await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
-            ...args, pull_number: t.number, review_id: id,
-            message: `A commit of ${bot}'s own is now the head, and this approval did not cover it.`,
-          }))
-        }
-        break
-      }
-      // A person's approval a commit of the bot's own buried: the ruleset no
-      // longer dismisses one. (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+      // A commit of the bot's own sits on an approval it did not cover, and the
+      // ruleset dismisses neither: `dismissProxy` carries the bot's own
+      // approvals, `dismissStale` a person's.
+      // (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+      case 'dismissProxy':
       case 'dismissStale': {
+        const own = a.type === 'dismissProxy'
+        const message = own
+          ? `A commit of ${bot}'s own is now the head, and this approval did not cover it.`
+          : `${bot} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`
         for (const id of a.ids) {
-          log(`dismiss buried approval ${id}`)
+          log(`dismiss ${own ? 'own' : 'buried'} approval ${id}`)
           if (dryRun) continue
           await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
-            ...args, pull_number: t.number, review_id: id,
-            message: `${bot} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`,
+            ...args, pull_number: t.number, review_id: id, message,
           }))
         }
         break
