@@ -287,6 +287,31 @@ no speculative machinery, naming the exposure in the PR body instead. The critic
 and its ladder check never raises a test, scale or speed point. A guard the reviewer may still
 remove is then a line they can see, not a silent build.
 
+## A fresh streamliner justifies every new piece
+
+In the month to 2026-11-20 the reviewer wrote about fifty inline comments asking a new function to
+justify itself or a file to be streamlined: *"Consider each new function in this file and justify
+it"* (SahajAtlasWeb#450), *"make sure that each line earns it's keep"* (SahajCloud#1134). Twenty
+came in the four days after the profile's 2026-11-15 refinement had already asked for exactly
+that, and the critic had cleared the shape of most of those files. Its own skill stopped it in
+three ways. The ladder walk counted only a named alternative, so a rewrite with nothing to name was
+never a finding. It justified a piece by the ticket's approach, not by the code. And nothing made
+it account for each piece, in a context already full of bugs and contracts.
+
+So a script lists the pieces, and a subagent that never sees the builder's prose justifies each
+one from the code and the ticket, or returns a sketch. The sketch must be concrete enough to
+build, because `address-review` adopts about four critic threads in five. A fold the code does not
+support costs a reversal: the reviewer's own *"Is this file really needed?"* on WeMeditateWeb#283
+got `bar.ts` deleted, then restored. For the same reason the builder answers a sketch only with a
+fact it breaks. A rebuttal on taste hands the decision back to the bias the pass exists to escape.
+
+It aims for fewer concepts, not fewer lines: the reviewer has asked not to break up a file to
+shrink it (SahajCloud#912). Fixtures, mocks, stories and docs are in. Test files, generated files
+and vendored code are out, at the reviewer's call. One subagent sees every qualifying file at once,
+because the refactors the reviewer asked for were cross-file: one transcription path for files and
+meditations (SahajCloud#1075), the duplication between mailing-list providers (#1088). It splits
+only past `review.streamline.splitLines`, where one context would dilute again.
+
 ---
 
 # finalize-pr

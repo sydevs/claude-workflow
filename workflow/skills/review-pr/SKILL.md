@@ -4,7 +4,7 @@ description: Critic-side adversarial review of one loop-authored PR — holistic
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
-allowed-tools: Bash(*), Read, Grep, Glob
+allowed-tools: Bash(*), Read, Grep, Glob, Task
 ---
 
 # Adversarial Review
@@ -47,12 +47,14 @@ Two lenses carry the most weight, in this order:
    second PR.** A part that does not belong is a finding to remove it; a part missing is a
    finding to build it here.
 
-   **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** For every
-   file, function, hook, type, constant or dependency the diff adds, ask whether the repo already
+   **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** The
+   streamliner (*Make every new piece earn its place*) walks it for each piece `new-pieces.mjs`
+   lists. You walk it for the rest: each dependency the diff adds, and each piece nested where the
+   script cannot see it, such as a hook inside a config object. Ask whether the repo already
    has it (name the path), the platform does it (name the API), or an installed package does it
-   (name it). A named answer is a finding. A guess with no name is not. A `shortcut:` comment that
-   names its limit is a decision, unless the expected load already crosses it. This check never
-   raises a test, scale or speed point.
+   (name it). A named answer is a finding, and so is a streamliner sketch that holds. A guess with
+   neither is not. A `shortcut:` comment that names its limit is a decision, unless the expected
+   load already crosses it. This check never raises a test, scale or speed point.
    (why: docs/why.md#the-builder-keeps-the-floor-the-critic-keeps-the-profile)
 
    **Prose is diff too.** Doc text the diff adds that breaks `docs/documentation.md` in the
@@ -119,6 +121,28 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    has it with `git show origin/<branch>:<path>`.** A checkout is refused as local destruction,
    and a critic must not touch the branch.
 
+## Make every new piece earn its place
+
+A fresh subagent justifies each new piece and streamlines each file the diff grows. Neither the
+builder's reasoning nor your own bug-hunt shapes what it finds.
+(why: docs/why.md#a-fresh-streamliner-justifies-every-new-piece)
+
+1. **List the pieces** once you have the diff:
+   `node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/new-pieces.mjs" --base origin/main
+   --head origin/<branch> --json`, from the attached checkout. On `NONE`, skip to *Produce the
+   review*, and say so in *What was checked*.
+2. **Start the streamliner before gather step 4**, so it runs while you read. Use one `Task` with
+   `review-pr/streamliner.md` as its brief. Give it the checkout path, the branch, the ticket
+   body (a ticketless PR's title), the script's JSON and `writing.budgets.reviewReply`. **Never
+   give it the PR body, a thread or the change outline.** When the JSON says `split`, start one
+   per group of related files instead, grouped by import and directory, each group under
+   `review.streamline.splitLines`.
+3. **Check every finding against the code.** Drop a sketch that loses a caller, changes behaviour
+   a test pins, or cuts what the ladder's *Never remove* holds.
+4. **Post each finding that holds as a `should-fix`**, led by the word **Streamline**, on the
+   line it names, sketch included. A piece the streamliner kept gets no thread. *What was
+   checked* gives the two counts.
+
 ## Produce the review
 
 Use the pending-review flow, submitted as `COMMENT` — a session can neither approve nor request
@@ -143,8 +167,8 @@ assessment, which is where it reads better anyway.
    is the part the reviewer reads — write it as the three sentences that matter.
 2. **Findings**, ranked `blocker` / `should-fix` / `consider`, one line each, pointing at its
    inline thread.
-3. **What was checked** — the files read, the new pieces the ladder walked, the consumer sides
-   followed, the queries run, with
+3. **What was checked** — the files read, the new pieces the ladder walked, the streamliner's
+   counts, the consumer sides followed, the queries run, with
    enough evidence that a clean verdict is checkable. A clean report with no evidence of reading
    is not a review. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 

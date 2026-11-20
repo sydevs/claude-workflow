@@ -385,6 +385,30 @@
     "skipWhen": {
       "maxFiles": 2,
       "maxLines": 40
+    },
+    "streamline": {
+      "$comment": "The pieces workflow/lib/new-pieces.mjs lists for review-pr's streamliner. Rules in review-pr/SKILL.md.",
+      "newFileLines": 150,
+      "grownLines": 80,
+      "splitLines": 1500,
+      "sourceGlobs": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.php",
+        "**/*.css",
+        "**/*.md",
+        "**/*.mdx"
+      ],
+      "skipGlobs": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/__tests__/**",
+        "**/*.d.ts"
+      ]
     }
   },
   "journal": {
