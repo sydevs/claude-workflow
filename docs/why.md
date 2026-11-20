@@ -1317,8 +1317,8 @@ a push, a verb — is an event the dispatcher already wakes on.** So a pass that
 and derives no move has found the state the last pass left: it runs the derivation and drops the
 plan. The gate is on the plan, not the fetch: `sweep-pr` still gathers, the only way to see a
 resolved thread or a refused write (why: docs/why.md#a-resolved-thread-fires-no-workflow). Those
-show up as a move (`armAutoMerge`, `disarmAutoMerge`, `proxyApprove`, `dismissProxy`, `markReady`,
-`fire`), so they pass the gate.
+show up as a move (`armAutoMerge`, `disarmAutoMerge`, `proxyApprove`, `dismissProxy`, `dismissStale`,
+`markReady`, `fire`), so they pass the gate.
 
 ## A review comment is feedback, whatever its association
 
@@ -1417,8 +1417,8 @@ The check approves a ready bot PR into the default branch that changes nothing b
 its head carries that status, with the consumer's token as `github-actions[bot]` (each consumer
 allows it: `can_approve_pull_request_reviews`). The approval is pinned to that head. A head the
 sync did not write (a hand edit, a fix-ci push) or that the gate refuses has the check's own
-earlier approval dismissed explicitly, by its body marker, never a person's: the consumers set
-`dismiss_stale_reviews_on_push` today, but the guarantee should not rest on a ruleset setting. The
+earlier approval dismissed explicitly, by its body marker, never a person's: the guarantee does not
+rest on a ruleset setting, and `dismiss_stale_reviews_on_push` is off again since 2026-11-20. The
 merge queue still runs CI.
 
 `decide` alone asks the reviewer, never at a contract-only sync's mark-ready: when the PR outgrows
@@ -2205,7 +2205,9 @@ No reviewer is requested: the approval it would wait for is given.
 The approval is pinned to the head it read, and never covers a commit of the bot's own. The loop
 pushes fixes onto member PRs (fix-ci, address-review, a relay), sometimes with behaviour nobody
 asked for, and the ruleset keeps an approval through later pushes. So when the head is the bot's,
-any earlier approval of its own is dismissed, and the PR waits for the author's
+any earlier approval of its own is dismissed (unless the head is a merge of the base:
+[A bot commit buries an approval, a conflict merge does not](#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)),
+and the PR waits for the author's
 `@sydevs-bot approve`, posted after that commit, or their own arming of auto-merge
 ([The owner's arming vouches for the bot's commits](#the-owners-arming-vouches-for-the-bots-commits)).
 A push of the author's own on top vouches for what is under it. The verb from anyone else, or on anyone else's PR, is refused: they approve in
@@ -2319,6 +2321,22 @@ sydevs/SahajAtlasWeb#328 was approved three times: each conflict resolution ende
 which labelled the PR `awaiting` and put it back on the reviewer's list. Approvals were never
 dismissed. Now an approved PR a session touched derives Pending. Only a hunk the session asks about,
 as a question thread, makes it Awaiting.
+
+## A bot commit buries an approval, a conflict merge does not
+
+On 2026-11-17 the five rulesets turned on `dismiss_stale_reviews_on_push`. GitHub then dismissed
+every approval on each conflict resolution: the merge moves the merge base and changes the diff,
+and GitHub has no setting that spares a merge of the base. Approved PRs went back to the reviewer
+for a resolution that, by [A resolved conflict is not a new question](#a-resolved-conflict-is-not-a-new-question),
+asks nothing. So on 2026-11-20 the setting went off again, and the dispatcher dismisses what it
+should have caught, itself.
+
+`buriedApprovals` holds the conditions. The judgements under them: a commit of the bot's own is
+code the approver never saw, a merge of the base asks nothing new, a person's commit other than the
+approver's neither buries nor vouches as it did before the ruleset change, and anything unread
+buries, because a false dismissal costs a review round while a missed one merges code nobody read.
+A buried approval is withdrawn ahead of the lock guard, as the disarm is: the queue merges an
+approved, armed PR the moment CI goes green, and never waits for a lease.
 
 ## Unknown mergeability is not clean
 

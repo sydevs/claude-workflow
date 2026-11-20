@@ -32,6 +32,8 @@ export const disarmAutoMerge = () => ({ type: 'disarmAutoMerge' })
 export const proxyApprove = (sha) => ({ type: 'proxyApprove', sha })
 /** Dismiss the bot's own approvals, by review id: a commit of its own sits on top of them. */
 export const dismissProxy = (ids) => ({ type: 'dismissProxy', ids })
+/** Dismiss a person's approvals, by review id: a commit of the bot's own landed after them. */
+export const dismissStale = (ids) => ({ type: 'dismissStale', ids })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })
@@ -473,7 +475,7 @@ export function loopMayNotMerge(snapshot, config) {
 // status, an anomaly — only restates where it already is. Turning a merge off,
 // or dismissing the approval that would allow one, moves an item as surely as
 // arming it does.
-const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'proxyApprove', 'dismissProxy', 'markReady', 'recheck', 'targets', 'rerunJobs'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'proxyApprove', 'dismissProxy', 'dismissStale', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item last left Awaiting says nothing unless the
@@ -503,14 +505,76 @@ function quietSweep(plan, s, config) {
  */
 export function evaluatePr(s, config) {
   const pr = s.pr
-  if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return evaluateOpenPr(s, config)
+  const stale = stalePlan(s, config)
+  if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return stale.concat(evaluateOpenPr(s, config))
   return [
     disarmAutoMerge(),
     // True whichever of them armed it: `botArmedOwnerPr` also fires on an
     // arming GitHub names nobody for, which may be the owner's own.
     commentOnce('proxy-disarmed', 'Auto-merge is off again: on your own PR, merging is yours. Enable it when you want this merged.'),
+    ...stale,
     ...evaluateOpenPr(s, config),
   ]
+}
+
+/**
+ * A person's approval that a commit of the bot's own has buried is dismissed,
+ * on every pass and ahead of the lock guard, like the disarm: the queue merges
+ * an approved, armed PR the moment CI goes green, and does not wait for a
+ * lease. The bot's own proxy approval is `proxyPlan`'s, which also asks the
+ * owner. An Actions app's approval (the contract check's) is withdrawn by the
+ * job that gave it. (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+ */
+function stalePlan(s, config) {
+  const pr = s.pr
+  if (!pr || pr.state !== 'open' || !fullTreatment(pr.user?.login, config)) return []
+  const person = (login) => login && !isBot(login, config) && !String(login).endsWith('[bot]')
+  const buried = buriedApprovals(s, config).filter((r) => person(r.user?.login))
+  if (!buried.length) return []
+  const logins = new Set(buried.map((r) => lower(r.user.login)))
+  const ids = (s.reviews || []).filter((r) => r.state === 'APPROVED' && logins.has(lower(r.user?.login))).map((r) => r.id).filter(Boolean)
+  return ids.length ? [dismissStale(ids)] : []
+}
+
+/** Each reviewer's latest state-bearing review, where it is an approval: what GitHub counts. */
+function standingApprovals(reviews) {
+  const latest = new Map()
+  for (const r of reviews || []) {
+    if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) latest.set(lower(r.user?.login), r)
+  }
+  return [...latest.values()].filter((r) => r.state === 'APPROVED')
+}
+
+/**
+ * Each reviewer's standing approval that a later commit has buried. The
+ * ruleset keeps an approval through every push, so the dispatcher withdraws
+ * one itself, and only for a push that warrants it: a commit of the bot's own
+ * (a fix, an adopted finding, a relay) the approval did not cover. A merge of
+ * the base buries nothing: its second parent is off the PR, and the conflict
+ * it resolved is not a new question (a hunk that is one asks in a thread). A
+ * commit of the approver's own on top vouches for what is under it; for the
+ * bot's proxy approval, that is the PR author's. A commit with no author
+ * GitHub can name, an approval whose commit left the PR, or a commit list
+ * never read, buries: unread fails closed.
+ * (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+ */
+function buriedApprovals(s, config) {
+  const head = s.pr?.head?.sha
+  const commits = s.prCommits
+  const onPr = new Set((commits || []).map((c) => c.sha))
+  const baseMerge = (c) => (c.parents || []).length === 2 && !onPr.has(c.parents[1])
+  return standingApprovals(s.reviews).filter((r) => r.commit_id !== head).filter((r) => {
+    if (!commits) return true
+    const at = commits.findIndex((c) => c.sha === r.commit_id)
+    if (at < 0) return true
+    const voucher = lower(isBot(r.user?.login, config) ? s.pr?.user?.login : r.user?.login)
+    let buried = false
+    for (const c of commits.slice(at + 1)) {
+      if (c.author && lower(c.author) === voucher) buried = false
+      else if ((!c.author || isBot(c.author, config)) && !baseMerge(c)) buried = true
+    }
+    return buried
+  })
 }
 
 /**
@@ -682,7 +746,7 @@ function contractSyncPlan(s, config) {
  * the head read here, and never covers a commit of the bot's own the author
  * has not vouched for with `approve`: the loop pushes fixes onto member PRs.
  * The ruleset keeps an approval through later pushes, so one the bot's own
- * commit has since buried is dismissed.
+ * commit has since buried is dismissed. A merge of the base buries none.
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
 function proxyPlan(s, config) {
@@ -693,6 +757,10 @@ function proxyPlan(s, config) {
   if (!isBot(s.headAuthor, config)) return approvals.length ? [] : [proxyApprove(head)]
   if (approvals.some((r) => r.commit_id === head)) return []
   if (verdict === 'owed') return [proxyApprove(head)]
+  // Carried across a merge of the base: the approval stands, and nobody is
+  // asked. (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+  const standing = standingApprovals(s.reviews).some((r) => isBot(r.user?.login, config))
+  if (standing && !buriedApprovals(s, config).some((r) => isBot(r.user?.login, config))) return []
   const buried = approvals.map((r) => r.id).filter(Boolean)
   const short = head.slice(0, 7)
   const waiting = threadsWaiting(s, config).length
@@ -754,7 +822,7 @@ function armedByAuthor(s) {
  * one thing the hold exists to stop.
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
-export function vouched(s, config) {
+function vouched(s, config) {
   if (armedByAuthor(s) && !threadsWaiting(s, config).length) return true
   const author = s.pr.user?.login
   const marks = [HOLD_KEY, ARMED_HOLD_KEY].map((k) => dispatcherMark(`${k} ${s.pr.head?.sha}`))

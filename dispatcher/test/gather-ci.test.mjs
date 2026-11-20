@@ -180,3 +180,19 @@ test("a sync PR's head is vouched for only by the bot, and GitHub's decision is 
   assert.equal(s.pr.contractSyncOnly, true)
   assert.deepEqual(s.pr.contractSync, { attestedAt: '2026-10-09T16:50:00Z', approvedByCheck: true, decision: 'REVIEW_REQUIRED' })
 })
+
+// ---- (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+
+test('the PR\'s commits are read only when an approval sits below the head', async () => {
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'pr', number: 742, reason: 'push', facts: {} }
+  const gh = fake()
+  let read = 0
+  gh.rest.pulls.listCommits = async () => { read++; return { data: [{ sha: 'abc', author: null, committer: { login: 'sydevs-bot' }, parents: [{ sha: 'old' }, { sha: 'm1' }] }] } }
+  const atHead = { id: 1, state: 'APPROVED', commit_id: 'abc', body: '', user: { login: 'Ardnived' } }
+  gh.rest.pulls.listReviews = async () => ({ data: [atHead] })
+  assert.equal((await gather(gh, target, config, { now: new Date('2026-11-20T10:00:00Z') })).prCommits, null)
+  gh.rest.pulls.listReviews = async () => ({ data: [{ ...atHead, commit_id: 'old' }] })
+  const s = await gather(gh, target, config, { now: new Date('2026-11-20T10:00:00Z') })
+  assert.equal(read, 1)
+  assert.deepEqual(s.prCommits, [{ sha: 'abc', author: 'sydevs-bot', parents: ['old', 'm1'] }])
+})
