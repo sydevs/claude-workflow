@@ -1220,4 +1220,64 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     const draft = ask('Ardnived', owned({ pr: { ...owned().pr, draft: true } }))
     assert.equal(draft.filter((a) => a.type === 'fire' || a.type === 'proxyApprove').length, 0)
   })
+
+  // ---- an approval through later pushes ----------------------------------
+  // The ruleset keeps every approval through a push since 2026-11-20, so a
+  // conflict resolution no longer asks anyone again, and the dispatcher
+  // withdraws only what a commit of the bot's own buried.
+  // (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+  const own = { id: 9, user: { login: 'sydevs-bot' }, state: 'APPROVED', body: '', commit_id: 'old' }
+  const commit = (sha, author, parents = ['prev']) => ({ sha, author, parents })
+  // `m1` is a commit of the base: it is not on the PR.
+  const baseMerge = commit('abc', 'sydevs-bot', ['old', 'm1'])
+  const fix = commit('abc', 'sydevs-bot', ['old'])
+
+  test('a merge of the base carries the bot\'s approval on the owner\'s PR: nothing dismissed, nobody asked', () => {
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, own], prCommits: [commit('old', 'Ardnived'), baseMerge] }), pc)
+    assert.equal(of(p, 'dismissProxy').length, 0)
+    assert.equal(of(p, 'proxyApprove').length, 0)
+    assert.equal(of(p, 'comment').length, 0)
+  })
+
+  test('a bot fix under the merge still buries it, and the owner\'s own push on top vouches again', () => {
+    const fixed = [commit('old', 'Ardnived'), commit('f1', 'sydevs-bot', ['old']), commit('abc', 'sydevs-bot', ['f1', 'm1'])]
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, own], prCommits: fixed }), pc)
+    assert.deepEqual(of(p, 'dismissProxy').map((a) => a.ids), [[9]])
+    assert.ok(of(p, 'comment').some((c) => c.key === 'proxy-held abc'))
+  })
+
+  test('a relay merge is not a merge of the base: its second parent is on the PR', () => {
+    const relayed = [commit('old', 'Ardnived'), commit('r1', 'sydevs-bot', ['old']), commit('abc', 'sydevs-bot', ['old', 'r1'])]
+    const p = evaluatePr(owned({ headAuthor: 'sydevs-bot', reviews: [critic, own], prCommits: relayed }), pc)
+    assert.deepEqual(of(p, 'dismissProxy').map((a) => a.ids), [[9]])
+  })
+
+  const bot = (over = {}) => prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: true }, normalized: { reviewDecision: 'APPROVED' }, ...over })
+  const person = { id: 7, user: { login: 'Ardnived' }, state: 'APPROVED', body: '', commit_id: 'old' }
+
+  test('a person\'s approval on a bot PR stands through a merge of the base', () => {
+    const p = evaluatePr(bot({ reviews: [person], prCommits: [commit('old', 'sydevs-bot'), baseMerge] }), config)
+    assert.equal(of(p, 'dismissStale').length, 0)
+  })
+
+  test('a bot commit after a person\'s approval dismisses it, every approval they gave, even under a lock', () => {
+    const earlier = { ...person, id: 6, commit_id: 'older' }
+    const prCommits = [commit('older', 'sydevs-bot'), commit('old', 'sydevs-bot'), fix]
+    assert.deepEqual(of(evaluatePr(bot({ reviews: [earlier, person], prCommits }), config), 'dismissStale').map((a) => a.ids), [[6, 7]])
+    assert.deepEqual(of(evaluatePr(bot({ reviews: [person], prCommits, locked: true }), config), 'dismissStale').map((a) => a.ids), [[7]])
+  })
+
+  test('unread fails closed: no commit list, an approval off the PR, or a nameless commit', () => {
+    assert.equal(of(evaluatePr(bot({ reviews: [person] }), config), 'dismissStale').length, 1)
+    assert.equal(of(evaluatePr(bot({ reviews: [person], prCommits: [fix] }), config), 'dismissStale').length, 1)
+    assert.equal(of(evaluatePr(bot({ reviews: [person], prCommits: [commit('old', 'sydevs-bot'), commit('abc', null, ['old'])] }), config), 'dismissStale').length, 1)
+  })
+
+  test('an approval at the head, one already dismissed, or an Actions app\'s, is left alone', () => {
+    const prCommits = [commit('old', 'sydevs-bot'), fix]
+    assert.equal(of(evaluatePr(bot({ reviews: [{ ...person, commit_id: 'abc' }], prCommits }), config), 'dismissStale').length, 0)
+    assert.equal(of(evaluatePr(bot({ reviews: [person, { ...person, id: 8, state: 'DISMISSED' }], prCommits }), config), 'dismissStale').length, 0)
+    const app = { ...person, user: { login: 'github-actions[bot]' } }
+    assert.equal(of(evaluatePr(bot({ reviews: [app], prCommits }), config), 'dismissStale').length, 0)
+  })
 }

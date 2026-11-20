@@ -331,6 +331,13 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
+  // The ruleset keeps an approval through every push, so `buriedApprovals`
+  // reads the commits after each one. Fetched only when one sits below the head.
+  // (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+  s.prCommits = pr.state === 'open' && reviews.some((r) => r.state === 'APPROVED' && r.commit_id !== pr.head?.sha)
+    ? (await gh.paginate(gh.rest.pulls.listCommits, { owner, repo, pull_number: number, per_page: 100 }))
+      .map((c) => ({ sha: c.sha, author: c.author?.login || c.committer?.login || null, parents: (c.parents || []).map((p) => p.sha) }))
+    : null
   s.threads = threads
   s.normalized = normalized
   s.ci = { ...ciVerdict(normalized, `${owner}/${repo}`), advisory: gate.advisory }

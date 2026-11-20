@@ -294,6 +294,19 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         }
         break
       }
+      // A person's approval a commit of the bot's own buried: the ruleset no
+      // longer dismisses one. (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
+      case 'dismissStale': {
+        for (const id of a.ids) {
+          log(`dismiss buried approval ${id}`)
+          if (dryRun) continue
+          await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
+            ...args, pull_number: t.number, review_id: id,
+            message: `${bot} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`,
+          }))
+        }
+        break
+      }
       case 'sentry': {
         const token = env.SENTRY_CLAUDE_WORKFLOW_TOKEN
         log(`sentry resolve ${a.id} (issue #${a.issue})`)
