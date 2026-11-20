@@ -23,6 +23,12 @@ re-checks, and things we maintain that someone else already does.
   ```
 
   Wrong doc, right code → a doc-fix PR. Cross-repo contracts are `audit-contracts`' job, not this.
+
+  Then weigh the docs. In each repo, run
+  `node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/doc-weight.mjs"` and put its first
+  line in the journal: the number is tracked there and nowhere else. Read the docs it says are
+  touched most against `docs/documentation.md` in `claude-workflow`. Mechanism, a restated fact
+  or a guide that is only a listing → a doc-fix PR, kept to what that rule says to delete.
 - **Build vs buy** — custom code a maintained package, a Payload plugin or a platform feature
   (Cloudflare, Railway, Sentry) already provides. File a ticket naming the replacement, what it
   removes, and what it costs: migration, bundle size, lock-in. Check the repo has not already
