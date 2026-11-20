@@ -822,7 +822,7 @@ function armedByAuthor(s) {
  * one thing the hold exists to stop.
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
  */
-export function vouched(s, config) {
+function vouched(s, config) {
   if (armedByAuthor(s) && !threadsWaiting(s, config).length) return true
   const author = s.pr.user?.login
   const marks = [HOLD_KEY, ARMED_HOLD_KEY].map((k) => dispatcherMark(`${k} ${s.pr.head?.sha}`))
