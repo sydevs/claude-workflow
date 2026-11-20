@@ -41,3 +41,7 @@ Skills read it from the claude-workflow checkout. (why: docs/why.md#docs-say-wha
   `CHANGELOG.md`. Their overlap with the code is the contract.
 - **A list of conditions**, unless the same edit leaves the pointer to where the list lives.
 - **A rejected alternative and why it lost.** The code never records it.
+- **A figure a test asserts out of the prose itself.** Rule 1 types a measured number as
+  mechanism, and a check turns that one into a contract. SahajCloud#1235 cut the "78 s" lane
+  figure from four guides, and `tests/unit/perf-figures-pinned.spec.ts` went red. Grep the suite
+  for a number before cutting it.
