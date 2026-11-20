@@ -1,0 +1,34 @@
+# The contract check: CI for the contract consumers, called as a step from
+# each one's own CI, beside `dependency-review.yml`.
+#
+# A PR that changes a copied contract must change it to exactly what its sync
+# command writes. A PR that leaves the copy alone passes, however far the
+# source has moved: drift on `main` is the contract sync's and audit-contracts'
+# to fix, never every open PR's. A broken edit here blocks merges in every
+# consumer at once.
+#
+# why: sydevs/claude-workflow/docs/why.md#a-contract-check-checks-what-a-pr-changes
+name: Contract check
+description: Fail a PR that changes a copied contract to anything its sync command does not write.
+
+inputs:
+  paths:
+    description: Space-separated copy paths. Defaults to this repo's `contractSync.consumers` entry in loop-config.json.
+    required: false
+    default: ''
+  command:
+    description: The command that regenerates them, run from the repo root. Defaults to that entry's command.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        CONFIG: ${{ github.action_path }}/../../../loop-config.json
+        REPO_NAME: ${{ github.event.repository.name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+      run: bash "$GITHUB_ACTION_PATH/check.sh"

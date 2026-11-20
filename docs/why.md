@@ -1867,6 +1867,29 @@ advisories are the daily check's. It is a reusable workflow called from each rep
 required check blocks every merge. It runs in the merge queue against the queue's base and passes
 at once on other events, so the required name always reports.
 
+## A contract check checks what a PR changes
+
+`wisdom_sidetext` was typed into WeMeditateWeb's `server/payload-types.ts` and its English mirror
+by hand (WeMeditateWeb#269), and passed every check: typecheck and the tests read the committed
+copy, and nothing compared it with its source. The first proposed gate (WeMeditateWeb#310)
+compared every PR's copy with SahajCloud `main`. That fails the PR for the wrong reason: one
+producer merge reddens every open PR until its sync lands, fires `fix-ci` on each open bot PR to
+regenerate the copy inside a feature, fails the merge queue, and kept every PR red until an
+unrelated SahajCloud PR shipped. WordPress's required `URL contract in sync` job did the same.
+
+So, as with [dependency review](#dependency-review-checks-what-a-pr-adds), the check asks only what
+the PR changes: a PR that touches a `contractSync` copy must leave it exactly as its sync command
+writes it. A PR that leaves the copy alone passes, and drift on `main` is the contract sync's and
+`audit-contracts`' to fix, which a sync now does unattended
+([A verified contract sync is approved by Actions](#a-verified-contract-sync-is-approved-by-actions)).
+It is a composite action, a step inside each consumer's existing required job, so no ruleset
+changes and the job's toolchain is already set up; `paths` and `command` inputs cover a copy
+outside `contractSync`, such as WeMeditateWeb's English mirror of production data. The command
+runs from the PR's own tree, as CI runs everything else: the check catches a mistake, not an
+author set on defeating it, who could edit the caller instead. A mismatch is re-checked twice,
+150 s apart, because `raw.githubusercontent.com` serves `main` up to five minutes stale after a
+merge. A command that fails is marked `ci.infraLabel`, so it is re-run, never repaired.
+
 ## A push from a person resets the repair count
 
 The cap comment promised *"A mention or a push from you starts me again"*, but `rec.fixCi` grew at
