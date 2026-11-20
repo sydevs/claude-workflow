@@ -54,6 +54,11 @@ Two lenses carry the most weight, in this order:
    names its limit is a decision, unless the expected load already crosses it. This check never
    raises a test, scale or speed point.
    (why: docs/why.md#the-builder-keeps-the-floor-the-critic-keeps-the-profile)
+
+   **Prose is diff too.** Doc text the diff adds that breaks `docs/documentation.md` in the
+   claude-workflow checkout — a fact restated in a second place, mechanism the code shows, a list
+   of conditions a test already holds — is a `should-fix` on its line.
+   (why: docs/why.md#docs-say-what-the-code-cannot)
 2. **Cross-repo contracts.** The couplings live in the workspace guide and
    `/workflow:implement-roadmap`: generated Payload types flow producer→consumer via `types:cms`,
    the embed contract in `SahajAtlasWeb/docs/embedding.md` has two in-tree consumers, API access
