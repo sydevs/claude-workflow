@@ -558,7 +558,7 @@ function standingApprovals(reviews) {
  * never read, buries: unread fails closed.
  * (why: docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
  */
-export function buriedApprovals(s, config) {
+function buriedApprovals(s, config) {
   const head = s.pr?.head?.sha
   const commits = s.prCommits
   const onPr = new Set((commits || []).map((c) => c.sha))
