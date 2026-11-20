@@ -312,6 +312,16 @@ because the refactors the reviewer asked for were cross-file: one transcription 
 meditations (SahajCloud#1075), the duplication between mailing-list providers (#1088). It splits
 only past `review.streamline.splitLines`, where one context would dilute again.
 
+## A refactor where the diff works is in scope
+
+The scope lens flagged a refactor beside the fix as smuggled, and the builder's ticket proposals
+recommended a separate ticket. The reviewer keeps choosing the other way: *"All changes should be
+made in this PR, not in a follow up"* (SahajCloud#1102), and "in this PR" over the recommended
+ticket (#999). On 2026-11-20 they asked the loop to favour refactoring and long-term maintenance
+over small PRs. So a refactor of the code the diff touches, its callers, or the siblings that share
+what it builds is in scope, and preferred. A refactor of unrelated code is still scope creep: a PR
+that grows everywhere is the review load this rule exists to cut.
+
 ---
 
 # finalize-pr

@@ -40,7 +40,10 @@ Two lenses carry the most weight, in this order:
 1. **Simplicity and scope.** Read the linked ticket first, then measure the diff against it. Is
    the diff larger than the problem? Does it contain anything the ticket did not ask for — an
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
-   strongest finding this review can produce is "half of this PR should not exist." A change the
+   strongest finding this review can produce is "half of this PR should not exist." A refactor of
+   the code the diff touches, its callers, or the siblings that share what it builds is not
+   smuggled: prefer it to a smaller diff that leaves the friction in place. Only a refactor of
+   unrelated code is. (why: docs/why.md#a-refactor-where-the-diff-works-is-in-scope) A change the
    `## Summary` names as joined is not smuggled. Judge it by format-ticket's join rule, and flag
    only one the rule does not join. A criterion marked `(review, …)` is the reviewer's own ask:
    never flag its change as scope. **Never recommend moving part of this PR to a follow-up or a

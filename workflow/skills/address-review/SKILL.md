@@ -74,7 +74,8 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
   reviewer's call, never yours. Build nothing for that part yet. Propose the ticket in a review
   comment: a reply in their thread, or a question thread (`/workflow:finalize-pr` step 7c) for a
   review-body point. Say what the ticket would hold, then give format-ticket's options, your
-  recommendation first, each with its implications:
+  recommendation first, each with its implications. Recommend *A* when the part sits in code this
+  PR touches (why: docs/why.md#a-refactor-where-the-diff-works-is-in-scope):
   - *A — build it in this PR:* what it adds to the diff and the review, and what it delays.
   - *B — file it as its own ticket:* what merges without it, what stays inconsistent until it
     ships, and that it needs its own `implement`.
