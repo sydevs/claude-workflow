@@ -291,6 +291,21 @@ remove is then a line they can see, not a silent build.
 
 # finalize-pr
 
+## finalize-pr is the one model-invocable pipeline
+
+Every user- or routine-invoked skill carries `disable-model-invocation: true`, so nothing fires on a
+stray phrase. On `finalize-pr` that flag put the ship pipeline out of reach of an ordinary
+conversation: asked to raise a PR, a session hand-rolled `gh pr create` and skipped simplify, the
+review, the conditional security review, the docs sync and step 7's body. sydevs/SahajCloud#1238
+shipped that way on 2026-11-20, with no `## Preview` links in a repo that deploys previews. Only
+`review-pr` catches it, as a `should-fix` on a missing link, once the review loop reaches the PR.
+
+So this skill alone drops the flag, and a description narrow enough to fire on nothing but a request
+for a PR, plus a pre-flight exit when nobody asked, replace it. Reaching these steps must not depend
+on a maintainer remembering the slash command. Set aside, and still usable on top later: a PreToolUse
+hook blocking `gh pr create` where the body has no `## Preview`, and a dispatcher step adding
+fixture links on `pull_request.opened`.
+
 ## simplify fans out
 
 `/simplify` edits the working tree, and its fixes can land minutes after dispatch, well after its

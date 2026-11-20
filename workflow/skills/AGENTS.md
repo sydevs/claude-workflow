@@ -7,7 +7,10 @@
   pipeline skills that genuinely need `Bash(*)`.
 - **`disable-model-invocation: true` unless the skill is a helper.** Every user- or
   routine-invoked skill carries it, so nothing fires on a stray phrase. Only helpers invoked *by*
-  other skills omit it.
+  other skills omit it — and `finalize-pr`, the one exception. A session that cannot reach it
+  hand-rolls `gh pr create` and skips the whole pipeline, so it stays model-invocable, held narrow
+  by its description and a pre-flight exit instead.
+  (why: docs/why.md#finalize-pr-is-the-one-model-invocable-pipeline)
 - **Write for one busy reader.** The loop's own writing rules (lead with the outcome, detail in
   `<details>`, no throat-clearing) live in `start-run/SKILL.md` and apply to skill bodies
   as much as to what they emit.

@@ -1,7 +1,6 @@
 ---
 name: finalize-pr
-description: Finalize the current branch's PR. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and open or refresh the PR: a draft for the bot's run, ready for a member's own branch. Never waits for CI, never merges. User-invoked. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
-disable-model-invocation: true
+description: Open or refresh the current branch's pull request — the only path to one. Use when the user asks to open, raise, create or refresh a PR, or to put the branch up for review. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and write the body with its mandatory Preview section: a draft for the bot's run, ready for a member's own branch. Never waits for CI, never merges. Do not use to answer a question about a PR, or to read, review, merge or check one. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 ---
@@ -75,6 +74,8 @@ git rev-list --count origin/<base>..HEAD
 ```
 
 - **Abort if on `main`** or any shared branch.
+- **Nobody asked for a PR** → say so and exit. This skill pushes, so a question about a PR is not
+  a reason to run it. (why: docs/why.md#finalize-pr-is-the-one-model-invocable-pipeline)
 - **Commit pending working-tree changes** — the Adjust phase ends here, so those edits ship too.
   If anything looks unrelated, stop and ask (or abort, non-interactively). Never commit secrets or
   `.env`.
