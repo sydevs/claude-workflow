@@ -10,7 +10,7 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
-import { isLogin, isReviewer, isHuman } from './plan.mjs'
+import { isLogin, isReviewer, isHuman } from './predicates.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
 

@@ -8,7 +8,7 @@
  * (why: docs/why.md#the-lock-label-is-the-lease, docs/why.md#approval-lives-in-the-record)
  */
 
-import { isLogin } from './plan.mjs'
+import { isLogin } from './predicates.mjs'
 
 export const MARKER = '<!-- sydevs-status v1 '
 const END = ' -->'

@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, fullTreatment, threadsWaiting } from './plan.mjs'
+import { isBot, fullTreatment, threadsWaiting } from './predicates.mjs'
 import { proxyApproves, proxyVerdict } from './approvals.mjs'
 import { isRoadmap, needsAddressReview, loopMayNotMerge, stackedPr } from './decide.mjs'
 

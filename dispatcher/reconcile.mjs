@@ -11,7 +11,7 @@
  * gathered too, for its due. (why: docs/why.md#the-reconciler-replaces-the-drift-window)
  */
 
-import { fullTreatment, isBot } from './plan.mjs'
+import { fullTreatment, isBot } from './predicates.mjs'
 
 const STATUS_FIELD = 'fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }'
 

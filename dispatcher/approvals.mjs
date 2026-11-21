@@ -9,11 +9,12 @@
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot,
  * docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
  *
- * `decide.mjs` imports these; the vocabulary they share with it is in
- * `plan.mjs`. Nothing here fetches.
+ * `decide.mjs` imports these; the actions they emit are `actions.mjs` and the
+ * predicates they read a snapshot with `predicates.mjs`. Nothing here fetches.
  */
 
-import { commentOnce, dismissProxy, dismissStale, fullTreatment, isBot, lower, note, nowOf, proxyApprove, requestReviewer, threadsWaiting } from './plan.mjs'
+import { commentOnce, dismissProxy, dismissStale, note, proxyApprove, requestReviewer } from './actions.mjs'
+import { fullTreatment, isBot, lower, nowOf, threadsWaiting } from './predicates.mjs'
 import { dispatcherMark } from './markers.mjs'
 import { parseVerb } from './verbs.mjs'
 

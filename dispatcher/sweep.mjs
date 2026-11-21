@@ -9,7 +9,7 @@
  */
 
 import { loadRecord } from './record.mjs'
-import { isBot, fullTreatment } from './plan.mjs'
+import { isBot, fullTreatment } from './predicates.mjs'
 import { listLeases } from './lease.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 

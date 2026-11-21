@@ -5,8 +5,8 @@
  * into a plan: a list of actions `apply.mjs` executes in order. Nothing
  * here fetches, so `node --test dispatcher/test` covers every branch.
  *
- * Approval accounting is `approvals.mjs`. The actions a plan is made of, and
- * the predicates both files read a snapshot with, are `plan.mjs`.
+ * Approval accounting is `approvals.mjs`. The actions a plan is made of are
+ * `actions.mjs`, and the predicates it reads a snapshot with `predicates.mjs`.
  *
  * The invariant the whole file rests on: the event is a wake-up, and the
  * decision is re-derived from current state. A stale payload, a cancelled
@@ -14,11 +14,11 @@
  * same answer. (why: docs/why.md#actions-observes-classifies-locks-and-fires)
  */
 
-import { fire, recheck, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, note, react, record, hold, transfer, relay, lower, isBot, respondTo, isHuman, hasAccess, fullTreatment, nowOf, isQuestion, threadsWaiting } from './plan.mjs'
+import { fire, recheck, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, note, react, record, hold, transfer, relay } from './actions.mjs'
+import { lower, isBot, respondTo, isHuman, hasAccess, fullTreatment, nowOf, isQuestion, threadsWaiting } from './predicates.mjs'
 import { botArmedOwnerPr, contractSyncPlan, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { pushRoute, relayRefusal } from './relay.mjs'
-import { dispatcherMark } from './markers.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- predicates ------------------------------------------------------
@@ -219,7 +219,7 @@ export function needsAddressReview(snapshot, config) {
   return mention ? 'a mention waits on a reply' : null
 }
 
-/** A mention asking for a reply. `review` asks for the critic, which `pendingReviewVerb` handles; `approve` is read by `proxyPlan`. */
+/** A mention asking for a reply. `review` asks for the critic, which `pendingReviewVerb` handles; `approve` is read by `approvals.mjs`'s `proxyPlan`. */
 function isAddressMention(body, config) {
   const v = parseVerb(body, config.dispatch, 'pr')
   return v.mentioned && v.verb !== 'review' && v.verb !== 'approve'
@@ -423,7 +423,7 @@ export function evaluatePr(s, config) {
   if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return stale.concat(evaluateOpenPr(s, config))
   return [
     disarmAutoMerge(),
-    // True whichever of them armed it: `botArmedOwnerPr` also fires on an
+    // True whichever of them armed it: `approvals.mjs`'s `botArmedOwnerPr` also fires on an
     // arming GitHub names nobody for, which may be the owner's own.
     commentOnce('proxy-disarmed', 'Auto-merge is off again: on your own PR, merging is yours. Enable it when you want this merged.'),
     ...stale,
@@ -518,7 +518,7 @@ function evaluateGreenPr(s, config) {
     // be armed. From here the ruleset decides: approval, resolved threads and
     // green CI, then the queue. (why: docs/why.md#github-owns-the-merge)
     // A contract-only sync asks nobody yet: the contract check approves one
-    // the sync wrote, and `contractSyncPlan` asks when it cannot.
+    // the sync wrote, and `approvals.mjs`'s `contractSyncPlan` asks when it cannot.
     // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
     const plan = pr.contractSyncOnly ? [markReady()] : [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
@@ -559,6 +559,7 @@ function evaluateGreenPr(s, config) {
   }
   return plan
 }
+
 // ---- issue verbs ------------------------------------------------------
 
 /** An unticked open question is a decision still owed, so nothing is built yet. (why: docs/why.md#a-decision-is-settled-before-the-build) */
@@ -1046,7 +1047,7 @@ function route(target, s, config) {
       return [note('an open PR closes it')]
     case 'pull_request.ready_for_review':
       // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
-      // A contract-only sync asks nobody here: `contractSyncPlan` does, when the check cannot.
+      // A contract-only sync asks nobody here: `approvals.mjs`'s `contractSyncPlan` does, when the check cannot.
       return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.

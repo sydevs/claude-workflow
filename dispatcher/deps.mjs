@@ -19,7 +19,7 @@
 
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
-import { isBot } from './plan.mjs'
+import { isBot } from './predicates.mjs'
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 const lower = (s) => String(s || '').toLowerCase()
