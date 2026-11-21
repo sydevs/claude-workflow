@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, isDispatcherComment, fullTreatment, proxyApproves } from './decide.mjs'
+import { isBot, isDispatcherComment, fullTreatment, proxyApproves, dispatcherLogins } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
@@ -219,7 +219,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { owner, name } = target.repo
   const repo = name
   const number = target.number
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
   const base = { owner, repo, number }
 
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: number })
@@ -317,7 +317,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     pr, checkRuns, statuses,
     reviewThreads: { review_threads: threads.map((t) => ({ is_resolved: t.isResolved })) },
     reviews: reviewsShaped,
-    reviewAuthority: [config.assignment.reviewer, ...(proxy ? [config.identity.expectedLogin] : [])],
+    reviewAuthority: [config.assignment.reviewer, ...(proxy ? bot : [])],
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha, repo: pr.head?.repo?.full_name || null }, base: { ref: pr.base?.ref, defaultBranch: pr.base?.repo?.default_branch || null }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), autoMergeBy: pr.auto_merge?.enabled_by?.login || null, requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)

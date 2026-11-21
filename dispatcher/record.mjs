@@ -65,21 +65,30 @@ export function renderRecord(rec) {
 }
 
 /**
- * Find the status comment. Returns `{ id, rec }`, with `id` null when absent.
+ * Find the status comment in a list already read. Returns `{ id, rec }`, with
+ * `id` null when absent.
  *
- * `bot` is `identity.expectedLogin`, required, and only that author's comment
- * counts. The filter belongs here, not in `parseRecord`, which sees a body and
- * no author. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * `bot` is `identity.dispatcherLogins`, required, and only one of those
+ * authors' comments counts. The filter belongs here, not in `parseRecord`,
+ * which sees a body and no author.
+ * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
+export function findRecord(comments, bot) {
+  for (const c of comments || []) {
+    if (!isLogin(c.user?.login, bot)) continue
+    const rec = parseRecord(c.body)
+    if (rec) return { id: c.id, rec }
+  }
+  return { id: null, rec: emptyRecord() }
+}
+
+/** Find the status comment, reading the item's comments a page at a time. */
 export async function loadRecord(gh, { owner, repo, number }, bot) {
   let page = 1
   for (;;) {
     const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100, page })
-    for (const c of data) {
-      if (!isLogin(c.user?.login, bot)) continue
-      const rec = parseRecord(c.body)
-      if (rec) return { id: c.id, rec }
-    }
+    const found = findRecord(data, bot)
+    if (found.id !== null) return found
     if (data.length < 100) break
     page += 1
   }

@@ -10,14 +10,14 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
-import { isLogin, isReviewer, isHuman } from './decide.mjs'
+import { isLogin, isReviewer, isHuman, dispatcherLogins } from './decide.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
 
 /**
- * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
- * author's comment counts as already posted — every key is guessable from the
- * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * Post an advisory once. `bot` is `identity.dispatcherLogins`, and only one of
+ * those authors' comments counts as already posted — every key is guessable
+ * from the item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 async function commentOnce(gh, t, bot, key, body, dryRun, log) {
   const mark = dispatcherMark(key)
@@ -72,7 +72,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   let moved = false
   let bumpFixCi = false
   const rec = snapshot.record
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
 
   // The board is a lens. A token that cannot reach it must not stop the
   // dispatch, which is the part that matters — the record carries the state,
@@ -291,8 +291,8 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'dismissStale': {
         const own = a.type === 'dismissProxy'
         const message = own
-          ? `A commit of ${bot}'s own is now the head, and this approval did not cover it.`
-          : `${bot} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`
+          ? `A commit of ${config.identity.expectedLogin}'s own is now the head, and this approval did not cover it.`
+          : `${config.identity.expectedLogin} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`
         for (const id of a.ids) {
           log(`dismiss ${own ? 'own' : 'buried'} approval ${id}`)
           if (dryRun) continue
@@ -520,7 +520,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // anyway. This ref create is the compare-and-swap that settles it: one 201,
   // one 422. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
   const item = { owner: t.repo.owner, repo: t.repo.name, number: t.number }
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
   const lease = await takeLease(gh, item, snapshot.pr?.head?.sha)
   if (!lease.won) {
     const why = lease.contended ? 'another pass holds the lease' : lease.error

@@ -373,8 +373,12 @@
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>"
   },
   "identity": {
-    "$comment": "expectedLogin is authoritative. Each run checks it against get_me once. Attribution rules in implement-ticket/SKILL.md.",
+    "$comment": "expectedLogin is authoritative, and is the sessions' login. Each run checks it against get_me once. dispatcherLogins are every login the loop writes under — the sessions' and the dispatcher App's — and the dispatcher reads its own writes under any of them, so an item written before the App switch keeps its record. Attribution rules in implement-ticket/SKILL.md.",
     "expectedLogin": "sydevs-bot",
+    "dispatcherLogins": [
+      "sydevs-bot",
+      "sydevs-dispatcher[bot]"
+    ],
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
   "review": {

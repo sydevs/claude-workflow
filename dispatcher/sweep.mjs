@@ -9,7 +9,7 @@
  */
 
 import { loadRecord } from './record.mjs'
-import { isBot, fullTreatment } from './decide.mjs'
+import { isBot, fullTreatment, dispatcherLogins } from './decide.mjs'
 import { listLeases } from './lease.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 
@@ -19,7 +19,7 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   const out = []
   const push = (kind, number, reason, facts = {}) => out.push({ repo, kind, number, reason, event: 'schedule', facts })
 
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
 
   const byLabel = async (label) => github.paginate(github.rest.issues.listForRepo, { owner, repo: name, state: 'open', labels: label, per_page: 100 })
 

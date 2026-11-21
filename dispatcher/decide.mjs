@@ -56,18 +56,29 @@ export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, 
 const lower = (s) => String(s || '').toLowerCase()
 
 /**
- * A login is the loop's own, case aside. The expected login must be named, and
- * a missing one throws: a seam that forgets to thread it would otherwise refuse
- * every comment, which `loadRecord` reports as no record at all and
- * `sweep.mjs` then reads as a timed-out lease on a live session.
+ * A login is the loop's own, case aside. `expected` is one login or a list of
+ * them, and a missing one throws: a seam that forgets to thread it would
+ * otherwise refuse every comment, which `loadRecord` reports as no record at
+ * all and `sweep.mjs` then reads as a timed-out lease on a live session.
  * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 export function isLogin(login, expected) {
-  if (!expected) throw new Error('isLogin: the expected login is required')
-  return lower(login) === lower(expected)
+  const list = Array.isArray(expected) ? expected : [expected]
+  if (!list.length || list.some((e) => !e)) throw new Error('isLogin: the expected login is required')
+  return list.some((e) => lower(login) === lower(e))
+}
+/**
+ * Every login the loop writes under: the sessions' and the dispatcher App's.
+ * The dispatcher finds its own status comments, markers and PRs under any of
+ * them, so an item written before the App switch keeps its record.
+ * (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ */
+export function dispatcherLogins(config) {
+  const list = (config.identity?.dispatcherLogins || []).filter(Boolean)
+  return list.length ? list : [config.identity?.expectedLogin]
 }
 export function isBot(login, config) {
-  return isLogin(login, config.identity?.expectedLogin)
+  return isLogin(login, dispatcherLogins(config))
 }
 export function respondTo(login, config) {
   return (config.assignment?.respondTo || []).some((l) => lower(l) === lower(login))
