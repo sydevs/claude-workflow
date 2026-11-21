@@ -15,9 +15,12 @@ import { cheapView, driftTargets } from './reconcile.mjs'
 
 /**
  * A `sweep-timeout` for every locked item whose session is past its deadline,
- * and for a lock with no record at all. The caller brings the locked items and
- * their kind: the cron reads them by label, and an event run already has them
- * in the cheap view, so neither pays a query here.
+ * and for a lock with no record at all. The caller brings the locked items,
+ * their kind and their labels: the cron reads them by label, and an event run
+ * already has them in the cheap view, so neither pays a query here. Which of
+ * them is a candidate is decided here — the journal's own issues are never
+ * work, as in `driftTargets`, and `skip` holds the ones the caller has already
+ * targeted.
  *
  * `limit` bounds the **record reads**, not the targets: a live lock yields no
  * target, so bounding the output would let one event run read every record in
@@ -25,11 +28,12 @@ import { cheapView, driftTargets } from './reconcile.mjs'
  * has no record, so a read is one call or several.
  * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
-export async function expiredLockTargets({ github, config, repo, items, now, event, limit = Infinity }) {
+export async function expiredLockTargets({ github, config, repo, items, now, event, limit = Infinity, skip = new Set() }) {
   const bot = config.identity.expectedLogin
   const out = []
   let reads = 0
   for (const i of items) {
+    if ((i.labels || []).includes(config.labels.journal) || skip.has(i.number)) continue
     if (reads >= limit) break
     reads += 1
     const push = (facts) => out.push({ repo, kind: i.kind, number: i.number, reason: 'sweep-timeout', event, facts })
@@ -62,7 +66,7 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
   const lockedNumbers = new Set(locked.map((i) => i.number))
   out.push(...await expiredLockTargets({
     github, config, repo, now, event: 'schedule',
-    items: locked.map((i) => ({ kind: i.pull_request ? 'pr' : 'issue', number: i.number })),
+    items: locked.map((i) => ({ kind: i.pull_request ? 'pr' : 'issue', number: i.number, labels: (i.labels || []).map((l) => l.name) })),
   }))
 
   const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })

@@ -80,10 +80,10 @@ export async function resolve({ github, context, config, now = new Date() }) {
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
   const view = await cheapView(github, config, repo.owner, repo.name)
-  // The journal's own issues are never work, here as in `driftTargets`.
-  const locked = view.filter((v) => v.labels.includes(config.labels.lock)
-    && !v.labels.includes(config.labels.journal) && !skip.has(v.number))
-  const expired = await expiredLockTargets({ github, config, repo, now, limit, items: locked, event: eventLabel(context) })
+  const expired = await expiredLockTargets({
+    github, config, repo, now, limit, skip, event: eventLabel(context),
+    items: view.filter((v) => v.labels.includes(config.labels.lock)),
+  })
   // An item the reclaim took is spared the drift pass: a lock off the board,
   // or behind a Status write that failed, is a drift target too, and a second
   // target spends a slot and a full `gather` on an item already handled.
