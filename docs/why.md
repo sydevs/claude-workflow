@@ -1965,6 +1965,13 @@ author set on defeating it, who could edit the caller instead. A mismatch is re-
 150 s apart, because `raw.githubusercontent.com` serves `main` up to five minutes stale after a
 merge. A command that fails is marked `ci.infraLabel`, so it is re-run, never repaired.
 
+**The check sees only the paths it is given.** A consumer that moves its copy disarms all three
+guards until `contractSync` catches up. `check.sh` diffs the configured path, so a hand edit to the
+file the repo really builds from reads as nothing to check. `contracts-sync` and `audit-contracts`
+run `git status` on a path nothing writes, and call it current. WeMeditateWeb#327 was the first such
+move, and merging it back to back with the config edit is the whole mitigation. Listing the old path
+beside the new one is not a mitigation: `git add` on a path that no longer exists fails the sync job.
+
 ## A push from a person resets the repair count
 
 The cap comment promised *"A mention or a push from you starts me again"*, but `rec.fixCi` grew at
