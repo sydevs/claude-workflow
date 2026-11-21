@@ -1179,7 +1179,7 @@ The session journalled to one and the anomalies went to the other, and each titl
 Both causes are closed. An issue matched by creation date for lack of a marker is **stamped with
 the marker**, so later lookups are exact. Two `act` jobs can both find nothing and create, so after
 creating, the dispatcher looks again and **closes its own issue if an older one appeared** — a rule
-racing jobs agree on without talking. The scheduled journal job sweeps up leftovers every half hour,
+racing jobs agree on without talking. The scheduled journal job sweeps up leftovers on its next run,
 keeping the oldest; it never runs on an event, so it never races itself. `improve-loop` counts a
 week from these titles, and a day counted twice at half strength is worse than once.
 
