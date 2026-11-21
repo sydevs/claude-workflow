@@ -2273,18 +2273,19 @@ back to the PAT rather than failing dispatch in all five repos.
 
 Its writes then come from the App, which is why `identity.dispatcherLogins` names every login the
 loop writes under and `isBot` tests the set: an item whose status comment, markers or sync PR were
-written under the PAT must keep its record under the App. The App needs two entries, because REST
-spells it `<slug>[bot]` while GraphQL spells the same actor `<slug>` — `cheapView`'s PR authors and
-`reviewThreads`' comment authors are GraphQL. Without the bare spelling the App's own draft PRs
-would read as an outsider's, and every one would be a permanent drift target on every pass: more
-API spend, not less.
+written under the PAT must keep its record under the App.
 
-Both spellings are **listed**, not derived by stripping the suffix at comparison time. `isBot` gates
-the contract-sync approval and the proxy approval, so the trusted set has to be exactly what the
-config names: a predicate that normalised the suffix would extend trust to the bare form of every
-entry added afterwards, without anyone writing it down. The cost is that the bare slug is a login a
-user account could hold, so the org must not let one take it; the firmer fix is GraphQL's
-`__typename`, trusting a bare slug only for a `Bot` actor. `identity.expectedLogin` stays the sessions' login, which is what prose,
+**The App is trusted as `<slug>[bot]`, and only as that.** REST spells it that way, and no username
+can, because `[` is not legal in one. GraphQL spells the same actor `<slug>` — `cheapView`'s PR
+authors and `reviewThreads`' comment authors come from there — so those queries select `__typename`
+and `restLogin` maps a `Bot` actor to the REST spelling before anything compares it. Trusting the
+bare slug instead would have been one config line and a hole: these repos are public, `findRecord`
+authenticates the dispatcher's own record by author login alone, and `reconcile` acts on what that
+record says. Anyone who registered the username could have posted a comment carrying a forged
+`sydevs-status` marker and had the loop fire a privileged session on their own issue — with no push
+access, no org membership, nothing but a free account and the name. For the same reason a retried
+handler is checked against `handlers` before it fires: it comes out of a comment body, so it is
+data, not a plan. `identity.expectedLogin` stays the sessions' login, which is what prose,
 `get_me` and `pickFeaturePr` mean, and `docs/routine-setup.md` §0c has the permissions, the setup
 and the experiments the switch waits on.
 

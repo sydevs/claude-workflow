@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, isDispatcherComment, fullTreatment, proxyApproves, dispatcherLogins } from './decide.mjs'
+import { isBot, isDispatcherComment, fullTreatment, proxyApproves, dispatcherLogins, restLogin } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
@@ -77,12 +77,12 @@ async function recordAndComments(gh, base, total, bot) {
 
 async function reviewThreads(gh, { owner, repo, number }) {
   const q = `query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){
-    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login } createdAt body databaseId url } } } } } } }`
+    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login __typename } createdAt body databaseId url } } } } } } }`
   const d = await gh.graphql(q, { o: owner, r: repo, n: number })
   return (d.repository.pullRequest.reviewThreads.nodes || []).map((t) => ({
     id: t.id,
     isResolved: t.isResolved,
-    comments: (t.comments.nodes || []).map((c) => ({ author: c.author?.login || '', createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
+    comments: (t.comments.nodes || []).map((c) => ({ author: restLogin(c.author), createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
   }))
 }
 

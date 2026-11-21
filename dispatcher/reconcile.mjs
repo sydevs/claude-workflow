@@ -11,7 +11,7 @@
  * gathered too, for its due. (why: docs/why.md#the-reconciler-replaces-the-drift-window)
  */
 
-import { fullTreatment, isBot } from './decide.mjs'
+import { fullTreatment, isBot, restLogin } from './decide.mjs'
 
 const STATUS_FIELD = 'fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }'
 
@@ -25,7 +25,7 @@ const ISSUES = `query($o:String!,$n:String!,$after:String){ repository(owner:$o,
 
 const PRS = `query($o:String!,$n:String!,$after:String){ repository(owner:$o,name:$n){
   pullRequests(states:OPEN, first:50, after:$after){ pageInfo{ hasNextPage endCursor } nodes{
-    number isDraft author{ login } labels(first:20){ nodes{ name } }
+    number isDraft author{ login __typename } labels(first:20){ nodes{ name } }
     projectItems(first:5){ nodes{ project{ number } ${STATUS_FIELD} } } } } } }`
 
 async function pages(github, query, vars, pick) {
@@ -76,7 +76,7 @@ export async function cheapView(github, config, owner, name) {
         number: p.number,
         labels: (p.labels?.nodes || []).map((l) => l.name),
         draft: Boolean(p.isDraft),
-        author: p.author?.login || '',
+        author: restLogin(p.author),
         board: boardOf(p, config),
       })),
     ]

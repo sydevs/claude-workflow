@@ -59,15 +59,16 @@ dispatcher runs and stranding a lease.
 `SYDEVS_APP_ID` is set, so this section can wait.
 
 1. Create a GitHub App in the sydevs org. Its slug must be **`sydevs-dispatcher`**, because
-   `identity.dispatcherLogins` in `loop-config.json` names it. Change one and you change both — and
-   it is named twice there, as `sydevs-dispatcher[bot]` and `sydevs-dispatcher`, because REST spells
-   an App `<slug>[bot]` while GraphQL spells the same actor `<slug>`. `isLogin` matches exactly, so
-   both belong in the list.
+   `identity.dispatcherLogins` in `loop-config.json` names `sydevs-dispatcher[bot]`. Change one and
+   you change both.
 
-   > ⚠ **Do not let a user account hold the bare slug.** `sydevs-dispatcher` is a login the
-   > dispatcher trusts as itself, and `isBot` gates the contract-sync approval. A GitHub username
-   > cannot contain `[`, so only the bare spelling is at risk; reaching anything dangerous with it
-   > still needs push access to the repo.
+   Only the `[bot]` spelling is trusted, and that is deliberate. REST spells an App
+   `<slug>[bot]`, which no username can be, because `[` is not legal in one. GraphQL spells the
+   same actor `<slug>`, which *is* a name a user could register, so `restLogin` normalises a
+   GraphQL `Bot` actor to the REST spelling instead of the list trusting the bare slug. These
+   repos are public and `findRecord` authenticates the dispatcher's own record by author login
+   alone, so a bare slug in that list would let anyone who registered the username post a forged
+   status comment and have the loop fire a session on it.
 2. Repository permissions, read and write: **Issues**, **Pull requests**, **Contents**,
    **Workflows**, **Commit statuses**. Read: **Checks**, **Metadata**, **Dependabot alerts**.
    Organization permissions: **Projects**, read and write.

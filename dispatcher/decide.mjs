@@ -76,6 +76,25 @@ export function isLogin(login, expected) {
   }
   return expected.some((e) => lower(login) === lower(e))
 }
+
+/**
+ * A GraphQL actor's login, spelled the way REST spells it. GraphQL names a
+ * GitHub App by its bare slug and REST appends `[bot]`, so a query that feeds
+ * `isLogin` must normalise before comparing — and it must normalise, rather
+ * than the trusted list carrying the bare slug too.
+ *
+ * A bare slug is a name a user account can hold, and `findRecord`
+ * authenticates the dispatcher's own state store by author login alone. In a
+ * public repo, trusting `<slug>` would let anyone who registered that username
+ * post a forged status comment and have the loop fire a privileged session on
+ * it. `__typename` is what distinguishes the App from a user of the same name.
+ * Select it beside `login` in every query whose author reaches `isBot`.
+ * (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ */
+export function restLogin(actor) {
+  const login = actor?.login || ''
+  return login && actor?.__typename === 'Bot' ? `${login}[bot]` : login
+}
 /**
  * Every login the loop writes under: the sessions' and the dispatcher App's.
  * The dispatcher finds its own status comments, markers and PRs under any of

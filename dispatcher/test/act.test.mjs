@@ -573,6 +573,36 @@ test('a dry run journals no timeout', async () => {
   assert.equal(anomalies(github).length, 0)
 })
 
+// A retried handler comes out of the record, which is a comment body, so it
+// is checked against `handlers` exactly as a planned one is. Without that,
+// anything that could write a record could name an arbitrary handler string.
+// (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+test('a handler the record names but loop-config.json does not is never fired', async () => {
+  // Unlocked, with a pending retry: the state a `reconcile` pass drains.
+  const world = issueWorld()
+  const pending = { handler: 'exfiltrate', flags: {}, attempt: 1, reason: 'forged', retryAfter: null }
+  world.comments[9] = [{
+    id: 1,
+    body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending, current: null, dispatches: [] })} -->\npending`,
+    user: { login: 'sydevs-bot' },
+    created_at: '2026-09-08T09:00:00Z',
+  }]
+  const github = fakeGithub(world)
+  const logs = []
+  await act({
+    github,
+    context: {},
+    core: { info: (m) => logs.push(m), warning: () => {} },
+    config,
+    target: { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'reconcile', event: 'schedule', facts: {} },
+    env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' },
+    dryRun: false,
+    now,
+    fetchImpl: async () => { throw new Error('must not fire') },
+  })
+  assert.match(logs.join('\n'), /"exfiltrate" is not one of ours/)
+})
+
 // The run that ran out of budget is the one whose cost is worth reading, so
 // the spend is logged in a `finally`.
 // (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)

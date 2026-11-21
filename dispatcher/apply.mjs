@@ -29,6 +29,25 @@ async function commentOnce(gh, t, bot, key, body, dryRun, log) {
 }
 
 /**
+ * May this handler be fired? It must be one `loop-config.json` names, and
+ * enabled where `enabledHandlers` lists any. A planned handler comes from
+ * `decide.mjs`, but a retried one comes from the record — a comment body — so
+ * both are checked here. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ */
+function fireable(config, handler, log) {
+  if (!handler || !Object.hasOwn(config.handlers || {}, handler)) {
+    log(`handler ${JSON.stringify(handler)} is not one of ours — skipped`)
+    return false
+  }
+  const enabled = config.dispatch.enabledHandlers
+  if (Array.isArray(enabled) && !enabled.includes(handler)) {
+    log(`handler ${handler} not enabled yet — skipped`)
+    return false
+  }
+  return true
+}
+
+/**
  * Release the lease, and say so when it will not go. This is the one failure
  * in the lease that nothing used to report: the next `takeLease` answers 422
  * `already exists`, which reads as contention and posts no anomaly, so the
@@ -363,8 +382,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
-        const enabled = config.dispatch.enabledHandlers
-        if (Array.isArray(enabled) && !enabled.includes(a.handler)) { log(`handler ${a.handler} not enabled yet — skipped`); break }
+        if (!fireable(config, a.handler, log)) break
         await doFire({ gh, t, snapshot, handler: a.handler, flags: a.flags, attempt: a.attempt || 1, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi })
         recordDirty = true
         break
@@ -372,6 +390,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'retry': {
         const p = rec.pending
         if (!p) break
+        // The handler comes from the record, which is a comment body, so it is
+        // checked exactly as a planned one is.
+        if (!fireable(config, p.handler, log)) break
         await doFire({ gh, t, snapshot, handler: p.handler, flags: p.flags, attempt: p.attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi: p.bumpFixCi === true })
         recordDirty = true
         break

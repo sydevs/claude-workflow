@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadRecord, findRecord, emptyRecord, MARKER } from '../record.mjs'
-import { dispatcherLogins } from '../decide.mjs'
+import { dispatcherLogins, restLogin, isLogin } from '../decide.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 
@@ -65,30 +65,45 @@ test('a record written before the switch is still found after it', async () => {
   assert.equal((await loadRecord(gh, ref, dispatcherLogins(config))).id, 5)
 })
 
-// REST spells a GitHub App `<slug>[bot]`; GraphQL spells the same actor
-// `<slug>`. `cheapView`'s PR authors and `reviewThreads`' comment authors come
-// from GraphQL, so a config entry in one spelling must match both — otherwise
-// the App's own draft PRs read as an outsider's and drift forever.
-test("both of the App's spellings are listed, and nothing else matches", async () => {
+// `findRecord` authenticates the dispatcher's own state store by author login
+// alone, and these repos are public. So the trusted list holds no login a user
+// account could register: an App is trusted as `<slug>[bot]`, which no username
+// can be, since `[` is not a legal username character. GraphQL spells the same
+// actor `<slug>`, and `restLogin` normalises it rather than the list trusting
+// the bare form. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+test('the trusted list holds no login a user could register', async () => {
   const all = dispatcherLogins(config)
-  for (const spelling of ['sydevs-dispatcher[bot]', 'sydevs-dispatcher', 'SYDEVS-Dispatcher[bot]']) {
+  for (const login of all) {
+    assert.ok(
+      login === config.identity.expectedLogin || login.endsWith('[bot]'),
+      `${login} must be the sessions' own account or an App — a bare slug a stranger could squat is not trusted`,
+    )
+  }
+  for (const spelling of ['sydevs-dispatcher[bot]', 'SYDEVS-Dispatcher[bot]']) {
     const gh = fake([{ id: 7, body: status(real), user: { login: spelling } }])
     assert.equal((await loadRecord(gh, ref, all)).id, 7, `${spelling} is the dispatcher`)
   }
-  for (const other of ['renovate[bot]', 'sydevs-dispatcher-2', 'sydevs-bot[bot]']) {
+  for (const other of ['sydevs-dispatcher', 'renovate[bot]', 'sydevs-dispatcher-2']) {
     const gh = fake([{ id: 8, body: status(forged), user: { login: other } }])
-    assert.equal((await loadRecord(gh, ref, all)).id, null, `${other} is not, and is not normalised into it`)
+    assert.equal((await loadRecord(gh, ref, all)).id, null, `${other} is not, so a forged record from it is ignored`)
   }
+})
+
+test('a GraphQL Bot actor is normalised to the spelling the list trusts', () => {
+  const all = dispatcherLogins(config)
+  assert.equal(restLogin({ login: 'sydevs-dispatcher', __typename: 'Bot' }), 'sydevs-dispatcher[bot]')
+  assert.ok(isLogin(restLogin({ login: 'sydevs-dispatcher', __typename: 'Bot' }), all), 'the App is itself through GraphQL')
+  // A user of that name is not the App, however its actor is spelled.
+  assert.equal(restLogin({ login: 'sydevs-dispatcher', __typename: 'User' }), 'sydevs-dispatcher')
+  assert.ok(!isLogin(restLogin({ login: 'sydevs-dispatcher', __typename: 'User' }), all), 'and a squatter is not')
+  assert.equal(restLogin({ login: 'Ardnived', __typename: 'User' }), 'Ardnived')
+  assert.equal(restLogin(null), '', 'a deleted actor is nobody')
 })
 
 test('loop-config.json names every dispatcher login, and findRecord reads a list in hand', () => {
   const logins = dispatcherLogins(config)
   assert.ok(logins.includes(config.identity.expectedLogin), "the sessions' login is one of them")
-  // The sessions', and the App's two spellings. Both are listed because the
-  // match is exact: REST says `<slug>[bot]` and GraphQL says `<slug>`.
-  const apps = logins.filter((l) => l !== config.identity.expectedLogin)
-  assert.equal(apps.length, 2, "the App's REST and GraphQL spellings")
-  assert.deepEqual([...apps].sort(), [...new Set(apps.map((l) => l.replace(/\[bot\]$/, '')))].flatMap((slug) => [slug, `${slug}[bot]`]).sort(), 'one slug, both spellings')
+  assert.equal(logins.length, 2, "the sessions' and the App's")
   assert.equal(findRecord([{ id: 9, body: status(real), user: { login: logins[1] } }], logins).id, 9)
   assert.deepEqual(dispatcherLogins({ identity: { expectedLogin: 'only-one' } }), ['only-one'], 'an unset list falls back')
 })
