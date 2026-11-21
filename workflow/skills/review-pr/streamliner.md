@@ -40,6 +40,11 @@ part, and of the siblings outside the file that should share what it holds. Aim 
 a maintainer has to hold in their head, not fewer lines. Never split a file only to shrink it, and
 never merge two files that each have one clear job.
 
+**A Markdown file is prose, so the piece questions do not fit it.** Judge it by
+`docs/documentation.md` in the claude-workflow checkout instead: a fact restated where something
+above it in that rule's authority order already holds it, mechanism the code shows, or a list of
+conditions a test holds. Each one is a finding to delete it, bounded by that file's *Never delete*.
+
 ## Never
 
 - Cut anything the ladder's *Never remove* holds (`implement-ticket/ladder.md`): validation at a
