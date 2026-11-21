@@ -1,5 +1,5 @@
 /**
- * The residue sweeper: every 30 minutes per repo, find what no event will
+ * The residue sweeper: on each repo's cron, find what no event will
  * ever move again — a lock past its deadline, a lease ref no session is
  * behind, an orphaned draft, a resolved review thread — and turn each into a
  * target. Then the reconciler: every open item's cheap view against the
@@ -13,27 +13,61 @@ import { isBot, fullTreatment } from './decide.mjs'
 import { listLeases } from './lease.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 
+/**
+ * A `sweep-timeout` for every locked item whose session is past its deadline,
+ * and for a lock with no record at all. The caller brings the locked items,
+ * their kind and their labels: the cron reads them by label, and an event run
+ * already has them in the cheap view, so neither pays a query here. Which of
+ * them is a candidate is decided here — the journal's own issues are never
+ * work, as in `driftTargets`, and `skip` holds the ones the caller has already
+ * targeted.
+ *
+ * `limit` bounds the **record reads**, not the targets: a live lock yields no
+ * target, so bounding the output would let one event run read every record in
+ * the repo. `loadRecord` pages comments, and pages all of them when an item
+ * has no record, so a read is one call or several.
+ * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+ */
+export async function expiredLockTargets({ github, config, repo, items, now, event, limit = Infinity, skip = new Set() }) {
+  const bot = config.identity.expectedLogin
+  const out = []
+  let reads = 0
+  for (const i of items) {
+    if ((i.labels || []).includes(config.labels.journal) || skip.has(i.number)) continue
+    if (reads >= limit) break
+    reads += 1
+    const push = (facts) => out.push({ repo, kind: i.kind, number: i.number, reason: 'sweep-timeout', event, facts })
+    // A record this pass cannot read reclaims nothing, as `cheapView` and
+    // `listLeases` answer nothing: on an event run the reclaim is a passenger,
+    // and one 403 must not cost the event its own target.
+    let rec
+    try { ({ rec } = await loadRecord(github, { owner: repo.owner, repo: repo.name, number: i.number }, bot)) } catch { continue }
+    const cur = rec.current
+    if (!cur) { push({ reason: 'lock without a record' }); continue }
+    if (cur.deadline && Date.parse(cur.deadline) < now.getTime()) push({ handler: cur.handler, attempt: cur.attempt })
+    // A recheck recorded while the lock was held is drained by the unlock;
+    // the reconciler catches one whose unlock was never seen.
+  }
+  return out
+}
+
 export async function listSweepTargets({ github, config, repo, now = new Date() }) {
   const { owner, name } = repo
   const L = config.labels
   const out = []
   const push = (kind, number, reason, facts = {}) => out.push({ repo, kind, number, reason, event: 'schedule', facts })
 
-  const bot = config.identity.expectedLogin
-
   const byLabel = async (label) => github.paginate(github.rest.issues.listForRepo, { owner, repo: name, state: 'open', labels: label, per_page: 100 })
 
+  // By REST, not from the `cheapView` below, on purpose: that view answers `[]`
+  // on one GraphQL failure, and the cron is the backstop that must still
+  // reclaim a dead session's item when it does.
   const locked = await byLabel(L.lock)
   const lockedNumbers = new Set(locked.map((i) => i.number))
-  for (const i of locked) {
-    const kind = i.pull_request ? 'pr' : 'issue'
-    const { rec } = await loadRecord(github, { owner, repo: name, number: i.number }, bot)
-    const cur = rec.current
-    if (!cur) { push(kind, i.number, 'sweep-timeout', { reason: 'lock without a record' }); continue }
-    if (cur.deadline && Date.parse(cur.deadline) < now.getTime()) push(kind, i.number, 'sweep-timeout', { handler: cur.handler, attempt: cur.attempt })
-    // A recheck recorded while the lock was held is drained by the unlock;
-    // the reconciler catches one whose unlock was never seen.
-  }
+  out.push(...await expiredLockTargets({
+    github, config, repo, now, event: 'schedule',
+    items: locked.map((i) => ({ kind: i.pull_request ? 'pr' : 'issue', number: i.number, labels: (i.labels || []).map((l) => l.name) })),
+  }))
 
   const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })
   const openPrNumbers = new Set(openPrs.map((pr) => pr.number))
