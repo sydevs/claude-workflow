@@ -299,7 +299,7 @@ never a finding. It justified a piece by the ticket's approach, not by the code.
 it account for each piece, in a context already full of bugs and contracts.
 
 So a script lists the pieces, and a subagent that never sees the builder's prose justifies each
-one from the code and the ticket, or returns a sketch. The sketch must be concrete enough to
+one from the code, the ticket and the reviewer's own profile, or returns a sketch. The sketch must be concrete enough to
 build, because `address-review` adopts about four critic threads in five. A fold the code does not
 support costs a reversal: the reviewer's own *"Is this file really needed?"* on WeMeditateWeb#283
 got `bar.ts` deleted, then restored. For the same reason the builder answers a sketch only with a
