@@ -10,6 +10,8 @@ posts what holds. You write no code, and you touch nothing.
   `git show origin/<branch>:<path>`, and find callers with `git grep <name> origin/<branch>`.
   Never check the branch out.
 - The ticket body: the problem the code has to solve.
+- `review.profilePath`: the reviewer's *Values, ranked*, which is how they weigh whether a piece
+  should exist at all. Read it before you judge one. A profile is not builder prose.
 - `new-pieces.mjs --json`: each file, the new top-level pieces in it by line, and `wholeFile` on the
   files to streamline whole.
 

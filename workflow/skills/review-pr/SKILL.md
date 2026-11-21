@@ -136,10 +136,10 @@ builder's reasoning nor your own bug-hunt shapes what it finds.
    review*, and say so in *What was checked*.
 2. **Start the streamliner before gather step 4**, so it runs while you read. Use one `Task` with
    `review-pr/streamliner.md` as its brief. Give it the checkout path, the branch, the ticket
-   body (a ticketless PR's title), the script's JSON and `writing.budgets.reviewReply`. **Never
-   give it the PR body, a thread or the change outline.** When the JSON says `split`, start one
-   per group of related files instead, grouped by import and directory, each group under
-   `review.streamline.splitLines`.
+   body (a ticketless PR's title), `review.profilePath`, the script's JSON and
+   `writing.budgets.reviewReply`. **Never give it the PR body, a thread or the change outline.**
+   When the JSON says `split`, start one per group of related files instead, grouped by import
+   and directory, each group under `review.streamline.splitLines`.
 3. **Check every finding against the code.** Drop a sketch that loses a caller, changes behaviour
    a test pins, or cuts what the ladder's *Never remove* holds.
 4. **Post each finding that holds as a `should-fix`**, led by the word **Streamline**, on the
