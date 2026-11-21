@@ -42,6 +42,10 @@ consumer's `command` and `paths`. The dispatcher runs that sync whenever a merge
 touches a source, so this check catches only what it missed — a push straight to `main`, or a sync
 PR closed unmerged.
 
+Run `git fetch origin main` in each consumer's checkout first. Both checks below read
+`origin/main`, and a clone ships that ref stale.
+(why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
+
 **A `paths` entry the consumer moved reads as current to all three guards.** So check that the
 config still describes the repo, before you check the copy:
 

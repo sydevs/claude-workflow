@@ -49,7 +49,11 @@ test('every configured copy comes out as one repo-and-path pair', () => {
   assert.ok(pairs.length > 0)
   for (const { repo, path } of pairs) {
     assert.ok(config.repos.includes(repo), `${repo} is not one of loop-config.json repos`)
-    assert.ok(path && !path.startsWith('/'), `${path} is not a repo-relative path`)
+    // Membership against ls-tree is exact, so a `./` prefix, a trailing
+    // slash or a `..` hop would report a present file as MISSING.
+    assert.match(path, /^[\w.-]+(\/[\w.-]+)*$/, `${path} is not spelled as a tree spells it`)
+    const hops = path.split('/').filter((s) => s === '.' || s === '..')
+    assert.deepEqual(hops, [], `${path} spells a hop a tree never names`)
   }
 })
 

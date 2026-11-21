@@ -4,10 +4,10 @@
  *
  * ## Why this exists
  *
- * `contractSync.consumers.<repo>.paths` is the only thing the three contract
- * guards read, and a path the consumer moved makes each one go quiet rather
- * than loud: an absent path is in no diff, and `git status` is clean on a file
- * no command writes. So all three report success about a file the repo no
+ * `contractSync.consumers.<repo>.paths` is what the three contract guards
+ * compare, and a path the consumer moved makes each one go quiet rather than
+ * loud: an absent path is in no diff, and `git status` is clean on a file no
+ * command writes. So all three report success about a file the repo no
  * longer builds from. Failing a consumer's CI on it would redden every PR
  * there until the config caught up, the shape WeMeditateWeb#310 was rejected
  * for, so the config is checked where drift on `main` is already fixed — in
@@ -18,8 +18,13 @@
  *
  * It reads names in a tree, never contents. A copy that exists and is stale is
  * the audit's diff, not this, and a copy the config never named is invisible
- * to both. It trusts `start-run` step 6 for a current `origin/main` in each
- * checkout, because nothing under `workflow/` fetches.
+ * to both. A `sources` entry the producer moved stops the dispatcher firing a
+ * sync, and that staleness reaches the audit's diff instead.
+ *
+ * A `paths` entry must name a file as the tree spells it, since membership is
+ * exact. `contract-paths.test.mjs` holds the real config to that. The caller
+ * fetches: nothing under `workflow/` does, so a stale `origin/main` answers
+ * about the commit it was left at.
  * (why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
  *
  * ## Usage
@@ -93,7 +98,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const paths = pairs.filter((p) => p.repo === repo).map((p) => p.path)
     const found = present(dir, paths)
     if (!found) {
-      console.error(`${repo} has no ${REF} — fetch it as start-run step 6 says`)
+      console.error(`${repo}: cannot read ${REF}. Is it a checkout, and fetched?`)
       process.exit(2)
     }
     for (const path of paths) rows.push({ repo, path, found: found.has(path) })
