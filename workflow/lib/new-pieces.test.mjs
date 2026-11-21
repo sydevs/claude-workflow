@@ -72,6 +72,22 @@ test('the diff parser numbers added lines on the branch and drops deletions', ()
   ])
 })
 
+test('a diff inside a diff is content, not a header', () => {
+  const diff = [
+    'diff --git a/workflow/skills/x/SKILL.md b/workflow/skills/x/SKILL.md',
+    '--- a/workflow/skills/x/SKILL.md',
+    '+++ b/workflow/skills/x/SKILL.md',
+    '@@ -1,1 +1,3 @@',
+    '+++ b/src/elsewhere.ts',
+    '+export const kept = 1',
+    '--- a/src/elsewhere.ts',
+  ].join('\n')
+  const files = parseDiff(diff)
+  assert.deepEqual(files.map((f) => [f.path, f.deleted, f.lines.map((l) => l.text)]), [
+    ['workflow/skills/x/SKILL.md', 1, ['++ b/src/elsewhere.ts', 'export const kept = 1']],
+  ])
+})
+
 test('a file is streamlined whole when new at the threshold or grown by its own', () => {
   const r = classify([
     file('src/big.ts', streamline.newFileLines),

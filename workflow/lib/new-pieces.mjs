@@ -61,27 +61,34 @@ export function declarations(path, added) {
 /**
  * Split a `git diff -M -U0` into files: path, whether git calls it new, and
  * each added line with its number on the branch. Deleted files are dropped.
+ *
+ * A header is only read before the first `@@`. Inside a hunk every line is
+ * content, and content that is itself a diff — a `diff` block in a skill or a
+ * doc — carries lines starting `++ ` and `-- `. Read as headers those
+ * silently rename the file and lose its walk.
  */
 export function parseDiff(text) {
   const files = []
   let file = null
   let line = 0
+  let inHunk = false
   for (const raw of text.split('\n')) {
     if (raw.startsWith('diff --git ')) {
       file = { path: null, added: false, lines: [], deleted: 0 }
+      inHunk = false
       files.push(file)
     } else if (!file) {
       continue
+    } else if (raw.startsWith('@@')) {
+      line = Number(raw.match(/\+(\d+)/)[1])
+      inHunk = true
+    } else if (inHunk) {
+      if (raw.startsWith('+')) file.lines.push({ line: line++, text: raw.slice(1) })
+      else if (raw.startsWith('-')) file.deleted++
     } else if (raw.startsWith('new file mode')) {
       file.added = true
     } else if (raw.startsWith('+++ ')) {
       file.path = raw === '+++ /dev/null' ? null : raw.slice(6)
-    } else if (raw.startsWith('@@')) {
-      line = Number(raw.match(/\+(\d+)/)[1])
-    } else if (raw.startsWith('+')) {
-      file.lines.push({ line: line++, text: raw.slice(1) })
-    } else if (raw.startsWith('-') && !raw.startsWith('--- ')) {
-      file.deleted++
     }
   }
   return files.filter((f) => f.path)
