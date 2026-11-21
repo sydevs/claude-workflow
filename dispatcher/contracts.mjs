@@ -16,13 +16,6 @@
 import { dispatcherLogins, isLogin } from './decide.mjs'
 import { installRetry } from './retry.mjs'
 
-/**
- * Every login `contracts-sync` may have run as. Returned rather than tested
- * here so the caller can answer "no identity is configured" softly, where
- * `isLogin` would throw.
- */
-const writers = (config) => dispatcherLogins(config).filter(Boolean)
-
 /** The consumers whose copy one of `changedFiles` feeds. Pure. */
 export function affectedConsumers(config, repoName, changedFiles) {
   const sync = config.contractSync
@@ -134,7 +127,7 @@ export const CHECK_APPROVAL_MARKER = '<!-- sydevs-contract-check -->'
  */
 export function contractSyncAttestedAt(statuses, config) {
   const ctx = config.contractSync?.attestContext
-  const bot = writers(config)
+  const bot = dispatcherLogins(config)
   if (!ctx || !bot.length) return null
   const x = (statuses || []).find((x) => x.context === ctx && x.state === 'success' && isLogin(x.creator?.login, bot))
   return x ? x.created_at || x.updated_at || 'unknown' : null
@@ -149,7 +142,7 @@ export function contractVerifyGate(config, repoName, pr, files) {
   const no = (reason) => ({ ok: false, reason })
   if (pr?.state !== 'open') return no('not open')
   if (pr.draft) return no('a draft: checked once it is ready')
-  const bot = writers(config)
+  const bot = dispatcherLogins(config)
   if (!bot.length || !isLogin(pr.user?.login, bot)) return no('not opened by the bot')
   if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return no('the head is in another repository')
   if (!pr.base?.ref || pr.base.ref !== pr.base?.repo?.default_branch) return no('it does not target the default branch, which the sync is generated from')

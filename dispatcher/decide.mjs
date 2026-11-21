@@ -103,7 +103,9 @@ export function restLogin(actor) {
  */
 export function dispatcherLogins(config) {
   const list = (config.identity?.dispatcherLogins || []).filter(Boolean)
-  return list.length ? list : [config.identity?.expectedLogin]
+  // Both arms filtered, so a caller that must answer "no identity is
+  // configured" softly can test `.length` instead of re-filtering.
+  return list.length ? list : [config.identity?.expectedLogin].filter(Boolean)
 }
 export function isBot(login, config) {
   return isLogin(login, dispatcherLogins(config))

@@ -106,4 +106,8 @@ test('loop-config.json names every dispatcher login, and findRecord reads a list
   assert.equal(logins.length, 2, "the sessions' and the App's")
   assert.equal(findRecord([{ id: 9, body: status(real), user: { login: logins[1] } }], logins).id, 9)
   assert.deepEqual(dispatcherLogins({ identity: { expectedLogin: 'only-one' } }), ['only-one'], 'an unset list falls back')
+  // Both arms are filtered, so an unconfigured identity is an empty list and
+  // not `[undefined]`. `contractSyncAttestedAt` and `contractVerifyGate` read
+  // that length to answer softly, where `isLogin` would throw.
+  assert.deepEqual(dispatcherLogins({}), [], 'and no identity at all is nobody')
 })
