@@ -3,8 +3,8 @@
  *
  * These answer questions no one decider owns: whether a login is the loop's
  * own, whether a PR gets the loop at all, what the snapshot's clock says.
- * Nine modules ask them, so they live below all of them. This module imports
- * nothing, so anything may import it.
+ * Most of the directory asks them, so they live below all of it. This module
+ * imports nothing, so anything may import it.
  */
 
 export const lower = (s) => String(s || '').toLowerCase()

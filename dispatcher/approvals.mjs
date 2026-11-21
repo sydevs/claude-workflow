@@ -9,7 +9,9 @@
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot,
  * docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
  *
- * `decide.mjs` imports these; the actions they emit are `actions.mjs` and the
+ * `decide.mjs` imports these, and `status.mjs` and `gather.mjs` the two that
+ * only read. Nothing here imports them back: an edge into either would be the
+ * directory's first cycle. The actions these emit are `actions.mjs`, and the
  * predicates they read a snapshot with `predicates.mjs`. Nothing here fetches.
  */
 
