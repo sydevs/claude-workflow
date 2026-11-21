@@ -970,10 +970,21 @@ const missed = (over = {}) => prSnap({
   comments: [{ author: 'Ardnived', body: '@sydevs-bot address', createdAt: '2026-09-08T11:00:00Z' }],
   ...over,
 })
-const addressVerb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot address', association: 'MEMBER', commentId: 9 } }
+const addressVerb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot address', association: 'MEMBER' } }
 
-test('an event on an item whose unlock was lost releases the lease before it fires', () => {
-  assert.deepEqual(types(decide(addressVerb, missed(), config)), ['unlocked:review-pr', 'note', 'fire:address-review'])
+test('an event on an item whose unlock was lost releases the lease before anything fires', () => {
+  // The drain derives the PR and answers the member's mention itself, so the
+  // comment waits on that session's unlock, as one under a live lock does.
+  const p = types(decide(addressVerb, missed(), config))
+  assert.deepEqual(p, ['unlocked:review-pr', 'note', 'fire:address-review', 'recheck'])
+  assert.ok(p.indexOf('unlocked:review-pr') < p.indexOf('fire:address-review'), 'the lease goes before the fire it would refuse')
+})
+
+test('a drain that only reports leaves the event to its own rule', () => {
+  // A member's draft is left alone, so the drain's derivation says nothing and
+  // the mention is the request it always was.
+  const draft = missed({ pr: { ...prSnap().pr, draft: true, user: { login: 'Ardnived' } } })
+  assert.deepEqual(types(decide(addressVerb, draft, config)), ['unlocked:review-pr', 'note', 'fire:address-review'])
 })
 
 test('the dispatcher\'s own unlock, and no session at all, read exactly as before', () => {
@@ -982,12 +993,12 @@ test('the dispatcher\'s own unlock, and no session at all, read exactly as befor
   assert.deepEqual(types(decide(addressVerb, missed({ record: { fixCi: 0 } }), config)), ['note', 'fire:address-review'])
 })
 
-test('a continue the lost unlock asks for starts, and the event waits for its unlock', () => {
+test('a continue the lost unlock asks for starts, and nothing fires twice', () => {
   const asked = missed({
-    record: { fixCi: 0, current: { handler: 'address-review', firedAt: '2026-09-08T10:00:00Z', flags: {} } },
+    record: { fixCi: 0, current: { handler: 'address-review', firedAt: '2026-09-08T10:00:00Z' } },
     request: { at: '2026-09-08T10:30:00Z', body: { continue: true } },
   })
-  assert.deepEqual(types(decide(addressVerb, asked, config)), ['unlocked:address-review', 'record', 'fire:address-review', 'recheck'], 'one fire, and the comment is re-derived on its unlock')
+  assert.deepEqual(types(decide(addressVerb, asked, config)), ['unlocked:address-review', 'record', 'fire:address-review', 'recheck'])
 })
 
 // ---- a wake hint promises only what wakes the bot ------------------------

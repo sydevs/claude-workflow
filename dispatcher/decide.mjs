@@ -1083,30 +1083,37 @@ function withPushRoute(plan, s, config) {
   return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
 }
 
-/** The reasons that read the record for a missed unlock themselves. */
-const READS_THE_RECORD = new Set(['unlock', 'sweep-lease', 'reconcile'])
+/** A plan carrying one of these has already read the record's session itself. */
+const READS_THE_RECORD = new Set(['unlocked', 'timeout', 'releaseLease'])
+
+/**
+ * A drained unlock that did one of these started something — a session, a push
+ * that lands commits, an issue transfer — so the event's own rule must not
+ * start it again. `MOVES` answers a different question: whether a sweep found
+ * anything to say.
+ */
+const TURN_TAKEN = new Set(['fire', 'retry', 'timeout', 'relay', 'transfer'])
 
 /**
  * The unlock this item never got: no lock on it, but the record still holds
  * the session that took the label off, so its lease is still there and every
- * later fire for the item is refused. The cron read it hours later; any event
- * on the item reads it now, and only the residue — the lease, the archive, a
- * continue, a relay — because re-deriving the item is the event's own rule.
- * Two events on sydevs/WeMeditateWeb#326 waited on the sweep for it.
+ * later fire for the item is refused. Only the cron read it, hours later; any
+ * event on the item drains it now, as the unlock it was. Two events on
+ * sydevs/WeMeditateWeb#326 waited on the sweep for it.
  * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
 function missedUnlock(target, s, config) {
-  if (untouched(s, config) || READS_THE_RECORD.has(target.reason)) return []
-  if (!s.record?.current || ownUnlock(s)) return []
-  return route({ ...target, reason: 'unlock', facts: { missed: true } }, s, config)
+  if (untouched(s, config) || !s.record?.current || ownUnlock(s)) return []
+  return route({ ...target, reason: 'unlock', facts: {} }, s, config)
 }
 
 export function decide(target, s, config) {
-  const missed = missedUnlock(target, s, config)
-  // A session that unlock started holds the item now, so this event waits for
-  // its unlock, exactly as one arriving under a lock does.
-  const own = missed.some((a) => a.type === 'fire') ? [recheck()] : route(target, s, config)
-  let plan = withPushRoute(missed.concat(own), s, config)
+  const own = route(target, s, config)
+  const drained = own.some((a) => READS_THE_RECORD.has(a.type)) ? [] : missedUnlock(target, s, config)
+  // The drain took the item's turn, so the event is derived against a held
+  // item: every rule that waits for a lock already says what that means.
+  const next = drained.some((a) => TURN_TAKEN.has(a.type)) ? route(target, { ...s, locked: true }, config) : own
+  let plan = withPushRoute(drained.concat(next), s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   if (untouched(s, config)) return plan
@@ -1398,8 +1405,7 @@ function route(target, s, config) {
         // (why: docs/why.md#the-relay)
         const req = freshRequest(s)?.relay
         if (req && req.sha !== s.pr?.head?.sha) return plan.concat(relayPlan(s, config, req))
-        // An event that read a missed unlock re-derives the PR itself, below.
-        return facts.missed ? plan : plan.concat(evaluatePr(s, config))
+        return plan.concat(evaluatePr(s, config))
       }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
