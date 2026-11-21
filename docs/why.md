@@ -2302,8 +2302,10 @@ authenticates the dispatcher's own record by author login alone, and `reconcile`
 record says. Anyone who registered the username could have posted a comment carrying a forged
 `sydevs-status` marker and had the loop fire a privileged session on their own issue — with no push
 access, no org membership, nothing but a free account and the name. For the same reason a retried
-handler is checked against `handlers` before it fires: it comes out of a comment body, so it is
-data, not a plan. `identity.expectedLogin` stays the sessions' login, which is what prose,
+handler is checked against `dispatch.handlers` before it fires: it comes out of a comment body, so
+it is data, not a plan. The check reads that list and not `handlers`, which also keys `$comment` and
+the cron-fired `audit-nightly`; `payload.mjs` reads the same list, so a session refuses what the
+dispatcher would not fire. `identity.expectedLogin` stays the sessions' login, which is what prose,
 `get_me` and `pickFeaturePr` mean, and `docs/routine-setup.md` §0c has the permissions, the setup
 and the experiments the switch waits on.
 
