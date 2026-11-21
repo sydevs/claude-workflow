@@ -572,3 +572,14 @@ test('a dry run journals no timeout', async () => {
   await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { throw new Error('must not fire') } })
   assert.equal(anomalies(github).length, 0)
 })
+
+// The run that ran out of budget is the one whose cost is worth reading, so
+// the spend is logged in a `finally`.
+// (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
+test('a leg that throws still logs what it spent, and on which credential', async () => {
+  const info = []
+  const github = { rest: { issues: { get: async () => { throw Object.assign(new Error('Server Error'), { status: 500 }) } } } }
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'reconcile', facts: {} }
+  await assert.rejects(act({ github, context: {}, core: { info: (m) => info.push(m) }, config, target, env: { TOKEN_SOURCE: 'app' } }))
+  assert.match(info.join('\n'), /api: \d+ REST, \d+ GraphQL · token: app/)
+})

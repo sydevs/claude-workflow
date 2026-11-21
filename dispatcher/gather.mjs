@@ -6,13 +6,25 @@
  */
 
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
-import { loadRecord } from './record.mjs'
+import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, isDispatcherComment, fullTreatment, proxyApproves, dispatcherLogins } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
+}
+
+/**
+ * The comment window a leg reads: the newest page of `perPage`, and the page
+ * before it too when the newest page is short. `all` is every comment on the
+ * item, oldest first, as GitHub returns them.
+ */
+export function newestWindow(all, perPage = 10) {
+  const page = Math.max(1, Math.ceil(all.length / perPage))
+  const start = (page - 1) * perPage
+  const out = all.slice(start)
+  return page > 1 && out.length < perPage ? all.slice(start - perPage) : out
 }
 
 async function newestComments(gh, { owner, repo, number }, total, perPage = 10) {
@@ -24,6 +36,26 @@ async function newestComments(gh, { owner, repo, number }, total, perPage = 10) 
     out.unshift(...prev.map(comment))
   }
   return out
+}
+
+/**
+ * The record and the comment window, from one read where one read can serve
+ * both. `loadRecord` pages from the oldest comment and the window reads the
+ * newest, so a leg used to spend two or three calls on one endpoint — half of
+ * an issue leg's REST calls, on every leg of every event run. A single page of
+ * 100 holds every comment of all but the longest threads.
+ * (why: docs/why.md#one-comment-read-serves-the-leg)
+ */
+async function recordAndComments(gh, base, total, bot) {
+  // Strictly under a page: at exactly 100 the two reads are two calls, and a
+  // first read that cannot prove it saw the whole thread would make three.
+  if ((total || 0) < 100) {
+    const { data } = await gh.rest.issues.listComments({ owner: base.owner, repo: base.repo, issue_number: base.number, per_page: 100 })
+    // A full page is more than the count promised, so the count lagged the
+    // thread and this is not all of it. Then the two reads stand.
+    if (data.length < 100) return { record: findRecord(data, bot), comments: newestWindow(data).map(comment) }
+  }
+  return { record: await loadRecord(gh, base, bot), comments: await newestComments(gh, base, total) }
 }
 
 async function reviewThreads(gh, { owner, repo, number }) {
@@ -224,8 +256,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
 
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: number })
   const labels = (issue.labels || []).map((l) => l.name || l)
-  const record = await loadRecord(gh, base, bot)
-  const comments = await newestComments(gh, base, issue.comments)
+  const { record, comments } = await recordAndComments(gh, base, issue.comments, bot)
   const botLast = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
   const newestHuman = comments.filter((c) => !isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
 

@@ -55,16 +55,44 @@ export function coalesceTargets(targets) {
 }
 
 /**
+ * The REST calls left in the hour, or null when that cannot be read.
+ * `GET /rate_limit` is itself exempt, so asking costs nothing.
+ */
+async function restRemaining(github) {
+  try {
+    const { data } = await github.rest.rateLimit.get()
+    const n = data?.resources?.core?.remaining ?? data?.rate?.remaining
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * The event's own targets, then — on an event run — up to
  * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo whose board
  * Status the cheap view rules out. The cron covers the rest.
  * (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+ *
+ * The drift targets are almost all of what an event run spends: each is a full
+ * `gather` in its own `act` leg, against the event's one. So under
+ * `dispatch.rateLimitFloor` they are shed, and the cron's full pass covers
+ * them. A budget that cannot be read sheds nothing.
+ * (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
  */
-export async function resolve({ github, context, config, now = new Date() }) {
+export async function resolve({ github, context, config, core = { info() {} }, now = new Date() }) {
   const own = await eventTargets({ github, context, config, now })
   if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
+  const floor = config.dispatch?.rateLimitFloor ?? 0
+  if (floor) {
+    const remaining = await restRemaining(github)
+    if (remaining !== null && remaining < floor) {
+      core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
+      return own
+    }
+  }
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
   return own.concat(driftTargets(await cheapView(github, config, repo.owner, repo.name), config, repo, { now, limit, skip }))

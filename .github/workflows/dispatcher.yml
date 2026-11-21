@@ -57,7 +57,9 @@ permissions: {}
 jobs:
   resolve:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above dispatch.githubRetry.rateLimitMaxWaitSeconds in loop-config.json,
+    # so a job that waits out a rate limit lives to finish.
+    timeout-minutes: 20
     outputs:
       targets: ${{ steps.resolve.outputs.targets }}
     steps:
@@ -102,7 +104,8 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.targets != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Its own work, plus one wait out of a rate limit (resolve's comment).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -171,7 +174,8 @@ jobs:
     # Only the journal repo's schedule maintains the day issue and its title.
     if: github.event_name == 'schedule' && github.repository == 'sydevs/claude-workflow'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -211,7 +215,8 @@ jobs:
       github.repository == 'sydevs/claude-workflow'
       && ((github.event_name == 'schedule' && github.event.schedule == '20 13 * * *') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     env:
       DRY_RUN: ${{ inputs.dry-run }}
       ROUTINE_TOKEN_SAHAJCLOUD: ${{ secrets.ROUTINE_TOKEN_SAHAJCLOUD }}
@@ -263,7 +268,8 @@ jobs:
   contracts-plan:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     outputs:
       consumers: ${{ steps.plan.outputs.consumers }}
     steps:
@@ -299,7 +305,8 @@ jobs:
     needs: contracts-plan
     if: needs.contracts-plan.outputs.consumers != '[]' && !inputs.dry-run
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -444,7 +451,8 @@ jobs:
         && github.event.context == 'sydevs / contract-sync'
         && github.event.state == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     permissions:
       pull-requests: write
     steps:
