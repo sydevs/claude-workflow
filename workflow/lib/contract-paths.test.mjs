@@ -1,25 +1,51 @@
 // node --test workflow/lib/contract-paths.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { configuredPaths, hasRef, inTree, missing, verdict, REF } from './contract-paths.mjs'
+import { configuredPaths, present, verdict, REF } from './contract-paths.mjs'
 
-// Fixture pre-mortem: nothing here stands in for the config. The pairs come
-// from the real loop-config.json, so a consumer added or a path moved is
-// read, not assumed. The temp repo stands in only for a checkout, and it is
-// built by git itself — `refs/remotes/origin/main` is written by hand because
-// a clone is what normally writes it, and this test has no network.
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const config = JSON.parse(readFileSync(join(root, 'loop-config.json'), 'utf8'))
+// Fixture pre-mortem: nothing here stands in for the config. Every repo name
+// and path comes from the real loop-config.json, so a consumer added or a copy
+// moved is read, not assumed. The temp checkouts stand in only for clones, and
+// git builds them — `refs/remotes/origin/main` by hand, since a clone is what
+// normally writes it and this test has no network.
+const here = dirname(fileURLToPath(import.meta.url))
+const config = JSON.parse(readFileSync(join(here, '..', '..', 'loop-config.json'), 'utf8'))
+const consumers = config.contractSync.consumers
+const script = join(here, 'contract-paths.mjs')
+
+const git = (dir, ...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
+
+/** A checkout per consumer, each holding the copies the config names. */
+function workspace(t, { ref = true } = {}) {
+  const ws = mkdtempSync(join(tmpdir(), 'contract-ws-'))
+  t.after(() => rmSync(ws, { recursive: true, force: true }))
+  for (const [repo, c] of Object.entries(consumers)) {
+    const dir = join(ws, repo)
+    mkdirSync(dir)
+    git(dir, 'init', '-q', '-b', 'main')
+    git(dir, 'config', 'user.email', 'test@example.com')
+    git(dir, 'config', 'user.name', 'test')
+    for (const p of c.paths) {
+      mkdirSync(join(dir, dirname(p)), { recursive: true })
+      writeFileSync(join(dir, p), '// the copy\n')
+    }
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'the copies where the config says they are')
+    if (ref) git(dir, 'update-ref', `refs/remotes/${REF}`, 'HEAD')
+  }
+  return ws
+}
+
+const run = (ws) => spawnSync(process.execPath, [script, ws], { encoding: 'utf8' })
 
 test('every configured copy comes out as one repo-and-path pair', () => {
-  const pairs = configuredPaths(config.contractSync.consumers)
-  const expected = Object.values(config.contractSync.consumers).reduce((n, c) => n + c.paths.length, 0)
-  assert.equal(pairs.length, expected)
+  const pairs = configuredPaths(consumers)
+  assert.equal(pairs.length, Object.values(consumers).reduce((n, c) => n + c.paths.length, 0))
   assert.ok(pairs.length > 0)
   for (const { repo, path } of pairs) {
     assert.ok(config.repos.includes(repo), `${repo} is not one of loop-config.json repos`)
@@ -27,55 +53,75 @@ test('every configured copy comes out as one repo-and-path pair', () => {
   }
 })
 
-test('a path the repo does not have is named with its repo', () => {
-  const pairs = [
-    { repo: 'WeMeditateWeb', path: 'server/payload-types.ts' },
-    { repo: 'SahajAtlasWordpress', path: 'tests/atlas-url-contract.json' },
-  ]
-  const gone = missing(pairs, (repo) => repo !== 'WeMeditateWeb')
-  assert.deepEqual(gone, [{ repo: 'WeMeditateWeb', path: 'server/payload-types.ts' }])
-  assert.equal(verdict(gone), 'PATHS MISSING')
-})
-
-test('all present is the only quiet verdict', () => {
-  const pairs = configuredPaths(config.contractSync.consumers)
-  assert.equal(verdict(missing(pairs, () => true)), 'PATHS PRESENT')
-  assert.equal(verdict([]), 'PATHS PRESENT')
-})
-
 test('a consumer with no paths contributes none, and no crash', () => {
   assert.deepEqual(configuredPaths({ Repo: {} }), [])
   assert.deepEqual(configuredPaths(), [])
 })
 
-test(`a moved copy is absent from ${REF}, where the old path once was`, () => {
+test('one absent copy decides the verdict for all of them', () => {
+  assert.equal(verdict([{ found: true }, { found: true }]), 'PATHS PRESENT')
+  assert.equal(verdict([{ found: true }, { found: false }]), 'PATHS MISSING')
+})
+
+test(`a moved copy leaves ${REF}, and no ref at all is not an answer`, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'contract-paths-'))
-  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
-  git('init', '-q', '-b', 'main')
-  git('config', 'user.email', 'test@example.com')
-  git('config', 'user.name', 'test')
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  git(dir, 'init', '-q', '-b', 'main')
+  git(dir, 'config', 'user.email', 'test@example.com')
+  git(dir, 'config', 'user.name', 'test')
   mkdirSync(join(dir, 'server'))
   writeFileSync(join(dir, 'server/payload-types.ts'), 'export type Config = {}\n')
-  git('add', '-A')
-  git('commit', '-qm', 'the copy where the config says it is')
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-qm', 'the copy where the config says it is')
 
-  // No remote ref yet: absence cannot be distinguished from an unfetched repo.
-  assert.equal(hasRef(dir), false)
+  // Unfetched, so absence would prove nothing: null, never an empty answer.
+  assert.equal(present(dir, ['server/payload-types.ts']), null)
 
-  git('update-ref', `refs/remotes/${REF}`, 'HEAD')
-  assert.equal(hasRef(dir), true)
-  assert.equal(inTree(dir, 'server/payload-types.ts'), true)
-  assert.equal(inTree(dir, 'types/payload/payload-types.ts'), false)
+  git(dir, 'update-ref', `refs/remotes/${REF}`, 'HEAD')
+  assert.deepEqual(present(dir, ['server/payload-types.ts']), new Set(['server/payload-types.ts']))
+  assert.deepEqual(present(dir, ['types/payload/payload-types.ts']), new Set())
 
   // The repo moves its copy, as WeMeditateWeb did, and the config lags.
   mkdirSync(join(dir, 'types/payload'), { recursive: true })
   renameSync(join(dir, 'server/payload-types.ts'), join(dir, 'types/payload/payload-types.ts'))
-  git('add', '-A')
-  git('commit', '-qm', 'move the copy')
-  git('update-ref', `refs/remotes/${REF}`, 'HEAD')
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-qm', 'move the copy')
+  git(dir, 'update-ref', `refs/remotes/${REF}`, 'HEAD')
 
-  const pairs = [{ repo: 'consumer', path: 'server/payload-types.ts' }]
-  const gone = missing(pairs, (_repo, path) => inTree(dir, path))
-  assert.deepEqual(gone, pairs)
-  assert.equal(verdict(gone), 'PATHS MISSING')
+  const paths = ['server/payload-types.ts', 'types/payload/payload-types.ts']
+  assert.deepEqual(present(dir, paths), new Set(['types/payload/payload-types.ts']))
+})
+
+test('the real config passes against checkouts holding what it names', (t) => {
+  const r = run(workspace(t))
+  assert.match(r.stdout, /PATHS PRESENT/)
+  assert.equal(r.status, 0)
+})
+
+test('a copy a consumer moved is named with its repo, and fails', (t) => {
+  const ws = workspace(t)
+  const [repo, c] = Object.entries(consumers)[0]
+  const path = c.paths[0]
+  unlinkSync(join(ws, repo, path))
+  git(join(ws, repo), 'add', '-A')
+  git(join(ws, repo), 'commit', '-qm', 'move the copy out of the configured path')
+  git(join(ws, repo), 'update-ref', `refs/remotes/${REF}`, 'HEAD')
+
+  const r = run(ws)
+  assert.equal(r.status, 1)
+  assert.match(r.stdout, /PATHS MISSING/)
+  const line = r.stdout.split('\n').find((l) => l.includes(`${repo} ${path}`))
+  assert.match(line, /MISSING/)
+})
+
+test('a checkout it cannot read is never a pass', (t) => {
+  const empty = mkdtempSync(join(tmpdir(), 'contract-ws-'))
+  t.after(() => rmSync(empty, { recursive: true, force: true }))
+  const missing = run(empty)
+  assert.equal(missing.status, 2)
+  assert.match(missing.stderr, new RegExp(Object.keys(consumers)[0]))
+
+  const unfetched = run(workspace(t, { ref: false }))
+  assert.equal(unfetched.status, 2)
+  assert.match(unfetched.stderr, new RegExp(REF))
 })
