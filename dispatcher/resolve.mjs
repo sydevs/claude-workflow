@@ -84,6 +84,10 @@ export async function resolve({ github, context, config, now = new Date() }) {
   const locked = view.filter((v) => v.labels.includes(config.labels.lock)
     && !v.labels.includes(config.labels.journal) && !skip.has(v.number))
   const expired = await expiredLockTargets({ github, config, repo, now, limit, items: locked, event: eventLabel(context) })
+  // An item the reclaim took is spared the drift pass: a lock off the board,
+  // or behind a Status write that failed, is a drift target too, and a second
+  // target spends a slot and a full `gather` on an item already handled.
+  for (const t of expired) skip.add(t.number)
   return own.concat(expired, driftTargets(view, config, repo, { now, limit: limit - expired.length, skip }))
 }
 

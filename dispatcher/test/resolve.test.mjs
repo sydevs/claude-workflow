@@ -131,6 +131,14 @@ test('the reclaim and the drift share one cap', async () => {
   assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout']], 'two, and the cron takes the rest')
 })
 
+test('an item the reclaim took is not a drift target as well', async () => {
+  // Off the board, so `driftTargets` reads it as drift: without the skip this
+  // item is targeted twice, and gathered twice.
+  const off = { ...lockedNode(2), projectItems: { nodes: [] } }
+  const out = await resolve({ github: world([off], { 2: record('2026-11-20T17:26:00Z') }), context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout']], 'reclaimed, not reconciled as well')
+})
+
 test('the cap bounds the record reads, not just the targets', async () => {
   // A live lock yields no target, so a cap on the output would let one event
   // run read every record in the repo.
