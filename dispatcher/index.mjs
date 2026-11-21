@@ -86,6 +86,7 @@ export async function act({ github, context, core, config, target, env = process
  * (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
  */
 export async function journalTick({ github, core, config, dryRun = false, now = new Date() }) {
+  installRetry(github, config)
   if (dryRun) return core.info('journal tick (dry run)')
   const j = await ensureJournalDay(github, config, now)
 

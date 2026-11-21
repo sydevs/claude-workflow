@@ -65,6 +65,20 @@ test('a record written before the switch is still found after it', async () => {
   assert.equal((await loadRecord(gh, ref, dispatcherLogins(config))).id, 5)
 })
 
+// REST spells a GitHub App `<slug>[bot]`; GraphQL spells the same actor
+// `<slug>`. `cheapView`'s PR authors and `reviewThreads`' comment authors come
+// from GraphQL, so a config entry in one spelling must match both — otherwise
+// the App's own draft PRs read as an outsider's and drift forever.
+test("the App's two spellings are one login", async () => {
+  const both = dispatcherLogins(config)
+  for (const spelling of ['sydevs-dispatcher[bot]', 'sydevs-dispatcher', 'SYDEVS-Dispatcher[bot]']) {
+    const gh = fake([{ id: 7, body: status(real), user: { login: spelling } }])
+    assert.equal((await loadRecord(gh, ref, both)).id, 7, `${spelling} is the dispatcher`)
+  }
+  const other = fake([{ id: 8, body: status(forged), user: { login: 'renovate[bot]' } }])
+  assert.equal((await loadRecord(other, ref, both)).id, null, 'another app is not')
+})
+
 test('loop-config.json names both dispatcher logins, and findRecord reads a list in hand', () => {
   const logins = dispatcherLogins(config)
   assert.ok(logins.includes(config.identity.expectedLogin), "the sessions' login is one of them")

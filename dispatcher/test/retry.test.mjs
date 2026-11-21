@@ -98,6 +98,20 @@ test('installRetry takes the wait cap from loop-config.json', async () => {
   assert.deepEqual(waits, [840_000], '16 minutes is not, so nothing more waited')
 })
 
+test('the cap bounds one request\'s waits in total, not each of them', async () => {
+  // `attempts` would otherwise allow two full waits, so a request could sleep
+  // twice the number every job's timeout-minutes clears, and be killed
+  // mid-wait — the failure the wait exists to end.
+  const waits = []
+  let calls = 0
+  await assert.rejects(withRetry(async () => {
+    calls += 1
+    throw limited(403, resetIn(600))
+  }, { attempts: 5, baseMs: 100, rateLimitMaxWaitMs: 900_000, sleep: async (ms) => waits.push(ms), now: () => NOW }), /rate limit/)
+  assert.deepEqual(waits, [600_000], 'the second 10-minute wait does not fit in what is left of 15')
+  assert.equal(calls, 2, 'tried once, waited once, tried again, then gave up')
+})
+
 test('installRetry counts every request it sends, REST and GraphQL apart', async () => {
   const github = { hook: { wrap: (name, fn) => { github.fn = fn } } }
   installRetry(github, config, { sleep: async () => {} })

@@ -28,6 +28,28 @@ test('every dispatcher job outlives the longest rate-limit wait', () => {
   }
 })
 
+test('every entry point a job calls installs the retry that waits', () => {
+  // A job whose timeout clears the wait but whose entry point never installs
+  // the hook cannot wait at all — and died at once on a 5xx too.
+  const index = readFileSync(new URL('../index.mjs', import.meta.url), 'utf-8')
+  const deps = readFileSync(new URL('../deps.mjs', import.meta.url), 'utf-8')
+  const contracts = readFileSync(new URL('../contracts.mjs', import.meta.url), 'utf-8')
+  for (const [name, source, fn] of [
+    ['resolve', index, 'resolveTargets'],
+    ['act', index, 'act'],
+    ['journal', index, 'journalTick'],
+    ['deps', deps, 'depsTick'],
+    ['contracts-plan', contracts, 'planContractSync'],
+    ['contracts-verify', contracts, 'verifyContractSync'],
+  ]) {
+    const body = source.slice(source.indexOf(`export async function ${fn}(`))
+    assert.ok(
+      body.slice(0, 400).includes('installRetry('),
+      `the ${name} job's entry point ${fn} must call installRetry, or its timeout promises a wait it cannot take`,
+    )
+  }
+})
+
 test('the App token step gates on a variable, never on a secret', () => {
   // `secrets` is not available to a step-level `if:`. A workflow that reads it
   // there fails to parse, which would stop dispatch in all five repos at once.

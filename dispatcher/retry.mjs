@@ -53,17 +53,24 @@ export function rateLimitWait(e, now = Date.now()) {
  *
  * One `delay` for both: a third class of retriable failure is one more arm
  * here, not one more copy of the attempt bookkeeping.
+ *
+ * `rateLimitMaxWaitMs` bounds the waits of one request **in total**, not each
+ * of them. `attempts` would otherwise allow two full waits, so a request could
+ * sleep twice the number every job's `timeout-minutes` is set above — and be
+ * killed mid-wait, which is the failure the wait exists to end.
  */
 export async function withRetry(fn, { attempts = 3, baseMs = 2000, rateLimitMaxWaitMs = 0, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), now = () => Date.now() } = {}) {
+  let waitLeftMs = rateLimitMaxWaitMs
   for (let i = 1; ; i += 1) {
     try {
       return await fn()
     } catch (e) {
       const wait = rateLimitWait(e, now())
       const delay = wait !== null
-        ? (wait <= rateLimitMaxWaitMs ? wait : null)
+        ? (wait <= waitLeftMs ? wait : null)
         : (retriable(e) ? baseMs * 2 ** (i - 1) : null)
       if (i >= attempts || delay === null) throw e
+      if (wait !== null) waitLeftMs -= wait
       await sleep(delay)
     }
   }

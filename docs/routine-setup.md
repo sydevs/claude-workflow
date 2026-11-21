@@ -60,10 +60,23 @@ both settings below exist, so this section can wait.
 
 1. Create a GitHub App in the sydevs org. Its slug must be **`sydevs-dispatcher`**, because
    `identity.dispatcherLogins` in `loop-config.json` names `sydevs-dispatcher[bot]`. Change one and
-   you change both.
-2. Repository permissions: **Issues**, **Pull requests**, **Contents** and **Workflows**, read and
-   write. Organization permissions: **Projects**, read and write. **Metadata**, read. Workflows is
-   what a relay branch touching `.github/workflows/` needs; Contents is the lease ref and the relay.
+   you change both. Only the slug matters: REST spells the App `<slug>[bot]` and GraphQL spells it
+   `<slug>`, and `isLogin` compares the bare slug, so the one entry matches both.
+2. Repository permissions, read and write: **Issues**, **Pull requests**, **Contents**,
+   **Workflows**, **Commit statuses**. Read: **Checks**, **Metadata**, **Dependabot alerts**.
+   Organization permissions: **Projects**, read and write.
+
+   Each of the less obvious ones is load-bearing, and a missing one is a 403 mid-plan, not a
+   warning at setup:
+
+   | Permission | What dies without it |
+   | --- | --- |
+   | **Workflows** write | a relay branch that touches `.github/workflows/` |
+   | **Contents** write | the lease ref, and the relay |
+   | **Commit statuses** write | `contracts-sync`'s `attest()` — and it runs before `gh pr create` under `set -e`, so no sync PR opens at all |
+   | **Checks** read | `gather`'s `checks.listForRef` and `checks.listAnnotations`, so every PR `act` leg, in all five repos |
+   | **Commit statuses** read | `getCombinedStatusForRef` and `listCommitStatusesForRef` — the CI gate and the sync attestation |
+   | **Dependabot alerts** read | the `deps` job's daily vulnerability check |
 3. No webhook: the App is a credential, not a listener. Events still arrive through each repo's
    `workflow-state.yml`.
 4. Install it on all five repos.
@@ -328,7 +341,7 @@ private repo:
 | Name | What |
 | --- | --- |
 | `SYDEVS_APP_ID` / `SYDEVS_APP_PRIVATE_KEY` | the dispatcher's own GitHub App (§0c), which gives it a REST budget apart from the sessions'. A variable and a secret. Both unset, every job uses `SYDEVS_BOT_PAT` instead. |
-| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
+| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |

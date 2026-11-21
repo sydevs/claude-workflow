@@ -2265,13 +2265,21 @@ that user's limit — and a cloud session acts as sydevs-bot through the Claude 
 connection, so a session cannot use an App. Splitting the two is therefore the only way either side
 gets a budget to itself: the dispatcher moves to an App, and the sessions keep sydevs-bot's 5,000.
 
-Each `dispatcher.yml` job mints an installation token when the org variable `SYDEVS_APP_ID` and the
-org secret `SYDEVS_APP_PRIVATE_KEY` are both set, and uses `SYDEVS_BOT_PAT` when they are not, so the
-code merges before the App exists and the switch is a settings change. Its writes then come from
-`<app-slug>[bot]`, which is why `identity.dispatcherLogins` names both logins and `isBot` tests the
-set: an item whose status comment, markers or sync PR were written under the PAT must keep its record
-under the App. `identity.expectedLogin` stays the sessions' login, and `docs/routine-setup.md` §0c
-has the setup and the experiments the switch waits on.
+Each `dispatcher.yml` job mints an installation token when the org variable `SYDEVS_APP_ID` is set,
+and uses `SYDEVS_BOT_PAT` when it is not, so the code merges before the App exists and the switch is
+a settings change. `secrets` is not a context a step-level `if:` can read, so the private key cannot
+gate the step — `continue-on-error` does that job instead, and a key that is missing or bad falls
+back to the PAT rather than failing dispatch in all five repos.
+
+Its writes then come from the App, which is why `identity.dispatcherLogins` names both logins and
+`isBot` tests the set: an item whose status comment, markers or sync PR were written under the PAT
+must keep its record under the App. One entry covers each App, because REST spells it `<slug>[bot]`
+while GraphQL spells the same actor `<slug>` — `cheapView`'s PR authors and `reviewThreads`' comment
+authors are GraphQL — so `isLogin` compares the bare slug. Without that, the App's own draft PRs
+would read as an outsider's, and every one would be a permanent drift target on every pass: more
+API spend, not less. `identity.expectedLogin` stays the sessions' login, which is what prose,
+`get_me` and `pickFeaturePr` mean, and `docs/routine-setup.md` §0c has the permissions, the setup
+and the experiments the switch waits on.
 
 ## A member's PR gets the loop
 

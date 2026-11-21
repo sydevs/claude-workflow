@@ -14,6 +14,7 @@
  */
 
 import { dispatcherLogins, isLogin } from './decide.mjs'
+import { installRetry } from './retry.mjs'
 
 /**
  * Every login `contracts-sync` may have run as. Returned rather than tested
@@ -48,6 +49,7 @@ export async function changedPaths(github, { owner, repo, number }) {
  * branch counts, because every consumer syncs from `main`.
  */
 export async function planContractSync({ github, context, core, config }) {
+  installRetry(github, config)
   const pr = context.payload.pull_request
   const { owner, repo } = context.repo
   if (!pr?.merged) return []
@@ -164,6 +166,8 @@ export function contractVerifyGate(config, repoName, pr, files) {
  * names a commit, not a PR, so the open sync PR at that head is looked up.
  */
 export async function verifyContractSync({ github, approver, context, core, config, dryRun = false }) {
+  installRetry(github, config)
+  installRetry(approver, config)
   const { owner, repo } = context.repo
   const branch = config.contractSync?.branch
   let numbers = context.payload.pull_request ? [context.payload.pull_request.number] : []
