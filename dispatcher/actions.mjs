@@ -9,6 +9,8 @@
 
 export const fire = (handler, flags = {}) => ({ type: 'fire', handler, flags })
 export const recheck = () => ({ type: 'recheck' })
+/** Put the item on the org board, so `syncStatus` has a row to write. */
+export const ensure = () => ({ type: 'ensure' })
 export const label = (add = [], remove = []) => ({ type: 'label', add, remove })
 /** The last action of every plan: `apply` derives Status from the state the plan left. (why: docs/why.md#status-is-derived-never-read) */
 export const syncStatus = () => ({ type: 'syncStatus' })
@@ -32,6 +34,12 @@ export const relationships = (blockedBy, strip = false) => ({ type: 'relationshi
 export const anomaly = (kind, text) => ({ type: 'anomaly', kind, text })
 export const targets = (list) => ({ type: 'targets', list })
 export const releaseLease = (why) => ({ type: 'releaseLease', why })
+/** A session ended: its lease goes with its label, and its dispatch is archived. */
+export const unlocked = (handler) => ({ type: 'unlocked', handler })
+/** Fire the pending dispatch the record is holding, now that its wait is over. */
+export const retry = () => ({ type: 'retry' })
+/** The deadline passed: reclaim the lease, whatever the record says. */
+export const timeout = () => ({ type: 'timeout' })
 export const note = (text) => ({ type: 'note', text })
 export const react = (emoji) => ({ type: 'react', emoji })
 export const record = (patch) => ({ type: 'record', patch })

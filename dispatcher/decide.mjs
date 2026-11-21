@@ -14,7 +14,7 @@
  * same answer. (why: docs/why.md#actions-observes-classifies-locks-and-fires)
  */
 
-import { fire, recheck, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, note, react, record, hold, transfer, relay } from './actions.mjs'
+import { fire, recheck, ensure, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, unlocked, retry, timeout, note, react, record, hold, transfer, relay } from './actions.mjs'
 import { lower, isBot, respondTo, isHuman, hasAccess, fullTreatment, nowOf, isQuestion, threadsWaiting } from './predicates.mjs'
 import { botArmedOwnerPr, contractSyncPlan, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
@@ -869,7 +869,7 @@ function route(target, s, config) {
       const blockers = outsider ? [] : s.markers.blockedBy
       const parkedHere = parked(s) && !(outsider && s.park.source === 'marker')
       const bornBlocked = s.blockedByOpen.length || blockers.length || parkedHere
-      plan.push({ type: 'ensure' })
+      plan.push(ensure())
       if (isBot(s.item.author, config)) plan.push(label([L.proposal], []))
       if (blockers.length) plan.push(relationships(blockers, true))
       // An outsider's own markers are already text, so there is nothing to refuse.
@@ -881,7 +881,7 @@ function route(target, s, config) {
       return plan
     }
     case 'issues.typed': {
-      plan.push({ type: 'ensure' })
+      plan.push(ensure())
       if (isRoadmap(s, config) && needsIntake(s, config) && !blockedNow(s)) plan.push(s.locked ? recheck() : fire('revise-roadmap', { mode: 'intake' }))
       return plan
     }
@@ -900,7 +900,7 @@ function route(target, s, config) {
     // A reopened item is a fresh verdict: whatever approval it had is spent.
     case 'issues.reopened':
     case 'issues.transferred':
-      return [{ type: 'ensure' }, ...withdraw(s), ...clearHandback(s)]
+      return [ensure(), ...withdraw(s), ...clearHandback(s)]
     case 'issues.closed': {
       const next = s.dependents.map((d) => ({ ...d, reason: 'unblock-check', facts: { closedNumber: s.item.number } }))
       // The last child of a roadmap ticket closing is the cue to check the
@@ -1040,7 +1040,7 @@ function route(target, s, config) {
       return fullTreatment(s.pr?.user?.login, config) ? evaluatePr(s, config) : [note('outside PR thread')]
     case 'pull_request.opened':
     case 'pull_request.reopened': {
-      plan.push({ type: 'ensure' })
+      plan.push(ensure())
       if (target.reason === 'pull_request.opened' && fullTreatment(s.pr?.user?.login, config)) {
         plan.push(targets(s.linkedIssues.map((n) => ({ repo: s.repo, kind: 'issue', number: n, reason: 'linked-in-flight' }))))
       }
@@ -1075,7 +1075,7 @@ function route(target, s, config) {
     case 'unlock': {
       if (ownUnlock(s)) return [note('the dispatcher removed its own lock — no session ended')]
       const finished = facts.handler || s.record?.current?.handler || null
-      plan.push({ type: 'unlocked', handler: finished })
+      plan.push(unlocked(finished))
       if (CONTINUES.has(finished)) {
         const live = s.kind === 'pr' ? s.pr?.state === 'open' : s.item.state === 'open'
         if (live && freshRequest(s)?.continue) return plan.concat(continueNext(s, config, finished))
@@ -1160,12 +1160,12 @@ function route(target, s, config) {
     case 'sweep-lease': {
       const cur = s.record?.current
       const expired = cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime()
-      if (s.locked) return expired ? [{ type: 'timeout' }] : [note('the lock is on the item — the lease is live')]
+      if (s.locked) return expired ? [timeout()] : [note('the lock is on the item — the lease is live')]
       if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
     case 'sweep-timeout':
-      return [{ type: 'timeout' }]
+      return [timeout()]
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {
@@ -1182,9 +1182,9 @@ function route(target, s, config) {
     case 'reconcile': {
       const rec = s.record || {}
       const cur = rec.current
-      if (s.locked) return cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime() ? [{ type: 'timeout' }] : [note('a session holds it')]
+      if (s.locked) return cur?.deadline && Date.parse(cur.deadline) < nowOf(s).getTime() ? [timeout()] : [note('a session holds it')]
       if ((cur || rec.recheck) && !ownUnlock(s)) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
-      if (rec.pending) return !rec.pending.retryAfter || Date.parse(rec.pending.retryAfter) <= nowOf(s).getTime() ? [{ type: 'retry' }] : [note(`retry waits until ${rec.pending.retryAfter}`)]
+      if (rec.pending) return !rec.pending.retryAfter || Date.parse(rec.pending.retryAfter) <= nowOf(s).getTime() ? [retry()] : [note(`retry waits until ${rec.pending.retryAfter}`)]
       const p = config.dispatch.commandPrefix
       if (s.kind === 'issue' && s.park?.passed && rec.status === 'hold') {
         plan.push(commentOnce(`hold-expired ${s.park.until}`, `The hold until ${s.park.until} has passed, so this is back with you. Say \`${p} implement\` to start it, \`${p} hold …\` to wait longer, or close it.`))
