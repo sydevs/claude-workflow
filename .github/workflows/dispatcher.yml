@@ -76,13 +76,16 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
-      # An installation token when the org names the App, the PAT when it
-      # does not. Both settings are checked: a half-finished setup falls back
-      # rather than failing every repo. `owner` scopes the token to every repo
-      # the App is installed on, which `contracts-sync` and `deps` need.
+      # An installation token when the org names the App, the PAT when it does
+      # not. `secrets` is not a context a step `if:` can read, so only the
+      # variable gates this; `continue-on-error` is what makes a missing or bad
+      # key fall back to the PAT instead of failing every repo's dispatch.
+      # `owner` scopes the token to every repo the App is installed on, which
+      # `contracts-sync` and `deps` need.
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -149,8 +152,9 @@ jobs:
             workflow/lib
             dispatcher
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -189,8 +193,9 @@ jobs:
             dispatcher
       # An installation token when the org names the App (`resolve`'s comment).
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -242,8 +247,9 @@ jobs:
             dispatcher
       # An installation token when the org names the App (`resolve`'s comment).
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -285,8 +291,9 @@ jobs:
             dispatcher
       # An installation token when the org names the App (`resolve`'s comment).
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -327,8 +334,9 @@ jobs:
     steps:
       # An installation token when the org names the App (`resolve`'s comment).
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
@@ -468,8 +476,9 @@ jobs:
             dispatcher
       # An installation token when the org names the App (`resolve`'s comment).
       - id: token
-        if: ${{ vars.SYDEVS_APP_ID != '' && secrets.SYDEVS_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.SYDEVS_APP_ID }}
           private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
