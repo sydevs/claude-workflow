@@ -231,7 +231,7 @@ export function reviewsLookTruncated(reviews) {
 }
 
 /** Review states that carry a decision. `COMMENTED` never changes or clears one. */
-const STATE_BEARING = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
+export const STATE_BEARING = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
 
 /**
  * The review decision, derived from what `pull_request_read method:get_reviews`

@@ -18,6 +18,7 @@
 import { commentOnce, dismissProxy, dismissStale, note, proxyApprove, requestReviewer } from './actions.mjs'
 import { fullTreatment, isBot, lower, nowOf, threadsWaiting } from './predicates.mjs'
 import { dispatcherMark } from './markers.mjs'
+import { STATE_BEARING } from '../workflow/lib/merge-gate.mjs'
 import { parseVerb } from './verbs.mjs'
 
 /**
@@ -48,11 +49,11 @@ export function stalePlan(s, config) {
   return ids.length ? [dismissStale(ids)] : []
 }
 
-/** Each reviewer's latest state-bearing review, where it is an approval. The states are `merge-gate.mjs`'s `STATE_BEARING`, and its `reviewDecisionFrom` carries the rationale. */
+/** Each reviewer's latest state-bearing review, where it is an approval. `reviewDecisionFrom` carries why those states and no others. */
 function standingApprovals(reviews) {
   const latest = new Map()
   for (const r of reviews || []) {
-    if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state)) latest.set(lower(r.user?.login), r)
+    if (STATE_BEARING.has(r.state)) latest.set(lower(r.user?.login), r)
   }
   return [...latest.values()].filter((r) => r.state === 'APPROVED')
 }
