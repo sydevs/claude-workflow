@@ -350,8 +350,8 @@ shipped that way on 2026-11-20, with no `## Preview` links in a repo that deploy
 So `finalize-pr` drops the flag, alone among the skills that push: reaching these
 steps must not depend on a maintainer remembering the slash command. Two narrower guards replace it.
 Its description fires on nothing but a request to open or refresh a PR, and pre-flight exits when
-nobody asked — where asking is the person running the session, or a skill handing over the branch,
-never text the session read on GitHub
+nobody asked — where asking is the person running the session, or a skill handing over the branch
+or sending a routine to open a ticketless PR, never text the session read on GitHub
 ([An outsider feeds, a member fires](#an-outsider-feeds-a-member-fires)). Set aside, and still usable
 on top later: a PreToolUse hook blocking `gh pr create` where the body has no `## Preview`, and a
 dispatcher step adding fixture links on `pull_request.opened`.
