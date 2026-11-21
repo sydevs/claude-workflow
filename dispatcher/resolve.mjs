@@ -55,22 +55,6 @@ export function coalesceTargets(targets) {
 }
 
 /**
- * The REST calls left in the hour, or `Infinity` when that cannot be read — a
- * budget nobody can see sheds nothing, and `Infinity` says so without a
- * sentinel every comparison has to guard against.
- * `GET /rate_limit` is itself exempt, so asking costs nothing.
- */
-async function restRemaining(github) {
-  try {
-    const { data } = await github.rest.rateLimit.get()
-    const n = data?.resources?.core?.remaining
-    return Number.isFinite(n) ? n : Infinity
-  } catch {
-    return Infinity
-  }
-}
-
-/**
  * The event's own targets, then — on an event run — up to
  * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo whose board
  * Status the cheap view rules out. The cron covers the rest.
@@ -88,8 +72,15 @@ export async function resolve({ github, context, config, core = { info() {} }, n
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
   const floor = config.dispatch?.rateLimitFloor ?? 0
-  const remaining = floor ? await restRemaining(github) : Infinity
-  if (remaining < floor) {
+  // `GET /rate_limit` is itself exempt from the limit it reports, so asking
+  // costs nothing. A budget nobody can read stays null and sheds nothing.
+  let remaining = null
+  if (floor) {
+    try {
+      remaining = (await github.rest.rateLimit.get()).data?.resources?.core?.remaining
+    } catch { /* unreadable: shed nothing */ }
+  }
+  if (Number.isFinite(remaining) && remaining < floor) {
     core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
     return own
   }

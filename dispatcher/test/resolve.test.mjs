@@ -119,6 +119,9 @@ test('a budget that cannot be read sheds nothing', async () => {
   gh.rest.rateLimit.get = async () => { throw Object.assign(new Error('Bad Gateway'), { status: 502 }) }
   const out = await resolve({ github: gh, context: opened, config, core })
   assert.deepEqual(out.map((t) => t.number), [7, 41], 'an unreadable budget is not a thin one')
+  // And neither is a reply that parsed but carried no core resource.
+  const answered = repoWithDrift(undefined)
+  assert.deepEqual((await resolve({ github: answered.gh, context: opened, config, core: answered.core })).map((t) => t.number), [7, 41])
 })
 
 test('the schedule never reads the budget, so the cron is unchanged', async () => {
