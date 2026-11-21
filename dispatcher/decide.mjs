@@ -1108,7 +1108,10 @@ const TURN_TAKEN = new Set(['fire', 'retry', 'timeout', 'relay', 'transfer'])
  */
 function missedUnlock(target, s, config) {
   if (untouched(s, config) || !s.record?.current || ownUnlock(s)) return []
-  return route({ ...target, reason: 'unlock', facts: { ...(target.facts || {}), missed: true } }, s, config)
+  // The event's comment id and nothing else: `case 'unlock'` reads `handler`
+  // from its facts too, and that is the dispatcher's own value, never an
+  // event's.
+  return route({ ...target, reason: 'unlock', facts: { missed: true, commentId: target.facts?.commentId } }, s, config)
 }
 
 export function decide(target, s, config) {
