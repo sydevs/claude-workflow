@@ -86,9 +86,9 @@ export async function journalTick({ github, core, config, dryRun = false, now = 
   const today = await step('tally today', () => refreshTally(github, config, j.number, now))
   core.info(`journal #${j.number}${j.created ? ' created' : ''}: ${today.ok ? JSON.stringify(today.value) : 'tally failed'}`)
 
-  // The schedule does not keep to its cron: the `*/30` sweeper lands about
-  // eight times a day, at gaps of two to five hours. So a day rolls with its
-  // last true count hours old and nothing came back for it — #134 froze at
+  // The schedule does not keep to its cron: this repo's four crons land about
+  // 6.5 runs a day between them, at gaps up to 8.7 hours. So a day rolls with
+  // its last true count hours old and nothing came back for it — #134 froze at
   // 00:31Z with 6.5 hours of its journal day left. Re-counting yesterday is
   // idempotent, and does not depend on which cron fired.
   const prev = await step('find yesterday', () => previousJournalDay(github, config, now))

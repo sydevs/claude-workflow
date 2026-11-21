@@ -1590,9 +1590,10 @@ from the scheduled `journal` job. The tick was unguarded, so a throw in `closeDu
 the tally; nothing revisited a day once `localDate` moved on; and `dispatch / journal` is in
 `ci.ignoreCheckNames`, with no anomaly posted, so failure was invisible.
 
-**The schedule is also not the schedule.** 212 runs from 2026-09-09 to 2026-10-06 — about eight a
-day against a declared fifty, two to five hours apart, all `success`. #134 froze at 00:31Z with 6.5
-hours of its day left. So no tick is guaranteed near midnight: each step is guarded, a failure posts
+**The schedule is also not the schedule.** About 6.5 runs a day land here against a declared fifty,
+3.5 hours apart at the median and 8.7 at the worst, all `success` (2026-11-13 to 2026-11-20; it was
+eight a day, two to five hours apart, over 2026-09-09 to 2026-10-06, so the cadence is falling).
+#134 froze at 00:31Z with 6.5 hours of its day left. So no tick is guaranteed near midnight: each step is guarded, a failure posts
 a `journal-tally` anomaly to the day's issue, and **every** tick re-counts yesterday under its own
 weekday as well as today, writing nothing when counts agree. The weekly reflection builds its usage
 report from the seven titles and tally blocks alone, so these are the one input a crashed week
@@ -2226,12 +2227,31 @@ and gathers in full only an item whose board value those facts rule out, or, on 
 Pending item for its due. An event run checks its own repo too, capped at
 `dispatch.reconcileMaxPerEvent`. A dispatch on a repo's `workflow-state.yml` is the on-demand full pass.
 
+**The cron is slower than it asks to be, and falling.** 2026-11-13 to 2026-11-20: about 3.4
+`schedule` runs a day in each product repo and 6.5 here, median gaps of seven hours and the longest
+past ten — half the cadence of the October window above. A lock past its deadline was the cron's
+alone to reclaim, so a dead session held its item for a morning (SahajCloud, 2026-11-20: locks
+expired at 17:26Z, still held at 22:16Z, cleared by hand). An event run now takes those too, under
+the same cap and before the drift ones: the locked items are in the cheap view it already fetched,
+so only their records are read. CI events alone arrive many times an hour across the five repos, so
+a busy loop reclaims within minutes. The cron is the backstop for a quiet night, and this repo's
+asks for `7,37` — GitHub drops or delays a `schedule` run most at the top of the hour.
+
 ## A lease past its deadline is reclaimed
 
 A 503 between the lease and the label left `refs/sydevs-lease/318` and `/146` with a `current` past
 its deadline, and every later fire read the ref as contention, silently, for days. `sweep-lease` now
 reads a session on record with no lock as the unlock it was, and times out a locked one past its
 deadline, whatever the label says.
+
+A lost unlock run leaves the same residue with no 503 in sight. sydevs-bot's REST quota ran out for
+ten minutes on 2026-11-20, taking with it the `unlabeled` run for a session on
+sydevs/WeMeditateWeb#326 that had just removed its own lock; the member's `address` 22 minutes later
+was refused by the ref it left. So **any** event on an item that carries no lock but whose record
+still holds a session reads that unlock first, and takes only its residue — the event itself
+re-derives the item, and a session the residue starts makes the event a `recheck` instead, drained
+on that session's unlock. The cross-repo window above is unchanged: events for one item in one repo
+are already serialized by its concurrency group.
 
 ## A refused fire is Pending, not silent
 
