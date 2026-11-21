@@ -347,7 +347,7 @@ review, the conditional security review, the docs sync and step 7's body. sydevs
 shipped that way on 2026-11-20, with no `## Preview` links in a repo that deploys previews. Only
 `review-pr` catches it, as a `should-fix` on a missing link, once the review loop reaches the PR.
 
-So `finalize-pr` drops the flag, alone among the skills a person or the loop invokes: reaching these
+So `finalize-pr` drops the flag, alone among the skills that push: reaching these
 steps must not depend on a maintainer remembering the slash command. Two narrower guards replace it.
 Its description fires on nothing but a request to open or refresh a PR, and pre-flight exits when
 nobody asked — where asking is the person running the session, or a skill handing over the branch,
