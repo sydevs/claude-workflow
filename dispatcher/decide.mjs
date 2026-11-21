@@ -1083,8 +1083,30 @@ function withPushRoute(plan, s, config) {
   return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
 }
 
+/** The reasons that read the record for a missed unlock themselves. */
+const READS_THE_RECORD = new Set(['unlock', 'sweep-lease', 'reconcile'])
+
+/**
+ * The unlock this item never got: no lock on it, but the record still holds
+ * the session that took the label off, so its lease is still there and every
+ * later fire for the item is refused. The cron read it hours later; any event
+ * on the item reads it now, and only the residue — the lease, the archive, a
+ * continue, a relay — because re-deriving the item is the event's own rule.
+ * Two events on sydevs/WeMeditateWeb#326 waited on the sweep for it.
+ * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+ */
+function missedUnlock(target, s, config) {
+  if (untouched(s, config) || READS_THE_RECORD.has(target.reason)) return []
+  if (!s.record?.current || ownUnlock(s)) return []
+  return route({ ...target, reason: 'unlock', facts: { missed: true } }, s, config)
+}
+
 export function decide(target, s, config) {
-  let plan = withPushRoute(route(target, s, config), s, config)
+  const missed = missedUnlock(target, s, config)
+  // A session that unlock started holds the item now, so this event waits for
+  // its unlock, exactly as one arriving under a lock does.
+  const own = missed.some((a) => a.type === 'fire') ? [recheck()] : route(target, s, config)
+  let plan = withPushRoute(missed.concat(own), s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   if (untouched(s, config)) return plan
@@ -1376,7 +1398,8 @@ function route(target, s, config) {
         // (why: docs/why.md#the-relay)
         const req = freshRequest(s)?.relay
         if (req && req.sha !== s.pr?.head?.sha) return plan.concat(relayPlan(s, config, req))
-        return plan.concat(evaluatePr(s, config))
+        // An event that read a missed unlock re-derives the PR itself, below.
+        return facts.missed ? plan : plan.concat(evaluatePr(s, config))
       }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
