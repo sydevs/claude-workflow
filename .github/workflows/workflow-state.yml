@@ -29,8 +29,8 @@ on:
     types: [created]
   # No pull_request_review_thread: it is a webhook event, not an Actions
   # trigger — GitHub rejects the whole file. The sweeper re-derives every
-  # open, unlocked bot PR instead, so a resolved thread is seen within 30
-  # minutes. (why: docs/why.md#a-resolved-thread-fires-no-workflow)
+  # open, unlocked bot PR instead, so a resolved thread is seen on its next
+  # run. (why: docs/why.md#a-resolved-thread-fires-no-workflow)
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -38,7 +38,10 @@ on:
     types: [completed]
   status:
   schedule:
-    - cron: '*/30 * * * *'   # residue sweeper
+    # Residue sweeper. Off :00 and :30: GitHub drops or delays `schedule`
+    # runs most at the top of the hour, and this cron asks for 48 a day and
+    # gets about 6.5. (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+    - cron: '7,37 * * * *'
     - cron: '5 7 * * *'      # journal day, 00:05 America/Vancouver (PDT)
     - cron: '5 8 * * *'      # journal day, 00:05 America/Vancouver (PST)
     - cron: '20 13 * * *'    # dependency check — the `deps` job in dispatcher.yml matches this string
