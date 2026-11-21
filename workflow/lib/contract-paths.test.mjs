@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { configuredPaths, present, verdict, REF } from './contract-paths.mjs'
+import { present, verdict, REF } from './contract-paths.mjs'
 
 // Fixture pre-mortem: nothing here stands in for the config. Every repo name
 // and path comes from the real loop-config.json, so a consumer added or a copy
@@ -43,23 +43,20 @@ function workspace(t, { ref = true } = {}) {
 
 const run = (ws) => spawnSync(process.execPath, [script, ws], { encoding: 'utf8' })
 
-test('every configured copy comes out as one repo-and-path pair', () => {
-  const pairs = configuredPaths(consumers)
-  assert.equal(pairs.length, Object.values(consumers).reduce((n, c) => n + c.paths.length, 0))
-  assert.ok(pairs.length > 0)
-  for (const { repo, path } of pairs) {
+test('every configured copy names a repo, and is spelled as a tree spells it', () => {
+  let copies = 0
+  for (const [repo, c] of Object.entries(consumers)) {
     assert.ok(config.repos.includes(repo), `${repo} is not one of loop-config.json repos`)
-    // Membership against ls-tree is exact, so a `./` prefix, a trailing
-    // slash or a `..` hop would report a present file as MISSING.
-    assert.match(path, /^[\w.-]+(\/[\w.-]+)*$/, `${path} is not spelled as a tree spells it`)
-    const hops = path.split('/').filter((s) => s === '.' || s === '..')
-    assert.deepEqual(hops, [], `${path} spells a hop a tree never names`)
+    for (const path of c.paths || []) {
+      copies++
+      // Membership against ls-tree is exact, so a `./` prefix, a trailing
+      // slash or a `..` hop would report a present file as MISSING.
+      assert.match(path, /^[\w.-]+(\/[\w.-]+)*$/, `${path} is not spelled as a tree spells it`)
+      const hops = path.split('/').filter((s) => s === '.' || s === '..')
+      assert.deepEqual(hops, [], `${path} spells a hop a tree never names`)
+    }
   }
-})
-
-test('a consumer with no paths contributes none, and no crash', () => {
-  assert.deepEqual(configuredPaths({ Repo: {} }), [])
-  assert.deepEqual(configuredPaths(), [])
+  assert.ok(copies > 0)
 })
 
 test('one absent copy decides the verdict for all of them', () => {

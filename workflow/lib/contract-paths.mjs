@@ -44,13 +44,6 @@ import { loadLoopConfig } from './config.mjs'
 /** The one ref a copy is judged against: what the repo really builds from. */
 export const REF = 'origin/main'
 
-/** Every configured copy as a `{repo, path}` pair, in config order. */
-export function configuredPaths(consumers = {}) {
-  return Object.entries(consumers).flatMap(([repo, c]) =>
-    (c.paths || []).map((path) => ({ repo, path })),
-  )
-}
-
 /**
  * Which of `paths` are files in `dir`'s `REF` tree, or `null` when the repo
  * has no `REF` to ask. One `ls-tree` answers both: it lists the pathspecs it
@@ -78,30 +71,31 @@ export function verdict(rows) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const ws = process.argv[2] || '..'
-  const pairs = configuredPaths(loadLoopConfig().contractSync?.consumers)
-
-  // No pairs would read as "all present", the silence this script exists to
-  // break. Nothing to check means it cannot tell.
-  if (!pairs.length) {
-    console.error('contractSync.consumers names no paths — nothing to check.')
-    process.exit(2)
-  }
+  const consumers = loadLoopConfig().contractSync?.consumers || {}
 
   const rows = []
-  for (const repo of new Set(pairs.map((p) => p.repo))) {
+  for (const [repo, c] of Object.entries(consumers)) {
+    const paths = c.paths || []
+    if (!paths.length) continue
     const dir = join(ws, repo)
     // A missing checkout would throw inside git and read as a missing ref.
     if (!existsSync(dir)) {
       console.error(`no checkout for ${repo} at ${dir}`)
       process.exit(2)
     }
-    const paths = pairs.filter((p) => p.repo === repo).map((p) => p.path)
     const found = present(dir, paths)
     if (!found) {
       console.error(`${repo}: cannot read ${REF}. Is it a checkout, and fetched?`)
       process.exit(2)
     }
     for (const path of paths) rows.push({ repo, path, found: found.has(path) })
+  }
+
+  // No rows would read as "all present", the silence this script exists to
+  // break. Nothing to check means it cannot tell.
+  if (!rows.length) {
+    console.error('contractSync.consumers names no paths — nothing to check.')
+    process.exit(2)
   }
 
   for (const r of rows) console.log(`  ${r.found ? 'ok      ' : 'MISSING '} ${r.repo} ${r.path}`)
