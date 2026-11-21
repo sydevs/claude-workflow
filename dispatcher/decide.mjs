@@ -1214,5 +1214,3 @@ function route(target, s, config) {
       return [note(`no rule for ${target.reason}`)]
   }
 }
-
-export const _internal = { needsAddressReview, ownReview, pendingReviewVerb, underThreshold, quietSweep, lastHumanWordAt, endedFixCiFor, defaultHoldDate }

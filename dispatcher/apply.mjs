@@ -352,15 +352,6 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         log(`reclaim ${leaseRef(t.number)} — ${a.why}`)
         await release(gh, config, t, { now, dryRun, log })
         break
-      case 'archiveCurrent':
-        if (rec.current) {
-          log(`archive ${rec.current.handler} — its end was never seen`)
-          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'ended unseen' }]
-          rec.current = null
-          recordDirty = true
-        }
-        await release(gh, config, t, { now, dryRun, log })
-        break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
         const enabled = config.dispatch.enabledHandlers

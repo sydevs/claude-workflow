@@ -45,7 +45,5 @@ export const react = (emoji) => ({ type: 'react', emoji })
 export const record = (patch) => ({ type: 'record', patch })
 /** Set the Hold Until date, or clear it with `null`. */
 export const hold = (date) => ({ type: 'hold', date })
-/** A pass on an item whose session ended with no unlock seen: archive it, release the lease. */
-export const archiveCurrent = () => ({ type: 'archiveCurrent' })
 export const transfer = (repo, milestone) => ({ type: 'transfer', repo, milestone })
 export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, sha })
