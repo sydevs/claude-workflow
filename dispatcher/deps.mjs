@@ -19,10 +19,9 @@
 
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
-import { isBot } from './predicates.mjs'
+import { isBot, lower } from './predicates.mjs'
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-const lower = (s) => String(s || '').toLowerCase()
 
 /** The numbers of the open alerts that make a session worth firing now. Pure. */
 export function dueAlerts(alerts, config, now) {

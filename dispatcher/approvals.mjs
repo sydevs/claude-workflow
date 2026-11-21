@@ -46,7 +46,7 @@ export function stalePlan(s, config) {
   return ids.length ? [dismissStale(ids)] : []
 }
 
-/** Each reviewer's latest state-bearing review, where it is an approval: what GitHub counts. */
+/** Each reviewer's latest state-bearing review, where it is an approval. The states are `merge-gate.mjs`'s `STATE_BEARING`, and its `reviewDecisionFrom` carries the rationale. */
 function standingApprovals(reviews) {
   const latest = new Map()
   for (const r of reviews || []) {

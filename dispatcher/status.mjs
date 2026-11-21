@@ -16,7 +16,7 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, fullTreatment, threadsWaiting } from './predicates.mjs'
+import { isBot, fullTreatment, threadsWaiting, nowOf } from './predicates.mjs'
 import { proxyApproves, proxyVerdict } from './approvals.mjs'
 import { isRoadmap, needsAddressReview, loopMayNotMerge, stackedPr } from './decide.mjs'
 
@@ -31,7 +31,7 @@ function childHeld(c, now) {
   return Boolean(c.holdUntil && c.holdUntil > now.toISOString().slice(0, 10))
 }
 
-export function deriveStatus(s, config, now = s.now || new Date()) {
+export function deriveStatus(s, config, now = nowOf(s)) {
   const lock = config.labels.lock
   const locked = (s.item?.labels || []).includes(lock)
   const rec = s.record || {}

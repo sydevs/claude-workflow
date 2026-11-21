@@ -10,7 +10,7 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
-import { isLogin, isReviewer, isHuman } from './predicates.mjs'
+import { isLogin, isReviewer, isHuman, lower } from './predicates.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
 
@@ -451,7 +451,6 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
 
 /** The member to ask for a review: the configured reviewer, or the other human when they wrote it. */
 export function reviewerFor(author, config) {
-  const lower = (x) => String(x || '').toLowerCase()
   if (!isReviewer(author, config)) return config.assignment.reviewer
   return (config.assignment.respondTo || []).find((l) => isHuman(l, config) && lower(l) !== lower(author)) || null
 }
