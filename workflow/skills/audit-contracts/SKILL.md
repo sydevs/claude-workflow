@@ -46,8 +46,8 @@ Run `git fetch origin main` in each consumer's checkout first. Both checks below
 `origin/main`, and a clone ships that ref stale.
 (why: docs/why.md#a-routine-clone-is-not-a-developers-checkout)
 
-**A `paths` entry the consumer moved reads as current to all three guards.** So check that the
-config still describes the repo, before you check the copy:
+**Check that the config still describes the repo, before you check the copy:**
+(why: docs/why.md#a-moved-contract-path-silences-every-guard)
 
 ```bash
 node workflow/lib/contract-paths.mjs ..   # PATHS MISSING names each repo and path

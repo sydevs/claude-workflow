@@ -1983,6 +1983,23 @@ author set on defeating it, who could edit the caller instead. A mismatch is re-
 150 s apart, because `raw.githubusercontent.com` serves `main` up to five minutes stale after a
 merge. A command that fails is marked `ci.infraLabel`, so it is re-run, never repaired.
 
+## A moved contract path silences every guard
+
+`contractSync.consumers.<repo>.paths` is the only thing the three contract guards read, and each
+goes quiet rather than loud when a consumer moves its copy: `check.sh` finds an absent path in no
+diff, `contracts-sync` reads a clean `git status` on a file its command never writes, and
+`audit-contracts` step 2 reads that same status as current. All three then report success about a
+file the repo no longer builds from, reopening WeMeditateWeb#269's failure mode: a hand edit to the
+live copy that nothing compares with its source. WeMeditateWeb moved its copy to
+`types/payload/payload-types.ts` and the
+config lagged; merging claude-workflow#297 back to back with WeMeditateWeb#327 was the whole
+mitigation (claude-workflow#298). Failing a consumer's CI on an absent path would redden every PR
+there until the config caught up — the shape
+[A contract check checks what a PR changes](#a-contract-check-checks-what-a-pr-changes) rejects,
+with a wider blast radius. So the config is checked where drift on `main` is already fixed, in the
+audit, whose fix is a `loop-config.json` PR. Naming the old and the new path together was rejected:
+`git add` on an absent path exits 128, so `contracts-sync` would fail its job rather than go quiet.
+
 ## A push from a person resets the repair count
 
 The cap comment promised *"A mention or a push from you starts me again"*, but `rec.fixCi` grew at

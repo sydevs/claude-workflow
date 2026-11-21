@@ -4,15 +4,11 @@
  *
  * ## Why this exists
  *
- * `contractSync.consumers.<repo>.paths` is what the three contract guards
- * compare, and a path the consumer moved makes each one go quiet rather than
- * loud: an absent path is in no diff, and `git status` is clean on a file no
- * command writes. So all three report success about a file the repo no
- * longer builds from. Failing a consumer's CI on it would redden every PR
- * there until the config caught up, the shape WeMeditateWeb#310 was rejected
- * for, so the config is checked where drift on `main` is already fixed — in
- * the audit, whose fix is a `loop-config.json` PR.
- * (why: docs/why.md#a-contract-check-checks-what-a-pr-changes)
+ * A `paths` entry the consumer moved makes all three contract guards report
+ * success about a file the repo no longer builds from, so the config is
+ * checked where drift on `main` is already fixed: in the audit, whose fix is a
+ * `loop-config.json` PR, never a consumer's CI.
+ * (why: docs/why.md#a-moved-contract-path-silences-every-guard)
  *
  * ## What it does NOT prove
  *
