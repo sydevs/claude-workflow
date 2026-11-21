@@ -48,6 +48,50 @@ supervised run.
 the loop reads them as human feedback. This is bounded and one-time, not worth a dated exclusion
 rule.
 
+## 0c. A GitHub App for the dispatcher
+
+The dispatcher runs in Actions, not in a session, so it *can* act as an App — and that gives it a
+REST budget apart from the sessions'. One shared budget is what ran out on 2026-11-20, failing 35
+dispatcher runs and stranding a lease.
+(why: [docs/why.md](why.md#the-dispatcher-has-its-own-github-app))
+
+**The code ships first and changes nothing.** Every `dispatcher.yml` job uses `SYDEVS_BOT_PAT` until
+both settings below exist, so this section can wait.
+
+1. Create a GitHub App in the sydevs org. Its slug must be **`sydevs-dispatcher`**, because
+   `identity.dispatcherLogins` in `loop-config.json` names `sydevs-dispatcher[bot]`. Change one and
+   you change both.
+2. Repository permissions: **Issues**, **Pull requests**, **Contents** and **Workflows**, read and
+   write. Organization permissions: **Projects**, read and write. **Metadata**, read. Workflows is
+   what a relay branch touching `.github/workflows/` needs; Contents is the lease ref and the relay.
+3. No webhook: the App is a credential, not a listener. Events still arrive through each repo's
+   `workflow-state.yml`.
+4. Install it on all five repos.
+5. Generate a private key, and store both settings org-level with `--visibility all`:
+
+   ```bash
+   gh variable set SYDEVS_APP_ID --org sydevs --visibility all --body '<the app id>'
+   gh secret set SYDEVS_APP_PRIVATE_KEY --org sydevs --visibility all < private-key.pem
+   ```
+
+6. Confirm the switch took: the next dispatcher run's `resolve` and `act` logs end
+   `· token: app`, and the item's status comment, labels and board Status still update.
+
+**Five calls the App has not been proved to make.** Each kept the PAT by default before the switch,
+and each job holds both tokens, so any one of them can go back to the PAT alone. Settle them on a
+scratch PR with `BOT_DISPATCH=dry` off and the App on, before trusting the App in anger:
+
+- whether an App's approving review satisfies the ruleset's required approval
+  (`mergePolicy.proxyApprove`);
+- whether the App can edit a status comment `sydevs-bot` wrote;
+- whether it can write the org issue fields (Priority, Hold Until) and the board's Status;
+- whether it can push a relay branch that touches `.github/workflows/`;
+- whether any ruleset lists `sydevs-bot` as a bypass actor, which the App would not inherit.
+
+> ⚠ **A session cannot use the App.** Requests an App makes on a user's behalf come off that user's
+> limit, and a cloud session acts as `sydevs-bot` through the Claude account's GitHub connection.
+> `identity.expectedLogin` stays the sessions' login, and `get_me` must still return it.
+
 ## 1. GitHub metadata
 
 The loop's queue **is** GitHub metadata. Without this it has nothing to read.
@@ -283,7 +327,8 @@ private repo:
 
 | Name | What |
 | --- | --- |
-| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
+| `SYDEVS_APP_ID` / `SYDEVS_APP_PRIVATE_KEY` | the dispatcher's own GitHub App (§0c), which gives it a REST budget apart from the sessions'. A variable and a secret. Both unset, every job uses `SYDEVS_BOT_PAT` instead. |
+| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |

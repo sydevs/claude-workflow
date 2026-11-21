@@ -2227,6 +2227,52 @@ One 503 mid-plan ended the `act` leg with the lease taken and no label written. 
 dispatcher makes now passes through `installRetry`, which retries a 5xx or a dropped connection
 `dispatch.githubRetry.attempts` times with doubling backoff. A 4xx is an answer and is never retried.
 
+## A rate-limited call waits for the reset
+
+A rate limit is the one 4xx that is weather: the budget comes back at a time GitHub names in the
+response. On 2026-11-20 a batch of member mentions from 22:16Z grew into 486 dispatcher runs in an
+hour, sydevs-bot's 5,000 REST calls ran out at 23:00Z, and all 35 runs until the 23:10:28Z reset
+failed. One was sydevs/WeMeditateWeb#326's unlock, which left `refs/sydevs-lease/326` behind until a
+manual sweep 55 minutes later. Every one of them would have finished on a ten-minute wait.
+`rateLimitWait` now waits until `x-ratelimit-reset` on a 403 or 429 carrying
+`x-ratelimit-remaining: 0`, or `retry-after` seconds on a secondary limit, bounded by
+`dispatch.githubRetry.rateLimitMaxWaitSeconds`; every job's `timeout-minutes` clears that bound. A
+403 with neither header is a permission refusal, and still throws at once.
+
+The same hour is also why a run says what it costs. `installRetry` counts the REST and GraphQL
+requests it sends, and an event run that finds itself under `dispatch.rateLimitFloor` returns only
+its own targets. Its drift targets are nearly all of its spend — up to `reconcileMaxPerEvent` full
+gathers in their own `act` legs, against the event's one — and in a burst many runs in one repo pick
+the same drifted items, so they are the cheapest thing to give up. The cron's full pass covers them.
+`GET /rate_limit` does not count against the limit, so asking is free, and a budget that cannot be
+read sheds nothing.
+
+## One comment read serves the leg
+
+`loadRecord` paged an item's comments from the oldest while the comment window read the newest, so
+every `act` leg spent two or three calls on one endpoint: three of an issue leg's six REST calls and
+three of a PR leg's nine, on every leg of every event run. One page of 100 holds the whole thread of
+all but the longest items, and `findRecord` and `newestWindow` both read it in hand. An issue leg is
+now 4 REST and a PR leg 7. The one page is asked for only strictly under 100 comments: a read that
+comes back full cannot prove it saw the whole thread, and asking anyway would cost a third call at
+exactly one page.
+
+## The dispatcher has its own GitHub App
+
+The budget that ran out above was one budget for two jobs. GitHub gives a PAT 5,000 REST calls an
+hour and an App installation its own 5,000, but requests an App makes on a user's behalf come off
+that user's limit — and a cloud session acts as sydevs-bot through the Claude account's GitHub
+connection, so a session cannot use an App. Splitting the two is therefore the only way either side
+gets a budget to itself: the dispatcher moves to an App, and the sessions keep sydevs-bot's 5,000.
+
+Each `dispatcher.yml` job mints an installation token when the org variable `SYDEVS_APP_ID` and the
+org secret `SYDEVS_APP_PRIVATE_KEY` are both set, and uses `SYDEVS_BOT_PAT` when they are not, so the
+code merges before the App exists and the switch is a settings change. Its writes then come from
+`<app-slug>[bot]`, which is why `identity.dispatcherLogins` names both logins and `isBot` tests the
+set: an item whose status comment, markers or sync PR were written under the PAT must keep its record
+under the App. `identity.expectedLogin` stays the sessions' login, and `docs/routine-setup.md` §0c
+has the setup and the experiments the switch waits on.
+
 ## A member's PR gets the loop
 
 A member's PR (`assignment.respondTo`) got nothing unless mentioned, so their own PRs sat outside
