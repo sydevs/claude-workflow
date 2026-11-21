@@ -20,7 +20,7 @@ import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
 import { ensureJournalDay, refreshTally, closeDuplicateDays, previousJournalDay, postAnomaly } from './journal.mjs'
-import { installRetry } from './retry.mjs'
+import { installRetry, apiCountLine } from './retry.mjs'
 
 export { planContractSync, verifyContractSync } from './contracts.mjs'
 export { depsTick } from './deps.mjs'
@@ -29,11 +29,24 @@ export function loadConfig(path) {
   return JSON.parse(readFileSync(path, 'utf-8'))
 }
 
-export async function resolveTargets({ github, context, core, config }) {
+/**
+ * What a run spends, and which credential it spent it on. One GitHub budget is
+ * shared by everything the loop does, so both belong in the log of every run.
+ * (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ */
+function spend(core, github, env) {
+  core.info(`${apiCountLine(github)} · token: ${env?.TOKEN_SOURCE || 'pat'}`)
+}
+
+export async function resolveTargets({ github, context, core, config, env = process.env }) {
   installRetry(github, config)
-  const targets = coalesceTargets(await resolveEvent({ github, context, config }))
-  core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
-  return targets
+  try {
+    const targets = coalesceTargets(await resolveEvent({ github, context, config, core }))
+    core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
+    return targets
+  } finally {
+    spend(core, github, env)
+  }
 }
 
 export async function act({ github, context, core, config, target, env = process.env, dryRun = false, now = new Date(), fetchImpl }) {
@@ -43,16 +56,22 @@ export async function act({ github, context, core, config, target, env = process
   const queue = (target.reasons || [{ reason: target.reason, facts: target.facts }])
     .map(({ reason, facts }) => ({ ...target, reason, facts: facts || {}, reasons: undefined }))
   const seen = new Set()
-  while (queue.length) {
-    const t = queue.shift()
-    const key = `${t.repo.full}#${t.number}:${t.reason}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const snapshot = await gather(github, t, config, { now })
-    const plan = decide(t, snapshot, config)
-    core.info(`${t.repo.name}#${t.number} ${t.reason}: plan = ${plan.map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value ? ':' + a.value : '')).join(', ')}`)
-    const emitted = await apply({ gh: github, target: t, snapshot, plan, config, env, dryRun, core, now, fetchImpl })
-    queue.push(...emitted)
+  // In a `finally`, because the run that ran out of budget is the one whose
+  // cost is worth reading. (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
+  try {
+    while (queue.length) {
+      const t = queue.shift()
+      const key = `${t.repo.full}#${t.number}:${t.reason}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const snapshot = await gather(github, t, config, { now })
+      const plan = decide(t, snapshot, config)
+      core.info(`${t.repo.name}#${t.number} ${t.reason}: plan = ${plan.map((a) => a.type + (a.handler ? ':' + a.handler : '') + (a.value ? ':' + a.value : '')).join(', ')}`)
+      const emitted = await apply({ gh: github, target: t, snapshot, plan, config, env, dryRun, core, now, fetchImpl })
+      queue.push(...emitted)
+    }
+  } finally {
+    spend(core, github, env)
   }
 }
 
@@ -67,6 +86,7 @@ export async function act({ github, context, core, config, target, env = process
  * (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
  */
 export async function journalTick({ github, core, config, dryRun = false, now = new Date() }) {
+  installRetry(github, config)
   if (dryRun) return core.info('journal tick (dry run)')
   const j = await ensureJournalDay(github, config, now)
 

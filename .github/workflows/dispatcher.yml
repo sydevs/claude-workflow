@@ -33,6 +33,12 @@ on:
     secrets:
       SYDEVS_BOT_PAT:
         required: true
+      # The dispatcher's own GitHub App, which gives it a REST budget apart
+      # from the sessions'. Unset here and in vars.SYDEVS_APP_ID, every job
+      # uses the PAT exactly as before.
+      # why: sydevs/claude-workflow/docs/why.md#the-dispatcher-has-its-own-github-app
+      SYDEVS_APP_PRIVATE_KEY:
+        required: false
       SENTRY_CLAUDE_WORKFLOW_TOKEN:
         required: false
       ROUTINE_TOKEN_SAHAJCLOUD:
@@ -51,7 +57,9 @@ permissions: {}
 jobs:
   resolve:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above dispatch.githubRetry.rateLimitMaxWaitSeconds in loop-config.json,
+    # so a job that waits out a rate limit lives to finish.
+    timeout-minutes: 20
     outputs:
       targets: ${{ steps.resolve.outputs.targets }}
     steps:
@@ -68,10 +76,26 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      # An installation token when the org names the App, the PAT when it does
+      # not. `secrets` is not a context a step `if:` can read, so only the
+      # variable gates this; `continue-on-error` is what makes a missing or bad
+      # key fall back to the PAT instead of failing every repo's dispatch.
+      # `owner` scopes the token to every repo the App is installed on, which
+      # `contracts-sync` and `deps` need.
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - id: resolve
         uses: actions/github-script@v9
+        env:
+          TOKEN_SOURCE: ${{ steps.token.outputs.token && 'app' || 'pat' }}
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { resolveTargets, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -83,7 +107,8 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.targets != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Its own work, plus one wait out of a rate limit (resolve's comment).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -126,11 +151,21 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       # No `run:` step interpolates github.event.*; event data reaches node
       # only through context.payload and the TARGET env var.
       - uses: actions/github-script@v9
+        env:
+          TOKEN_SOURCE: ${{ steps.token.outputs.token && 'app' || 'pat' }}
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { act, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -143,7 +178,8 @@ jobs:
     # Only the journal repo's schedule maintains the day issue and its title.
     if: github.event_name == 'schedule' && github.repository == 'sydevs/claude-workflow'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -155,9 +191,18 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      # An installation token when the org names the App (`resolve`'s comment).
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { journalTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -175,7 +220,8 @@ jobs:
       github.repository == 'sydevs/claude-workflow'
       && ((github.event_name == 'schedule' && github.event.schedule == '20 13 * * *') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     env:
       DRY_RUN: ${{ inputs.dry-run }}
       ROUTINE_TOKEN_SAHAJCLOUD: ${{ secrets.ROUTINE_TOKEN_SAHAJCLOUD }}
@@ -199,9 +245,18 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      # An installation token when the org names the App (`resolve`'s comment).
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { depsTick, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -219,7 +274,8 @@ jobs:
   contracts-plan:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     outputs:
       consumers: ${{ steps.plan.outputs.consumers }}
     steps:
@@ -233,10 +289,19 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      # An installation token when the org names the App (`resolve`'s comment).
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - id: plan
         uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { planContractSync, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)
@@ -247,7 +312,8 @@ jobs:
     needs: contracts-plan
     if: needs.contracts-plan.outputs.consumers != '[]' && !inputs.dry-run
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -257,7 +323,6 @@ jobs:
       group: contract-sync-${{ matrix.consumer.name }}
       cancel-in-progress: false
     env:
-      GH_TOKEN: ${{ secrets.SYDEVS_BOT_PAT }}
       REPO: ${{ matrix.consumer.repo }}
       BRANCH: ${{ matrix.consumer.branch }}
       SYNC_COMMAND: ${{ matrix.consumer.command }}
@@ -267,12 +332,21 @@ jobs:
       FEATURE_BRANCH: ${{ matrix.consumer.featureBranch }}
       ATTEST_CONTEXT: ${{ matrix.consumer.attestContext }}
     steps:
+      # An installation token when the org names the App (`resolve`'s comment).
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       # The consumer's own main, never a PR head, and its own sync script.
       - uses: actions/checkout@v7
         with:
           repository: ${{ matrix.consumer.repo }}
           ref: main
-          token: ${{ secrets.SYDEVS_BOT_PAT }}
+          token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           path: consumer
           fetch-depth: 0
       # No `version:` input: pnpm's version comes from the consumer's
@@ -285,6 +359,8 @@ jobs:
           node-version: 22
       - name: Re-sync, then open or update the PR
         working-directory: consumer
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
         run: |
           set -euo pipefail
           git config user.name sydevs-bot
@@ -383,7 +459,8 @@ jobs:
         && github.event.context == 'sydevs / contract-sync'
         && github.event.state == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the longest rate-limit wait (`resolve`'s comment).
+    timeout-minutes: 20
     permissions:
       pull-requests: write
     steps:
@@ -397,12 +474,21 @@ jobs:
             loop-config.json
             workflow/lib
             dispatcher
+      # An installation token when the org names the App (`resolve`'s comment).
+      - id: token
+        if: ${{ vars.SYDEVS_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SYDEVS_APP_ID }}
+          private-key: ${{ secrets.SYDEVS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - uses: actions/github-script@v9
         env:
           APPROVER_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ inputs.dry-run }}
         with:
-          github-token: ${{ secrets.SYDEVS_BOT_PAT }}
+          github-token: ${{ steps.token.outputs.token || secrets.SYDEVS_BOT_PAT }}
           script: |
             const cw = `${process.env.GITHUB_WORKSPACE}/cw`
             const { verifyContractSync, loadConfig } = await import(`${cw}/dispatcher/index.mjs`)

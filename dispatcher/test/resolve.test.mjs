@@ -1,7 +1,10 @@
 // One target per repo#number, carrying every reason the pass found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
+
+const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const t = (number, reason, facts = {}) => ({ repo, kind: 'pr', number, reason, event: 'schedule', facts })
@@ -70,4 +73,63 @@ test('a failed queue run targets the PR its branch names', async () => {
 
 test('a passing or cancelled queue run targets nothing', async () => {
   for (const c of ['success', 'cancelled', 'neutral']) assert.deepEqual(await resolve({ github: noApi, context: queueRun(c), config: {} }), [], c)
+})
+
+// ---- a thin budget sheds the drift targets ------------------------------
+// An event run's drift targets are nearly all of what it spends: each is a
+// full `gather` in its own `act` leg, against the event's one. In a burst many
+// runs in one repo pick the same drifted items, so the cheapest thing to give
+// up under pressure is the part the cron covers anyway.
+// (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
+
+/** One repo holding one issue the board calls Done that nothing closes: drift. */
+function repoWithDrift(remaining) {
+  const info = []
+  const gh = {
+    rest: { rateLimit: { get: async () => ({ data: { resources: { core: { remaining } } } }) } },
+    graphql: async (q) => (/pullRequests\(/.test(q)
+      ? { repository: { pullRequests: { pageInfo: {}, nodes: [] } } }
+      : { repository: { issues: { pageInfo: {}, nodes: [{
+        number: 41,
+        labels: { nodes: [] },
+        projectItems: { nodes: [{ project: { number: config.projects.number }, fieldValueByName: { name: config.projects.status.done } }] },
+      }] } } }),
+  }
+  return { gh, core: { info: (m) => info.push(m) }, info }
+}
+
+const opened = { eventName: 'issues', payload: { action: 'opened', issue: { number: 7 } }, repo: { owner: 'sydevs', repo: 'SahajCloud' } }
+
+test('an event run under the REST floor returns only its own targets, and says so', async () => {
+  const { gh, core, info } = repoWithDrift(500)
+  const out = await resolve({ github: gh, context: opened, config, core })
+  assert.deepEqual(out.map((t) => t.number), [7], 'the event itself, and nothing gathered beside it')
+  assert.match(info.join(' '), /under the floor of 1000/, 'the shed is logged, not silent')
+})
+
+test('an event run with budget to spare still adds the drift targets', async () => {
+  const { gh, core, info } = repoWithDrift(4000)
+  const out = await resolve({ github: gh, context: opened, config, core })
+  assert.deepEqual(out.map((t) => t.number), [7, 41], 'the reconciler runs as it always did')
+  assert.deepEqual(info, [], 'and nothing was shed')
+})
+
+test('a budget that cannot be read sheds nothing', async () => {
+  const { gh, core } = repoWithDrift(500)
+  gh.rest.rateLimit.get = async () => { throw Object.assign(new Error('Bad Gateway'), { status: 502 }) }
+  const out = await resolve({ github: gh, context: opened, config, core })
+  assert.deepEqual(out.map((t) => t.number), [7, 41], 'an unreadable budget is not a thin one')
+  // And neither is a reply that parsed but carried no core resource.
+  const answered = repoWithDrift(undefined)
+  assert.deepEqual((await resolve({ github: answered.gh, context: opened, config, core: answered.core })).map((t) => t.number), [7, 41])
+})
+
+test('the schedule never reads the budget, so the cron is unchanged', async () => {
+  const { gh, core } = repoWithDrift(1)
+  gh.rest.rateLimit.get = async () => { throw new Error('the cron must not ask') }
+  gh.paginate = async () => []
+  gh.rest.issues = { listForRepo: async () => ({ data: [] }) }
+  gh.rest.pulls = { list: async () => ({ data: [] }) }
+  const out = await resolve({ github: gh, context: { ...opened, eventName: 'schedule', payload: {} }, config, core })
+  assert.ok(Array.isArray(out), 'the sweep runs its own way')
 })

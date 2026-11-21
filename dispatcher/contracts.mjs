@@ -13,6 +13,9 @@
  * instead. (why: docs/why.md#docs-fixes-and-re-syncs-ride-the-feature)
  */
 
+import { dispatcherLogins, isLogin } from './decide.mjs'
+import { installRetry } from './retry.mjs'
+
 /** The consumers whose copy one of `changedFiles` feeds. Pure. */
 export function affectedConsumers(config, repoName, changedFiles) {
   const sync = config.contractSync
@@ -39,6 +42,7 @@ export async function changedPaths(github, { owner, repo, number }) {
  * branch counts, because every consumer syncs from `main`.
  */
 export async function planContractSync({ github, context, core, config }) {
+  installRetry(github, config)
   const pr = context.payload.pull_request
   const { owner, repo } = context.repo
   if (!pr?.merged) return []
@@ -83,6 +87,9 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
         const depRepo = dep.repository?.name || /\/repos\/[^/]+\/([^/]+)$/.exec(String(dep.repository_url || ''))?.[1] || repo
         if (dep.state !== 'open' || depRepo !== consumer) continue
         const p = await github.graphql(prs, { o: owner, r: consumer, n: dep.number })
+        // The sessions' login, not `dispatcherLogins`: a feature PR is opened by
+        // a cloud session, and a session cannot act as the App.
+        // (why: docs/why.md#the-dispatcher-has-its-own-github-app)
         const found = pickFeaturePr(p.repository.issue.closedByPullRequestsReferences.nodes, config.identity?.expectedLogin)
         if (found) return found
       }
@@ -114,14 +121,15 @@ export const CHECK_APPROVAL_MARKER = '<!-- sydevs-contract-check -->'
 /**
  * When `contracts-sync` vouched for this head, or null if it never did. It
  * posts `contractSync.attestContext` on every commit it pushes to the sync
- * branch, as sydevs-bot; anyone who can push can post a status, so only the
- * bot's counts. `statuses` is the REST list for the head. Pure.
+ * branch, under whichever of `identity.dispatcherLogins` its token is; anyone
+ * who can push can post a status, so only those count. `statuses` is the REST
+ * list for the head. Pure.
  */
 export function contractSyncAttestedAt(statuses, config) {
   const ctx = config.contractSync?.attestContext
-  const bot = String(config.identity?.expectedLogin || '').toLowerCase()
-  if (!ctx || !bot) return null
-  const x = (statuses || []).find((x) => x.context === ctx && x.state === 'success' && String(x.creator?.login || '').toLowerCase() === bot)
+  const bot = dispatcherLogins(config)
+  if (!ctx || !bot.length) return null
+  const x = (statuses || []).find((x) => x.context === ctx && x.state === 'success' && isLogin(x.creator?.login, bot))
   return x ? x.created_at || x.updated_at || 'unknown' : null
 }
 
@@ -132,10 +140,10 @@ export function contractSyncAttestedAt(statuses, config) {
  */
 export function contractVerifyGate(config, repoName, pr, files) {
   const no = (reason) => ({ ok: false, reason })
-  const bot = String(config.identity?.expectedLogin || '').toLowerCase()
   if (pr?.state !== 'open') return no('not open')
   if (pr.draft) return no('a draft: checked once it is ready')
-  if (!bot || String(pr.user?.login || '').toLowerCase() !== bot) return no('not opened by the bot')
+  const bot = dispatcherLogins(config)
+  if (!bot.length || !isLogin(pr.user?.login, bot)) return no('not opened by the bot')
   if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return no('the head is in another repository')
   if (!pr.base?.ref || pr.base.ref !== pr.base?.repo?.default_branch) return no('it does not target the default branch, which the sync is generated from')
   if (!isContractSyncOnly(config, repoName, pr, files)) return no('it changes more than the copied contract')
@@ -151,6 +159,8 @@ export function contractVerifyGate(config, repoName, pr, files) {
  * names a commit, not a PR, so the open sync PR at that head is looked up.
  */
 export async function verifyContractSync({ github, approver, context, core, config, dryRun = false }) {
+  installRetry(github, config)
+  installRetry(approver, config)
   const { owner, repo } = context.repo
   const branch = config.contractSync?.branch
   let numbers = context.payload.pull_request ? [context.payload.pull_request.number] : []

@@ -48,6 +48,73 @@ supervised run.
 the loop reads them as human feedback. This is bounded and one-time, not worth a dated exclusion
 rule.
 
+## 0c. A GitHub App for the dispatcher
+
+The dispatcher runs in Actions, not in a session, so it *can* act as an App — and that gives it a
+REST budget apart from the sessions'. One shared budget is what ran out on 2026-11-20, failing 35
+dispatcher runs and stranding a lease.
+(why: [docs/why.md](why.md#the-dispatcher-has-its-own-github-app))
+
+**The code ships first and changes nothing.** Every `dispatcher.yml` job uses `SYDEVS_BOT_PAT` until
+`SYDEVS_APP_ID` is set, so this section can wait.
+
+1. Create a GitHub App in the sydevs org. Its slug must be **`sydevs-dispatcher`**, because
+   `identity.dispatcherLogins` in `loop-config.json` names `sydevs-dispatcher[bot]`. Change one and
+   you change both.
+
+   Only the `[bot]` spelling is trusted, and that is deliberate. REST spells an App
+   `<slug>[bot]`, which no username can be, because `[` is not legal in one. GraphQL spells the
+   same actor `<slug>`, which *is* a name a user could register, so `restLogin` normalises a
+   GraphQL `Bot` actor to the REST spelling instead of the list trusting the bare slug. These
+   repos are public and `findRecord` authenticates the dispatcher's own record by author login
+   alone, so a bare slug in that list would let anyone who registered the username post a forged
+   status comment and have the loop fire a session on it.
+2. Repository permissions, read and write: **Issues**, **Pull requests**, **Contents**,
+   **Workflows**, **Commit statuses**. Read: **Checks**, **Metadata**, **Dependabot alerts**.
+   Organization permissions: **Projects**, read and write.
+
+   Each of the less obvious ones is load-bearing, and a missing one is a 403 mid-plan, not a
+   warning at setup:
+
+   | Permission | What dies without it |
+   | --- | --- |
+   | **Workflows** write | a relay branch that touches `.github/workflows/` |
+   | **Contents** write | the lease ref, and the relay |
+   | **Commit statuses** write | `contracts-sync`'s `attest()` — and it runs before `gh pr create` under `set -e`, so no sync PR opens at all |
+   | **Checks** read | `gather`'s `checks.listForRef` and `checks.listAnnotations`, so every PR `act` leg, in all five repos |
+   | **Commit statuses** read | `getCombinedStatusForRef` and `listCommitStatusesForRef` — the CI gate and the sync attestation |
+   | **Dependabot alerts** read | the `deps` job's daily vulnerability check |
+3. No webhook: the App is a credential, not a listener. Events still arrive through each repo's
+   `workflow-state.yml`.
+4. Install it on all five repos.
+5. Generate a private key, and store both settings org-level with `--visibility all`:
+
+   ```bash
+   gh variable set SYDEVS_APP_ID --org sydevs --visibility all --body '<the app id>'
+   gh secret set SYDEVS_APP_PRIVATE_KEY --org sydevs --visibility all < private-key.pem
+   ```
+
+6. Confirm the switch took: the next dispatcher run's `resolve` and `act` logs end
+   `· token: app`, and the item's status comment, labels and board Status still update. A log still
+   saying `· token: pat` with the variable set means the mint failed — the token step is
+   `continue-on-error`, on purpose, so a bad key degrades instead of stopping dispatch in five
+   repos. Read that step's own log.
+
+**Five calls the App has not been proved to make.** Each kept the PAT by default before the switch,
+and each job holds both tokens, so any one of them can go back to the PAT alone. Settle them on a
+scratch PR with `BOT_DISPATCH=dry` off and the App on, before trusting the App in anger:
+
+- whether an App's approving review satisfies the ruleset's required approval
+  (`mergePolicy.proxyApprove`);
+- whether the App can edit a status comment `sydevs-bot` wrote;
+- whether it can write the org issue fields (Priority, Hold Until) and the board's Status;
+- whether it can push a relay branch that touches `.github/workflows/`;
+- whether any ruleset lists `sydevs-bot` as a bypass actor, which the App would not inherit.
+
+> ⚠ **A session cannot use the App.** Requests an App makes on a user's behalf come off that user's
+> limit, and a cloud session acts as `sydevs-bot` through the Claude account's GitHub connection.
+> `identity.expectedLogin` stays the sessions' login, and `get_me` must still return it.
+
 ## 1. GitHub metadata
 
 The loop's queue **is** GitHub metadata. Without this it has nothing to read.
@@ -283,7 +350,8 @@ private repo:
 
 | Name | What |
 | --- | --- |
-| `SYDEVS_BOT_PAT` | the dispatch token. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents** and org **Projects**, all read and write. Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
+| `SYDEVS_APP_ID` / `SYDEVS_APP_PRIVATE_KEY` | the dispatcher's own GitHub App (§0c), which gives it a REST budget apart from the sessions'. A variable and a secret. Both unset, every job uses `SYDEVS_BOT_PAT` instead. |
+| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
@@ -789,4 +857,4 @@ judgement is the only thing that costs a session.
 | An `is:blocked` search returns the wrong issues | In issue **search** it matches the `blocked` label, not the relationship. Use GraphQL `blockedBy` on `Issue`. |
 | Two journal issues for one day | Two `act` jobs created one each. The scheduled journal job closes the newer within 30 minutes. |
 | A session starts and stops immediately | It found no `bot:working` label. Either the lock write failed, or another session already finished the item. |
-| After a bot rename or PAT migration, every advisory re-posts and every status comment is duplicated, once | Expected. Only `identity.expectedLogin` is read back, so the old login's comments stop counting. One duplicate per open item, then quiet. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author) |
+| After a bot rename, every advisory re-posts and every status comment is duplicated, once | Expected, unless the old login is still in `identity.dispatcherLogins`. Only the logins on that list are read back, so one left off stops counting: one duplicate per open item, then quiet. This is why the App switch (§0c) keeps `sydevs-bot` on the list rather than replacing it. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author) |

@@ -567,8 +567,74 @@ test('the last timeout is journalled as timed-out too, beside attempts-exhausted
   assert.deepEqual(kinds, ['timed-out', 'attempts-exhausted'])
 })
 
+// The deadline path re-fires `rec.current.handler`, which comes out of the
+// same comment body as `retry`'s, so it is checked the same way. The lease and
+// the lock are released before the check, so a refusal leaves the item open.
+test('a timeout re-fire reads the record too, so it is checked too', async () => {
+  const world = timedOutWorld(1)
+  world.comments[9][0].body = world.comments[9][0].body.replace('"handler":"implement"', '"handler":"exfiltrate"')
+  const github = fakeGithub(world)
+  const logs = []
+  await act({ github, context: {}, core: { info: (m) => logs.push(m), warning: () => {} }, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.match(logs.join('\n'), /"exfiltrate" is not one of ours/)
+  assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'), 'and the lock still came off')
+})
+
 test('a dry run journals no timeout', async () => {
   const github = fakeGithub(timedOutWorld(1))
   await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { throw new Error('must not fire') } })
   assert.equal(anomalies(github).length, 0)
+})
+
+// A retried handler comes out of the record, which is a comment body, so it
+// is checked against `dispatch.handlers` exactly as a planned one is. Without
+// that, anything that could write a record could name an arbitrary handler
+// string. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+async function firedFromRecord(handler) {
+  // Unlocked, with a pending retry: the state a `reconcile` pass drains.
+  const world = issueWorld()
+  const pending = { handler, flags: {}, attempt: 1, reason: 'forged', retryAfter: null }
+  world.comments[9] = [{
+    id: 1,
+    body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending, current: null, dispatches: [] })} -->\npending`,
+    user: { login: 'sydevs-bot' },
+    created_at: '2026-09-08T09:00:00Z',
+  }]
+  const github = fakeGithub(world)
+  const logs = []
+  await act({
+    github,
+    context: {},
+    core: { info: (m) => logs.push(m), warning: () => {} },
+    config,
+    target: { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'reconcile', event: 'schedule', facts: {} },
+    env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' },
+    dryRun: false,
+    now,
+    fetchImpl: async () => { throw new Error('must not fire') },
+  })
+  return logs.join('\n')
+}
+
+test('a handler the record names but loop-config.json does not is never fired', async () => {
+  assert.match(await firedFromRecord('exfiltrate'), /"exfiltrate" is not one of ours/)
+})
+
+// `handlers` keys `$comment` and `audit-nightly`, which cron fires on its own
+// routine. Checking the wide block would have let a forged record fire the
+// nightly audit on any item, since `enabledHandlers` is null.
+test('a handler only cron fires is not one a record may name', async () => {
+  assert.match(await firedFromRecord('audit-nightly'), /"audit-nightly" is not one of ours/)
+  assert.match(await firedFromRecord('$comment'), /"\$comment" is not one of ours/)
+})
+
+// The run that ran out of budget is the one whose cost is worth reading, so
+// the spend is logged in a `finally`.
+// (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
+test('a leg that throws still logs what it spent, and on which credential', async () => {
+  const info = []
+  const github = { rest: { issues: { get: async () => { throw Object.assign(new Error('Server Error'), { status: 500 }) } } } }
+  const target = { repo: { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }, kind: 'issue', number: 9, reason: 'reconcile', facts: {} }
+  await assert.rejects(act({ github, context: {}, core: { info: (m) => info.push(m) }, config, target, env: { TOKEN_SOURCE: 'app' } }))
+  assert.match(info.join('\n'), /api: \d+ REST, \d+ GraphQL · token: app/)
 })

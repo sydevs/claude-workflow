@@ -10,14 +10,14 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
-import { isLogin, isReviewer, isHuman } from './decide.mjs'
+import { isLogin, isReviewer, isHuman, dispatcherLogins } from './decide.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
 
 /**
- * Post an advisory once. `bot` is `identity.expectedLogin`, and only that
- * author's comment counts as already posted — every key is guessable from the
- * item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
+ * Post an advisory once. `bot` is `identity.dispatcherLogins`, and only one of
+ * those authors' comments counts as already posted — every key is guessable
+ * from the item. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 async function commentOnce(gh, t, bot, key, body, dryRun, log) {
   const mark = dispatcherMark(key)
@@ -26,6 +26,29 @@ async function commentOnce(gh, t, bot, key, body, dryRun, log) {
   log(`comment: ${key}`)
   if (dryRun) return
   await gh.rest.issues.createComment({ owner: t.repo.owner, repo: t.repo.name, issue_number: t.number, body: `${mark}\n${body}\n\n<sub>🤖 sydevs dispatcher</sub>` })
+}
+
+/**
+ * May this handler be fired? It must be one of `dispatch.handlers`, and
+ * enabled where `enabledHandlers` lists any. A planned handler comes from
+ * `decide.mjs`, but a retried one comes from the record — a comment body — so
+ * both are checked here. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ *
+ * `dispatch.handlers`, not `handlers`: that block also keys `$comment` and
+ * `audit-nightly`, which cron fires and no record may name.
+ */
+function fireable(config, handler, log) {
+  const dispatchable = config.dispatch?.handlers
+  if (!handler || !Array.isArray(dispatchable) || !dispatchable.includes(handler)) {
+    log(`handler ${JSON.stringify(handler)} is not one of ours — skipped`)
+    return false
+  }
+  const enabled = config.dispatch.enabledHandlers
+  if (Array.isArray(enabled) && !enabled.includes(handler)) {
+    log(`handler ${handler} not enabled yet — skipped`)
+    return false
+  }
+  return true
 }
 
 /**
@@ -72,7 +95,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   let moved = false
   let bumpFixCi = false
   const rec = snapshot.record
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
 
   // The board is a lens. A token that cannot reach it must not stop the
   // dispatch, which is the part that matters — the record carries the state,
@@ -291,8 +314,8 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'dismissStale': {
         const own = a.type === 'dismissProxy'
         const message = own
-          ? `A commit of ${bot}'s own is now the head, and this approval did not cover it.`
-          : `${bot} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`
+          ? `A commit of ${config.identity.expectedLogin}'s own is now the head, and this approval did not cover it.`
+          : `${config.identity.expectedLogin} pushed a commit after this approval, and the approval did not cover it. Review the new commits, then approve again.`
         for (const id of a.ids) {
           log(`dismiss ${own ? 'own' : 'buried'} approval ${id}`)
           if (dryRun) continue
@@ -363,8 +386,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
-        const enabled = config.dispatch.enabledHandlers
-        if (Array.isArray(enabled) && !enabled.includes(a.handler)) { log(`handler ${a.handler} not enabled yet — skipped`); break }
+        if (!fireable(config, a.handler, log)) break
         await doFire({ gh, t, snapshot, handler: a.handler, flags: a.flags, attempt: a.attempt || 1, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi })
         recordDirty = true
         break
@@ -372,6 +394,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
       case 'retry': {
         const p = rec.pending
         if (!p) break
+        // The handler comes from the record, which is a comment body, so it is
+        // checked exactly as a planned one is.
+        if (!fireable(config, p.handler, log)) break
         await doFire({ gh, t, snapshot, handler: p.handler, flags: p.flags, attempt: p.attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi: p.bumpFixCi === true })
         recordDirty = true
         break
@@ -408,6 +433,10 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'attempts-exhausted', text: `${t.repo.full}#${t.number} ${cur?.handler || ''}`, id: cur?.id || null }) }
           break
         }
+        // The handler comes from the record, as `retry`'s does, so it is
+        // checked the same way. The lease is already released above, so a
+        // refusal leaves the item unlocked rather than stuck.
+        if (!fireable(config, cur.handler, log)) break
         await doFire({ gh, t, snapshot, handler: cur.handler, flags: cur.flags || {}, attempt, config, env, dryRun, log, now, fetchImpl, rec })
         break
       }
@@ -520,7 +549,7 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
   // anyway. This ref create is the compare-and-swap that settles it: one 201,
   // one 422. (why: docs/why.md#the-lease-is-a-ref-not-a-label)
   const item = { owner: t.repo.owner, repo: t.repo.name, number: t.number }
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
   const lease = await takeLease(gh, item, snapshot.pr?.head?.sha)
   if (!lease.won) {
     const why = lease.contended ? 'another pass holds the lease' : lease.error

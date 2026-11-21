@@ -59,12 +59,31 @@ export function coalesceTargets(targets) {
  * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo whose board
  * Status the cheap view rules out. The cron covers the rest.
  * (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+ *
+ * The drift targets are almost all of what an event run spends: each is a full
+ * `gather` in its own `act` leg, against the event's one. So under
+ * `dispatch.rateLimitFloor` they are shed, and the cron's full pass covers
+ * them. A budget that cannot be read sheds nothing.
+ * (why: docs/why.md#a-rate-limited-call-waits-for-the-reset)
  */
-export async function resolve({ github, context, config, now = new Date() }) {
+export async function resolve({ github, context, config, core = { info() {} }, now = new Date() }) {
   const own = await eventTargets({ github, context, config, now })
   if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
+  const floor = config.dispatch?.rateLimitFloor ?? 0
+  // `GET /rate_limit` is itself exempt from the limit it reports, so asking
+  // costs nothing. A budget nobody can read stays null and sheds nothing.
+  let remaining = null
+  if (floor) {
+    try {
+      remaining = (await github.rest.rateLimit.get()).data?.resources?.core?.remaining
+    } catch { /* unreadable: shed nothing */ }
+  }
+  if (Number.isFinite(remaining) && remaining < floor) {
+    core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
+    return own
+  }
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
   return own.concat(driftTargets(await cheapView(github, config, repo.owner, repo.name), config, repo, { now, limit, skip }))

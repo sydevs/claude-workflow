@@ -20,6 +20,7 @@
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { isBot } from './decide.mjs'
+import { installRetry } from './retry.mjs'
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 const lower = (s) => String(s || '').toLowerCase()
@@ -50,6 +51,7 @@ export function depsPrInFlight(pulls, config) {
 }
 
 export async function depsTick({ github, core, config, env = process.env, dryRun = false, now = new Date(), fetchImpl }) {
+  installRetry(github, config)
   const d = config.deps || {}
   const handler = d.handler || 'audit-deps'
   const enabled = config.dispatch?.enabledHandlers
