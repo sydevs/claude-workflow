@@ -47,6 +47,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { repoRoot as worktreeRoot, resolveBaseRefOrExit } from './base-ref.mjs'
+import { generatedPatterns } from './config.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const UNIT = String.fromCharCode(31)
@@ -355,17 +356,10 @@ function targets(repoRoot, base) {
   const changed = git(repoRoot, ['diff', '--name-only', '--diff-filter=ACM', base])
     .split('\n')
     .filter(Boolean)
-  const generated = (() => {
-    const p = join(repoRoot, '.claude/workflow.json')
-    if (!existsSync(p)) return []
-    try {
-      return (JSON.parse(readFileSync(p, 'utf8')).generatedFiles || []).map(
-        (g) => new RegExp(g.pattern),
-      )
-    } catch {
-      return []
-    }
-  })()
+  const workflowJson = join(repoRoot, '.claude/workflow.json')
+  const generated = generatedPatterns(
+    existsSync(workflowJson) ? readFileSync(workflowJson, 'utf8') : '',
+  )
   const denied = RULES.denyPaths
     .filter((d) => d.pathGlob)
     .map((d) => new RegExp(d.pathGlob.replace(/\*\*/g, '.*').replace(/([^.])\*/g, '$1[^/]*')))
