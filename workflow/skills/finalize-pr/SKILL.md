@@ -1,6 +1,6 @@
 ---
 name: finalize-pr
-description: Open or refresh the current branch's pull request — the only path to one. Use when the user asks to open, raise, create or refresh a PR, or to put the branch up for review. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and write the body, with preview links wherever the repo deploys previews: a draft for the bot's run, ready for a member's own branch. Never waits for CI, never merges. Do not use to answer a question about a PR, or to read, review, merge or check one. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
+description: Use when the user asks to open, raise, create or refresh the current branch's pull request, or to put the branch up for review. Simplify, review, run a conditional security review, run the lean gate, sync docs, push, and write the body, with preview links wherever the repo deploys previews: a draft for the bot's run, ready for a member's own branch. Never waits for CI, never merges. Do not use to answer a question about a PR, or to read, review, merge or check one. Also the final step of every skill that opens a PR; address-review runs steps 3 to 5 and 7c.
 effort: max
 allowed-tools: Bash(*), Read, Edit, Write, Grep, Glob, Task
 ---
