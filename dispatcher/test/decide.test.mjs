@@ -1004,16 +1004,19 @@ test('a continue the lost unlock asks for starts, and the event waits for it', (
   assert.deepEqual(types(decide(addressVerb, asked, config)), ['unlocked:address-review', 'record', 'fire:address-review', 'recheck'])
 })
 
-test('on an issue, the drain does not re-dispatch the very comment that drained it', () => {
+test('on an issue, the drain re-dispatches the pending verb under the leg\'s own reason', () => {
   const verb = { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER', commentId: 42 }
   const s = issueSnap({
     record: { current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z' }, pending: { handler: 'implement', refused: true } },
     comments: [{ id: 42, author: 'Ardnived', body: '@sydevs-bot implement', createdAt: '2026-10-07T11:00:00Z', association: 'MEMBER' }],
   })
-  const p = types(decide({ reason: 'issue_comment', facts: verb }, s, config))
-  assert.equal(p.filter((a) => a === 'targets').length, 0, 'act keys on repo#number:reason and would drop it anyway')
-  assert.deepEqual(p.filter((a) => a.startsWith('fire:')), ['fire:implement'], 'the verb starts once')
+  const plan = decide({ reason: 'issue_comment', facts: verb }, s, config)
+  const p = types(plan)
   assert.equal(p[0], 'unlocked:revise')
+  assert.deepEqual(p.filter((a) => a.startsWith('fire:')), ['fire:implement'], 'the verb starts once')
+  // Every target the drain emits here carries `issue_comment`, which is this
+  // leg's own reason: `act` keys `seen` on `repo#number:reason` and drops it.
+  for (const a of plan.filter((a) => a.type === 'targets')) assert.deepEqual(a.list.map((t) => t.reason), ['issue_comment'])
 })
 
 // ---- a wake hint promises only what wakes the bot ------------------------

@@ -1108,10 +1108,9 @@ const TURN_TAKEN = new Set(['fire', 'retry', 'timeout', 'relay', 'transfer'])
  */
 function missedUnlock(target, s, config) {
   if (untouched(s, config) || !s.record?.current || ownUnlock(s)) return []
-  // The event's comment id and nothing else: `case 'unlock'` reads `handler`
-  // from its facts too, and that is the dispatcher's own value, never an
-  // event's.
-  return route({ ...target, reason: 'unlock', facts: { missed: true, commentId: target.facts?.commentId } }, s, config)
+  // `missed` and nothing else: `case 'unlock'` reads `handler` from its facts
+  // too, and that is the dispatcher's own value, never an event's.
+  return route({ ...target, reason: 'unlock', facts: { missed: true } }, s, config)
 }
 
 export function decide(target, s, config) {
@@ -1422,11 +1421,7 @@ function route(target, s, config) {
       // only hits the in-flight guard. The PR is the answer.
       // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
       const answered = v?.verb === 'implement' && Boolean(inFlight(s))
-      // A drain whose own event is that comment re-dispatches nothing: `act`
-      // keys on `repo#number:reason` and would drop it, and the event's rule
-      // has the verb in hand.
-      const itsOwnComment = facts.missed && v && facts.commentId === v.comment.id
-      if (v && !answered && !itsOwnComment) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
+      if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
       if (s.item.state !== 'open') return plan
       const req = freshRequest(s)
       if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
