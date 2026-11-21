@@ -1,6 +1,7 @@
 // One target per repo#number, carrying every reason the pass found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
 
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
@@ -70,4 +71,72 @@ test('a failed queue run targets the PR its branch names', async () => {
 
 test('a passing or cancelled queue run targets nothing', async () => {
   for (const c of ['success', 'cancelled', 'neutral']) assert.deepEqual(await resolve({ github: noApi, context: queueRun(c), config: {} }), [], c)
+})
+
+// ---- expired locks on an event run (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+
+const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
+const now = new Date('2026-11-20T22:00:00Z')
+const capped = (n) => ({ ...config, dispatch: { ...config.dispatch, reconcileMaxPerEvent: n } })
+
+const comment = (number) => ({
+  eventName: 'issue_comment',
+  repo: { owner: repo.owner, repo: repo.name },
+  payload: { action: 'created', issue: { number }, comment: { user: { login: 'Ardnived' }, body: '@sydevs-bot implement', author_association: 'MEMBER', id: 7 } },
+})
+
+// Locked, and Working on the board, so the reconciler sees no drift here.
+const lockedNode = (number) => ({
+  number,
+  issueType: null,
+  labels: { nodes: [{ name: config.labels.lock }] },
+  blockedBy: { nodes: [] },
+  closedByPullRequestsReferences: { nodes: [] },
+  issueFieldValues: { nodes: [] },
+  projectItems: { nodes: [{ project: { number: config.projects.number }, fieldValueByName: { name: 'Working' } }] },
+})
+
+const record = (deadline) => [{
+  id: 1,
+  user: { login: config.identity.expectedLogin },
+  body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, current: { handler: 'implement', attempt: 1, deadline } })} -->\nrunning`,
+}]
+
+const world = (nodes, records) => ({
+  rest: { issues: { listComments: ({ issue_number: n }) => ({ data: records[n] || [] }) } },
+  graphql: async (q) => (q.includes('pullRequests(')
+    ? { repository: { pullRequests: { pageInfo: { hasNextPage: false }, nodes: [] } } }
+    : { repository: { issues: { pageInfo: { hasNextPage: false }, nodes } } }),
+})
+
+test('an event run reclaims a lock past its deadline, and leaves a live one alone', async () => {
+  const out = await resolve({
+    github: world([lockedNode(1), lockedNode(2), lockedNode(3)], { 1: record('2026-11-20T18:00:00Z'), 2: record('2026-11-20T17:26:00Z'), 3: record('2026-11-21T04:00:00Z') }),
+    context: comment(1), config: capped(10), now,
+  })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout']], 'its own item is never swept, and #3 is inside its deadline')
+  assert.deepEqual(out[1].facts, { handler: 'implement', attempt: 1 })
+  assert.equal(out[1].event, 'issue_comment.created', 'the record it fires names the event that found it')
+})
+
+test('a lock with no record is swept on an event run too, exactly as the cron does', async () => {
+  const out = await resolve({ github: world([lockedNode(5)], {}), context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [5, 'sweep-timeout']])
+  assert.deepEqual(out[1].facts, { reason: 'lock without a record' })
+})
+
+test('the reclaim and the drift share one cap', async () => {
+  const records = Object.fromEntries([2, 3, 4].map((n) => [n, record('2026-11-20T17:26:00Z')]))
+  const out = await resolve({
+    github: world([lockedNode(2), lockedNode(3), lockedNode(4)], records),
+    context: comment(1), config: capped(2), now,
+  })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout']], 'two, and the cron takes the rest')
+})
+
+test('a cheap view that cannot answer reclaims nothing', async () => {
+  const github = world([lockedNode(2)], { 2: record('2026-11-20T17:26:00Z') })
+  github.graphql = async () => { throw new Error('502') }
+  const out = await resolve({ github, context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'the cron is the backstop')
 })
