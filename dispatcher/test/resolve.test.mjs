@@ -124,11 +124,13 @@ test('a lock with no record is swept on an event run too, exactly as the cron do
 
 test('the reclaim and the drift share one cap', async () => {
   const records = Object.fromEntries([2, 3, 4].map((n) => [n, record('2026-11-20T17:26:00Z')]))
-  const out = await resolve({
-    github: world([lockedNode(2), lockedNode(3), lockedNode(4)], records),
-    context: comment(1), config: capped(2), now,
-  })
+  // #5 carries no lock, so `Working` is a Status the board may not hold: a
+  // drift target, and the only one either half of the cap can reach.
+  const nodes = [lockedNode(2), lockedNode(3), lockedNode(4), lockedNode(5, [])]
+  const out = await resolve({ github: world(nodes, records), context: comment(1), config: capped(2), now })
   assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout']], 'two, and the cron takes the rest')
+  const room = await resolve({ github: world(nodes, records), context: comment(1), config: capped(4), now })
+  assert.deepEqual(room.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout'], [4, 'sweep-timeout'], [5, 'reconcile']], 'the drift half takes what the reclaim leaves')
 })
 
 test('an item the reclaim took is not a drift target as well', async () => {
