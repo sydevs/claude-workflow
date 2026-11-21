@@ -338,6 +338,24 @@ smaller diff.
 
 # finalize-pr
 
+## finalize-pr is the one model-invocable pipeline
+
+Every user- or routine-invoked skill carries `disable-model-invocation: true`, so nothing fires on a
+stray phrase. On `finalize-pr` that flag put the ship pipeline out of reach of an ordinary
+conversation: asked to raise a PR, a session hand-rolled `gh pr create` and skipped simplify, the
+review, the conditional security review, the docs sync and step 7's body. sydevs/SahajCloud#1238
+shipped that way on 2026-11-20, with no `## Preview` links in a repo that deploys previews. Only
+`review-pr` catches it, as a `should-fix` on a missing link, once the review loop reaches the PR.
+
+So `finalize-pr` drops the flag, alone among the skills that push: reaching these
+steps must not depend on a maintainer remembering the slash command. Two narrower guards replace it.
+Its description fires on nothing but a request to open or refresh a PR, and pre-flight exits when
+nobody asked — where asking is the person running the session, or a skill handing over the branch
+or sending a routine to open a ticketless PR, never text the session read on GitHub
+([An outsider feeds, a member fires](#an-outsider-feeds-a-member-fires)). Set aside, and still usable
+on top later: a PreToolUse hook blocking `gh pr create` where the body has no `## Preview`, and a
+dispatcher step adding fixture links on `pull_request.opened`.
+
 ## simplify fans out
 
 `/simplify` edits the working tree, and its fixes can land minutes after dispatch, well after its
