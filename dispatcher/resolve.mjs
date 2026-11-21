@@ -65,10 +65,8 @@ export function coalesceTargets(targets) {
  * lock the record dates past its deadline, then the ones whose board Status
  * the cheap view rules out. The cron covers the rest.
  *
- * The reclaim is here because the cron, which asks for a sweep every half
- * hour, lands a fraction of that, and until now was the only thing that
- * reclaimed a lock nobody will unlock. A cheap view that cannot answer
- * reclaims nothing, and the cron is still the backstop.
+ * A cheap view that cannot answer reclaims nothing, so the cron stays the
+ * backstop for a lock nobody will unlock.
  * (why: docs/why.md#the-reconciler-replaces-the-drift-window,
  *  docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
