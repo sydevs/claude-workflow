@@ -114,6 +114,11 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
 
   let syncWanted = false
   for (const a of plan) {
+    // Once the issue has moved, `t.number` is not it any more: the writes
+    // after this point would land on whatever now holds that number, or 404.
+    // The post-loop writes already read `moved`; `route` used to put the
+    // transfer last, which is no longer the only way a plan reaches here.
+    if (moved) { log(`${a.type} skipped — the issue has moved`); continue }
     switch (a.type) {
       case 'note': log(a.text); break
       case 'ensure':
