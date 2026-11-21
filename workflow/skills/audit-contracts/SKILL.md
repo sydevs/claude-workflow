@@ -42,7 +42,18 @@ consumer's `command` and `paths`. The dispatcher runs that sync whenever a merge
 touches a source, so this check catches only what it missed — a push straight to `main`, or a sync
 PR closed unmerged.
 
-Run the consumer's `command` in its checkout, on `origin/main`. A clean `git status -- <paths>`
+**A `paths` entry the consumer moved reads as current to all three guards.** So check that the
+config still describes the repo, before you check the copy:
+
+```bash
+node workflow/lib/contract-paths.mjs ..   # PATHS MISSING names each repo and path
+```
+
+Act on the verdict word. A path that is absent is drift in the config, not in the copy. Point the
+entry at the file that repo builds from, in a `loop-config.json` PR here, as *Fixing* says. Never
+fail a consumer's CI on it. (why: docs/why.md#a-contract-check-checks-what-a-pr-changes)
+
+Then run the consumer's `command` in its checkout, on `origin/main`. A clean `git status -- <paths>`
 means current. A diff means stale: a consumer behind `main` has types that are quietly wrong, not
 broken — no build error, just a shape that no longer matches the API.
 
@@ -78,9 +89,10 @@ Fix it in one PR per drifted repo, copying the canonical block into the copy.
 ## Fixing
 
 **Open one PR per drifted contract, not a ticket.** A copy that is behind, a document that
-misdescribes the code, a missing changelog entry — each is fixed by making the copy or the
-document match its source. Branch `claude/<type>-contract-<scope>` (`contractSync.branch` for a
-copied contract), then run `/workflow:finalize-pr`. The PR opens as a draft, and the dispatcher
+misdescribes the code, a `paths` entry that misdescribes the repo, a missing changelog entry —
+fix each by making the copy, the document or the entry match what it describes. Branch
+`claude/<type>-contract-<scope>` (`contractSync.branch` for a copied contract), then run
+`/workflow:finalize-pr`. The PR opens as a draft, and the dispatcher
 carries it from there. Name the source you checked it against in the body.
 
 **File a ticket only when the code may be the wrong side** — when the document describes what a
