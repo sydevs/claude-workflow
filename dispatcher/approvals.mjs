@@ -9,10 +9,8 @@
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot,
  * docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
  *
- * `decide.mjs` imports these; `status.mjs` reads `proxyApproves` and
- * `proxyVerdict`, `gather.mjs` `proxyApproves`. Nothing here imports them
- * back: an edge into either would be the directory's first cycle. The actions these emit are `actions.mjs`, and the
- * predicates they read a snapshot with `predicates.mjs`. Nothing here fetches.
+ * Nothing here imports `decide.mjs` or `status.mjs` back: that edge would be
+ * the directory's first cycle. Nothing here fetches.
  */
 
 import { commentOnce, dismissProxy, dismissStale, note, proxyApprove, requestReviewer } from './actions.mjs'
