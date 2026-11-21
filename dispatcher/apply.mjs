@@ -29,13 +29,17 @@ async function commentOnce(gh, t, bot, key, body, dryRun, log) {
 }
 
 /**
- * May this handler be fired? It must be one `loop-config.json` names, and
+ * May this handler be fired? It must be one of `dispatch.handlers`, and
  * enabled where `enabledHandlers` lists any. A planned handler comes from
  * `decide.mjs`, but a retried one comes from the record — a comment body — so
  * both are checked here. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+ *
+ * `dispatch.handlers`, not `handlers`: that block also keys `$comment` and
+ * `audit-nightly`, which cron fires and no record may name.
  */
 function fireable(config, handler, log) {
-  if (!handler || !Object.hasOwn(config.handlers || {}, handler)) {
+  const dispatchable = config.dispatch?.handlers
+  if (!handler || !Array.isArray(dispatchable) || !dispatchable.includes(handler)) {
     log(`handler ${JSON.stringify(handler)} is not one of ours — skipped`)
     return false
   }

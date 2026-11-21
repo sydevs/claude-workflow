@@ -574,13 +574,13 @@ test('a dry run journals no timeout', async () => {
 })
 
 // A retried handler comes out of the record, which is a comment body, so it
-// is checked against `handlers` exactly as a planned one is. Without that,
-// anything that could write a record could name an arbitrary handler string.
-// (why: docs/why.md#the-dispatcher-has-its-own-github-app)
-test('a handler the record names but loop-config.json does not is never fired', async () => {
+// is checked against `dispatch.handlers` exactly as a planned one is. Without
+// that, anything that could write a record could name an arbitrary handler
+// string. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+async function firedFromRecord(handler) {
   // Unlocked, with a pending retry: the state a `reconcile` pass drains.
   const world = issueWorld()
-  const pending = { handler: 'exfiltrate', flags: {}, attempt: 1, reason: 'forged', retryAfter: null }
+  const pending = { handler, flags: {}, attempt: 1, reason: 'forged', retryAfter: null }
   world.comments[9] = [{
     id: 1,
     body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, fixCi: 0, recheck: false, pending, current: null, dispatches: [] })} -->\npending`,
@@ -600,7 +600,19 @@ test('a handler the record names but loop-config.json does not is never fired', 
     now,
     fetchImpl: async () => { throw new Error('must not fire') },
   })
-  assert.match(logs.join('\n'), /"exfiltrate" is not one of ours/)
+  return logs.join('\n')
+}
+
+test('a handler the record names but loop-config.json does not is never fired', async () => {
+  assert.match(await firedFromRecord('exfiltrate'), /"exfiltrate" is not one of ours/)
+})
+
+// `handlers` keys `$comment` and `audit-nightly`, which cron fires on its own
+// routine. Checking the wide block would have let a forged record fire the
+// nightly audit on any item, since `enabledHandlers` is null.
+test('a handler only cron fires is not one a record may name', async () => {
+  assert.match(await firedFromRecord('audit-nightly'), /"audit-nightly" is not one of ours/)
+  assert.match(await firedFromRecord('$comment'), /"\$comment" is not one of ours/)
 })
 
 // The run that ran out of budget is the one whose cost is worth reading, so
