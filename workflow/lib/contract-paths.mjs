@@ -64,11 +64,6 @@ export function present(dir, paths) {
   return new Set(out.split('\n').filter(Boolean))
 }
 
-/** The verdict word for rows carrying a `found` flag each. */
-export function verdict(rows) {
-  return rows.every((r) => r.found) ? 'PATHS PRESENT' : 'PATHS MISSING'
-}
-
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const ws = process.argv[2] || '..'
   const consumers = loadLoopConfig().contractSync?.consumers || {}
@@ -100,6 +95,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
   for (const r of rows) console.log(`  ${r.found ? 'ok      ' : 'MISSING '} ${r.repo} ${r.path}`)
   const absent = rows.filter((r) => !r.found).length
-  console.log(`\n${verdict(rows)} — ${absent} of ${rows.length} configured copies absent.`)
+  const word = absent ? 'PATHS MISSING' : 'PATHS PRESENT'
+  console.log(`\n${word} — ${absent} of ${rows.length} configured copies absent.`)
   process.exit(absent ? 1 : 0)
 }

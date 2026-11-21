@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { present, verdict, REF } from './contract-paths.mjs'
+import { present, REF } from './contract-paths.mjs'
 
 // Fixture pre-mortem: nothing here stands in for the config. Every repo name
 // and path comes from the real loop-config.json, so a consumer added or a copy
@@ -57,11 +57,6 @@ test('every configured copy names a repo, and is spelled as a tree spells it', (
     }
   }
   assert.ok(copies > 0)
-})
-
-test('one absent copy decides the verdict for all of them', () => {
-  assert.equal(verdict([{ found: true }, { found: true }]), 'PATHS PRESENT')
-  assert.equal(verdict([{ found: true }, { found: false }]), 'PATHS MISSING')
 })
 
 test(`a moved copy leaves ${REF}, and no ref at all is not an answer`, (t) => {
