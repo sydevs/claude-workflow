@@ -52,9 +52,10 @@ Two lenses carry the most weight, in this order:
 
    **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** The
    streamliner (*Make every new piece earn its place*) walks it for each piece `new-pieces.mjs`
-   lists. You walk it for the rest: each dependency the diff adds, and each piece nested where the
-   script cannot see it, such as a hook inside a config object. Ask whether the repo already
-   has it (name the path), the platform does it (name the API), or an installed package does it
+   lists. You walk it for the rest: each dependency the diff adds, each piece nested where the
+   script cannot see it, such as a hook inside a config object, and each new piece in a file the
+   JSON lists under `skipped`. Ask whether the repo already has it (name the path), the platform
+   does it (name the API), or an installed package does it
    (name it). A named answer is a finding, and so is a streamliner sketch that holds. A guess with
    neither is not. A `shortcut:` comment that names its limit is a decision, unless the expected
    load already crosses it. This check never raises a test, scale or speed point.
