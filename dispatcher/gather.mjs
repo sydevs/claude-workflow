@@ -63,14 +63,8 @@ async function recordAndComments(gh, base, total, bot) {
     const { data } = await gh.rest.issues.listComments({ owner: base.owner, repo: base.repo, issue_number: base.number, per_page: FULL_PAGE })
     if (data.length < FULL_PAGE) return { record: findRecord(data, bot), comments: newestWindow(data).map(comment) }
     // A full page is more than the count promised, so the count lagged the
-    // thread and this is not all of it. The record is among the oldest
-    // comments, though, so the page in hand almost always holds it — and
-    // `loadRecord` resumes at the next page rather than re-reading this one.
-    const seed = findRecord(data, bot)
-    return {
-      record: seed.id !== null ? seed : await loadRecord(gh, base, bot, 2),
-      comments: await newestComments(gh, base, total),
-    }
+    // thread and this is not all of it. Fall through and page it, which costs
+    // one extra call in a race nobody has seen.
   }
   return { record: await loadRecord(gh, base, bot), comments: await newestComments(gh, base, total) }
 }
