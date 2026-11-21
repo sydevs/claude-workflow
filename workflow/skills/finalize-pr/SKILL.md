@@ -343,8 +343,9 @@ open. (why: docs/why.md#a-pr-question-is-a-thread-on-the-line)
 
 1. **Ask only a decision a person owns.** Settle every fact yourself first
    (format-ticket's *Decisions, facts, and open questions*).
-2. **Build the recommended option.** The branch is then complete whatever the answer, and any
-   other answer costs one commit.
+2. **Recommend the option that leaves less to maintain**, even when it makes this PR bigger.
+   (why: docs/why.md#the-critic-gives-a-second-opinion-on-each-question) **Build it.** The branch
+   is then complete whatever the answer, and any other answer costs one commit.
 3. **Never ask twice.** A thread whose root carries `review.questionMarker` and asks the same
    thing already asks it.
 4. **Post every new question in one review.** `pull_request_review_write method:create`, then

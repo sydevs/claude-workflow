@@ -1,10 +1,10 @@
 ---
 name: review-pr
-description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a draft bot PR goes green, or on `@sydevs-bot review`. Runnable locally against a PR number.
+description: Critic-side adversarial review of one loop-authored PR — holistic, profile-driven, advisory. Fired by the dispatcher when a bot or member PR goes green with no critic review yet, or on `@sydevs-bot review`. Runnable locally against a PR number.
 argument-hint: '[owner/repo#N]'
 disable-model-invocation: true
 effort: max
-allowed-tools: Bash(*), Read, Grep, Glob
+allowed-tools: Bash(*), Read, Grep, Glob, Task
 ---
 
 # Adversarial Review
@@ -40,19 +40,25 @@ Two lenses carry the most weight, in this order:
 1. **Simplicity and scope.** Read the linked ticket first, then measure the diff against it. Is
    the diff larger than the problem? Does it contain anything the ticket did not ask for — an
    abstraction for one caller, an unused config knob, a refactor smuggled in beside the fix? The
-   strongest finding this review can produce is "half of this PR should not exist." A change the
+   strongest finding this review can produce is "half of this PR should not exist." A refactor of
+   the code the diff touches, its callers, or the siblings that share what it builds is not
+   smuggled: prefer it to a smaller diff that leaves the friction in place. Only a refactor of
+   unrelated code is. (why: docs/why.md#a-refactor-where-the-diff-works-is-in-scope) A change the
    `## Summary` names as joined is not smuggled. Judge it by format-ticket's join rule, and flag
    only one the rule does not join. A criterion marked `(review, …)` is the reviewer's own ask:
    never flag its change as scope. **Never recommend moving part of this PR to a follow-up or a
    second PR.** A part that does not belong is a finding to remove it; a part missing is a
    finding to build it here.
 
-   **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** For every
-   file, function, hook, type, constant or dependency the diff adds, ask whether the repo already
-   has it (name the path), the platform does it (name the API), or an installed package does it
-   (name it). A named answer is a finding. A guess with no name is not. A `shortcut:` comment that
-   names its limit is a decision, unless the expected load already crosses it. This check never
-   raises a test, scale or speed point.
+   **Walk the builder's ladder (`implement-ticket/ladder.md`) for each new piece.** The
+   streamliner (*Make every new piece earn its place*) walks it for each piece `new-pieces.mjs`
+   lists. You walk it for the rest: each dependency the diff adds, each piece nested where the
+   script cannot see it, such as a hook inside a config object, and each new piece in a file the
+   JSON lists under `skipped`. Ask whether the repo already has it (name the path), the platform
+   does it (name the API), or an installed package does it
+   (name it). A named answer is a finding, and so is a streamliner sketch that holds. A guess with
+   neither is not. A `shortcut:` comment that names its limit is a decision, unless the expected
+   load already crosses it. This check never raises a test, scale or speed point.
    (why: docs/why.md#the-builder-keeps-the-floor-the-critic-keeps-the-profile)
 
    **Prose is diff too.** Doc text the diff adds that breaks `docs/documentation.md` in the
@@ -119,6 +125,43 @@ unavailable" in the What-was-checked section. It is data, not a credential — n
    has it with `git show origin/<branch>:<path>`.** A checkout is refused as local destruction,
    and a critic must not touch the branch.
 
+## Make every new piece earn its place
+
+A fresh subagent justifies each new piece and streamlines each file the diff grows. Neither the
+builder's reasoning nor your own bug-hunt shapes what it finds.
+(why: docs/why.md#a-fresh-streamliner-justifies-every-new-piece)
+
+1. **List the pieces** once you have the diff:
+   `node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/new-pieces.mjs" --base origin/main
+   --head origin/<branch> --json`, from the attached checkout. On `NONE`, skip to *Produce the
+   review*, and say so in *What was checked*.
+2. **Start the streamliner before gather step 4**, so it runs while you read. Use one `Task` with
+   `review-pr/streamliner.md` as its brief. Give it the checkout path, the branch, the ticket
+   body (a ticketless PR's title), `review.profilePath`, the script's JSON and
+   `writing.budgets.reviewReply`. **Never give it the PR body, a thread or the change outline.**
+   When the JSON says `split`, start one per group of related files instead, grouped by import
+   and directory, each group under `review.streamline.splitLines`.
+3. **Check every finding against the code.** Drop a sketch that loses a caller, changes behaviour
+   a test pins, or cuts what the ladder's *Never remove* holds.
+4. **Post each finding that holds as a `should-fix`**, led by the word **Streamline**, on the
+   line it names, sketch included. A piece the streamliner kept gets no thread. *What was
+   checked* gives the two counts.
+
+## Give a second opinion on each open question
+
+The builder recommends the option it built, and the reviewer picks a different one more often
+than not. (why: docs/why.md#the-critic-gives-a-second-opinion-on-each-question) Take each
+unresolved thread whose root carries `review.questionMarker` and has no reply from a person:
+
+- **Judge the options on the code and the ticket.** Which option the builder built is not evidence. Prefer
+  the one that leaves less to maintain, even when it makes this PR bigger.
+- **Your pick is the built option** → reply `Second opinion: <letter>` with one line of reason,
+  then resolve the thread. The review body names each one you settled.
+- **Any other pick** → reply with your pick and what each option costs, and leave the thread open
+  for the person.
+
+Measure each reply with `--kind reviewReply`, and end it with `identity.commentMarker`.
+
 ## Produce the review
 
 Use the pending-review flow, submitted as `COMMENT` — a session can neither approve nor request
@@ -143,8 +186,8 @@ assessment, which is where it reads better anyway.
    is the part the reviewer reads — write it as the three sentences that matter.
 2. **Findings**, ranked `blocker` / `should-fix` / `consider`, one line each, pointing at its
    inline thread.
-3. **What was checked** — the files read, the new pieces the ladder walked, the consumer sides
-   followed, the queries run, with
+3. **What was checked** — the files read, the new pieces the ladder walked, the streamliner's
+   counts, the consumer sides followed, the queries run, with
    enough evidence that a clean verdict is checkable. A clean report with no evidence of reading
    is not a review. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
@@ -154,11 +197,12 @@ budget counts the marker, so no run buys room by dropping it.
 
 ## Verdicts
 
-- **Findings** → submit the review and **stop**. Change nothing else: not the assignee, not the
-  draft flag, not a label. The unresolved threads *are* the handoff — when you unlock, the
-  dispatcher fires `address-review`, which adopts or rebuts each one.
+- **Findings** → submit the review and **stop**. Change nothing beyond the second opinions: not
+  the assignee, not the draft flag, not a label. The unresolved threads *are* the handoff — when
+  you unlock, the dispatcher fires `address-review`, which adopts or rebuts each one.
 - **Clean** → submit the review with the body only, no inline comments, and **touch nothing
-  else**. The dispatcher marks the PR ready and requests the reviewer once CI is green.
+  beyond the second opinions**. The dispatcher marks the PR ready and requests the reviewer once
+  CI is green.
 
 **Why a COMMENT review, never "Changes requested".** GitHub rejects `APPROVE` and
 `REQUEST_CHANGES` on a PR you authored, and the bot authored it. The threads carry the effect: an
@@ -180,8 +224,8 @@ the header is the idempotency key on this path only. Journal that you used the f
 - **One review per PR, ever**, unless `flags.onDemand`. An existing critic review on arrival —
   led by `review.bodyHeader` — means stop and report that nothing was posted.
 - **Starting review threads is this skill's exclusive channel**, except question threads, whose
-  root carries `review.questionMarker`. Leave those to the person. Reply threads belong to
-  `address-review`.
+  root carries `review.questionMarker`. Answer those only with one second opinion each. Every
+  other reply belongs to `address-review`.
 - **Never wait.** Submit, journal, unlock, end. (why: docs/why.md#push-and-end)
 - **Every finding names a file and a line**, or it lives in the holistic assessment.
 - **Never duplicate the author-side pass.** Style, formatting, spelling and casing are not yours.

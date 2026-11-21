@@ -287,6 +287,53 @@ no speculative machinery, naming the exposure in the PR body instead. The critic
 and its ladder check never raises a test, scale or speed point. A guard the reviewer may still
 remove is then a line they can see, not a silent build.
 
+## A fresh streamliner justifies every new piece
+
+In the month to 2026-11-20 the reviewer wrote about fifty inline comments asking a new function to
+justify itself or a file to be streamlined: *"Consider each new function in this file and justify
+it"* (SahajAtlasWeb#450), *"make sure that each line earns it's keep"* (SahajCloud#1134). Twenty
+came in the four days after the profile's 2026-11-15 refinement had already asked for exactly
+that, and the critic had cleared the shape of most of those files. Its own skill stopped it in
+three ways. The ladder walk counted only a named alternative, so a rewrite with nothing to name was
+never a finding. It justified a piece by the ticket's approach, not by the code. And nothing made
+it account for each piece, in a context already full of bugs and contracts.
+
+So a script lists the pieces, and a subagent that never sees the builder's prose justifies each
+one from the code, the ticket and the reviewer's own profile, or returns a sketch. The sketch must be concrete enough to
+build, because `address-review` adopts about four critic threads in five. A fold the code does not
+support costs a reversal: the reviewer's own *"Is this file really needed?"* on WeMeditateWeb#283
+got `bar.ts` deleted, then restored. For the same reason the builder answers a sketch only with a
+fact it breaks. A rebuttal on taste hands the decision back to the bias the pass exists to escape.
+
+It aims for fewer concepts, not fewer lines: the reviewer has asked not to break up a file to
+shrink it (SahajCloud#912). Fixtures, mocks, stories and docs are in. Test files, generated files
+and vendored code are out, at the reviewer's call. One subagent sees every qualifying file at once,
+because the refactors the reviewer asked for were cross-file: one transcription path for files and
+meditations (SahajCloud#1075), the duplication between mailing-list providers (#1088). It splits
+only past `review.streamline.splitLines`, where one context would dilute again.
+
+## A refactor where the diff works is in scope
+
+The scope lens flagged a refactor beside the fix as smuggled, and the builder's ticket proposals
+recommended a separate ticket. The reviewer keeps choosing the other way: *"All changes should be
+made in this PR, not in a follow up"* (SahajCloud#1102), and "in this PR" over the recommended
+ticket (#999). On 2026-11-20 they asked the loop to favour refactoring and long-term maintenance
+over small PRs. So a refactor of the code the diff touches, its callers, or the siblings that share
+what it builds is in scope, and preferred. A refactor of unrelated code is still scope creep: a PR
+that grows everywhere is the review load this rule exists to cut.
+
+## The critic gives a second opinion on each question
+
+About a third of the reviewer's inline comments in that month were bare option picks on the
+builder's question threads: 91 of 288. Where the bot had marked a default, the reviewer chose
+another option more often than not, roughly 30 times to 24, and usually the one with less code:
+"drop both" over "keep it (built)" (SahajCloud#1017), a per-collection rule over "the registry
+stays (built)" (#1013). A builder recommends what it already built. The critic, which did not
+build it, now picks on its own. Agreement on the built option settles the thread without the
+person, and the holistic assessment names it so they can reopen it. Only a disagreement waits on
+them, now with two views. The builder's own default leans the same way: less to maintain, over a
+smaller diff.
+
 ---
 
 # finalize-pr
@@ -859,6 +906,15 @@ chosen to avoid — a document the review skims instead of weighing. The gate ke
 model of the reviewer's *intent*, which generalizes to cases the week never showed, rather than a
 transcript of their incidents, which does not. It also keeps the weekly diff small enough for the
 reviewer to actually audit their own portrait.
+
+## The critic's recall is counted weekly
+
+Profile value 1 asked every layer to pay rent from the day it was seeded, and the 2026-11-15
+refinement asked the review to read a grown file whole. Each time the reviewer flagged what the
+critic passed, the reflection read a profile gap and added text, and the misses went on. A count
+shows whether a change to the critic's steps worked, which another paragraph cannot. Option picks
+and answers to the bot's questions are left out: they measure the builder's questions, not the
+critic's reading.
 
 ---
 
@@ -2186,6 +2242,14 @@ person's review, asks it for work: the author's own threads are notes to themsel
 review reaches the bot as its threads, since the review body it would be read from is empty. A
 member branch outside `claude/*` is reached through [the relay](#the-relay).
 Anyone else's PR answers a mention and nothing more.
+
+## A bot PR opened ready still gets the critic
+
+The critic fired for a bot PR only while it was a draft, because every cloud run opens one. A
+session run by hand can open a bot-authored PR ready, and SahajAtlasWeb#442, #444 and #450, adding
+3,592, 1,464 and 645 lines, reached the reviewer with no critic at all. Such a PR now gets the
+critic as a member's ready PR does. An approval already given ends the debt: a critic thread then
+would only hold a PR a person has passed.
 
 ## The owner's PR is approved by the bot
 

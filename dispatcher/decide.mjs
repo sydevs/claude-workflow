@@ -532,8 +532,12 @@ function evaluateGreenPr(s, config) {
   // as a bot draft's markReady. CI is green (evaluatePr got here), address-review
   // has answered the threads (it ran first), and the critic has run or the PR is
   // under `review.skipWhen`. (why: docs/why.md#a-members-pr-gets-the-loop)
+  // A bot PR opened ready skipped the draft pass too, and gets the same critic
+  // unless a person has already approved it.
+  // (why: docs/why.md#a-bot-pr-opened-ready-still-gets-the-critic)
   const member = !isBot(pr.user?.login, config)
-  if (member && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
+  const owed = member || s.normalized?.reviewDecision !== 'APPROVED'
+  if (owed && !ownReview(s, config) && !underThreshold(pr, config)) return [fire('review-pr')]
   // The owner's own PR has no one to ask: the bot approves it at this point
   // instead, and `mayArm` leaves the merge to the owner.
   // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)

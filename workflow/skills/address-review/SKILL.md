@@ -74,7 +74,8 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
   reviewer's call, never yours. Build nothing for that part yet. Propose the ticket in a review
   comment: a reply in their thread, or a question thread (`/workflow:finalize-pr` step 7c) for a
   review-body point. Say what the ticket would hold, then give format-ticket's options, your
-  recommendation first, each with its implications:
+  recommendation first, each with its implications. Recommend *A* when the part sits in code this
+  PR touches (why: docs/why.md#a-refactor-where-the-diff-works-is-in-scope):
   - *A — build it in this PR:* what it adds to the diff and the review, and what it delays.
   - *B — file it as its own ticket:* what merges without it, what stays inconsistent until it
     ships, and that it needs its own `implement`.
@@ -91,7 +92,7 @@ defer an ask to a follow-up. (why: docs/why.md#the-reviewers-ask-is-the-spec)
 | --- | --- |
 | **Adopt** | One commit per thread, `fix(<scope>): <thread in five words>`, built by `implement-ticket/ladder.md` and the profile's *Values, ranked*. Reply in the thread: what changed and the SHA, inside `writing.budgets.reviewReply`. **Resolve the thread.** |
 | **Rebut a fact** | Only when the ask rests on a premise the code disproves. Reply with the evidence — a file and line, or the ticket line it satisfies. **On a human's thread, leave it open.** Only they settle it. |
-| **Rebut the critic** | On a thread the own login rooted, any point may be rebutted with evidence. **Resolve it:** your evidence settles a bot's point. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) |
+| **Rebut the critic** | On a thread the own login rooted, any point may be rebutted with evidence. **Resolve it:** your evidence settles a bot's point. (why: docs/why.md#a-rebutted-critic-thread-is-resolved) A thread led by **Streamline** is rebutted only by a fact its sketch breaks — a caller, a test, an item on the ladder's *Never remove* list — never by a preference for the shape you built. (why: docs/why.md#a-fresh-streamliner-justifies-every-new-piece) |
 | **An answer to a question thread** | Build the chosen option in one commit, or keep the built one. Reply with the SHA, or that the built option stands. **Resolve the thread.** |
 | **An answer to a ticket proposal** | *A* → build it here, and add it to the ticket's criteria as a review line. *B* → file it through `/workflow:write-ticket` in `create` mode, and link it under the PR's `## Notes for reviewer`. Reply with the SHA or the new ticket. **Resolve the thread.** |
 | **Ambiguous** | **Ask. Do not guess.** Reply with the question in format-ticket's options shape: each option with what it implies, your recommendation first. Leave it open — on the critic's thread too, but only for a question the reviewer must answer, never for visibility. |

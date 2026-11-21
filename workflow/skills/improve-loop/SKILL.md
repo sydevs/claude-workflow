@@ -93,7 +93,7 @@ added for one bad night outlives its cause.
 | PRs needing 3+ `address-review` sessions | Tickets are underspecified, or `implement-ticket` is guessing |
 | Rebuttals the reviewer then overrode | The bot argues where it should adopt — a profile gap |
 | The same reviewer comment theme on 2+ PRs | A missing profile value, or a missing skill rule |
-| The reviewer flagged something the adversarial review passed clean | A profile gap |
+| The reviewer flagged something the adversarial review passed clean | A profile gap. Where the profile already holds that value, the gap is in `review-pr`'s steps: propose a skill change, not more profile text |
 | Adversarial-review findings the reviewer resolved without change | The bot review over-flags — trim the profile, not the code |
 | A PR under `review.skipWhen` that the reviewer then changed | The threshold is too generous |
 | Proposals sitting unreviewed | Audits outrun review capacity — lower `ceilings.maxProposalsPerSurvey` |
@@ -125,6 +125,12 @@ From the seven titles and `<!-- tally -->` blocks, with no comment reads:
 - sessions per merged PR — the week's dispatches on PR items divided by the PRs merged,
 - every item with **three or more sessions**, with its count and handlers,
 - `address-review` sessions per PR, where a review arrived one comment at a time.
+
+**Critic recall** needs the reviewer reads from *Evidence*. Count the reviewer's substantive inline
+comments in the window, leaving out a bare option pick and any answer to the bot's question. Then
+count how many sit on a file the critic reviewed without raising the same point. Report the second
+as a share of the first, by theme, beside last week's numbers.
+(why: docs/why.md#the-critics-recall-is-counted-weekly)
 
 **Planning quality** needs reads the tally does not carry. Find the roadmap tickets with children
 active in the window,
