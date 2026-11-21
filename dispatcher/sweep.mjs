@@ -33,7 +33,11 @@ export async function expiredLockTargets({ github, config, repo, items, now, eve
     if (reads >= limit) break
     reads += 1
     const push = (facts) => out.push({ repo, kind: i.kind, number: i.number, reason: 'sweep-timeout', event, facts })
-    const { rec } = await loadRecord(github, { owner: repo.owner, repo: repo.name, number: i.number }, bot)
+    // A record this pass cannot read reclaims nothing, as `cheapView` and
+    // `listLeases` answer nothing: on an event run the reclaim is a passenger,
+    // and one 403 must not cost the event its own target.
+    let rec
+    try { ({ rec } = await loadRecord(github, { owner: repo.owner, repo: repo.name, number: i.number }, bot)) } catch { continue }
     const cur = rec.current
     if (!cur) { push({ reason: 'lock without a record' }); continue }
     if (cur.deadline && Date.parse(cur.deadline) < now.getTime()) push({ handler: cur.handler, attempt: cur.attempt })

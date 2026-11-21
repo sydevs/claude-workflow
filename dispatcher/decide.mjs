@@ -1100,11 +1100,15 @@ const TURN_TAKEN = new Set(['fire', 'retry', 'timeout', 'relay', 'transfer'])
  * later fire for the item is refused. Only the cron read it, hours later; any
  * event on the item drains it now, as the unlock it was. Two events on
  * sydevs/WeMeditateWeb#326 waited on the sweep for it.
+ *
+ * `missed` is what stops the drain re-deriving what the event itself derives:
+ * every PR event funnels into `evaluatePr`, and some of that runs ahead of the
+ * lock guard, so deriving twice plans two approvals and two dismissals.
  * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
 function missedUnlock(target, s, config) {
   if (untouched(s, config) || !s.record?.current || ownUnlock(s)) return []
-  return route({ ...target, reason: 'unlock', facts: {} }, s, config)
+  return route({ ...target, reason: 'unlock', facts: { ...(target.facts || {}), missed: true } }, s, config)
 }
 
 export function decide(target, s, config) {
@@ -1405,7 +1409,9 @@ function route(target, s, config) {
         // (why: docs/why.md#the-relay)
         const req = freshRequest(s)?.relay
         if (req && req.sha !== s.pr?.head?.sha) return plan.concat(relayPlan(s, config, req))
-        return plan.concat(evaluatePr(s, config))
+        // A drained unlock derives nothing: the event that drained it is a PR
+        // event, and every one of those funnels into `evaluatePr` already.
+        return facts.missed ? plan : plan.concat(evaluatePr(s, config))
       }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
@@ -1413,7 +1419,11 @@ function route(target, s, config) {
       // only hits the in-flight guard. The PR is the answer.
       // (why: docs/why.md#a-pr-is-the-answer-to-an-implement-verb)
       const answered = v?.verb === 'implement' && Boolean(inFlight(s))
-      if (v && !answered) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
+      // A drain whose own event is that comment re-dispatches nothing: `act`
+      // keys on `repo#number:reason` and would drop it, and the event's rule
+      // has the verb in hand.
+      const itsOwnComment = facts.missed && v && facts.commentId === v.comment.id
+      if (v && !answered && !itsOwnComment) return plan.concat(targets([{ repo: s.repo, kind: 'issue', number: s.item.number, reason: 'issue_comment', facts: { author: v.comment.author, body: v.comment.body, association: 'MEMBER', commentId: v.comment.id } }]))
       if (s.item.state !== 'open') return plan
       const req = freshRequest(s)
       if (req?.escalated && s.parent) plan.push(targets([{ repo: s.parent.repo, kind: 'issue', number: s.parent.number, reason: 'escalated', facts: { child: `${s.repo.full}#${s.item.number}` } }]))
@@ -1480,8 +1490,18 @@ function route(target, s, config) {
       if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
-    case 'sweep-timeout':
-      return [{ type: 'timeout' }]
+    // The record is read again here, as `sweep-lease` and `reconcile` do.
+    // `resolve` found this target in another job, outside the per-item
+    // concurrency group, so by now the lock may be a later session's: timing
+    // that one out would delete its lease and fire its handler a second time.
+    // (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+    case 'sweep-timeout': {
+      const cur = s.record?.current
+      if (!s.locked) return [note('the lock is already off — the unlock path owns it')]
+      if (!cur) return [{ type: 'timeout' }]
+      if (cur.deadline && Date.parse(cur.deadline) < nowOf(s).getTime()) return [{ type: 'timeout' }]
+      return [note(`${cur.handler} is inside its deadline — re-fired since the sweep found it`)]
+    }
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {

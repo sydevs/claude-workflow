@@ -973,18 +973,21 @@ const missed = (over = {}) => prSnap({
 const addressVerb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot address', association: 'MEMBER' } }
 
 test('an event on an item whose unlock was lost releases the lease before anything fires', () => {
-  // The drain derives the PR and answers the member's mention itself, so the
-  // comment waits on that session's unlock, as one under a live lock does.
   const p = types(decide(addressVerb, missed(), config))
-  assert.deepEqual(p, ['unlocked:review-pr', 'note', 'fire:address-review', 'recheck'])
+  assert.deepEqual(p, ['unlocked:review-pr', 'note', 'fire:address-review'])
   assert.ok(p.indexOf('unlocked:review-pr') < p.indexOf('fire:address-review'), 'the lease goes before the fire it would refuse')
 })
 
-test('a drain that only reports leaves the event to its own rule', () => {
-  // A member's draft is left alone, so the drain's derivation says nothing and
-  // the mention is the request it always was.
-  const draft = missed({ pr: { ...prSnap().pr, draft: true, user: { login: 'Ardnived' } } })
-  assert.deepEqual(types(decide(addressVerb, draft, config)), ['unlocked:review-pr', 'note', 'fire:address-review'])
+test('the drain derives nothing a PR event derives anyway, so nothing is planned twice', () => {
+  // Every PR event funnels into evaluatePr, and `stalePlan` runs ahead of its
+  // lock guard — two derivations plan two approvals and two dismissals.
+  const stale = missed({
+    reviews: [{ id: 7, user: { login: 'Ardnived' }, state: 'APPROVED', commit_id: 'old', submitted_at: '2026-09-08T09:00:00Z' }],
+    prCommits: [{ sha: 'old', author: 'Ardnived' }, { sha: 'abc', author: 'sydevs-bot' }],
+  })
+  const p = types(decide(addressVerb, stale, config))
+  assert.deepEqual(p.filter((a) => a === 'dismissStale'), ['dismissStale'], 'one dismissal: a second answers 422 and kills the leg')
+  assert.deepEqual(p, [...new Set(p)], 'and no action type is planned twice')
 })
 
 test('the dispatcher\'s own unlock, and no session at all, read exactly as before', () => {
@@ -993,12 +996,24 @@ test('the dispatcher\'s own unlock, and no session at all, read exactly as befor
   assert.deepEqual(types(decide(addressVerb, missed({ record: { fixCi: 0 } }), config)), ['note', 'fire:address-review'])
 })
 
-test('a continue the lost unlock asks for starts, and nothing fires twice', () => {
+test('a continue the lost unlock asks for starts, and the event waits for it', () => {
   const asked = missed({
     record: { fixCi: 0, current: { handler: 'address-review', firedAt: '2026-09-08T10:00:00Z' } },
     request: { at: '2026-09-08T10:30:00Z', body: { continue: true } },
   })
   assert.deepEqual(types(decide(addressVerb, asked, config)), ['unlocked:address-review', 'record', 'fire:address-review', 'recheck'])
+})
+
+test('on an issue, the drain does not re-dispatch the very comment that drained it', () => {
+  const verb = { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER', commentId: 42 }
+  const s = issueSnap({
+    record: { current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z' }, pending: { handler: 'implement', refused: true } },
+    comments: [{ id: 42, author: 'Ardnived', body: '@sydevs-bot implement', createdAt: '2026-10-07T11:00:00Z', association: 'MEMBER' }],
+  })
+  const p = types(decide({ reason: 'issue_comment', facts: verb }, s, config))
+  assert.equal(p.filter((a) => a === 'targets').length, 0, 'act keys on repo#number:reason and would drop it anyway')
+  assert.deepEqual(p.filter((a) => a.startsWith('fire:')), ['fire:implement'], 'the verb starts once')
+  assert.equal(p[0], 'unlocked:revise')
 })
 
 // ---- a wake hint promises only what wakes the bot ------------------------
