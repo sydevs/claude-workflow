@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { withRetry, installRetry, retriable, rateLimitWait, apiCounts, apiCountLine } from '../retry.mjs'
+import { withRetry, installRetry, retriable, rateLimitWait, apiCountLine } from '../retry.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 
@@ -119,6 +119,6 @@ test('installRetry counts every request it sends, REST and GraphQL apart', async
   await github.fn(async () => 'ok', { url: '/graphql', method: 'POST' })
   let n = 0
   await github.fn(async () => { n += 1; if (n === 1) throw Object.assign(new Error('Bad Gateway'), { status: 502 }); return 'ok' }, { url: '/rate_limit' })
-  assert.deepEqual(apiCounts(github), { rest: 3, graphql: 1 }, 'the retry sent a second request, and spent a second call')
-  assert.equal(apiCountLine(github), 'api: 3 REST, 1 GraphQL')
+  assert.equal(apiCountLine(github), 'api: 3 REST, 1 GraphQL', 'the retry sent a second request, and spent a second call')
+  assert.equal(apiCountLine({}), 'api: 0 REST, 0 GraphQL', 'a client with no hook spent nothing')
 })

@@ -76,14 +76,12 @@ export async function withRetry(fn, { attempts = 3, baseMs = 2000, rateLimitMaxW
   }
 }
 
-/** What this client has spent: one count per request actually sent, retries included. */
-export function apiCounts(github) {
-  return github?.__sydevsApi || { rest: 0, graphql: 0 }
-}
-
-/** `api: <n> REST, <m> GraphQL`, for a log line at the end of a run or a leg. */
+/**
+ * `api: <n> REST, <m> GraphQL`, for a log line at the end of a run or a leg.
+ * One count per request actually sent, retries included.
+ */
 export function apiCountLine(github) {
-  const { rest, graphql } = apiCounts(github)
+  const { rest = 0, graphql = 0 } = github?.__sydevsApi || {}
   return `api: ${rest} REST, ${graphql} GraphQL`
 }
 
