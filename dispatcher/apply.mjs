@@ -433,6 +433,10 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           if (!dryRun) { const j = await ensureJournalDay(gh, config, now); await postAnomaly(gh, config, j.number, { kind: 'attempts-exhausted', text: `${t.repo.full}#${t.number} ${cur?.handler || ''}`, id: cur?.id || null }) }
           break
         }
+        // The handler comes from the record, as `retry`'s does, so it is
+        // checked the same way. The lease is already released above, so a
+        // refusal leaves the item unlocked rather than stuck.
+        if (!fireable(config, cur.handler, log)) break
         await doFire({ gh, t, snapshot, handler: cur.handler, flags: cur.flags || {}, attempt, config, env, dryRun, log, now, fetchImpl, rec })
         break
       }

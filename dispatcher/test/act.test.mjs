@@ -567,6 +567,19 @@ test('the last timeout is journalled as timed-out too, beside attempts-exhausted
   assert.deepEqual(kinds, ['timed-out', 'attempts-exhausted'])
 })
 
+// The deadline path re-fires `rec.current.handler`, which comes out of the
+// same comment body as `retry`'s, so it is checked the same way. The lease and
+// the lock are released before the check, so a refusal leaves the item open.
+test('a timeout re-fire reads the record too, so it is checked too', async () => {
+  const world = timedOutWorld(1)
+  world.comments[9][0].body = world.comments[9][0].body.replace('"handler":"implement"', '"handler":"exfiltrate"')
+  const github = fakeGithub(world)
+  const logs = []
+  await act({ github, context: {}, core: { info: (m) => logs.push(m), warning: () => {} }, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: false, now, fetchImpl: async () => { throw new Error('must not fire') } })
+  assert.match(logs.join('\n'), /"exfiltrate" is not one of ours/)
+  assert.ok(github.calls.some((c) => c.name === 'removeLabel' && c.args.name === 'bot:working'), 'and the lock still came off')
+})
+
 test('a dry run journals no timeout', async () => {
   const github = fakeGithub(timedOutWorld(1))
   await act({ github, context: {}, core, config, target: timeoutTarget, env: { ROUTINE_TOKEN_SAHAJCLOUD: 'tok' }, dryRun: true, now, fetchImpl: async () => { throw new Error('must not fire') } })
