@@ -56,12 +56,18 @@ dispatcher runs and stranding a lease.
 (why: [docs/why.md](why.md#the-dispatcher-has-its-own-github-app))
 
 **The code ships first and changes nothing.** Every `dispatcher.yml` job uses `SYDEVS_BOT_PAT` until
-both settings below exist, so this section can wait.
+`SYDEVS_APP_ID` is set, so this section can wait.
 
 1. Create a GitHub App in the sydevs org. Its slug must be **`sydevs-dispatcher`**, because
-   `identity.dispatcherLogins` in `loop-config.json` names `sydevs-dispatcher[bot]`. Change one and
-   you change both. Only the slug matters: REST spells the App `<slug>[bot]` and GraphQL spells it
-   `<slug>`, and `isLogin` compares the bare slug, so the one entry matches both.
+   `identity.dispatcherLogins` in `loop-config.json` names it. Change one and you change both — and
+   it is named twice there, as `sydevs-dispatcher[bot]` and `sydevs-dispatcher`, because REST spells
+   an App `<slug>[bot]` while GraphQL spells the same actor `<slug>`. `isLogin` matches exactly, so
+   both belong in the list.
+
+   > ⚠ **Do not let a user account hold the bare slug.** `sydevs-dispatcher` is a login the
+   > dispatcher trusts as itself, and `isBot` gates the contract-sync approval. A GitHub username
+   > cannot contain `[`, so only the bare spelling is at risk; reaching anything dangerous with it
+   > still needs push access to the repo.
 2. Repository permissions, read and write: **Issues**, **Pull requests**, **Contents**,
    **Workflows**, **Commit statuses**. Read: **Checks**, **Metadata**, **Dependabot alerts**.
    Organization permissions: **Projects**, read and write.
@@ -88,7 +94,10 @@ both settings below exist, so this section can wait.
    ```
 
 6. Confirm the switch took: the next dispatcher run's `resolve` and `act` logs end
-   `· token: app`, and the item's status comment, labels and board Status still update.
+   `· token: app`, and the item's status comment, labels and board Status still update. A log still
+   saying `· token: pat` with the variable set means the mint failed — the token step is
+   `continue-on-error`, on purpose, so a bad key degrades instead of stopping dispatch in five
+   repos. Read that step's own log.
 
 **Five calls the App has not been proved to make.** Each kept the PAT by default before the switch,
 and each job holds both tokens, so any one of them can go back to the PAT alone. Settle them on a

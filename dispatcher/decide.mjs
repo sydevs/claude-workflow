@@ -56,29 +56,25 @@ export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, 
 const lower = (s) => String(s || '').toLowerCase()
 
 /**
- * A login, with case and an App's `[bot]` suffix set aside. REST spells a
- * GitHub App `<slug>[bot]` and GraphQL spells the same actor `<slug>`, and the
- * dispatcher reads logins through both — `cheapView`'s PR authors and
- * `reviewThreads`' comment authors are GraphQL. Comparing the bare slug lets
- * one `dispatcherLogins` entry match either API.
- * (why: docs/why.md#the-dispatcher-has-its-own-github-app)
- */
-const bareLogin = (s) => lower(s).replace(/\[bot\]$/, '')
-
-/**
- * A login is the loop's own. `expected` is the list of logins it may be —
- * `dispatcherLogins`, at every call site — and anything else throws: a seam
- * that forgets to thread it would otherwise refuse every comment, which
+ * A login is the loop's own, case aside. `expected` is the list of logins it
+ * may be — `dispatcherLogins`, at every call site — and anything else throws:
+ * a seam that forgets to thread it would otherwise refuse every comment, which
  * `loadRecord` reports as no record at all and `sweep.mjs` then reads as a
  * timed-out lease on a live session. A bare string throws for the same reason,
  * loudly, rather than being read as a one-login list.
+ *
+ * The comparison is exact, never a normalised `[bot]` suffix. REST spells a
+ * GitHub App `<slug>[bot]` and GraphQL spells the same actor `<slug>`, so both
+ * spellings are listed in `identity.dispatcherLogins` instead: this predicate
+ * gates the contract-sync approval, so the trusted set is exactly what the
+ * config names, and no entry added later quietly gains a second trusted form.
  * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 export function isLogin(login, expected) {
   if (!Array.isArray(expected) || !expected.length || expected.some((e) => !e)) {
     throw new Error('isLogin: the expected login is required, as a list')
   }
-  return expected.some((e) => bareLogin(login) === bareLogin(e))
+  return expected.some((e) => lower(login) === lower(e))
 }
 /**
  * Every login the loop writes under: the sessions' and the dispatcher App's.

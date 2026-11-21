@@ -2271,13 +2271,20 @@ a settings change. `secrets` is not a context a step-level `if:` can read, so th
 gate the step — `continue-on-error` does that job instead, and a key that is missing or bad falls
 back to the PAT rather than failing dispatch in all five repos.
 
-Its writes then come from the App, which is why `identity.dispatcherLogins` names both logins and
-`isBot` tests the set: an item whose status comment, markers or sync PR were written under the PAT
-must keep its record under the App. One entry covers each App, because REST spells it `<slug>[bot]`
-while GraphQL spells the same actor `<slug>` — `cheapView`'s PR authors and `reviewThreads`' comment
-authors are GraphQL — so `isLogin` compares the bare slug. Without that, the App's own draft PRs
+Its writes then come from the App, which is why `identity.dispatcherLogins` names every login the
+loop writes under and `isBot` tests the set: an item whose status comment, markers or sync PR were
+written under the PAT must keep its record under the App. The App needs two entries, because REST
+spells it `<slug>[bot]` while GraphQL spells the same actor `<slug>` — `cheapView`'s PR authors and
+`reviewThreads`' comment authors are GraphQL. Without the bare spelling the App's own draft PRs
 would read as an outsider's, and every one would be a permanent drift target on every pass: more
-API spend, not less. `identity.expectedLogin` stays the sessions' login, which is what prose,
+API spend, not less.
+
+Both spellings are **listed**, not derived by stripping the suffix at comparison time. `isBot` gates
+the contract-sync approval and the proxy approval, so the trusted set has to be exactly what the
+config names: a predicate that normalised the suffix would extend trust to the bare form of every
+entry added afterwards, without anyone writing it down. The cost is that the bare slug is a login a
+user account could hold, so the org must not let one take it; the firmer fix is GraphQL's
+`__typename`, trusting a bare slug only for a `Bot` actor. `identity.expectedLogin` stays the sessions' login, which is what prose,
 `get_me` and `pickFeaturePr` mean, and `docs/routine-setup.md` §0c has the permissions, the setup
 and the experiments the switch waits on.
 

@@ -69,20 +69,26 @@ test('a record written before the switch is still found after it', async () => {
 // `<slug>`. `cheapView`'s PR authors and `reviewThreads`' comment authors come
 // from GraphQL, so a config entry in one spelling must match both — otherwise
 // the App's own draft PRs read as an outsider's and drift forever.
-test("the App's two spellings are one login", async () => {
-  const both = dispatcherLogins(config)
+test("both of the App's spellings are listed, and nothing else matches", async () => {
+  const all = dispatcherLogins(config)
   for (const spelling of ['sydevs-dispatcher[bot]', 'sydevs-dispatcher', 'SYDEVS-Dispatcher[bot]']) {
     const gh = fake([{ id: 7, body: status(real), user: { login: spelling } }])
-    assert.equal((await loadRecord(gh, ref, both)).id, 7, `${spelling} is the dispatcher`)
+    assert.equal((await loadRecord(gh, ref, all)).id, 7, `${spelling} is the dispatcher`)
   }
-  const other = fake([{ id: 8, body: status(forged), user: { login: 'renovate[bot]' } }])
-  assert.equal((await loadRecord(other, ref, both)).id, null, 'another app is not')
+  for (const other of ['renovate[bot]', 'sydevs-dispatcher-2', 'sydevs-bot[bot]']) {
+    const gh = fake([{ id: 8, body: status(forged), user: { login: other } }])
+    assert.equal((await loadRecord(gh, ref, all)).id, null, `${other} is not, and is not normalised into it`)
+  }
 })
 
-test('loop-config.json names both dispatcher logins, and findRecord reads a list in hand', () => {
+test('loop-config.json names every dispatcher login, and findRecord reads a list in hand', () => {
   const logins = dispatcherLogins(config)
   assert.ok(logins.includes(config.identity.expectedLogin), "the sessions' login is one of them")
-  assert.equal(logins.length, 2, "the sessions' and the App's")
+  // The sessions', and the App's two spellings. Both are listed because the
+  // match is exact: REST says `<slug>[bot]` and GraphQL says `<slug>`.
+  const apps = logins.filter((l) => l !== config.identity.expectedLogin)
+  assert.equal(apps.length, 2, "the App's REST and GraphQL spellings")
+  assert.deepEqual([...apps].sort(), [...new Set(apps.map((l) => l.replace(/\[bot\]$/, '')))].flatMap((slug) => [slug, `${slug}[bot]`]).sort(), 'one slug, both spellings')
   assert.equal(findRecord([{ id: 9, body: status(real), user: { login: logins[1] } }], logins).id, 9)
   assert.deepEqual(dispatcherLogins({ identity: { expectedLogin: 'only-one' } }), ['only-one'], 'an unset list falls back')
 })
