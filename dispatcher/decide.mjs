@@ -15,22 +15,13 @@
  */
 
 import { fire, recheck, ensure, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, unlocked, retry, timeout, note, react, record, hold, transfer, relay } from './actions.mjs'
-import { lower, isBot, respondTo, isHuman, fullTreatment, nowOf, isQuestion, threadsWaiting } from './predicates.mjs'
-import { botArmedOwnerPr, contractSyncPlan, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
+import { lower, isBot, respondTo, isHuman, fullTreatment, nowOf, isQuestion, isRoadmap, stackedPr, threadsWaiting } from './predicates.mjs'
+import { botArmedOwnerPr, contractSyncPlan, loopMayNotMerge, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { pushRoute, relayRefusal } from './relay.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
 
 // ---- predicates ------------------------------------------------------
-/**
- * A PR based on another branch than the default. The loop never opens one
- * and never works one: it has no ruleset behind it, so armed it would merge
- * unreviewed. (why: docs/why.md#a-stacked-pr-is-never-armed)
- */
-export function stackedPr(s) {
-  const base = s.pr?.base
-  return Boolean(base?.defaultBranch && base.ref !== base.defaultBranch)
-}
 /**
  * The open PRs that close this issue, or null when none does. An issue whose
  * PR is open is the PR's turn, not the human's.
@@ -43,10 +34,6 @@ export function stackedPr(s) {
  */
 const inFlight = (s) => (s.openPrsClosingIt.length ? s.openPrsClosingIt : null)
 
-/** A roadmap ticket: a plain-language goal whose state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status) */
-export function isRoadmap(s, config) {
-  return s.kind === 'issue' && Boolean(s.item?.type) && s.item.type === (config.roadmap?.type || 'Roadmap')
-}
 /** A throwaway branch a review session pushed for a preview. Nothing here touches it. */
 function isSpike(s, config) {
   const prefix = config.roadmap?.spikeBranchPrefix
@@ -382,11 +369,6 @@ function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
   return Boolean(pr.contractSyncOnly) || ((pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines)
-}
-
-/** Repos where a merge is a deploy, so nothing is ever armed. */
-export function loopMayNotMerge(snapshot, config) {
-  return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
 // The actions that move an item. Every other action — a label, a comment, a

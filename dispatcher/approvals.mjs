@@ -9,6 +9,9 @@
  * (why: docs/why.md#the-owners-pr-is-approved-by-the-bot,
  * docs/why.md#a-bot-commit-buries-an-approval-a-conflict-merge-does-not)
  *
+ * `loopMayNotMerge` is here too, where `mergePolicy`'s other half is: it is
+ * the one wall no approval can clear.
+ *
  * Nothing here imports `decide.mjs` or `status.mjs` back: that edge would be
  * the directory's first cycle. Nothing here fetches.
  */
@@ -26,6 +29,11 @@ import { parseVerb } from './verbs.mjs'
  */
 export function proxyApproves(login, config) {
   return Boolean(login) && (config.mergePolicy?.proxyApprove || []).some((l) => lower(l) === lower(login))
+}
+
+/** Repos where a merge is a deploy, so nothing is ever armed. */
+export function loopMayNotMerge(snapshot, config) {
+  return (config.mergePolicy?.loopMayNotMerge || []).includes(snapshot.repo.name)
 }
 
 /**

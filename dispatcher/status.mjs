@@ -16,9 +16,9 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, fullTreatment, threadsWaiting, nowOf } from './predicates.mjs'
-import { proxyApproves, proxyVerdict } from './approvals.mjs'
-import { isRoadmap, needsAddressReview, loopMayNotMerge, stackedPr } from './decide.mjs'
+import { isBot, fullTreatment, isRoadmap, stackedPr, threadsWaiting, nowOf } from './predicates.mjs'
+import { loopMayNotMerge, proxyApproves, proxyVerdict } from './approvals.mjs'
+import { needsAddressReview } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')

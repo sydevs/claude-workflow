@@ -2,9 +2,13 @@
  * The predicates the dispatcher reads a login, a config or a snapshot with.
  *
  * These answer questions no one decider owns: whether a login is the loop's
- * own, whether a PR gets the loop at all, what the snapshot's clock says.
- * Most of the directory asks them, so they live below all of it. This module
- * imports nothing, so anything may import it.
+ * own, whether a PR gets the loop at all, what the snapshot's clock says,
+ * what kind of item this is. Membership is the whole small, pure family, not
+ * only the members a cycle forced out — a line drawn where a cycle happened
+ * to fall could not place the next one. `decide.mjs` keeps a predicate whose
+ * dependency tail is its own, like `needsAddressReview`, and merge policy is
+ * `approvals.mjs`'s. Most of the directory asks these, so they live below all
+ * of it. This module imports nothing, so anything may import it.
  */
 
 export const lower = (s) => String(s || '').toLowerCase()
@@ -39,6 +43,21 @@ export function fullTreatment(login, config) {
 }
 /** The snapshot's own clock, so a test fixes `now` and every date a plan writes follows it. */
 export const nowOf = (s) => s.now || new Date()
+
+/**
+ * A PR based on another branch than the default. The loop never opens one
+ * and never works one: it has no ruleset behind it, so armed it would merge
+ * unreviewed. (why: docs/why.md#a-stacked-pr-is-never-armed)
+ */
+export function stackedPr(s) {
+  const base = s.pr?.base
+  return Boolean(base?.defaultBranch && base.ref !== base.defaultBranch)
+}
+
+/** A roadmap ticket: a plain-language goal whose state is its children. (why: docs/why.md#a-roadmap-ticket-has-no-status) */
+export function isRoadmap(s, config) {
+  return s.kind === 'issue' && Boolean(s.item?.type) && s.item.type === (config.roadmap?.type || 'Roadmap')
+}
 
 /**
  * A thread the bot rooted to ask a human something. It waits on that human:
