@@ -29,7 +29,7 @@
 import { execFileSync } from 'node:child_process'
 import { matchesGlob } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { flag, loadLoopConfig } from './config.mjs'
+import { flag, generatedPatterns, loadLoopConfig } from './config.mjs'
 
 const NAME = '([A-Za-z_$][\\w$]*)'
 const SCRIPT = [
@@ -112,12 +112,12 @@ export function classify(files, { streamline, generated = [] }, length) {
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['pipe', 'pipe', 'ignore'] })
 
-/** The repo's generatedFiles patterns, from the base: the branch under review may change them. */
-function generatedPatterns(base) {
+/** A file as `ref` has it, or '' when it is absent. */
+const show = (ref, path) => {
   try {
-    return (JSON.parse(git(['show', `${base}:.claude/workflow.json`])).generatedFiles || []).map((g) => new RegExp(g.pattern))
+    return git(['show', `${ref}:${path}`])
   } catch {
-    return []
+    return ''
   }
 }
 
@@ -143,7 +143,9 @@ function main(argv) {
     process.exit(2)
   }
   const length = (path) => git(['show', `${head}:${path}`]).split('\n').length
-  const result = classify(parseDiff(diff), { streamline, generated: generatedPatterns(base) }, length)
+  // generatedFiles comes from the base: the branch under review may change it.
+  const generated = generatedPatterns(show(base, '.claude/workflow.json'))
+  const result = classify(parseDiff(diff), { streamline, generated }, length)
   if (argv.includes('--json')) {
     console.log(JSON.stringify(result, null, 2))
     return

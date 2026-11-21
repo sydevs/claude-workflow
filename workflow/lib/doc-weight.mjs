@@ -31,6 +31,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { generatedPatterns } from './config.mjs'
 
 const DOC = /\.mdx?$/
 const LOCKFILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|composer\.lock|pubspec\.lock)$/
@@ -89,16 +90,6 @@ export function weigh(commits, generated = [], top = 8) {
   }
 }
 
-function generatedPatterns(root) {
-  const p = join(root, '.claude/workflow.json')
-  if (!existsSync(p)) return []
-  try {
-    return (JSON.parse(readFileSync(p, 'utf8')).generatedFiles || []).map((g) => new RegExp(g.pattern))
-  } catch {
-    return []
-  }
-}
-
 function main(argv) {
   const arg = (name, fallback) => {
     const i = argv.indexOf(name)
@@ -116,7 +107,9 @@ function main(argv) {
     console.error(`doc-weight: git could not answer — ${err.message.split('\n')[0]}`)
     process.exit(1)
   }
-  const result = weigh(parseLog(log), generatedPatterns(root))
+  const workflowJson = join(root, '.claude/workflow.json')
+  const generated = generatedPatterns(existsSync(workflowJson) ? readFileSync(workflowJson, 'utf8') : '')
+  const result = weigh(parseLog(log), generated)
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ref, since, ...result }, null, 2))
     return

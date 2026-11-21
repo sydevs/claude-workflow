@@ -42,6 +42,21 @@ export function loadLoopConfig(explicit = null) {
   throw new Error('loop-config.json not found — run from the claude-workflow checkout or pass --config.')
 }
 
+/**
+ * A repo's `generatedFiles` patterns as `RegExp`, from the text of its
+ * `.claude/workflow.json`. The text comes in rather than a path because the
+ * three readers reach the file three ways — two from disk, one from `git
+ * show` of a base ref. Text that will not parse means no patterns: a caller
+ * that cannot read the file skips nothing, which is the safe side here.
+ */
+export function generatedPatterns(text) {
+  try {
+    return (JSON.parse(text).generatedFiles || []).map((g) => new RegExp(g.pattern))
+  } catch {
+    return []
+  }
+}
+
 /** `--name value` from argv, with a default. */
 export function flag(argv, name, fallback = null) {
   const i = argv.indexOf(`--${name}`)
