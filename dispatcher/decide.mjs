@@ -15,7 +15,7 @@
  */
 
 import { fire, recheck, ensure, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, unlocked, retry, timeout, note, react, record, hold, transfer, relay } from './actions.mjs'
-import { lower, isBot, respondTo, isHuman, hasAccess, fullTreatment, nowOf, isQuestion, threadsWaiting } from './predicates.mjs'
+import { lower, isBot, respondTo, isHuman, fullTreatment, nowOf, isQuestion, threadsWaiting } from './predicates.mjs'
 import { botArmedOwnerPr, contractSyncPlan, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { pushRoute, relayRefusal } from './relay.mjs'
@@ -51,6 +51,10 @@ export function isRoadmap(s, config) {
 function isSpike(s, config) {
   const prefix = config.roadmap?.spikeBranchPrefix
   return s.kind === 'pr' && Boolean(prefix) && String(s.pr?.head?.ref || '').startsWith(prefix)
+}
+const ACCESS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
+export function hasAccess(association) {
+  return ACCESS.has(String(association || '').toUpperCase())
 }
 /** The issue was opened by someone outside the org: its text is data, never state. (why: docs/why.md#a-strangers-marker-is-text) */
 function byOutsider(s, config) {

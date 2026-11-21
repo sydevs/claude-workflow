@@ -29,13 +29,6 @@ export function respondTo(login, config) {
 export function isHuman(login, config) {
   return respondTo(login, config) && lower(login) !== 'copilot'
 }
-const ACCESS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
-export function hasAccess(association) {
-  return ACCESS.has(String(association || '').toUpperCase())
-}
-export function isReviewer(login, config) {
-  return lower(login) === lower(config.assignment?.reviewer)
-}
 /**
  * A PR the loop works in full: the bot's own, or one a `respondTo` login
  * wrote. Anyone else's gets an answer to a mention and nothing more, so a
