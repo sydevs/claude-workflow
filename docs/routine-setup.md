@@ -205,8 +205,8 @@ always wins** — two jobs can look at the same instant and both create.
 
 **Every journal tick re-counts yesterday as well as today**, so a day closes with a true count
 rather than with whatever its last successful tick saw. The schedule is the only writer and GitHub
-drops most of its half-hourly cron, at gaps of hours, so nothing may land near midnight. A tick that cannot finish posts a `journal-tally` anomaly to the
-day's own issue, because `dispatch / journal` is in `ci.ignoreCheckNames` and a red journal job is
+drops most of its half-hourly cron, at gaps of hours, so nothing may land near midnight. A tick
+that cannot finish posts a `journal-tally` anomaly to the day's own issue, because `dispatch / journal` is in `ci.ignoreCheckNames` and a red journal job is
 never CI the loop acts on. (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
 
 The weekly reflection closes the week's journals, which is also what ends the re-counting: a

@@ -1590,12 +1590,12 @@ from the scheduled `journal` job. The tick was unguarded, so a throw in `closeDu
 the tally; nothing revisited a day once `localDate` moved on; and `dispatch / journal` is in
 `ci.ignoreCheckNames`, with no anomaly posted, so failure was invisible.
 
-**The schedule is also not the schedule.** About 6.5 runs a day land here against a declared fifty,
-3.5 hours apart at the median and 8.7 at the worst, all `success` (2026-11-13 to 2026-11-20; it was
-eight a day, two to five hours apart, over 2026-09-09 to 2026-10-06, so the cadence is falling).
-#134 froze at 00:31Z with 6.5 hours of its day left. So no tick is guaranteed near midnight: each step is guarded, a failure posts
-a `journal-tally` anomaly to the day's issue, and **every** tick re-counts yesterday under its own
-weekday as well as today, writing nothing when counts agree. The weekly reflection builds its usage
+**The schedule is also not the schedule.** A fraction of the declared `schedule` runs land here,
+hours apart and falling — [the measured cadence](#the-reconciler-replaces-the-drift-window) holds
+the figures. #134 froze at 00:31Z with 6.5 hours of its day left, so no tick is guaranteed near
+midnight: each step is guarded, a failure posts a `journal-tally` anomaly to the day's issue, and
+**every** tick re-counts yesterday under its own weekday as well as today, writing nothing when
+counts agree. The weekly reflection builds its usage
 report from the seven titles and tally blocks alone, so these are the one input a crashed week
 cannot reconstruct.
 
@@ -2228,10 +2228,11 @@ Pending item for its due. An event run checks its own repo too, capped at
 `dispatch.reconcileMaxPerEvent`. A dispatch on a repo's `workflow-state.yml` is the on-demand full pass.
 
 **The cron is slower than it asks to be, and falling.** 2026-11-13 to 2026-11-20: about 3.4
-`schedule` runs a day in each product repo and 6.5 here, median gaps of seven hours and the longest
-past ten — half the cadence of the October window above. A lock past its deadline was the cron's
-alone to reclaim, so a dead session held its item for a morning (SahajCloud, 2026-11-20: locks
-expired at 17:26Z, still held at 22:16Z, cleared by hand). An event run now takes those too, under
+`schedule` runs a day in each product repo, median gaps of seven hours and the longest past ten,
+and 6.5 a day here against a declared fifty, 3.5 hours apart at the median and 8.7 at the worst,
+all `success` — half the eight a day, two to five hours apart, of 2026-09-09 to 2026-10-06. A lock
+past its deadline was the cron's alone to reclaim, so a dead session held its item for a morning
+(SahajCloud, 2026-11-20: locks expired at 17:26Z, still held at 22:16Z, cleared by hand). An event run now takes those too, under
 the same cap and before the drift ones: the locked items are in the cheap view it already fetched,
 so only their records are read. CI events alone arrive many times an hour across the five repos, so
 a busy loop reclaims within minutes. The cron is the backstop for a quiet night, and this repo's
