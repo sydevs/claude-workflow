@@ -17,18 +17,21 @@ import { cheapView, driftTargets } from './reconcile.mjs'
  * A `sweep-timeout` for every locked item whose session is past its deadline,
  * and for a lock with no record at all. The caller brings the locked items and
  * their kind: the cron reads them by label, and an event run already has them
- * in the cheap view, so neither pays for a query here. One record read per
- * item is the whole cost. (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+ * in the cheap view, so neither pays a query here.
  *
- * `skip` leaves out the event's own item, which its own target already covers,
- * and `limit` bounds how many an event run takes.
+ * `limit` bounds the **record reads**, not the targets: a live lock yields no
+ * target, so bounding the output would let one event run read every record in
+ * the repo. `loadRecord` pages comments, and pages all of them when an item
+ * has no record, so a read is one call or several.
+ * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
-export async function expiredLockTargets({ github, config, repo, items, now = new Date(), skip = new Set(), limit = Infinity, event = 'schedule' }) {
+export async function expiredLockTargets({ github, config, repo, items, now, event, limit = Infinity }) {
   const bot = config.identity.expectedLogin
   const out = []
+  let reads = 0
   for (const i of items) {
-    if (out.length >= limit) break
-    if (skip.has(i.number)) continue
+    if (reads >= limit) break
+    reads += 1
     const push = (facts) => out.push({ repo, kind: i.kind, number: i.number, reason: 'sweep-timeout', event, facts })
     const { rec } = await loadRecord(github, { owner: repo.owner, repo: repo.name, number: i.number }, bot)
     const cur = rec.current
@@ -48,9 +51,15 @@ export async function listSweepTargets({ github, config, repo, now = new Date() 
 
   const byLabel = async (label) => github.paginate(github.rest.issues.listForRepo, { owner, repo: name, state: 'open', labels: label, per_page: 100 })
 
+  // By REST, not from the `cheapView` below, on purpose: that view answers `[]`
+  // on one GraphQL failure, and the cron is the backstop that must still
+  // reclaim a dead session's item when it does.
   const locked = await byLabel(L.lock)
   const lockedNumbers = new Set(locked.map((i) => i.number))
-  out.push(...await expiredLockTargets({ github, config, repo, now, items: locked.map((i) => ({ kind: i.pull_request ? 'pr' : 'issue', number: i.number })) }))
+  out.push(...await expiredLockTargets({
+    github, config, repo, now, event: 'schedule',
+    items: locked.map((i) => ({ kind: i.pull_request ? 'pr' : 'issue', number: i.number })),
+  }))
 
   const openPrs = await github.paginate(github.rest.pulls.list, { owner, repo: name, state: 'open', per_page: 100 })
   const openPrNumbers = new Set(openPrs.map((pr) => pr.number))

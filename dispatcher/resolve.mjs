@@ -34,7 +34,7 @@ function repoOf(context) {
 }
 
 /** The event a target was found on, for the dispatch record it may fire. */
-function eventLabel(context) {
+export function eventLabel(context) {
   return `${context.eventName}.${context.payload?.action || ''}`.replace(/\.$/, '')
 }
 
@@ -65,12 +65,10 @@ export function coalesceTargets(targets) {
  * lock the record dates past its deadline, then the ones whose board Status
  * the cheap view rules out. The cron covers the rest.
  *
- * The reclaim is here because the cron is slower than its half-hourly schedule
- * reads: about 3.4 runs a day per repo, with gaps past ten hours, so a dead
- * session held its item for a whole morning. CI events alone arrive many times an hour
- * across the five repos, so while the loop is busy an expired lock now clears
- * within minutes. A cheap view that cannot answer reclaims nothing, and the
- * cron is still the backstop.
+ * The reclaim is here because the cron, which asks for a sweep every half
+ * hour, lands a fraction of that, and until now was the only thing that
+ * reclaimed a lock nobody will unlock. A cheap view that cannot answer
+ * reclaims nothing, and the cron is still the backstop.
  * (why: docs/why.md#the-reconciler-replaces-the-drift-window,
  *  docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
@@ -82,8 +80,10 @@ export async function resolve({ github, context, config, now = new Date() }) {
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
   const view = await cheapView(github, config, repo.owner, repo.name)
-  const locked = view.filter((v) => v.labels.includes(config.labels.lock))
-  const expired = await expiredLockTargets({ github, config, repo, now, skip, limit, items: locked, event: eventLabel(context) })
+  // The journal's own issues are never work, here as in `driftTargets`.
+  const locked = view.filter((v) => v.labels.includes(config.labels.lock)
+    && !v.labels.includes(config.labels.journal) && !skip.has(v.number))
+  const expired = await expiredLockTargets({ github, config, repo, now, limit, items: locked, event: eventLabel(context) })
   return own.concat(expired, driftTargets(view, config, repo, { now, limit: limit - expired.length, skip }))
 }
 

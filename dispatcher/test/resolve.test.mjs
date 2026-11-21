@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
+import { emptyRecord, renderRecord } from '../record.mjs'
 
 const repo = { owner: 'sydevs', name: 'SahajCloud', full: 'sydevs/SahajCloud' }
 const t = (number, reason, facts = {}) => ({ repo, kind: 'pr', number, reason, event: 'schedule', facts })
@@ -82,24 +83,20 @@ const capped = (n) => ({ ...config, dispatch: { ...config.dispatch, reconcileMax
 const comment = (number) => ({
   eventName: 'issue_comment',
   repo: { owner: repo.owner, repo: repo.name },
-  payload: { action: 'created', issue: { number }, comment: { user: { login: 'Ardnived' }, body: '@sydevs-bot implement', author_association: 'MEMBER', id: 7 } },
+  payload: { action: 'created', issue: { number }, comment: { user: { login: 'Ardnived' }, body: '@sydevs-bot implement' } },
 })
 
 // Locked, and Working on the board, so the reconciler sees no drift here.
-const lockedNode = (number) => ({
+const lockedNode = (number, labels = [config.labels.lock]) => ({
   number,
-  issueType: null,
-  labels: { nodes: [{ name: config.labels.lock }] },
-  blockedBy: { nodes: [] },
-  closedByPullRequestsReferences: { nodes: [] },
-  issueFieldValues: { nodes: [] },
+  labels: { nodes: labels.map((name) => ({ name })) },
   projectItems: { nodes: [{ project: { number: config.projects.number }, fieldValueByName: { name: 'Working' } }] },
 })
 
+// Written by the dispatcher's own renderer, so the fake cannot drift from it.
 const record = (deadline) => [{
-  id: 1,
   user: { login: config.identity.expectedLogin },
-  body: `<!-- sydevs-status v1 ${JSON.stringify({ v: 1, current: { handler: 'implement', attempt: 1, deadline } })} -->\nrunning`,
+  body: renderRecord({ ...emptyRecord(), current: { handler: 'implement', attempt: 1, deadline } }),
 }]
 
 const world = (nodes, records) => ({
@@ -132,6 +129,26 @@ test('the reclaim and the drift share one cap', async () => {
     context: comment(1), config: capped(2), now,
   })
   assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout']], 'two, and the cron takes the rest')
+})
+
+test('the cap bounds the record reads, not just the targets', async () => {
+  // A live lock yields no target, so a cap on the output would let one event
+  // run read every record in the repo.
+  const many = Array.from({ length: 25 }, (_, k) => lockedNode(k + 2))
+  const records = Object.fromEntries(many.map((n) => [n.number, record('2026-11-21T04:00:00Z')]))
+  const github = world(many, records)
+  const inner = github.rest.issues.listComments
+  let reads = 0
+  github.rest.issues.listComments = (args) => { reads += 1; return inner(args) }
+  const out = await resolve({ github, context: comment(1), config: capped(3), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'every lock is live, so nothing is swept')
+  assert.equal(reads, 3)
+})
+
+test('the journal is never swept, lock or no lock', async () => {
+  const github = world([lockedNode(6, [config.labels.lock, config.labels.journal])], { 6: record('2026-11-20T17:26:00Z') })
+  const out = await resolve({ github, context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'the loop\'s own diary is not a worklist')
 })
 
 test('a cheap view that cannot answer reclaims nothing', async () => {
