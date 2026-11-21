@@ -56,16 +56,19 @@ export const relay = ({ branch, head, sha }) => ({ type: 'relay', branch, head, 
 const lower = (s) => String(s || '').toLowerCase()
 
 /**
- * A login is the loop's own, case aside. `expected` is one login or a list of
- * them, and a missing one throws: a seam that forgets to thread it would
- * otherwise refuse every comment, which `loadRecord` reports as no record at
- * all and `sweep.mjs` then reads as a timed-out lease on a live session.
+ * A login is the loop's own, case aside. `expected` is the list of logins it
+ * may be — `dispatcherLogins`, at every call site — and anything else throws:
+ * a seam that forgets to thread it would otherwise refuse every comment, which
+ * `loadRecord` reports as no record at all and `sweep.mjs` then reads as a
+ * timed-out lease on a live session. A bare string throws for the same reason,
+ * loudly, rather than being read as a one-login list.
  * (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author)
  */
 export function isLogin(login, expected) {
-  const list = Array.isArray(expected) ? expected : [expected]
-  if (!list.length || list.some((e) => !e)) throw new Error('isLogin: the expected login is required')
-  return list.some((e) => lower(login) === lower(e))
+  if (!Array.isArray(expected) || !expected.length || expected.some((e) => !e)) {
+    throw new Error('isLogin: the expected login is required, as a list')
+  }
+  return expected.some((e) => lower(login) === lower(e))
 }
 /**
  * Every login the loop writes under: the sessions' and the dispatcher App's.

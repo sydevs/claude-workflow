@@ -82,9 +82,12 @@ export function findRecord(comments, bot) {
   return { id: null, rec: emptyRecord() }
 }
 
-/** Find the status comment, reading the item's comments a page at a time. */
-export async function loadRecord(gh, { owner, repo, number }, bot) {
-  let page = 1
+/**
+ * Find the status comment, reading the item's comments a page at a time.
+ * `startPage` skips pages a caller has already read and searched.
+ */
+export async function loadRecord(gh, { owner, repo, number }, bot, startPage = 1) {
+  let page = startPage
   for (;;) {
     const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100, page })
     const found = findRecord(data, bot)

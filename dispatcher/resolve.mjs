@@ -55,16 +55,18 @@ export function coalesceTargets(targets) {
 }
 
 /**
- * The REST calls left in the hour, or null when that cannot be read.
+ * The REST calls left in the hour, or `Infinity` when that cannot be read — a
+ * budget nobody can see sheds nothing, and `Infinity` says so without a
+ * sentinel every comparison has to guard against.
  * `GET /rate_limit` is itself exempt, so asking costs nothing.
  */
 async function restRemaining(github) {
   try {
     const { data } = await github.rest.rateLimit.get()
-    const n = data?.resources?.core?.remaining ?? data?.rate?.remaining
-    return Number.isFinite(n) ? n : null
+    const n = data?.resources?.core?.remaining
+    return Number.isFinite(n) ? n : Infinity
   } catch {
-    return null
+    return Infinity
   }
 }
 
@@ -86,12 +88,10 @@ export async function resolve({ github, context, config, core = { info() {} }, n
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
   const floor = config.dispatch?.rateLimitFloor ?? 0
-  if (floor) {
-    const remaining = await restRemaining(github)
-    if (remaining !== null && remaining < floor) {
-      core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
-      return own
-    }
+  const remaining = floor ? await restRemaining(github) : Infinity
+  if (remaining < floor) {
+    core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
+    return own
   }
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))

@@ -15,20 +15,30 @@ function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
 }
 
+// The comment window's page size, and GitHub's largest. One home each: both
+// paths below read the same thread, and a window that differed between them
+// would change what the leg decides on.
+const WINDOW_PAGE = 10
+const FULL_PAGE = 100
+
+/** The 1-based index of the newest page of `perPage` for `total` comments. */
+const lastPage = (total, perPage) => Math.max(1, Math.ceil((total || 0) / perPage))
+
 /**
  * The comment window a leg reads: the newest page of `perPage`, and the page
  * before it too when the newest page is short. `all` is every comment on the
  * item, oldest first, as GitHub returns them.
  */
-export function newestWindow(all, perPage = 10) {
-  const page = Math.max(1, Math.ceil(all.length / perPage))
-  const start = (page - 1) * perPage
+export function newestWindow(all, perPage = WINDOW_PAGE) {
+  const start = (lastPage(all.length, perPage) - 1) * perPage
   const out = all.slice(start)
-  return page > 1 && out.length < perPage ? all.slice(start - perPage) : out
+  // No `page > 1` guard: on the first page `start` is 0, and `slice(-perPage)`
+  // of a list that short is already the whole list.
+  return out.length < perPage ? all.slice(start - perPage) : out
 }
 
-async function newestComments(gh, { owner, repo, number }, total, perPage = 10) {
-  const page = Math.max(1, Math.ceil((total || 0) / perPage))
+async function newestComments(gh, { owner, repo, number }, total, perPage = WINDOW_PAGE) {
+  const page = lastPage(total, perPage)
   const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: number, per_page: perPage, page })
   const out = data.map(comment)
   if (page > 1 && out.length < perPage) {
@@ -47,13 +57,20 @@ async function newestComments(gh, { owner, repo, number }, total, perPage = 10) 
  * (why: docs/why.md#one-comment-read-serves-the-leg)
  */
 async function recordAndComments(gh, base, total, bot) {
-  // Strictly under a page: at exactly 100 the two reads are two calls, and a
-  // first read that cannot prove it saw the whole thread would make three.
-  if ((total || 0) < 100) {
-    const { data } = await gh.rest.issues.listComments({ owner: base.owner, repo: base.repo, issue_number: base.number, per_page: 100 })
+  // Strictly under a page: at exactly FULL_PAGE the two reads are two calls, and
+  // a first read that cannot prove it saw the whole thread would make three.
+  if ((total || 0) < FULL_PAGE) {
+    const { data } = await gh.rest.issues.listComments({ owner: base.owner, repo: base.repo, issue_number: base.number, per_page: FULL_PAGE })
+    if (data.length < FULL_PAGE) return { record: findRecord(data, bot), comments: newestWindow(data).map(comment) }
     // A full page is more than the count promised, so the count lagged the
-    // thread and this is not all of it. Then the two reads stand.
-    if (data.length < 100) return { record: findRecord(data, bot), comments: newestWindow(data).map(comment) }
+    // thread and this is not all of it. The record is among the oldest
+    // comments, though, so the page in hand almost always holds it — and
+    // `loadRecord` resumes at the next page rather than re-reading this one.
+    const seed = findRecord(data, bot)
+    return {
+      record: seed.id !== null ? seed : await loadRecord(gh, base, bot, 2),
+      comments: await newestComments(gh, base, total),
+    }
   }
   return { record: await loadRecord(gh, base, bot), comments: await newestComments(gh, base, total) }
 }

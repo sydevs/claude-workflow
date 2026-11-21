@@ -23,24 +23,26 @@ test('a comment starting with MARKER is read only from the expected login', asyn
     { id: 1, body: status(forged), user: { login: 'Ardnived' } },
     { id: 2, body: status(real), user: { login: 'sydevs-bot' } },
   ])
-  const { id, rec } = await loadRecord(gh, ref, 'sydevs-bot')
+  const { id, rec } = await loadRecord(gh, ref, ['sydevs-bot'])
   assert.equal(id, 2, "the bot's own comment, not the first that parses")
   assert.equal(rec.fixCi, 0)
 })
 
 test('a forged record alone reads as no record, so the real one is created', async () => {
   const gh = fake([{ id: 1, body: status(forged), user: { login: 'Ardnived' } }])
-  assert.deepEqual(await loadRecord(gh, ref, 'sydevs-bot'), { id: null, rec: emptyRecord() })
+  assert.deepEqual(await loadRecord(gh, ref, ['sydevs-bot']), { id: null, rec: emptyRecord() })
 })
 
 test('the login compare ignores case, and an unnamed login throws', async () => {
   const gh = fake([{ id: 3, body: status(real), user: { login: 'SyDevs-Bot' } }])
-  assert.equal((await loadRecord(gh, ref, 'sydevs-bot')).id, 3)
-  await assert.rejects(
-    loadRecord(gh, ref, undefined),
-    /expected login is required/,
-    'a seam that forgets the login crashes, rather than reading as no record',
-  )
+  assert.equal((await loadRecord(gh, ref, ['sydevs-bot'])).id, 3)
+  for (const [what, expected] of [['nothing', undefined], ['an empty list', []], ['a bare string', 'sydevs-bot']]) {
+    await assert.rejects(
+      loadRecord(gh, ref, expected),
+      /expected login is required/,
+      `a seam that hands the logins ${what} crashes, rather than reading as no record`,
+    )
+  }
 })
 
 // ---- either dispatcher login owns the record ----------------------------

@@ -13,10 +13,14 @@
  * instead. (why: docs/why.md#docs-fixes-and-re-syncs-ride-the-feature)
  */
 
-import { dispatcherLogins } from './decide.mjs'
+import { dispatcherLogins, isLogin } from './decide.mjs'
 
-/** Every login `contracts-sync` may have run as, lowered. */
-const writers = (config) => new Set(dispatcherLogins(config).filter(Boolean).map((l) => String(l).toLowerCase()))
+/**
+ * Every login `contracts-sync` may have run as. Returned rather than tested
+ * here so the caller can answer "no identity is configured" softly, where
+ * `isLogin` would throw.
+ */
+const writers = (config) => dispatcherLogins(config).filter(Boolean)
 
 /** The consumers whose copy one of `changedFiles` feeds. Pure. */
 export function affectedConsumers(config, repoName, changedFiles) {
@@ -88,6 +92,9 @@ export async function featurePrFor({ github, config, owner, repo, prNumber, cons
         const depRepo = dep.repository?.name || /\/repos\/[^/]+\/([^/]+)$/.exec(String(dep.repository_url || ''))?.[1] || repo
         if (dep.state !== 'open' || depRepo !== consumer) continue
         const p = await github.graphql(prs, { o: owner, r: consumer, n: dep.number })
+        // The sessions' login, not `dispatcherLogins`: a feature PR is opened by
+        // a cloud session, and a session cannot act as the App.
+        // (why: docs/why.md#the-dispatcher-has-its-own-github-app)
         const found = pickFeaturePr(p.repository.issue.closedByPullRequestsReferences.nodes, config.identity?.expectedLogin)
         if (found) return found
       }
@@ -126,8 +133,8 @@ export const CHECK_APPROVAL_MARKER = '<!-- sydevs-contract-check -->'
 export function contractSyncAttestedAt(statuses, config) {
   const ctx = config.contractSync?.attestContext
   const bot = writers(config)
-  if (!ctx || !bot.size) return null
-  const x = (statuses || []).find((x) => x.context === ctx && x.state === 'success' && bot.has(String(x.creator?.login || '').toLowerCase()))
+  if (!ctx || !bot.length) return null
+  const x = (statuses || []).find((x) => x.context === ctx && x.state === 'success' && isLogin(x.creator?.login, bot))
   return x ? x.created_at || x.updated_at || 'unknown' : null
 }
 
@@ -138,10 +145,10 @@ export function contractSyncAttestedAt(statuses, config) {
  */
 export function contractVerifyGate(config, repoName, pr, files) {
   const no = (reason) => ({ ok: false, reason })
-  const bot = writers(config)
   if (pr?.state !== 'open') return no('not open')
   if (pr.draft) return no('a draft: checked once it is ready')
-  if (!bot.size || !bot.has(String(pr.user?.login || '').toLowerCase())) return no('not opened by the bot')
+  const bot = writers(config)
+  if (!bot.length || !isLogin(pr.user?.login, bot)) return no('not opened by the bot')
   if (!pr.head?.repo?.full_name || pr.head.repo.full_name !== pr.base?.repo?.full_name) return no('the head is in another repository')
   if (!pr.base?.ref || pr.base.ref !== pr.base?.repo?.default_branch) return no('it does not target the default branch, which the sync is generated from')
   if (!isContractSyncOnly(config, repoName, pr, files)) return no('it changes more than the copied contract')
