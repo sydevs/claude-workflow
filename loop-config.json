@@ -318,7 +318,7 @@
         ],
         "command": "pnpm run types:cms",
         "paths": [
-          "server/payload-types.ts"
+          "types/payload/payload-types.ts"
         ]
       },
       "SahajAtlasWeb": {

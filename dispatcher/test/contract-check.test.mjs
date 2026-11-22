@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const CHECK = join(root, '.github/actions/contract-check/check.sh')
 const CONFIG = join(root, 'loop-config.json')
-const COPY = 'server/payload-types.ts'
+const COPY = 'types/payload/payload-types.ts'
 const SIBLING = 'server/other-contract.json'
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' }).trim()
@@ -21,7 +21,7 @@ const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.email=t@t', '-c',
 function pr(change, seed = () => {}) {
   const dir = mkdtempSync(join(tmpdir(), 'contract-check-'))
   const origin = join(dir, 'origin')
-  execFileSync('mkdir', ['-p', join(origin, 'server')])
+  execFileSync('mkdir', ['-p', join(origin, 'server'), join(origin, 'types/payload')])
   git(dir, 'init', '-q', '-b', 'main', origin)
   writeFileSync(join(origin, COPY), 'v1\n')
   writeFileSync(join(origin, 'other.txt'), 'a\n')
@@ -59,7 +59,7 @@ test('a changed copy passes only when it is exactly what the command writes', ()
   assert.equal(check(pr((w) => writeFileSync(join(w, COPY), 'v2\n')), 'v2\n').code, 0)
   const hand = check(pr((w) => writeFileSync(join(w, COPY), 'v2 plus a hand edit\n')), 'v2\n')
   assert.equal(hand.code, 1)
-  assert.match(hand.out, /::error file=server\/payload-types\.ts,title=Contract check::/)
+  assert.match(hand.out, /::error file=types\/payload\/payload-types\.ts,title=Contract check::/)
   const gone = check(pr((w) => unlinkSync(join(w, COPY))), 'v1\n')
   assert.equal(gone.code, 1, 'a deleted copy the command writes back is a change')
 })
@@ -73,7 +73,7 @@ test('a copy synced correctly passes while a sibling copy the PR never touched h
     INPUT_COMMAND: `cp ${join(p.dir, 'upstream')} ${COPY} && cp ${sibling} ${SIBLING}`,
   })
   assert.equal(r.code, 0, "drift in an untouched copy belongs to the contract sync, not to this PR")
-  assert.match(r.out, /Changed copies: server\/payload-types\.ts$/m)
+  assert.match(r.out, /Changed copies: types\/payload\/payload-types\.ts$/m)
 })
 
 test('a command that fails is infrastructure, re-run rather than repaired', () => {
@@ -89,7 +89,7 @@ test('defaults come from contractSync; a repo with no entry fails, and a push ha
   assert.match(none.out, /no contractSync entry/)
   const configured = check(p, 'v1\n', { INPUT_PATHS: '', INPUT_COMMAND: '' })
   assert.equal(configured.code, 0, 'WeMeditateWeb reads its paths from loop-config.json')
-  assert.match(configured.out, /server\/payload-types\.ts/)
+  assert.match(configured.out, /types\/payload\/payload-types\.ts/)
   const push = check(p, 'v1\n', { BASE_SHA: '' })
   assert.equal(push.code, 0)
   assert.match(push.out, /Not a pull request or merge group/)
