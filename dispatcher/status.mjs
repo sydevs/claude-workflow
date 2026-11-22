@@ -16,7 +16,9 @@
  * (why: docs/why.md#pending-has-a-due-awaiting-has-a-reason)
  */
 
-import { isBot, isRoadmap, fullTreatment, needsAddressReview, loopMayNotMerge, threadsWaiting, stackedPr, proxyApproves, proxyVerdict } from './decide.mjs'
+import { isBot, fullTreatment, isRoadmap, stackedPr, threadsWaiting, nowOf } from './predicates.mjs'
+import { loopMayNotMerge, proxyApproves, proxyVerdict } from './approvals.mjs'
+import { needsAddressReview } from './decide.mjs'
 
 const out = (key, reason, due = false) => ({ key, reason, due })
 const refs = (list) => list.map((b) => `${b.owner && b.repo ? `${b.owner}/${b.repo}` : ''}#${b.number}`).join(', ')
@@ -29,7 +31,7 @@ function childHeld(c, now) {
   return Boolean(c.holdUntil && c.holdUntil > now.toISOString().slice(0, 10))
 }
 
-export function deriveStatus(s, config, now = s.now || new Date()) {
+export function deriveStatus(s, config, now = nowOf(s)) {
   const lock = config.labels.lock
   const locked = (s.item?.labels || []).includes(lock)
   const rec = s.record || {}
