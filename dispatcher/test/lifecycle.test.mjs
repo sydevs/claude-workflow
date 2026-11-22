@@ -191,6 +191,24 @@ function boardGh(boardName) {
   return gh
 }
 
+// A transfer used to be the last action `route` could plan. A drained unlock
+// can now put a plan behind one, and `t.number` stops being this issue the
+// moment it moves. (why: docs/why.md#a-session-asks-actions-acts)
+test('nothing is written to an issue that has moved', async () => {
+  const gh = boardGh('Awaiting')
+  gh.rest.repos = { get: async () => ({ data: { node_id: 'R2' } }) }
+  const inner = gh.graphql
+  gh.graphql = async (q, v) => (q.includes('transferIssue')
+    ? { transferIssue: { issue: { number: 77 } } }
+    : inner(q, v))
+  gh.rest.issues.addLabels = async (a) => { gh.calls.push(['addLabels', a]); return { data: {} } }
+  const snapshot = issue({ item: { number: 9, state: 'open', labels: [], nodeId: 'N9' }, record: {} })
+  const plan = [{ type: 'transfer', repo: 'SahajAtlasWeb', milestone: null }, { type: 'label', add: ['proposal'], remove: [] }, { type: 'syncStatus' }]
+  await apply({ gh, target: { repo, kind: 'issue', number: 9, reason: 'issue_comment' }, snapshot, plan, config, env: {}, dryRun: false, core: { info: () => {} }, now })
+  assert.equal(gh.calls.filter(([k]) => k === 'addLabels').length, 0, 'the label would land on whatever holds number 9 now')
+  assert.equal(gh.calls.filter(([k]) => k === 'status').length, 0, 'and the Status was already guarded')
+})
+
 test('a board value nobody wrote is a drag: reverted and journalled', async () => {
   const gh = boardGh('Done')
   const snapshot = issue({ item: { number: 9, state: 'open', labels: [], nodeId: 'N9' }, record: { status: 'awaiting' } })

@@ -160,7 +160,8 @@ board's Status, not in a label. (why: docs/why.md#status-is-derived-never-read)
 > releases the lock, because `POST /git/refs` is GitHub's only compare-and-swap. It lives outside
 > `refs/heads` and `refs/tags`, so it is not a branch or a tag and `git branch -a` never shows it.
 > `git ls-remote origin 'refs/sydevs-lease/*'` lists the leases a repo holds; a ref there with no
-> `bot:working` on the item, or a record past its deadline, is residue the next sweep reclaims.
+> `bot:working` on the item, or a record past its deadline, is residue — reclaimed by the next
+> sweep, by the next event run in that repo, or by any event on the item itself.
 > (why: docs/why.md#the-lease-is-a-ref-not-a-label, docs/why.md#a-lease-past-its-deadline-is-reclaimed)
 
 One script sets every shared label to the same colour and description in all five repos. It edits
@@ -204,9 +205,8 @@ always wins** — two jobs can look at the same instant and both create.
 
 **Every journal tick re-counts yesterday as well as today**, so a day closes with a true count
 rather than with whatever its last successful tick saw. The schedule is the only writer and GitHub
-drops most of its `*/30` cron — about eight ticks a day land, at gaps of two to five hours — so
-nothing may land near midnight. A tick that cannot finish posts a `journal-tally` anomaly to the
-day's own issue, because `dispatch / journal` is in `ci.ignoreCheckNames` and a red journal job is
+drops most of its half-hourly cron, at gaps of hours, so nothing may land near midnight. A tick
+that cannot finish posts a `journal-tally` anomaly to the day's own issue, because `dispatch / journal` is in `ci.ignoreCheckNames` and a red journal job is
 never CI the loop acts on. (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
 
 The weekly reflection closes the week's journals, which is also what ends the re-counting: a
@@ -788,6 +788,6 @@ judgement is the only thing that costs a session.
 | `TypeError: Cannot read properties of null (reading 'status')` in `projects.mjs` | The PAT cannot see the org project. `projectV2` returns `null` with no GraphQL error — a permission answer dressed as data. |
 | `POST /repos/.../issues` or `.../labels` returns 403 | The PAT lacks **Issues: write**. The same permission covers labels, comments and issue creation. |
 | An `is:blocked` search returns the wrong issues | In issue **search** it matches the `blocked` label, not the relationship. Use GraphQL `blockedBy` on `Issue`. |
-| Two journal issues for one day | Two `act` jobs created one each. The scheduled journal job closes the newer within 30 minutes. |
+| Two journal issues for one day | Two `act` jobs created one each. The scheduled journal job closes the newer on its next run. |
 | A session starts and stops immediately | It found no `bot:working` label. Either the lock write failed, or another session already finished the item. |
 | After a bot rename or PAT migration, every advisory re-posts and every status comment is duplicated, once | Expected. Only `identity.expectedLogin` is read back, so the old login's comments stop counting. One duplicate per open item, then quiet. (why: docs/why.md#a-dispatcher-owned-marker-is-qualified-by-its-author) |

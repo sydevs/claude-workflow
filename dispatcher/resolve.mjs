@@ -12,7 +12,7 @@
  */
 
 import { isBot } from './predicates.mjs'
-import { listSweepTargets } from './sweep.mjs'
+import { expiredLockTargets, listSweepTargets } from './sweep.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 
 /**
@@ -31,6 +31,11 @@ const QUEUE_FAILED = new Set(['failure', 'timed_out'])
 
 function repoOf(context) {
   return { owner: context.repo.owner, name: context.repo.repo, full: `${context.repo.owner}/${context.repo.repo}` }
+}
+
+/** The event a target was found on, for the dispatch record it may fire. */
+export function eventLabel(context) {
+  return `${context.eventName}.${context.payload?.action || ''}`.replace(/\.$/, '')
 }
 
 /**
@@ -56,9 +61,14 @@ export function coalesceTargets(targets) {
 
 /**
  * The event's own targets, then — on an event run — up to
- * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo whose board
- * Status the cheap view rules out. The cron covers the rest.
- * (why: docs/why.md#the-reconciler-replaces-the-drift-window)
+ * `dispatch.reconcileMaxPerEvent` items elsewhere in the repo: first every
+ * lock the record dates past its deadline, then the ones whose board Status
+ * the cheap view rules out. The cron covers the rest.
+ *
+ * A cheap view that cannot answer reclaims nothing, so the cron stays the
+ * backstop for a lock nobody will unlock.
+ * (why: docs/why.md#the-reconciler-replaces-the-drift-window,
+ *  docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
 export async function resolve({ github, context, config, now = new Date() }) {
   const own = await eventTargets({ github, context, config, now })
@@ -67,7 +77,16 @@ export async function resolve({ github, context, config, now = new Date() }) {
   if (!limit) return own
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
-  return own.concat(driftTargets(await cheapView(github, config, repo.owner, repo.name), config, repo, { now, limit, skip }))
+  const view = await cheapView(github, config, repo.owner, repo.name)
+  const expired = await expiredLockTargets({
+    github, config, repo, now, limit, skip, event: eventLabel(context),
+    items: view.filter((v) => v.labels.includes(config.labels.lock)),
+  })
+  // An item the reclaim took is spared the drift pass: a lock off the board,
+  // or behind a Status write that failed, is a drift target too, and a second
+  // target spends a slot and a full `gather` on an item already handled.
+  for (const t of expired) skip.add(t.number)
+  return own.concat(expired, driftTargets(view, config, repo, { now, limit: limit - expired.length, skip }))
 }
 
 async function eventTargets({ github, context, config, now }) {
@@ -75,7 +94,7 @@ async function eventTargets({ github, context, config, now }) {
   const ev = context.payload
   const action = ev.action
   const name = context.eventName
-  const one = (kind, number, reason, facts = {}) => [{ repo, kind, number, reason, event: `${name}.${action || ''}`.replace(/\.$/, ''), facts }]
+  const one = (kind, number, reason, facts = {}) => [{ repo, kind, number, reason, event: eventLabel(context), facts }]
 
   if (name === 'issues') {
     const n = ev.issue.number

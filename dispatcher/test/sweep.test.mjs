@@ -45,6 +45,12 @@ test('a stale draft is re-derived first, and only then considered an orphan', as
   assert.deepEqual(t.filter((x) => x.number === 9).map((x) => x.reason), ['sweep-pr', 'sweep-orphan'], 'in that order')
 })
 
+test('the journal is never swept, lock or no lock', async () => {
+  const github = fake({ issuesByLabel: { [config.labels.lock]: [{ number: 11, labels: [{ name: config.labels.journal }] }] } })
+  const t = await listSweepTargets({ github, config, repo, now })
+  assert.ok(!t.some((x) => x.number === 11), 'the loop\'s own diary is not a worklist, here as on an event run')
+})
+
 // The cheap view: one GraphQL page per kind, its board Status beside it.
 const OFF = Symbol('not on the board')
 const node = (number, { labels = [], blockers = [], board = 'Awaiting', type = null, pr = false, hold = null } = {}) => ({

@@ -114,6 +114,9 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
 
   let syncWanted = false
   for (const a of plan) {
+    // `t.number` is not this issue once it has moved: a write here would land
+    // on whatever now holds that number, or 404.
+    if (moved) { log(`${a.type} skipped — the issue has moved`); continue }
     switch (a.type) {
       case 'note': log(a.text); break
       case 'ensure':

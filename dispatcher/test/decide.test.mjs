@@ -959,6 +959,66 @@ test('a resolve-conflicts that ended on this head is not fired again; a new head
   assert.deepEqual(types(evaluatePr(conflicted({ record: { dispatches: [{ ...ended, sha: 'old' }] } }), config)), ['fire:resolve-conflicts'])
 })
 
+// ---- an unlock the dispatcher never saw (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+
+// sydevs/WeMeditateWeb#326: a review-pr session took its own lock off, the run
+// that would have read that died on a spent REST quota, and the member's
+// `address` 22 minutes later was refused by the lease it left behind.
+const missed = (over = {}) => prSnap({
+  pr: { ...prSnap().pr, draft: false, user: { login: 'Ardnived' } },
+  record: { fixCi: 0, current: { handler: 'review-pr', firedAt: '2026-09-08T10:00:00Z' }, pending: { handler: 'address-review', refused: true } },
+  comments: [{ author: 'Ardnived', body: '@sydevs-bot address', createdAt: '2026-09-08T11:00:00Z' }],
+  ...over,
+})
+const addressVerb = { reason: 'issue_comment', facts: { author: 'Ardnived', body: '@sydevs-bot address', association: 'MEMBER' } }
+
+test('an event on an item whose unlock was lost releases the lease before anything fires', () => {
+  const p = types(decide(addressVerb, missed(), config))
+  assert.deepEqual(p, ['unlocked:review-pr', 'note', 'fire:address-review'])
+  assert.ok(p.indexOf('unlocked:review-pr') < p.indexOf('fire:address-review'), 'the lease goes before the fire it would refuse')
+})
+
+test('the drain derives nothing a PR event derives anyway, so nothing is planned twice', () => {
+  // Every PR event funnels into evaluatePr, and `stalePlan` runs ahead of its
+  // lock guard — two derivations plan two approvals and two dismissals.
+  const stale = missed({
+    reviews: [{ id: 7, user: { login: 'Ardnived' }, state: 'APPROVED', commit_id: 'old', submitted_at: '2026-09-08T09:00:00Z' }],
+    prCommits: [{ sha: 'old', author: 'Ardnived' }, { sha: 'abc', author: 'sydevs-bot' }],
+  })
+  const p = types(decide(addressVerb, stale, config))
+  assert.deepEqual(p.filter((a) => a === 'dismissStale'), ['dismissStale'], 'one dismissal: a second answers 422 and kills the leg')
+  assert.deepEqual(p, [...new Set(p)], 'and no action type is planned twice')
+})
+
+test('the dispatcher\'s own unlock, and no session at all, read exactly as before', () => {
+  const own = missed({ record: { fixCi: 0, current: { handler: 'review-pr' }, pending: { handler: 'address-review' } } })
+  assert.deepEqual(types(decide(addressVerb, own, config)), ['note', 'fire:address-review'], 'a pending fire of its own is no session ending')
+  assert.deepEqual(types(decide(addressVerb, missed({ record: { fixCi: 0 } }), config)), ['note', 'fire:address-review'])
+})
+
+test('a continue the lost unlock asks for starts, and the event waits for it', () => {
+  const asked = missed({
+    record: { fixCi: 0, current: { handler: 'address-review', firedAt: '2026-09-08T10:00:00Z' } },
+    request: { at: '2026-09-08T10:30:00Z', body: { continue: true } },
+  })
+  assert.deepEqual(types(decide(addressVerb, asked, config)), ['unlocked:address-review', 'record', 'fire:address-review', 'recheck'])
+})
+
+test('on an issue, the drain re-dispatches the pending verb under the leg\'s own reason', () => {
+  const verb = { author: 'Ardnived', body: '@sydevs-bot implement', association: 'MEMBER', commentId: 42 }
+  const s = issueSnap({
+    record: { current: { handler: 'revise', firedAt: '2026-10-07T10:00:00Z' }, pending: { handler: 'implement', refused: true } },
+    comments: [{ id: 42, author: 'Ardnived', body: '@sydevs-bot implement', createdAt: '2026-10-07T11:00:00Z', association: 'MEMBER' }],
+  })
+  const plan = decide({ reason: 'issue_comment', facts: verb }, s, config)
+  const p = types(plan)
+  assert.equal(p[0], 'unlocked:revise')
+  assert.deepEqual(p.filter((a) => a.startsWith('fire:')), ['fire:implement'], 'the verb starts once')
+  // Every target the drain emits here carries `issue_comment`, which is this
+  // leg's own reason: `act` keys `seen` on `repo#number:reason` and drops it.
+  for (const a of plan.filter((a) => a.type === 'targets')) assert.deepEqual(a.list.map((t) => t.reason), ['issue_comment'])
+})
+
 // ---- a wake hint promises only what wakes the bot ------------------------
 
 const wakeComment = (plan) => plan.find((a) => a.type === 'comment')
