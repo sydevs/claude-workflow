@@ -13,7 +13,7 @@
  * instead. (why: docs/why.md#docs-fixes-and-re-syncs-ride-the-feature)
  */
 
-import { dispatcherLogins, isLogin } from './decide.mjs'
+import { dispatcherLogins, isLogin } from './predicates.mjs'
 import { installRetry } from './retry.mjs'
 
 /** The consumers whose copy one of `changedFiles` feeds. Pure. */

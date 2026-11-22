@@ -8,7 +8,9 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, isDispatcherComment, fullTreatment, proxyApproves, dispatcherLogins, restLogin } from './decide.mjs'
+import { isBot, fullTreatment, dispatcherLogins, restLogin } from './predicates.mjs'
+import { proxyApproves } from './approvals.mjs'
+import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
 function comment(c) {

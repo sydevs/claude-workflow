@@ -11,7 +11,7 @@
  * order inside the one leg. (why: docs/why.md#one-target-per-item)
  */
 
-import { isBot } from './decide.mjs'
+import { isBot } from './predicates.mjs'
 import { listSweepTargets } from './sweep.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 

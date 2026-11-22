@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadRecord, findRecord, emptyRecord, MARKER } from '../record.mjs'
-import { dispatcherLogins, restLogin, isLogin } from '../decide.mjs'
+import { dispatcherLogins, restLogin, isLogin } from '../predicates.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 

@@ -10,7 +10,7 @@ import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
-import { isLogin, isReviewer, isHuman, dispatcherLogins } from './decide.mjs'
+import { isLogin, isHuman, lower, dispatcherLogins } from './predicates.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
 
@@ -375,15 +375,6 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         log(`reclaim ${leaseRef(t.number)} — ${a.why}`)
         await release(gh, config, t, { now, dryRun, log })
         break
-      case 'archiveCurrent':
-        if (rec.current) {
-          log(`archive ${rec.current.handler} — its end was never seen`)
-          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'ended unseen' }]
-          rec.current = null
-          recordDirty = true
-        }
-        await release(gh, config, t, { now, dryRun, log })
-        break
       case 'targets': emitted.push(...(a.list || [])); break
       case 'fire': {
         if (!fireable(config, a.handler, log)) break
@@ -480,8 +471,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
 
 /** The member to ask for a review: the configured reviewer, or the other human when they wrote it. */
 export function reviewerFor(author, config) {
-  const lower = (x) => String(x || '').toLowerCase()
-  if (!isReviewer(author, config)) return config.assignment.reviewer
+  if (lower(author) !== lower(config.assignment.reviewer)) return config.assignment.reviewer
   return (config.assignment.respondTo || []).find((l) => isHuman(l, config) && lower(l) !== lower(author)) || null
 }
 
