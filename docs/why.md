@@ -625,10 +625,8 @@ Either way the rest of the body round-trips byte for byte: 9.4 KB on sydevs/Saha
 two sentences its author reworded in flight. That is what makes the readback diff worth reading —
 a difference outside that block is a real one.
 
-There was never a missing writer. `body` is a string argument carrying the whole document, so the
-file's bytes go through it at any size, and the readback diff the rule already requires is what
-makes that checkable. Reading the file to disk exists precisely so a long body never passes
-through a retype.
+There was never a missing writer. The retype those three runs feared is the one thing reading the
+file to disk removes.
 
 This does not reach the other half of the same tool gap. `issue_read method:get` has no field
 projection, so `start-run`'s lock re-check — once before the first write and once before every
