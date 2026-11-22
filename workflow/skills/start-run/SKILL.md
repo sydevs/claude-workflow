@@ -76,6 +76,11 @@ rule set. Where they disagree, the files win. Journal the discrepancy under `⚠
   repos/<org>/<repo>/<pulls|issues>/<n> --jq .body > body.md`. Edit the file, write the whole
   file back through `update_pull_request` or `issue_write`, then diff a fresh read against it.
   Neither tool takes a patch, so a body retyped from the thread ships stale or corrupted.
+  **Send the file's bytes, whatever the size.** `body` is the whole document, and the readback
+  makes a long one safe. A body left stale because it looked unwritable is the failure this rule
+  exists to stop.
+  **The trailing Claude Code attribution is the server's**, which rewrites or drops what you send
+  there and answers 200. A readback difference confined to that block is not corruption.
   (why: docs/why.md#a-body-is-read-to-disk-before-it-is-edited)
 - **Feedback is `assignment.respondTo`**, an allowlist. No other login's comment is feedback.
   (why: docs/why.md#respondto-is-an-allowlist)

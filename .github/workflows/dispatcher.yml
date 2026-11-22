@@ -367,7 +367,9 @@ jobs:
           git config user.email 322523691+sydevs-bot@users.noreply.github.com
           # Vouches for a commit this job wrote on the sync branch, so the
           # contracts-verify job can approve it. Only here: a commit on a
-          # feature PR is reviewed with the feature.
+          # feature PR is reviewed with the feature. Needs **Commit statuses**
+          # write on every contractSync consumer; without it on SYDEVS_BOT_PAT
+          # every sync 403s here (claude-workflow#305).
           attest() {
             [ -n "${ATTEST_CONTEXT:-}" ] || return 0
             gh api -X POST "repos/$REPO/statuses/$(git rev-parse HEAD)" -f state=success \
@@ -423,7 +425,6 @@ jobs:
           fi
           # A branch left by a PR closed unmerged is replaced, not built on.
           git push -q --force origin "HEAD:$BRANCH"
-          attest
           body=$(printf '%s\n' \
             '## Summary' '' \
             "- Re-syncs this repo's copy of a SahajCloud contract, after $SOURCE_PR merged." \
@@ -434,6 +435,10 @@ jobs:
             'Opened by the dispatcher contract sync (`contractSync` in sydevs/claude-workflow `loop-config.json`), not from a ticket. A later producer merge adds its commit here while this PR is open.')
           gh pr create --repo "$REPO" --base main --head "$BRANCH" --draft \
             --title "chore(contracts): re-sync copied contracts from SahajCloud" --body "$body"
+          # After the PR, so a refused status still fails the job but leaves a
+          # PR for a person, not a bare branch. contracts-verify fires on the
+          # status event too, so the order costs no approval.
+          attest
 
   # A contract-sync PR has one correct content, so a person reading it checks
   # nothing a machine cannot. `contracts-sync` posts `contractSync.attestContext`

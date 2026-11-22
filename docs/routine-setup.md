@@ -351,16 +351,17 @@ private repo:
 | Name | What |
 | --- | --- |
 | `SYDEVS_APP_ID` / `SYDEVS_APP_PRIVATE_KEY` | the dispatcher's own GitHub App (§0c), which gives it a REST budget apart from the sessions'. A variable and a secret. Both unset, every job uses `SYDEVS_BOT_PAT` instead. |
-| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. |
+| `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. **Commit statuses** write must reach each `contractSync` consumer (WeMeditateWeb, SahajAtlasWeb, SahajAtlasWordpress), for the status `contracts-verify` approves on. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's preview seed and smoke steps — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. **Not the loop's** — the loop holds its own pair in §4, so either can be switched off without deleting the other. |
 
-> ⚠ **A missing permission on the PAT reads as something else entirely.** Three separate live
+> ⚠ **A missing permission on the PAT reads as something else entirely.** Four separate live
 > failures traced back to it: `projectV2` returning `null` with no GraphQL error, `POST /issues`
-> 403 while creating the day's journal, and `POST …/labels` 403 while applying the lock. Check the
-> PAT before you debug anything else.
+> 403 while creating the day's journal, `POST …/labels` 403 while applying the lock, and
+> `POST …/statuses` 403 in `contracts-sync`, which left a pushed sync branch with no PR
+> (claude-workflow#305). Check the PAT before you debug anything else.
 
 **One-time UI configuration** (built-in project workflows and views have no API):
 
