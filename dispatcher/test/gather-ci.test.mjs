@@ -168,7 +168,7 @@ test("a sync PR's head is vouched for only by the bot, and GitHub's decision is 
   const base = await gh.rest.pulls.get()
   const pr = { ...base.data, number: 292, draft: false, head: { ref: config.contractSync.branch, sha: 'abc' } }
   gh.rest.pulls.get = async () => ({ data: pr })
-  gh.rest.pulls.listFiles = async () => ({ data: [{ filename: 'server/payload-types.ts' }] })
+  gh.rest.pulls.listFiles = async () => ({ data: [{ filename: 'types/payload/payload-types.ts' }] })
   gh.rest.pulls.listReviews = async () => ({ data: [{ id: 1, state: 'APPROVED', commit_id: 'abc', body: `${marker}\nok`, user: { login: 'github-actions[bot]' } }] })
   gh.rest.repos.listCommitStatusesForRef = async () => ({ data: [
     { context: config.contractSync.attestContext, state: 'success', creator: { login: 'someone' }, created_at: '2026-10-09T16:00:00Z' },
