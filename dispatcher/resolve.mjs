@@ -92,7 +92,7 @@ export async function resolve({ github, context, config, core = { info() {} }, n
     } catch { /* unreadable: shed nothing */ }
   }
   if (Number.isFinite(remaining) && remaining < floor) {
-    core.info(`REST budget ${remaining} is under the floor of ${floor} — shedding the drift targets; the cron covers them`)
+    core.info(`REST budget ${remaining} is under the floor of ${floor} — keeping only this event's targets; the cron covers the reclaim and the drift`)
     return own
   }
   const repo = repoOf(context)
