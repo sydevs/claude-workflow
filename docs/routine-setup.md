@@ -287,7 +287,7 @@ private repo:
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
-| `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's preview seed and smoke steps — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. **Not the loop's** — the loop holds its own pair in §4, so either can be switched off without deleting the other. |
+| `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's smoke step — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. The loop holds no Access credential (§4). |
 
 > ⚠ **A missing permission on the PAT reads as something else entirely.** Four separate live
 > failures traced back to it: `projectV2` returning `null` with no GraphQL error, `POST /issues`
