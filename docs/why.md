@@ -600,6 +600,21 @@ The rule was wrong, not the runs. A read is the one thing `gh` adds here that MC
 write still goes through `mcp__github__*` where the repository scope lives, and the readback diff
 is what makes the round trip checkable rather than hopeful.
 
+A later week found the rule's own blind spot. `Neither tool takes a patch` reads as `neither tool
+writes a long body`, and in the week to 2026-11-21 three runs stopped there: sydevs/WeMeditateWeb#313
+(*"an 18 KB body must be retyped, which is the corruption the rule exists to prevent"*), #283
+(*"correcting one stale line risks corrupting the body it retypes"*) and #293 (*"the file the
+read-to-disk rule produces has no writer"*). All three left a known-stale body on a PR the next
+run grounds from, which is the failure the rule was written to stop. Four more wrote the body with
+`gh api -X PATCH`, which `start-run` bars, and that path rewrites the trailing attribution
+(sydevs/WeMeditateWeb#283, #316, sydevs/SahajAtlasWeb#442, sydevs/SahajCloud#1231 — where it
+appended a Claude Code footer to a *ticket*).
+
+There was never a missing writer. `body` is a string argument carrying the whole document, so the
+file's bytes go through it at any size, and the readback diff the rule already requires is what
+makes that checkable. Reading the file to disk exists precisely so a long body never passes
+through a retype.
+
 This does not reach the other half of the same tool gap. `issue_read method:get` has no field
 projection, so `start-run`'s lock re-check — once before the first write and once before every
 push — pays the whole body each time: about 15k tokens a check on a 30 KB PR
