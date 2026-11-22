@@ -782,8 +782,43 @@ function withPushRoute(plan, s, config) {
   return plan.map((a) => (a.type === 'fire' && !a.flags?.push ? { ...a, flags: { ...(a.flags || {}), push } } : a))
 }
 
+/** A plan carrying one of these has already read the record's session itself. */
+const READS_THE_RECORD = new Set(['unlocked', 'timeout', 'releaseLease'])
+
+/**
+ * A drained unlock that did one of these started something — a session, a push
+ * that lands commits, an issue transfer — so the event's own rule must not
+ * start it again. `MOVES` answers a different question: whether a sweep found
+ * anything to say.
+ */
+const TURN_TAKEN = new Set(['fire', 'retry', 'timeout', 'relay', 'transfer'])
+
+/**
+ * The unlock this item never got: no lock on it, but the record still holds
+ * the session that took the label off, so its lease is still there and every
+ * later fire for the item is refused. Only the cron read it, hours later; any
+ * event on the item drains it now, as the unlock it was. Two events on
+ * sydevs/WeMeditateWeb#326 waited on the sweep for it.
+ *
+ * `missed` is what stops the drain re-deriving what the event itself derives:
+ * every PR event funnels into `evaluatePr`, and some of that runs ahead of the
+ * lock guard, so deriving twice plans two approvals and two dismissals.
+ * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+ */
+function missedUnlock(target, s, config) {
+  if (untouched(s, config) || !s.record?.current || ownUnlock(s)) return []
+  // `missed` and nothing else: `case 'unlock'` reads `handler` from its facts
+  // too, and that is the dispatcher's own value, never an event's.
+  return route({ ...target, reason: 'unlock', facts: { missed: true } }, s, config)
+}
+
 export function decide(target, s, config) {
-  let plan = withPushRoute(route(target, s, config), s, config)
+  const own = route(target, s, config)
+  const drained = own.some((a) => READS_THE_RECORD.has(a.type)) ? [] : missedUnlock(target, s, config)
+  // The drain took the item's turn, so the event is derived against a held
+  // item: every rule that waits for a lock already says what that means.
+  const next = drained.some((a) => TURN_TAKEN.has(a.type)) ? route(target, { ...s, locked: true }, config) : own
+  let plan = withPushRoute(drained.concat(next), s, config)
   // A fresh implement or address-review starts its own count of continuations.
   if (s.record?.continues && plan.some((a) => a.type === 'fire' && CONTINUES.has(a.handler) && !a.flags?.continuation)) plan = plan.concat(record({ continues: 0 }))
   if (untouched(s, config)) return plan
@@ -1075,7 +1110,9 @@ function route(target, s, config) {
         // (why: docs/why.md#the-relay)
         const req = freshRequest(s)?.relay
         if (req && req.sha !== s.pr?.head?.sha) return plan.concat(relayPlan(s, config, req))
-        return plan.concat(evaluatePr(s, config))
+        // A drained unlock derives nothing: the event that drained it is a PR
+        // event, and every one of those funnels into `evaluatePr` already.
+        return facts.missed ? plan : plan.concat(evaluatePr(s, config))
       }
       const v = pendingVerb(s, config, 'issue')
       // An implement session answers with a PR, never a comment on the issue,
@@ -1150,8 +1187,18 @@ function route(target, s, config) {
       if (cur) return route({ ...target, reason: 'unlock', facts: {} }, s, config)
       return [releaseLease('no lock and no session on the item')]
     }
-    case 'sweep-timeout':
-      return [timeout()]
+    // The record is read again here, as `sweep-lease` and `reconcile` do.
+    // `resolve` found this target in another job, outside the per-item
+    // concurrency group, so by now the lock may be a later session's: timing
+    // that one out would delete its lease and fire its handler a second time.
+    // (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+    case 'sweep-timeout': {
+      const cur = s.record?.current
+      if (!s.locked) return [note('the lock is already off — the unlock path owns it')]
+      if (!cur) return [timeout()]
+      if (cur.deadline && Date.parse(cur.deadline) < nowOf(s).getTime()) return [timeout()]
+      return [note(`${cur.handler} is inside its deadline — re-fired since the sweep found it`)]
+    }
     case 'sweep-pr':
       return quietSweep(evaluatePr(s, config), s, config)
     case 'sweep-orphan': {

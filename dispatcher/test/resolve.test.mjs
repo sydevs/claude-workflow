@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
+import { emptyRecord, renderRecord } from '../record.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
 
@@ -132,4 +133,102 @@ test('the schedule never reads the budget, so the cron is unchanged', async () =
   gh.rest.pulls = { list: async () => ({ data: [] }) }
   const out = await resolve({ github: gh, context: { ...opened, eventName: 'schedule', payload: {} }, config, core })
   assert.ok(Array.isArray(out), 'the sweep runs its own way')
+})
+
+// ---- expired locks on an event run (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+
+const now = new Date('2026-11-20T22:00:00Z')
+const capped = (n) => ({ ...config, dispatch: { ...config.dispatch, reconcileMaxPerEvent: n } })
+
+const comment = (number) => ({
+  eventName: 'issue_comment',
+  repo: { owner: repo.owner, repo: repo.name },
+  payload: { action: 'created', issue: { number }, comment: { user: { login: 'Ardnived' }, body: '@sydevs-bot implement' } },
+})
+
+// Locked, and Working on the board, so the reconciler sees no drift here.
+const lockedNode = (number, labels = [config.labels.lock]) => ({
+  number,
+  labels: { nodes: labels.map((name) => ({ name })) },
+  projectItems: { nodes: [{ project: { number: config.projects.number }, fieldValueByName: { name: 'Working' } }] },
+})
+
+// Written by the dispatcher's own renderer, so the fake cannot drift from it.
+const record = (deadline) => [{
+  user: { login: config.identity.expectedLogin },
+  body: renderRecord({ ...emptyRecord(), current: { handler: 'implement', attempt: 1, deadline } }),
+}]
+
+const world = (nodes, records) => ({
+  rest: {
+    issues: { listComments: ({ issue_number: n }) => ({ data: records[n] || [] }) },
+    // Budget to spare, so the floor sheds nothing and these tests measure the
+    // reclaim rather than the shed.
+    rateLimit: { get: async () => ({ data: { resources: { core: { remaining: 5000 } } } }) },
+  },
+  graphql: async (q) => (q.includes('pullRequests(')
+    ? { repository: { pullRequests: { pageInfo: { hasNextPage: false }, nodes: [] } } }
+    : { repository: { issues: { pageInfo: { hasNextPage: false }, nodes } } }),
+})
+
+test('an event run reclaims a lock past its deadline, and leaves a live one alone', async () => {
+  const out = await resolve({
+    github: world([lockedNode(1), lockedNode(2), lockedNode(3)], { 1: record('2026-11-20T18:00:00Z'), 2: record('2026-11-20T17:26:00Z'), 3: record('2026-11-21T04:00:00Z') }),
+    context: comment(1), config: capped(10), now,
+  })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout']], 'its own item is never swept, and #3 is inside its deadline')
+  assert.deepEqual(out[1].facts, { handler: 'implement', attempt: 1 })
+  assert.equal(out[1].event, 'issue_comment.created', 'the record it fires names the event that found it')
+})
+
+test('a lock with no record is swept on an event run too, exactly as the cron does', async () => {
+  const out = await resolve({ github: world([lockedNode(5)], {}), context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [5, 'sweep-timeout']])
+  assert.deepEqual(out[1].facts, { reason: 'lock without a record' })
+})
+
+test('the reclaim and the drift share one cap', async () => {
+  const records = Object.fromEntries([2, 3, 4].map((n) => [n, record('2026-11-20T17:26:00Z')]))
+  // #5 carries no lock, so `Working` is a Status the board may not hold: a
+  // drift target, and the only one either half of the cap can reach.
+  const nodes = [lockedNode(2), lockedNode(3), lockedNode(4), lockedNode(5, [])]
+  const out = await resolve({ github: world(nodes, records), context: comment(1), config: capped(2), now })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout']], 'two, and the cron takes the rest')
+  const room = await resolve({ github: world(nodes, records), context: comment(1), config: capped(4), now })
+  assert.deepEqual(room.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout'], [3, 'sweep-timeout'], [4, 'sweep-timeout'], [5, 'reconcile']], 'the drift half takes what the reclaim leaves')
+})
+
+test('an item the reclaim took is not a drift target as well', async () => {
+  // Off the board, so `driftTargets` reads it as drift: without the skip this
+  // item is targeted twice, and gathered twice.
+  const off = { ...lockedNode(2), projectItems: { nodes: [] } }
+  const out = await resolve({ github: world([off], { 2: record('2026-11-20T17:26:00Z') }), context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => [t.number, t.reason]), [[1, 'issue_comment'], [2, 'sweep-timeout']], 'reclaimed, not reconciled as well')
+})
+
+test('the cap bounds the record reads, not just the targets', async () => {
+  // A live lock yields no target, so a cap on the output would let one event
+  // run read every record in the repo.
+  const many = Array.from({ length: 25 }, (_, k) => lockedNode(k + 2))
+  const records = Object.fromEntries(many.map((n) => [n.number, record('2026-11-21T04:00:00Z')]))
+  const github = world(many, records)
+  const inner = github.rest.issues.listComments
+  let reads = 0
+  github.rest.issues.listComments = (args) => { reads += 1; return inner(args) }
+  const out = await resolve({ github, context: comment(1), config: capped(3), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'every lock is live, so nothing is swept')
+  assert.equal(reads, 3)
+})
+
+test('the journal is never swept, lock or no lock', async () => {
+  const github = world([lockedNode(6, [config.labels.lock, config.labels.journal])], { 6: record('2026-11-20T17:26:00Z') })
+  const out = await resolve({ github, context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'the loop\'s own diary is not a worklist')
+})
+
+test('a cheap view that cannot answer reclaims nothing', async () => {
+  const github = world([lockedNode(2)], { 2: record('2026-11-20T17:26:00Z') })
+  github.graphql = async () => { throw new Error('502') }
+  const out = await resolve({ github, context: comment(1), config: capped(10), now })
+  assert.deepEqual(out.map((t) => t.reason), ['issue_comment'], 'the cron is the backstop')
 })

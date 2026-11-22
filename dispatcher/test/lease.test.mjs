@@ -143,6 +143,19 @@ test('sweep-lease reclaims a lease past its deadline, label or not', () => {
   const bare = decide(leaseTarget, snap({ now, record: stale }), config)
   assert.equal(bare[0].type, 'unlocked', 'no label and a session on record: read as the unlock it was, which releases the lease')
 })
+
+// An event run emits `sweep-timeout` from the `resolve` job, outside the
+// per-item concurrency group, so the lock it found may be a later session's by
+// the time `act` reads it. (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+test('sweep-timeout reads the record again, and spares a lock re-fired since', () => {
+  const now = new Date('2026-10-27T12:00:00Z')
+  const target = { ...leaseTarget, reason: 'sweep-timeout', facts: { handler: 'implement', attempt: 1 } }
+  const held = { number: 858, labels: ['bot:working'], body: '', state: 'open' }
+  const kinds = (over) => decide(target, snap({ now, locked: true, item: held, ...over }), config).filter((a) => a.type !== 'syncStatus').map((a) => a.type)
+  assert.deepEqual(kinds({ record: { current: { handler: 'implement', deadline: '2026-10-27T18:00:00Z' }, dispatches: [] } }), ['note'], 'the newer session keeps its lease and its lock')
+  assert.deepEqual(kinds({ record: { current: { handler: 'implement', deadline: '2026-10-27T11:00:00Z' }, dispatches: [] } }), ['timeout'])
+  assert.deepEqual(kinds({}), ['timeout'], 'a lock with no record is still swept')
+})
 test('a 422 that is not "already exists" is an error, not contention', async () => {
   // GitHub answers 422 for a stale anchor sha and a malformed ref name too.
   // Reading either as contention suppresses the anomaly and leaves the item

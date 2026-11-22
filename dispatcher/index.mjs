@@ -15,7 +15,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { resolve as resolveEvent, coalesceTargets } from './resolve.mjs'
+import { resolve as resolveEvent, coalesceTargets, eventLabel } from './resolve.mjs'
 import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
@@ -42,7 +42,7 @@ export async function resolveTargets({ github, context, core, config, env = proc
   installRetry(github, config)
   try {
     const targets = coalesceTargets(await resolveEvent({ github, context, config, core }))
-    core.info(`${context.eventName}.${context.payload.action || ''} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
+    core.info(`${eventLabel(context)} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
     return targets
   } finally {
     spend(core, github, env)
@@ -106,11 +106,12 @@ export async function journalTick({ github, core, config, dryRun = false, now = 
   const today = await step('tally today', () => refreshTally(github, config, j.number, now))
   core.info(`journal #${j.number}${j.created ? ' created' : ''}: ${today.ok ? JSON.stringify(today.value) : 'tally failed'}`)
 
-  // The schedule does not keep to its cron: the `*/30` sweeper lands about
-  // eight times a day, at gaps of two to five hours. So a day rolls with its
-  // last true count hours old and nothing came back for it — #134 froze at
-  // 00:31Z with 6.5 hours of its journal day left. Re-counting yesterday is
+  // The schedule does not keep to its cron: this repo's four crons land a
+  // fraction of what they ask for, hours apart. So a day rolls with its last
+  // true count hours old and nothing came back for it — #134 froze at 00:31Z
+  // with 6.5 hours of its journal day left. Re-counting yesterday is
   // idempotent, and does not depend on which cron fired.
+  // (why: docs/why.md#the-journal-tally-needs-a-writer-that-cannot-stop)
   const prev = await step('find yesterday', () => previousJournalDay(github, config, now))
   if (prev.ok && prev.value) {
     const back = await step('tally yesterday', () => refreshTally(github, config, prev.value.number, now, prev.value.label))
