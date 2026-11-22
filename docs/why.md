@@ -1990,11 +1990,10 @@ goes quiet rather than loud when a consumer moves its copy: `check.sh` finds an 
 diff, `contracts-sync` reads a clean `git status` on a file its command never writes, and
 `audit-contracts` step 2 reads that same status as current. All three then report success about a
 file the repo no longer builds from, reopening WeMeditateWeb#269's failure mode: a hand edit to the
-live copy that nothing compares with its source. WeMeditateWeb moved its copy to
-`types/payload/payload-types.ts` and the
-config lagged; merging claude-workflow#297 back to back with WeMeditateWeb#327 was the whole
-mitigation (claude-workflow#298). Failing a consumer's CI on an absent path would redden every PR
-there until the config caught up — the shape
+live copy that nothing compares with its source. WeMeditateWeb was the first to move one, to
+`types/payload/payload-types.ts`, and the config lagged; merging claude-workflow#297 back to back
+with WeMeditateWeb#327 was the whole mitigation (claude-workflow#298). Failing a consumer's CI on
+an absent path would redden every PR there until the config caught up — the shape
 [A contract check checks what a PR changes](#a-contract-check-checks-what-a-pr-changes) rejects,
 with a wider blast radius. So the config is checked where drift on `main` is already fixed, in the
 audit, whose fix is a `loop-config.json` PR. Naming the old and the new path together was rejected:
