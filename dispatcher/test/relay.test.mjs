@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { applyRelay, pushRoute, relayRefusal } from '../relay.mjs'
-import { fullTreatment, decide } from '../decide.mjs'
+import { decide } from '../decide.mjs'
 import { parseRequest } from '../markers.mjs'
 import { deriveStatus } from '../status.mjs'
 
@@ -112,21 +112,21 @@ const prSnap = (over = {}) => ({
 })
 
 test('push route: the branch decides, never the author', () => {
-  assert.equal(pushRoute(prSnap({ head: { ref: 'claude/feat-147-submit-a-class', repo: 'sydevs/SahajAtlasWeb' } }), config, fullTreatment), 'direct', 'a member PR on a claude/* branch is pushed to directly (#318)')
-  assert.equal(pushRoute(prSnap(), config, fullTreatment), 'relay', 'a member branch goes through the relay')
-  assert.equal(pushRoute(prSnap({ user: { login: 'Copilot' }, head: { ref: 'copilot/fix-1', repo: 'sydevs/SahajAtlasWeb' } }), config, fullTreatment), 'relay')
-  assert.equal(pushRoute(prSnap({ user: { login: 'someone' } }), config, fullTreatment), 'none', 'an outsider gets answers, not code')
-  assert.equal(pushRoute(prSnap({ head: { ref: 'claude/x', repo: 'someone/SahajAtlasWeb' } }), config, fullTreatment), 'none', 'a fork is never pushed to')
+  assert.equal(pushRoute(prSnap({ head: { ref: 'claude/feat-147-submit-a-class', repo: 'sydevs/SahajAtlasWeb' } }), config), 'direct', 'a member PR on a claude/* branch is pushed to directly (#318)')
+  assert.equal(pushRoute(prSnap(), config), 'relay', 'a member branch goes through the relay')
+  assert.equal(pushRoute(prSnap({ user: { login: 'Copilot' }, head: { ref: 'copilot/fix-1', repo: 'sydevs/SahajAtlasWeb' } }), config), 'relay')
+  assert.equal(pushRoute(prSnap({ user: { login: 'someone' } }), config), 'none', 'an outsider gets answers, not code')
+  assert.equal(pushRoute(prSnap({ head: { ref: 'claude/x', repo: 'someone/SahajAtlasWeb' } }), config), 'none', 'a fork is never pushed to')
 })
 
 test('relay request: each refusal names its reason', () => {
-  assert.equal(relayRefusal(prSnap(), config, req, fullTreatment), null)
-  assert.match(relayRefusal(prSnap(), config, { ...req, branch: 'claude/relay-999-aaaaaaa' }, fullTreatment), /is not `claude\/relay-318-\*`/)
-  assert.match(relayRefusal(prSnap(), config, { ...req, branch: 'feat/sneaky' }, fullTreatment), /is not `claude\/relay-318-\*`/)
-  assert.match(relayRefusal(prSnap(), config, { ...req, head: 'main' }, fullTreatment), /names `main`/)
-  assert.match(relayRefusal(prSnap({ user: { login: 'someone' } }), config, req, fullTreatment), /not a relay PR/)
-  assert.match(relayRefusal(prSnap({ head: { ref: 'feat/theirs', repo: 'someone/SahajAtlasWeb' } }), config, req, fullTreatment), /not a relay PR/)
-  assert.match(relayRefusal(prSnap({ state: 'closed' }), config, req, fullTreatment), /not open/)
+  assert.equal(relayRefusal(prSnap(), config, req), null)
+  assert.match(relayRefusal(prSnap(), config, { ...req, branch: 'claude/relay-999-aaaaaaa' }), /is not `claude\/relay-318-\*`/)
+  assert.match(relayRefusal(prSnap(), config, { ...req, branch: 'feat/sneaky' }), /is not `claude\/relay-318-\*`/)
+  assert.match(relayRefusal(prSnap(), config, { ...req, head: 'main' }), /names `main`/)
+  assert.match(relayRefusal(prSnap({ user: { login: 'someone' } }), config, req), /not a relay PR/)
+  assert.match(relayRefusal(prSnap({ head: { ref: 'feat/theirs', repo: 'someone/SahajAtlasWeb' } }), config, req), /not a relay PR/)
+  assert.match(relayRefusal(prSnap({ state: 'closed' }), config, req), /not open/)
 })
 
 test('a relay request is shape-checked when it is read', () => {
