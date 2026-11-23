@@ -530,7 +530,7 @@ SAHAJCLOUD_API_KEY=<production key, for preview smoke reads>
 **Preview access.** The loop opens no preview and holds no preview credential: a repo that declares
 `fixture` in its `.claude/workflow.json` links records it committed
 (why: docs/why.md#a-preview-loads-a-fixture-committed-in-the-diff). The `claude-loop` Access
-service token (`PREVIEW_ACCESS_*`) is retired, and a person switches it off in Cloudflare Zero Trust.
+service token (`PREVIEW_ACCESS_*`) is deleted, with its Access policy and its routine variables (#267).
 
 **Railway.** A workspace token, made at railway.com/account/tokens with the workspace that holds
 SahajCloud picked, stored under the name `railway.tokenEnvVar` gives in `loop-config.json`. A
