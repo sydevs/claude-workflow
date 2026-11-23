@@ -6,9 +6,9 @@
  */
 
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
-import { loadRecord } from './record.mjs'
+import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, fullTreatment } from './predicates.mjs'
+import { isBot, fullTreatment, dispatcherLogins, restLogin } from './predicates.mjs'
 import { proxyApproves } from './approvals.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
@@ -17,8 +17,30 @@ function comment(c) {
   return { id: c.id, author: c.user?.login || '', createdAt: c.created_at, body: c.body || '', association: c.author_association }
 }
 
-async function newestComments(gh, { owner, repo, number }, total, perPage = 10) {
-  const page = Math.max(1, Math.ceil((total || 0) / perPage))
+// The comment window's page size, and GitHub's largest. One home each: both
+// paths below read the same thread, and a window that differed between them
+// would change what the leg decides on.
+const WINDOW_PAGE = 10
+const FULL_PAGE = 100
+
+/** The 1-based index of the newest page of `perPage` for `total` comments. */
+const lastPage = (total, perPage) => Math.max(1, Math.ceil((total || 0) / perPage))
+
+/**
+ * The comment window a leg reads: the newest page of `perPage`, and the page
+ * before it too when the newest page is short. `all` is every comment on the
+ * item, oldest first, as GitHub returns them.
+ */
+export function newestWindow(all, perPage = WINDOW_PAGE) {
+  const start = (lastPage(all.length, perPage) - 1) * perPage
+  const out = all.slice(start)
+  // No `page > 1` guard: on the first page `start` is 0, and `slice(-perPage)`
+  // of a list that short is already the whole list.
+  return out.length < perPage ? all.slice(start - perPage) : out
+}
+
+async function newestComments(gh, { owner, repo, number }, total, perPage = WINDOW_PAGE) {
+  const page = lastPage(total, perPage)
   const { data } = await gh.rest.issues.listComments({ owner, repo, issue_number: number, per_page: perPage, page })
   const out = data.map(comment)
   if (page > 1 && out.length < perPage) {
@@ -28,14 +50,35 @@ async function newestComments(gh, { owner, repo, number }, total, perPage = 10) 
   return out
 }
 
+/**
+ * The record and the comment window, from one read where one read can serve
+ * both. `loadRecord` pages from the oldest comment and the window reads the
+ * newest, so a leg used to spend two or three calls on one endpoint — half of
+ * an issue leg's REST calls, on every leg of every event run. A single page of
+ * 100 holds every comment of all but the longest threads.
+ * (why: docs/why.md#one-comment-read-serves-the-leg)
+ */
+async function recordAndComments(gh, base, total, bot) {
+  // Strictly under a page: at exactly FULL_PAGE the two reads are two calls, and
+  // a first read that cannot prove it saw the whole thread would make three.
+  if ((total || 0) < FULL_PAGE) {
+    const { data } = await gh.rest.issues.listComments({ owner: base.owner, repo: base.repo, issue_number: base.number, per_page: FULL_PAGE })
+    if (data.length < FULL_PAGE) return { record: findRecord(data, bot), comments: newestWindow(data).map(comment) }
+    // A full page is more than the count promised, so the count lagged the
+    // thread and this is not all of it. Fall through and page it, which costs
+    // one extra call in a race nobody has seen.
+  }
+  return { record: await loadRecord(gh, base, bot), comments: await newestComments(gh, base, total) }
+}
+
 async function reviewThreads(gh, { owner, repo, number }) {
   const q = `query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){
-    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login } createdAt body databaseId url } } } } } } }`
+    reviewThreads(first:100){ nodes { id isResolved comments(first:50){ nodes { author { login __typename } createdAt body databaseId url } } } } } } }`
   const d = await gh.graphql(q, { o: owner, r: repo, n: number })
   return (d.repository.pullRequest.reviewThreads.nodes || []).map((t) => ({
     id: t.id,
     isResolved: t.isResolved,
-    comments: (t.comments.nodes || []).map((c) => ({ author: c.author?.login || '', createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
+    comments: (t.comments.nodes || []).map((c) => ({ author: restLogin(c.author), createdAt: c.createdAt, body: c.body, id: c.databaseId, url: c.url || null })),
   }))
 }
 
@@ -221,13 +264,12 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { owner, name } = target.repo
   const repo = name
   const number = target.number
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
   const base = { owner, repo, number }
 
   const { data: issue } = await gh.rest.issues.get({ owner, repo, issue_number: number })
   const labels = (issue.labels || []).map((l) => l.name || l)
-  const record = await loadRecord(gh, base, bot)
-  const comments = await newestComments(gh, base, issue.comments)
+  const { record, comments } = await recordAndComments(gh, base, issue.comments, bot)
   const botLast = comments.filter((c) => isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
   const newestHuman = comments.filter((c) => !isBot(c.author, config) && !isDispatcherComment(c.body)).map((c) => c.createdAt).sort().pop() || null
 
@@ -319,7 +361,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     pr, checkRuns, statuses,
     reviewThreads: { review_threads: threads.map((t) => ({ is_resolved: t.isResolved })) },
     reviews: reviewsShaped,
-    reviewAuthority: [config.assignment.reviewer, ...(proxy ? [config.identity.expectedLogin] : [])],
+    reviewAuthority: [config.assignment.reviewer, ...(proxy ? bot : [])],
   })
   s.pr = { number: pr.number, state: pr.state, merged: pr.merged, draft: pr.draft, user: { login: pr.user?.login }, head: { ref: pr.head?.ref, sha: pr.head?.sha, repo: pr.head?.repo?.full_name || null }, base: { ref: pr.base?.ref, defaultBranch: pr.base?.repo?.default_branch || null }, changed_files: pr.changed_files, additions: pr.additions, deletions: pr.deletions, nodeId: pr.node_id, autoMergeArmed: Boolean(pr.auto_merge), autoMergeBy: pr.auto_merge?.enabled_by?.login || null, requestedReviewers: (pr.requested_reviewers || []).map((u) => u.login) }
   // A re-sync the dispatcher opened needs no critic. (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket)

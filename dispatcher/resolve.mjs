@@ -67,14 +67,34 @@ export function coalesceTargets(targets) {
  *
  * A cheap view that cannot answer reclaims nothing, so the cron stays the
  * backstop for a lock nobody will unlock.
+ *
+ * Both of those passes are almost all of what an event run spends: each
+ * target is a full `gather` in its own `act` leg, against the event's one, and
+ * the reclaim reads a record per locked item. So under `dispatch.rateLimitFloor`
+ * the run keeps only its own targets, and the cron's full pass covers both.
+ * A budget that cannot be read sheds nothing.
  * (why: docs/why.md#the-reconciler-replaces-the-drift-window,
- *  docs/why.md#a-lease-past-its-deadline-is-reclaimed)
+ *  docs/why.md#a-lease-past-its-deadline-is-reclaimed,
+ *  docs/why.md#a-rate-limited-call-waits-for-the-reset)
  */
-export async function resolve({ github, context, config, now = new Date() }) {
+export async function resolve({ github, context, config, core = { info() {} }, now = new Date() }) {
   const own = await eventTargets({ github, context, config, now })
   if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
+  const floor = config.dispatch?.rateLimitFloor ?? 0
+  // `GET /rate_limit` is itself exempt from the limit it reports, so asking
+  // costs nothing. A budget nobody can read stays null and sheds nothing.
+  let remaining = null
+  if (floor) {
+    try {
+      remaining = (await github.rest.rateLimit.get()).data?.resources?.core?.remaining
+    } catch { /* unreadable: shed nothing */ }
+  }
+  if (Number.isFinite(remaining) && remaining < floor) {
+    core.info(`REST budget ${remaining} is under the floor of ${floor} — keeping only this event's targets; the cron covers the reclaim and the drift`)
+    return own
+  }
   const repo = repoOf(context)
   const skip = new Set(own.map((t) => t.number))
   const view = await cheapView(github, config, repo.owner, repo.name)

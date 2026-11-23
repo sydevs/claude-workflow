@@ -9,7 +9,7 @@
  */
 
 import { loadRecord } from './record.mjs'
-import { isBot, fullTreatment } from './predicates.mjs'
+import { isBot, fullTreatment, dispatcherLogins } from './predicates.mjs'
 import { listLeases } from './lease.mjs'
 import { cheapView, driftTargets } from './reconcile.mjs'
 
@@ -29,7 +29,7 @@ import { cheapView, driftTargets } from './reconcile.mjs'
  * (why: docs/why.md#a-lease-past-its-deadline-is-reclaimed)
  */
 export async function expiredLockTargets({ github, config, repo, items, now, event, limit = Infinity, skip = new Set() }) {
-  const bot = config.identity.expectedLogin
+  const bot = dispatcherLogins(config)
   const out = []
   let reads = 0
   for (const i of items) {

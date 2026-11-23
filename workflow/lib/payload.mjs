@@ -96,8 +96,14 @@ export function validate(input, config, { expectHandler = null, now = Date.now()
 
   const handlers = config?.handlers && typeof config.handlers === 'object' ? config.handlers : null
   if (!handlers) errors.push('loop-config.json has no `handlers` block')
+  // `handlers` also keys `$comment` and `audit-nightly`, which cron fires.
+  // Only `dispatch.handlers` is the set a record may name, and a record is a
+  // comment body. (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+  const dispatchable = Array.isArray(config?.dispatch?.handlers) ? config.dispatch.handlers : null
+  if (!dispatchable) errors.push('loop-config.json has no `dispatch.handlers` list')
   const handler = typeof r.handler === 'string' ? r.handler : ''
   if (handlers && !Object.hasOwn(handlers, handler)) errors.push(`unknown handler "${handler}"`)
+  if (dispatchable && !dispatchable.includes(handler)) errors.push(`handler "${handler}" is not dispatchable`)
   if (expectHandler && handler !== expectHandler) {
     errors.push(`record is for handler "${handler}" but this routine runs "${expectHandler}"`)
   }

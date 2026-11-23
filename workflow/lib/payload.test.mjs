@@ -12,10 +12,13 @@ const config = {
   repos: ['SahajCloud', 'claude-workflow'],
   journalRepo: 'claude-workflow',
   labels: { lock: 'bot:working' },
-  dispatch: { maxAttempts: 3 },
+  dispatch: { maxAttempts: 3, handlers: ['answer', 'implement'] },
   handlers: {
     answer: { skill: 'write-ticket', model: 'sonnet' },
     implement: { skill: 'implement-ticket', model: 'opus' },
+    // In `handlers` and not in `dispatch.handlers`: cron fires it, and no
+    // record may name it. `audit-nightly`'s shape, under a test name.
+    nightly: { skill: 'run-audit', model: 'opus' },
   },
 }
 
@@ -104,6 +107,18 @@ test('an unknown handler is refused, and a config without handlers refuses every
   assert.equal(validate(record(), { ...config, handlers: undefined }, { now: NOW }).ok, false)
 })
 
+// A record is a comment body, so the set it may name is the dispatchable one.
+// `handlers` also keys `$comment` and the cron-only `audit-nightly`: a forged
+// record naming either would otherwise reach a session.
+// (why: docs/why.md#the-dispatcher-has-its-own-github-app)
+test('a handler cron fires is not one a record may name', () => {
+  const r = validate(record({ handler: 'nightly' }), config, { now: NOW })
+  assert.equal(r.ok, false)
+  assert.match(r.errors.join('\n'), /"nightly" is not dispatchable/)
+  assert.equal(validate(record({ handler: '$comment' }), config, { now: NOW }).ok, false)
+  assert.equal(validate(record(), { ...config, dispatch: { maxAttempts: 3 } }, { now: NOW }).ok, false, 'and no list refuses everything')
+})
+
 test('flags default to false and never carry anything else', () => {
   const r = validate(record({ flags: { onDemand: 'yes', delegated: true, extra: 1 } }), config, { now: NOW })
   assert.equal(r.ok, true)
@@ -183,7 +198,7 @@ test('a root holding the checkout satisfies the attached check', () => {
 
 // ---- repo-scope fires (why: docs/why.md#a-vulnerability-is-checked-before-a-session-is-spent)
 
-const repoConfig = { ...config, handlers: { ...config.handlers, 'audit-deps': { skill: 'audit-deps', model: 'opus', scope: 'repo' } } }
+const repoConfig = { ...config, dispatch: { ...config.dispatch, handlers: [...config.dispatch.handlers, 'audit-deps'] }, handlers: { ...config.handlers, 'audit-deps': { skill: 'audit-deps', model: 'opus', scope: 'repo' } } }
 const repoRecord = (over = {}) => record({ id: 'SahajCloud-repo-audit-deps-x', handler: 'audit-deps', kind: 'repo', number: null, url: 'https://github.com/sydevs/SahajCloud/security/dependabot', lock: null, flags: { mode: 'vulnerabilities' }, ...over })
 
 test('a repo-scope handler is fired at the repo, with no number and no lock', () => {
