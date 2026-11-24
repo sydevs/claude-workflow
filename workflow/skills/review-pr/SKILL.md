@@ -29,9 +29,9 @@ invoked locally. Names and values below come from `loop-config.json` — read it
 
 ## Stance
 
-Be adversarial about the PR, not about code style. The author-side review already ran before this
-PR opened (`/finalize-pr` step 2: `/code-review high` and `/simplify`, or the toolkit's six
-lenses where it is installed) — **do not re-run it, and do not
+Be adversarial about the PR, not about code style. The author-side review already ran before this PR
+opened (`/finalize-pr` step 2: `/code-review high`, or the toolkit's six lenses where it is
+installed, beside `/simplify` on any diff over `review.skipWhen`) — **do not re-run it, and do not
 re-litigate lint- or nit-level findings.** That pass asked "is this code good?" You ask: **should
 this PR exist in this shape?**
 

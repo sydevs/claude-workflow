@@ -362,6 +362,53 @@ dispatcher step adding fixture links on `pull_request.opened`.
 first message. Editing the same files at the same time makes a patch fail an assertion, or a file
 read back unexpectedly. The first suspicion is always a corrupted edit, not a second writer.
 
+## The reviews run while simplify does
+
+`/simplify`, `/code-review high` and `/security-review` each fan out reviewer agents, and they used
+to run one after another. `/code-review high` alone took a median 6 minutes over 11 local runs,
+42 at worst, and bot PRs spent 20 to 45 minutes between the last implementation commit and the
+PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
+they work: the step takes the slowest review's time instead of all three added up. Each skill
+still runs in the main session, because a subagent cannot start agents of its own. The cost is
+that no reviewer sees `/simplify`'s commit, which used to land before the review, so the run reads
+that commit itself. `/security-review` stays out of the parallel start: it takes no target and
+reads the worktree, which `/simplify` is editing, so it runs once, after that commit.
+
+## A tiny diff gets one read
+
+A `/simplify` fan-out over a two-file, forty-line diff costs minutes and adds little that step 2's
+review and one careful read do not already find. The threshold is `review.skipWhen`, the size at
+which the critic already trusts a PR, so one value moves both: keep it small. That overlap is why
+the tier skips `/simplify` and nothing else. The two counts differ in one way — finalize-pr counts
+only the paths kept in review, while the dispatcher counts GitHub's totals, skipped snapshots
+included, so a small change beside a snapshot is read inline and still gets a critic — but where
+nothing is skipped they agree, and dropping step 2's review as well would hand the reviewer a PR
+no agent had read. The security review runs on any trigger match whatever the size, because a
+short diff in an access path is no safer than a long one.
+
+## The gate runs once
+
+The lean gate ran after `/simplify`, after each fixed finding, and after the security review: three
+to six times a run, at a median 26 to 54 seconds each across 45 local runs in three repos. The
+fixes stay small, separate commits, so a failure in the one combined run still names its cause
+in a short search, and CI gates the pushed result in full regardless.
+
+## Generated files stay out of review
+
+SahajCloud#1216, #1217, #1225, #1241 and #1244 each carried a ~29,600-line migration snapshot JSON,
+and every review lens had it in scope. In #1216 the snapshot sat beside 91 lines of real change,
+and 42 minutes passed between the last implementation commit and the PR. A snapshot a command
+writes from a schema the diff already shows has no review to give.
+
+The skip is an opt-in on each `generatedFiles` entry, not the list itself, because that list
+answers a different question: "never hand-edit this". It also names SahajAtlasWeb's
+`pnpm-lock.yaml`, which that repo's security trigger exists to review, because a transitive bump
+or a swapped `resolution` shows only there. It names the WordPress plugin's hand-vendored
+`vendor/`, which runs on 13 sites and decides their next update. And it names SahajCloud's
+migration `.ts`, whose SQL Payload writes from the schema diff: a rename it reads as
+drop-and-add deletes the column's data. A path the security trigger matches is never skipped,
+and the scope is read from the base, so a branch cannot widen its own skip list.
+
 ## A clean review report must carry its evidence
 
 An empty result is harder to notice than a wrong one. Nothing about it looks like a failure. One

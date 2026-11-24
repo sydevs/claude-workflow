@@ -32,6 +32,7 @@ repo:
 | `leanGate.command` / `.full` | Step 4 |
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
+| `generatedFiles[].review` | *Review scope* — `"skip"` leaves a generated path out of review |
 | `packageManager` | Any command you construct |
 | `previewUrl.pattern` | Step 7 — the PR-number host |
 | `fixture.path` / `.link` / `.surfacePaths` | Step 7, *Every link opens on data* — where the repo's committed preview data lives, the admin link to one record (`{pr}`, `{collection}`, `{id}`), and the paths whose change needs a link. Absent: the repo has no fixture, and step 7 keeps plain links with no data rule |
@@ -84,15 +85,44 @@ git rev-list --count origin/<base>..HEAD
   `.env`.
 - **Nothing ahead of `origin/<base>`**, and the PR exists → say so and exit.
 
+### Review scope
+
+Run this before step 1:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/review-scope.mjs" --base origin/<base>
+```
+
+It prints `TINY` or `FULL`, then one `review:` or `skip:` line per changed path. A path is skipped
+only where the base's `generatedFiles` entry sets `"review": "skip"`, and never where
+`securityReview.triggerPattern` matches it. **Tell each review in steps 1–3 which paths to skip**,
+and name them in the report. Without `loop-config.json` at hand it says `FULL`: pass `--config` the
+claude-workflow checkout's copy where you have one.
+(why: docs/why.md#generated-files-stay-out-of-review)
+
+- **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify`, and run
+  step 2's review as usual. The dispatcher skips the critic on the same threshold, so dropping both
+  leaves the PR unread by any agent. Read the diff of every `review:` path yourself for
+  simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
+  and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
+- **`FULL`**: start steps 1 and 2 together. Run step 3's trigger check, then invoke `/simplify`.
+  Its agents run in the background, so invoke step 2's review straight after, with the branch as
+  its target so it reads commits only, before you wait on its report. Wait for both reports before
+  you triage either. Step 3 waits for step 1's commit.
+  (why: docs/why.md#the-reviews-run-while-simplify-does)
+
 ### 1. Simplify
 
 Run `/simplify` over the entire branch diff. Quality only — reuse, simplification, efficiency,
 altitude. It does not hunt for bugs.
 
 - Let it apply fixes, review them as one unit, and revert anything undesirable.
-- If it changed anything, re-run the lean gate and commit `refactor: simplify per /simplify pass`.
-- **Do not edit the same files while `/simplify` runs.** Wait for its report, then read `git diff`
-  as one unit. (why: docs/why.md#simplify-fans-out)
+- If it changed anything, commit `refactor: simplify per /simplify pass`.
+- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. Step 3
+  runs after this commit, so it covers it.
+- **Do not edit the same files while `/simplify` runs.** Pass no review `--fix` either, and on the
+  toolkit path leave out its `code-simplifier`, which edits. Wait for its report, then read
+  `git diff` as one unit. (why: docs/why.md#simplify-fans-out)
 
 ### 2. Review — one pass, several lenses
 
@@ -112,11 +142,11 @@ which is what every run converged on unaided. Say in the report which one ran.
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 
-**Triage every finding — judge, do not defer.** A reviewer's finding can be wrong. Verify each
-claim against the source before you act on it, and reject it with a stated reason when it does
-not hold — including a suggested *simplification*, which can quietly cost something, such as a
-"redundant" generic that was carrying type inference. Fix each valid finding in its own commit,
-re-run the lean gate, and record dismissals with one-line reasons.
+**Triage every finding — judge, do not defer.** A reviewer's finding can be wrong. Verify each claim
+against the source as it now stands before you act on it, and reject it with a stated reason when it
+does not hold — including a suggested *simplification*, which can quietly cost something, such as a
+"redundant" generic that was carrying type inference. Fix each valid finding in its own commit, and
+record dismissals with one-line reasons.
 
 **A clean report must carry its evidence** — it names the files and paths it actually read.
 **Treat a clean report with little or no reading as *not yet reviewed***: re-run that lens, or
@@ -156,6 +186,8 @@ CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
 
 - **Match** → run the built-in `/security-review` over the diff, triage and fix it as in step 2.
   `security-guidance` already flagged issues at edit time. This is the branch-level sweep.
+  **Run it after step 1's commit**, never beside `/simplify`: it takes no target and reads the
+  worktree `/simplify` is editing. (why: docs/why.md#the-reviews-run-while-simplify-does)
 - **No match** → skip, and say so in the report.
 
 ### 4. Lean gate
@@ -164,9 +196,10 @@ CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
 jq -r '.leanGate.command' .claude/workflow.json | sh
 ```
 
-Plus any targeted specs for what changed. Fix and re-run on failure. CI runs the full suite on the
-PR — that is the real gate. Do not reproduce it locally unless debugging a red run
-(`leanGate.full`).
+Plus any targeted specs for what changed. **Run it once, after every fix from steps 1–3 is
+committed.** Fix and re-run on failure. CI runs the full suite on the PR — that is the real gate.
+Do not reproduce it locally unless debugging a red run (`leanGate.full`).
+(why: docs/why.md#the-gate-runs-once)
 
 ### 5. Docs sync
 

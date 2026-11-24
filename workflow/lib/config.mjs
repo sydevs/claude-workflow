@@ -45,16 +45,37 @@ export function loadLoopConfig(explicit = null) {
 /**
  * A repo's `generatedFiles` patterns as `RegExp`, from the text of its
  * `.claude/workflow.json`. The text comes in rather than a path because the
- * three readers reach the file three ways — two from disk, one from `git
- * show` of a base ref. Text that will not parse means no patterns: a caller
+ * four readers reach the file two ways — two from disk, two from `git show`
+ * of a base ref. Text that will not parse means no patterns: a caller
  * that cannot read the file skips nothing, which is the safe side here.
+ *
+ * `review` keeps only the entries that set it, so `{ review: 'skip' }` gives
+ * the paths a repo leaves out of finalize-pr's review. Being generated is not
+ * enough on its own: the list also names a lockfile and hand-vendored code,
+ * and both still want a reviewer
+ * (why: docs/why.md#generated-files-stay-out-of-review).
+ *
+ * An entry whose pattern is missing, empty or will not compile contributes
+ * nothing, and costs the others nothing: an empty pattern would match every
+ * path, and one bad pattern used to void the whole list.
  */
-export function generatedPatterns(text) {
+export function generatedPatterns(text, { review = null } = {}) {
+  let entries
   try {
-    return (JSON.parse(text).generatedFiles || []).map((g) => new RegExp(g.pattern))
+    entries = JSON.parse(text).generatedFiles
   } catch {
     return []
   }
+  if (!Array.isArray(entries)) return []
+  return entries.flatMap((g) => {
+    if (review !== null && g?.review !== review) return []
+    if (typeof g?.pattern !== 'string' || !g.pattern) return []
+    try {
+      return [new RegExp(g.pattern)]
+    } catch {
+      return []
+    }
+  })
 }
 
 /** `--name value` from argv, with a default. */
