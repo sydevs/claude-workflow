@@ -370,8 +370,9 @@ to run one after another. `/code-review high` alone took a median 6 minutes over
 PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
 they work: the step takes the slowest review's time instead of all three added up. Each skill
 still runs in the main session, because a subagent cannot start agents of its own. The cost is
-that no reviewer sees `/simplify`'s commit, which used to land before the review: so the run
-reads that commit itself, and sends it to `/security-review` when it touches a trigger path.
+that no reviewer sees `/simplify`'s commit, which used to land before the review, so the run reads
+that commit itself. `/security-review` stays out of the parallel start: it takes no target and
+reads the worktree, which `/simplify` is editing, so it runs once, after that commit.
 
 ## A tiny diff gets one read
 

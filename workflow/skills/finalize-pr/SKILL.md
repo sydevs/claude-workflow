@@ -105,10 +105,10 @@ claude-workflow checkout's copy where you have one.
   leaves the PR unread by any agent. Read the diff of every `review:` path yourself for
   simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
   and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
-- **`FULL`**: start steps 1, 2 and 3 together. Run step 3's trigger check, then invoke `/simplify`.
-  Its agents run in the background, so invoke step 2's review, with the branch as its target so it
-  reads commits only, and on a step 3 match `/security-review`, straight after, before you wait on
-  its report. Wait for every report before you triage any.
+- **`FULL`**: start steps 1 and 2 together. Run step 3's trigger check, then invoke `/simplify`.
+  Its agents run in the background, so invoke step 2's review straight after, with the branch as
+  its target so it reads commits only, before you wait on its report. Wait for both reports before
+  you triage either. Step 3 waits for step 1's commit.
   (why: docs/why.md#the-reviews-run-while-simplify-does)
 
 ### 1. Simplify
@@ -118,8 +118,8 @@ altitude. It does not hunt for bugs.
 
 - Let it apply fixes, review them as one unit, and revert anything undesirable.
 - If it changed anything, commit `refactor: simplify per /simplify pass`.
-- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. If step
-  3's path or content check matches that commit, run `/security-review` over it as well.
+- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. Step 3
+  runs after this commit, so it covers it.
 - **Do not edit the same files while `/simplify` runs.** Pass no review `--fix` either, and on the
   toolkit path leave out its `code-simplifier`, which edits. Wait for its report, then read
   `git diff` as one unit. (why: docs/why.md#simplify-fans-out)
@@ -186,6 +186,8 @@ CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
 
 - **Match** → run the built-in `/security-review` over the diff, triage and fix it as in step 2.
   `security-guidance` already flagged issues at edit time. This is the branch-level sweep.
+  **Run it after step 1's commit**, never beside `/simplify`: it takes no target and reads the
+  worktree `/simplify` is editing. (why: docs/why.md#the-reviews-run-while-simplify-does)
 - **No match** → skip, and say so in the report.
 
 ### 4. Lean gate
