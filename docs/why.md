@@ -375,13 +375,15 @@ reads that commit itself, and sends it to `/security-review` when it touches a t
 
 ## A tiny diff gets one read
 
-Two fan-outs of reviewer agents over a two-file, forty-line diff cost minutes and add little that
-one careful read of the whole diff misses. The threshold is `review.skipWhen`, the size at which
-the critic already trusts a PR, so one value moves both: keep it small. The two counts differ in
-one way. finalize-pr counts only the paths kept in review, while the dispatcher counts GitHub's
-totals, skipped snapshots included, so a small change beside a snapshot is read inline and still
-gets a critic. The security review runs on any trigger match whatever the size, because a short
-diff in an access path is no safer than a long one.
+A `/simplify` fan-out over a two-file, forty-line diff costs minutes and adds little that step 2's
+review and one careful read do not already find. The threshold is `review.skipWhen`, the size at
+which the critic already trusts a PR, so one value moves both: keep it small. That overlap is why
+the tier skips `/simplify` and nothing else. The two counts differ in one way — finalize-pr counts
+only the paths kept in review, while the dispatcher counts GitHub's totals, skipped snapshots
+included, so a small change beside a snapshot is read inline and still gets a critic — but where
+nothing is skipped they agree, and dropping step 2's review as well would hand the reviewer a PR
+no agent had read. The security review runs on any trigger match whatever the size, because a
+short diff in an access path is no safer than a long one.
 
 ## The gate runs once
 

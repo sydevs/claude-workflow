@@ -14,7 +14,8 @@
  *   `securityReview.triggerPattern` matches stays in review regardless,
  *   because the trigger is the repo saying "read this".
  * - **Tier.** At or under `review.skipWhen`, counted over the paths kept in
- *   review, the run reads the diff itself instead of starting two fan-outs.
+ *   review, the run reads the diff itself and skips the `/simplify` pass.
+ *   Step 2's review runs on either tier.
  *
  * ## What it does NOT do
  *

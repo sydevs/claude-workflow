@@ -100,10 +100,11 @@ and name them in the report. Without `loop-config.json` at hand it says `FULL`: 
 claude-workflow checkout's copy where you have one.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
-- **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify` and step 2's
-  review. Read the diff of every `review:` path yourself for bugs and simplifications, and write
-  `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3 and the comment check
-  run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
+- **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify`, and run
+  step 2's review as usual. The dispatcher skips the critic on the same threshold, so dropping both
+  leaves the PR unread by any agent. Read the diff of every `review:` path yourself for
+  simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
+  and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
 - **`FULL`**: start steps 1, 2 and 3 together. Run step 3's trigger check, then invoke `/simplify`.
   Its agents run in the background, so invoke step 2's review, with the branch as its target so it
   reads commits only, and on a step 3 match `/security-review`, straight after, before you wait on
