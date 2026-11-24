@@ -40,7 +40,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { flag, loadLoopConfig, reviewSkipPatterns } from './config.mjs'
+import { flag, generatedPatterns, loadLoopConfig } from './config.mjs'
 import { repoRoot, resolveBaseRefOrExit } from './base-ref.mjs'
 
 export const VERDICTS = ['TINY', 'FULL']
@@ -122,7 +122,7 @@ function main(argv) {
     console.log(`FULL — git diff ${baseline.slice(0, 7)} HEAD failed, so nothing is skipped and the reviews read the whole diff`)
     return
   }
-  const result = classify(files, { skip: reviewSkipPatterns(workflow), trigger: triggerFrom(workflow), skipWhen })
+  const result = classify(files, { skip: generatedPatterns(workflow, { review: 'skip' }), trigger: triggerFrom(workflow), skipWhen })
 
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ...result, notes }, null, 2))

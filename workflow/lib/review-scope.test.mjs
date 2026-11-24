@@ -4,8 +4,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { reviewSkipPatterns } from './config.mjs'
+import { generatedPatterns } from './config.mjs'
 import { classify, parseNumstat } from './review-scope.mjs'
+
+const skipPatterns = (text) => generatedPatterns(text, { review: 'skip' })
 
 // Fixture pre-mortem: the entries below copy the shape of SahajCloud's and
 // SahajAtlasWeb's real `generatedFiles` and `securityReview` blocks, read on
@@ -35,7 +37,7 @@ const pr1216 = [
 ]
 
 test('only an entry that opts out is skipped: the snapshot and types go, the migration SQL stays', () => {
-  const r = classify(pr1216, { skip: reviewSkipPatterns(sahajCloud), skipWhen })
+  const r = classify(pr1216, { skip: skipPatterns(sahajCloud), skipWhen })
   assert.deepEqual(r.skipped.map((f) => f.path), [
     'src/migrations/20261118_233000_wm_web_menu_key.json',
     'src/payload-types.ts',
@@ -48,7 +50,7 @@ test('only an entry that opts out is skipped: the snapshot and types go, the mig
 test('a path the security trigger names stays in review, opted out or not', () => {
   const atlas = JSON.stringify({ generatedFiles: [{ pattern: '^pnpm-lock\\.yaml$', review: 'skip' }] })
   const files = [{ path: 'pnpm-lock.yaml', lines: 20 }]
-  const r = classify(files, { skip: reviewSkipPatterns(atlas), trigger: /package\.json|pnpm-lock\.yaml/, skipWhen })
+  const r = classify(files, { skip: skipPatterns(atlas), trigger: /package\.json|pnpm-lock\.yaml/, skipWhen })
   assert.deepEqual(r.skipped, [])
   assert.deepEqual(r.review.map((f) => f.path), ['pnpm-lock.yaml'])
 })
@@ -63,16 +65,22 @@ test('a diff at both limits is TINY, and one over either is FULL', () => {
 
 test('an unreadable threshold or config fails toward FULL and skips nothing', () => {
   assert.equal(classify([{ path: 'a.ts', lines: 1 }], { skipWhen: null }).verdict, 'FULL')
-  assert.deepEqual(reviewSkipPatterns('not json'), [])
-  assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '(', review: 'skip' }] })), [])
-  assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '^dist/' }] })), [])
+  assert.deepEqual(skipPatterns('not json'), [])
+  assert.deepEqual(skipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '(', review: 'skip' }] })), [])
+  assert.deepEqual(skipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '^dist/' }] })), [])
   // A pattern that is missing or empty would compile to one that matches every path.
-  assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ review: 'skip' }, { pattern: '', review: 'skip' }] })), [])
+  assert.deepEqual(skipPatterns(JSON.stringify({ generatedFiles: [{ review: 'skip' }, { pattern: '', review: 'skip' }] })), [])
+})
+
+test('an unusable entry costs the other patterns nothing, filtered or not', () => {
+  const text = JSON.stringify({ generatedFiles: [{ pattern: '(' }, {}, { pattern: '^dist/' }] })
+  assert.deepEqual(generatedPatterns(text).map(String), ['/^dist\\//'])
+  assert.deepEqual(skipPatterns(text), [])
 })
 
 test('a diff whose every path would be skipped skips nothing', () => {
   const files = [{ path: 'src/payload-types.ts', lines: 4 }]
-  const r = classify(files, { skip: reviewSkipPatterns(sahajCloud), skipWhen })
+  const r = classify(files, { skip: skipPatterns(sahajCloud), skipWhen })
   assert.deepEqual(r.skipped, [])
   assert.deepEqual(r.review.map((f) => f.path), ['src/payload-types.ts'])
 })
