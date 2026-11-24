@@ -409,14 +409,6 @@ migration `.ts`, whose SQL Payload writes from the schema diff: a rename it read
 drop-and-add deletes the column's data. A path the security trigger matches is never skipped,
 and the scope is read from the base, so a branch cannot widen its own skip list.
 
-## finalize-pr runs at high effort
-
-Most of finalize is mechanical: the scope script, the gate, the docs grep, the PR body and its
-links. At `max`, each of those turns cost what the triage costs. A skill's `effort` holds for the
-rest of the turn, so a caller's steps after finalize-pr run at `high` too. It ships as its own
-commit with no measured baseline, so it is the first thing to revert if triage starts to miss
-findings the critic then catches.
-
 ## A clean review report must carry its evidence
 
 An empty result is harder to notice than a wrong one. Nothing about it looks like a failure. One
