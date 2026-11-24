@@ -4,7 +4,7 @@
 # A change touching only files that no build, lint or test reads (by default
 # markdown, docs/, .claude/ and .vscode/) gets `full=false`, and the caller
 # skips its expensive steps or jobs. Anything it cannot prove light is full:
-# a push, an unreadable diff, an empty diff.
+# an event with no base, an unreadable diff, an empty diff.
 #
 # ⚠ Gate steps, or jobs through `needs`, never the workflow. A required check
 # that never reports blocks the merge forever, so `paths-ignore` is not an
@@ -32,6 +32,5 @@ runs:
       shell: bash
       env:
         LIGHT: ${{ inputs.light }}
-        EVENT: ${{ github.event_name }}
-        MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       run: bash "$GITHUB_ACTION_PATH/scope.sh"

@@ -8,21 +8,14 @@ trap out EXIT
 
 head=$(git rev-parse --verify --quiet HEAD) || { echo "::warning::No checkout, so running the full lane."; exit 0; }
 
-case "$EVENT" in
-  pull_request | pull_request_target)
-    # GitHub's merge commit: its first parent is the base tip it merged onto.
-    git rev-parse --verify --quiet "$head^2" >/dev/null || { echo "Not a merge commit, so running the full lane."; exit 0; }
-    git rev-parse --verify --quiet "$head^1" >/dev/null || git fetch --quiet --no-tags --depth=2 origin "$head" || true
-    base=$(git rev-parse --verify --quiet "$head^1") ;;
-  merge_group)
-    git cat-file -e "$MERGE_GROUP_BASE^{commit}" 2>/dev/null || git fetch --quiet --no-tags --depth=1 origin "$MERGE_GROUP_BASE" || true
-    base=$(git rev-parse --verify --quiet "$MERGE_GROUP_BASE^{commit}") ;;
-  *)
-    echo "A $EVENT event always runs the full lane."; exit 0 ;;
-esac
+# The base comes off the event, as `contract-check` and this repo's `ci.yml`
+# read it. Never off the checkout: `actions/checkout` defaults to depth 1,
+# where the merge commit is grafted and has no parent to read.
+[ -n "${BASE_SHA:-}" ] || { echo "Not a pull request or merge group, so running the full lane."; exit 0; }
+git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" || true
+git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || { echo "::warning::Could not read the base commit, so running the full lane."; exit 0; }
 
-[ -n "${base:-}" ] || { echo "::warning::Could not read the base commit, so running the full lane."; exit 0; }
-files=$(git diff --name-only "$base" "$head") || { echo "::warning::Could not diff against the base, so running the full lane."; exit 0; }
+files=$(git diff --name-only "$BASE_SHA" "$head") || { echo "::warning::Could not diff against the base, so running the full lane."; exit 0; }
 [ -n "$files" ] || { echo "Empty diff, so running the full lane."; exit 0; }
 
 echo "Changed files:"
