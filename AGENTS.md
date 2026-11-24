@@ -69,13 +69,16 @@ what failure it prevents. `dispatcher/` beside it is the code, with
 `node --test dispatcher/test/*.test.mjs` as its gate.
 (why: docs/why.md#actions-observes-classifies-locks-and-fires)
 
-Two things there **are** CI, for the other four. `dependency-review.yml` is called by each product
+Three things there **are** CI, for the other four. `dependency-review.yml` is called by each product
 repo's own CI, and their rulesets require its `Dependency Review / review` check. A broken edit to
 it blocks every merge in four repos at once.
 (why: docs/why.md#dependency-review-checks-what-a-pr-adds) `actions/contract-check/` is a step in
 each contract consumer's required CI job, reading `contractSync` from `loop-config.json` on `main`,
 so a broken edit to either blocks every merge in those three.
-(why: docs/why.md#a-contract-check-checks-what-a-pr-changes)
+(why: docs/why.md#a-contract-check-checks-what-a-pr-changes) `actions/change-scope/` is the first step of each
+product repo's CI, and decides whether a PR gets the full lane, so a broken edit to it either
+blocks every merge or lets an untested one through.
+(why: docs/why.md#a-docs-only-change-takes-the-light-lane)
 
 The real gate is a **supervised dispatch**: `BOT_DISPATCH=dry` logs every plan without writing,
 and a scratch `@sydevs-bot revise …` watched end to end (`docs/routine-setup.md` §6). A green

@@ -2059,6 +2059,27 @@ author set on defeating it, who could edit the caller instead. A mismatch is re-
 150 s apart, because `raw.githubusercontent.com` serves `main` up to five minutes stale after a
 merge. A command that fails is marked `ci.infraLabel`, so it is re-run, never repaired.
 
+## A docs-only change takes the light lane
+
+SahajCloud#1265 changed one line of `.claude/workflow.json` and ran 12–16 minutes of CI: lint,
+both typechecks, the unit and Postgres integration suites, a wait on the Railway preview and its
+smoke specs. The merge queue then ran it all again. Nothing in that lane reads the file: eslint and
+prettier ignore `.claude/`, and no code or test reads a markdown file. The cost was pure wait, on
+every agent-config, guide and `docs/` PR the loop opens.
+
+The fix cannot be a trigger filter. The job is a required check, and `paths-ignore` stops it
+reporting at all, so the PR never merges. `actions/change-scope/` instead decides inside the run
+and outputs `full`. A caller gates steps on it, or gates whole jobs through `needs`: a job skipped
+by `if` reports SKIPPED, which a ruleset accepts. A step that still checks a light file, such as
+`prettier --check` on markdown, stays ungated. Every doubt is full: a push, an unreadable base, an
+empty diff, a `light` that is empty or not a valid regex. `light` is an input, because a light path
+differs per repo; this repo's own CI does not call it, since its markdown is the product.
+
+The default is `.claude/` and `.vscode/` alone. Markdown and `docs/` are the paths a repo is most
+likely to read from a test: SahajCloud pins `tests/PERF.md`'s figures against four consumer docs,
+so a prose-only PR there would skip the one suite written to catch that edit. A repo that knows
+its prose is unread says so in its own `light`.
+
 ## A moved contract path silences every guard
 
 `contractSync.consumers.<repo>.paths` is the only thing the three contract guards read, and each
