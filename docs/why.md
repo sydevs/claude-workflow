@@ -362,6 +362,17 @@ dispatcher step adding fixture links on `pull_request.opened`.
 first message. Editing the same files at the same time makes a patch fail an assertion, or a file
 read back unexpectedly. The first suspicion is always a corrupted edit, not a second writer.
 
+## The reviews run while simplify does
+
+`/simplify`, `/code-review high` and `/security-review` each fan out reviewer agents, and they used
+to run one after another. `/code-review high` alone took a median 6 minutes over 11 local runs,
+42 at worst, and bot PRs spent 20 to 45 minutes between the last implementation commit and the
+PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
+they work: the step takes the slowest review's time instead of all three added up. Each skill
+still runs in the main session, because a subagent cannot start agents of its own. The cost is
+that no reviewer sees `/simplify`'s commit, which used to land before the review: so the run
+reads that commit itself, and sends it to `/security-review` when it touches a trigger path.
+
 ## Generated files stay out of review
 
 SahajCloud#1216, #1217, #1225, #1241 and #1244 each carried a ~29,600-line migration snapshot JSON,

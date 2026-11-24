@@ -98,6 +98,11 @@ It prints one `review:` or `skip:` line per changed path. A path is skipped only
 matches it. **Tell each review in steps 1–3 which paths to skip**, and name them in the report.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
+**Then start steps 1, 2 and 3 together.** Run step 3's trigger check, then invoke `/simplify`. Its
+agents run in the background, so invoke step 2's review and, on a step 3 match, `/security-review`
+straight after, before you wait on its report. Wait for every report before you triage any.
+(why: docs/why.md#the-reviews-run-while-simplify-does)
+
 ### 1. Simplify
 
 Run `/simplify` over the entire branch diff. Quality only — reuse, simplification, efficiency,
@@ -105,8 +110,11 @@ altitude. It does not hunt for bugs.
 
 - Let it apply fixes, review them as one unit, and revert anything undesirable.
 - If it changed anything, re-run the lean gate and commit `refactor: simplify per /simplify pass`.
-- **Do not edit the same files while `/simplify` runs.** Wait for its report, then read `git diff`
-  as one unit. (why: docs/why.md#simplify-fans-out)
+- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. If it
+  touches a path step 3's trigger matches, run `/security-review` over it as well.
+- **Do not edit the same files while `/simplify` runs.** Pass no review `--fix` either, and on the
+  toolkit path leave out its `code-simplifier`, which edits. Wait for its report, then read
+  `git diff` as one unit. (why: docs/why.md#simplify-fans-out)
 
 ### 2. Review — one pass, several lenses
 
@@ -127,7 +135,7 @@ which is what every run converged on unaided. Say in the report which one ran.
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 
 **Triage every finding — judge, do not defer.** A reviewer's finding can be wrong. Verify each
-claim against the source before you act on it, and reject it with a stated reason when it does
+claim against the source as it now stands before you act on it, and reject it with a stated reason when it does
 not hold — including a suggested *simplification*, which can quietly cost something, such as a
 "redundant" generic that was carrying type inference. Fix each valid finding in its own commit,
 re-run the lean gate, and record dismissals with one-line reasons.
