@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { check, fit, DEFAULT_BUDGETS, DEFAULT_MARKER, DEFAULT_MARKER_REQUIRED, VERDICTS } from './budget.mjs'
 import { VERDICTS as PREVIEW_VERDICTS } from './preview-host.mjs'
 import { VERDICTS as PIECES_VERDICTS } from './new-pieces.mjs'
+import { VERDICTS as SCOPE_VERDICTS } from './review-scope.mjs'
 import { loadLoopConfig } from './config.mjs'
 import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -305,6 +306,6 @@ test('every verdict word a skill names is one the script can print', () => {
   assert.ok(named.has('MISSING_MARKER'), 'the scan misses the verdict it was widened for')
   // Every script that prints a verdict exports its own list, so this is their
   // union: a word belongs to whichever script prints it, not to this one.
-  const printable = [...VERDICTS, ...PREVIEW_VERDICTS, ...PIECES_VERDICTS]
+  const printable = [...VERDICTS, ...PREVIEW_VERDICTS, ...PIECES_VERDICTS, ...SCOPE_VERDICTS]
   assert.deepEqual([...named].filter((word) => !printable.includes(word)), [])
 })

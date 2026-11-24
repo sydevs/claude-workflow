@@ -209,7 +209,7 @@ metadata, Mailpit, Sentry, the cloud environment and the routines, in order.
   Pending, and retry later.
 
 **Per-repo settings** live in each repo's `.claude/workflow.json`: `packageManager`, the
-`leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles`,
+`leanGate` test gate, `contractStep`, `securityReview` patterns, `generatedFiles` (`"review": "skip"` on an entry also leaves it out of finalize-pr's review),
 `prAllowlistGlobs` (where any run's small ticketless fix may open; docs- and test-only fixes have their own route), `previewUrl`, `fixture` (`{ path, link, surfacePaths }`: the committed preview data a PR's links are built from, absent where a repo has none), `worktreeSetup`,
 `worktreeNotes`, `deployTarget` and `devServer`. Loop-wide
 values live in [`loop-config.json`](loop-config.json).

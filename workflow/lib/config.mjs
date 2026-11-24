@@ -57,6 +57,30 @@ export function generatedPatterns(text) {
   }
 }
 
+/**
+ * The `generatedFiles` patterns whose entry opts out of review with
+ * `"review": "skip"`. Being generated is not enough: the edit guard lists a
+ * lockfile and hand-vendored code too, and both still want a reviewer
+ * (why: docs/why.md#generated-files-stay-out-of-review). Unreadable text, or a
+ * pattern that will not compile, skips nothing.
+ */
+export function reviewSkipPatterns(text) {
+  let entries
+  try {
+    entries = JSON.parse(text).generatedFiles || []
+  } catch {
+    return []
+  }
+  return entries.flatMap((g) => {
+    if (g?.review !== 'skip') return []
+    try {
+      return [new RegExp(g.pattern)]
+    } catch {
+      return []
+    }
+  })
+}
+
 /** `--name value` from argv, with a default. */
 export function flag(argv, name, fallback = null) {
   const i = argv.indexOf(`--${name}`)

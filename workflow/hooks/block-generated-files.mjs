@@ -7,8 +7,9 @@
  * Tells the caller how to regenerate the file instead.
  *
  * The rules are per-repo data, not code. They come from `generatedFiles` in
- * `.claude/workflow.json`. Each entry is `{ pattern, reason }`. `pattern` is
- * a JS regex tested against the worktree-relative path.
+ * `.claude/workflow.json`. Each entry is `{ pattern, reason, review? }`.
+ * `pattern` is a JS regex tested against the worktree-relative path. This
+ * hook ignores `review`, which only finalize-pr's review scope reads.
  */
 
 import { readInput, loadConfig, worktreeRoot, relativePath, deny } from './lib/workflow-config.mjs'
