@@ -20,7 +20,10 @@ files=$(git diff --name-only "$BASE_SHA" "$head") || { echo "::warning::Could no
 
 echo "Changed files:"
 echo "$files" | sed 's/^/  /'
-heavy=$(echo "$files" | grep -vE "$LIGHT")
+# grep exits 1 when it selects nothing and 2 on a bad regex, and both leave
+# `heavy` empty, so the status is read, not the output.
+heavy=$(echo "$files" | grep -vE -- "$LIGHT")
+[ $? -le 1 ] || { echo "::warning::\`light\` is not a valid extended regex, so running the full lane."; exit 0; }
 if [ -z "$heavy" ]; then
   full=false
   echo "::notice title=Light lane::Every changed file matches /$LIGHT/, so the full CI lane is skipped."
