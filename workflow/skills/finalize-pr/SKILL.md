@@ -93,9 +93,10 @@ Run this before step 1:
 node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/review-scope.mjs" --base origin/<base>
 ```
 
-It prints `TINY` or `FULL`, then one `review:` or `skip:` line per changed path. A path is skipped only where the base's
-`generatedFiles` entry sets `"review": "skip"`, and never where `securityReview.triggerPattern`
-matches it. **Tell each review in steps 1–3 which paths to skip**, and name them in the report.
+It prints `TINY` or `FULL`, then one `review:` or `skip:` line per changed path. A path is skipped
+only where the base's `generatedFiles` entry sets `"review": "skip"`, and never where
+`securityReview.triggerPattern` matches it. **Tell each review in steps 1–3 which paths to skip**,
+and name them in the report.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
 - **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify` and step 2's
@@ -138,11 +139,11 @@ which is what every run converged on unaided. Say in the report which one ran.
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 
-**Triage every finding — judge, do not defer.** A reviewer's finding can be wrong. Verify each
-claim against the source as it now stands before you act on it, and reject it with a stated reason when it does
-not hold — including a suggested *simplification*, which can quietly cost something, such as a
-"redundant" generic that was carrying type inference. Fix each valid finding in its own commit,
-and record dismissals with one-line reasons.
+**Triage every finding — judge, do not defer.** A reviewer's finding can be wrong. Verify each claim
+against the source as it now stands before you act on it, and reject it with a stated reason when it
+does not hold — including a suggested *simplification*, which can quietly cost something, such as a
+"redundant" generic that was carrying type inference. Fix each valid finding in its own commit, and
+record dismissals with one-line reasons.
 
 **A clean report must carry its evidence** — it names the files and paths it actually read.
 **Treat a clean report with little or no reading as *not yet reviewed***: re-run that lens, or
