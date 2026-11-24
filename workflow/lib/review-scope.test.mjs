@@ -66,6 +66,15 @@ test('an unreadable threshold or config fails toward FULL and skips nothing', ()
   assert.deepEqual(reviewSkipPatterns('not json'), [])
   assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '(', review: 'skip' }] })), [])
   assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ pattern: '^dist/' }] })), [])
+  // A pattern that is missing or empty would compile to one that matches every path.
+  assert.deepEqual(reviewSkipPatterns(JSON.stringify({ generatedFiles: [{ review: 'skip' }, { pattern: '', review: 'skip' }] })), [])
+})
+
+test('a diff whose every path would be skipped skips nothing', () => {
+  const files = [{ path: 'src/payload-types.ts', lines: 4 }]
+  const r = classify(files, { skip: reviewSkipPatterns(sahajCloud), skipWhen })
+  assert.deepEqual(r.skipped, [])
+  assert.deepEqual(r.review.map((f) => f.path), ['src/payload-types.ts'])
 })
 
 test('numstat parsing counts a binary file as zero lines and keeps odd paths whole', () => {

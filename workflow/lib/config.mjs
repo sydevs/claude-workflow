@@ -61,8 +61,9 @@ export function generatedPatterns(text) {
  * The `generatedFiles` patterns whose entry opts out of review with
  * `"review": "skip"`. Being generated is not enough: the edit guard lists a
  * lockfile and hand-vendored code too, and both still want a reviewer
- * (why: docs/why.md#generated-files-stay-out-of-review). Unreadable text, or a
- * pattern that will not compile, skips nothing.
+ * (why: docs/why.md#generated-files-stay-out-of-review). Unreadable text, and an
+ * entry whose pattern is missing, empty or will not compile, skip nothing: an
+ * empty pattern would match every path.
  */
 export function reviewSkipPatterns(text) {
   let entries
@@ -72,7 +73,7 @@ export function reviewSkipPatterns(text) {
     return []
   }
   return entries.flatMap((g) => {
-    if (g?.review !== 'skip') return []
+    if (g?.review !== 'skip' || typeof g.pattern !== 'string' || !g.pattern) return []
     try {
       return [new RegExp(g.pattern)]
     } catch {

@@ -20,8 +20,11 @@
  *
  * It reads paths and line counts, never contents. It does not decide whether
  * the security review runs: that is step 3's trigger check over the whole
- * diff. Both config files come from the base, so a branch cannot widen its
- * own skip list (why: docs/why.md#generated-files-stay-out-of-review).
+ * diff. `.claude/workflow.json` comes from the base, so a branch cannot widen
+ * its own skip list (why: docs/why.md#generated-files-stay-out-of-review).
+ * `loop-config.json` comes from the claude-workflow checkout, as every script
+ * here reads it. Where none is at hand, as in a member's installed plugin, the
+ * tier is FULL.
  *
  * ## Usage
  *
@@ -30,7 +33,8 @@
  *
  * Prints `TINY` or `FULL`, the counts, then one `review:` or `skip:` line per
  * changed path. Act on the verdict word. Anything it cannot read makes the
- * verdict `FULL` and skips nothing, and the reason is printed.
+ * verdict `FULL` and skips nothing, and the reason is printed. A diff whose
+ * every path would be skipped skips nothing, so something is always read.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -60,12 +64,13 @@ export function parseNumstat(text) {
  * `skipWhen` null means the threshold could not be read: the tier is FULL.
  */
 export function classify(files, { skip = [], trigger = null, skipWhen = null }) {
-  const review = []
-  const skipped = []
+  let review = []
+  let skipped = []
   for (const f of files) {
     const kept = (trigger && trigger.test(f.path)) || !skip.some((re) => re.test(f.path))
     ;(kept ? review : skipped).push(f)
   }
+  if (!review.length) [review, skipped] = [skipped, []]
   const lines = review.reduce((sum, f) => sum + f.lines, 0)
   const tiny = Boolean(skipWhen) && review.length <= skipWhen.maxFiles && lines <= skipWhen.maxLines
   return { verdict: tiny ? 'TINY' : 'FULL', files: review.length, lines, review, skipped }
@@ -109,7 +114,13 @@ function main(argv) {
 
   // --no-renames reports a rename as a delete and an add: it can only raise
   // the count, which errs toward FULL.
-  const files = parseNumstat(git(['diff', '--numstat', '-z', '--no-renames', baseline, 'HEAD']))
+  let files
+  try {
+    files = parseNumstat(git(['diff', '--numstat', '-z', '--no-renames', baseline, 'HEAD']))
+  } catch {
+    console.log(`FULL — git diff ${baseline.slice(0, 7)} HEAD failed, so nothing is skipped and the reviews read the whole diff`)
+    return
+  }
   const result = classify(files, { skip: reviewSkipPatterns(workflow), trigger: triggerFrom(workflow), skipWhen })
 
   if (argv.includes('--json')) {

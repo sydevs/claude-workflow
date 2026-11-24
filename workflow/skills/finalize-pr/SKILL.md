@@ -96,7 +96,8 @@ node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/review-scope.mjs" --
 It prints `TINY` or `FULL`, then one `review:` or `skip:` line per changed path. A path is skipped
 only where the base's `generatedFiles` entry sets `"review": "skip"`, and never where
 `securityReview.triggerPattern` matches it. **Tell each review in steps 1–3 which paths to skip**,
-and name them in the report.
+and name them in the report. Without `loop-config.json` at hand it says `FULL`: pass `--config` the
+claude-workflow checkout's copy where you have one.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
 - **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify` and step 2's
@@ -104,9 +105,10 @@ and name them in the report.
   `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3 and the comment check
   run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
 - **`FULL`**: start steps 1, 2 and 3 together. Run step 3's trigger check, then invoke `/simplify`.
-  Its agents run in the background, so invoke step 2's review and, on a step 3 match,
-  `/security-review` straight after, before you wait on its report. Wait for every report before
-  you triage any. (why: docs/why.md#the-reviews-run-while-simplify-does)
+  Its agents run in the background, so invoke step 2's review, with the branch as its target so it
+  reads commits only, and on a step 3 match `/security-review`, straight after, before you wait on
+  its report. Wait for every report before you triage any.
+  (why: docs/why.md#the-reviews-run-while-simplify-does)
 
 ### 1. Simplify
 
@@ -115,8 +117,8 @@ altitude. It does not hunt for bugs.
 
 - Let it apply fixes, review them as one unit, and revert anything undesirable.
 - If it changed anything, commit `refactor: simplify per /simplify pass`.
-- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. If it
-  touches a path step 3's trigger matches, run `/security-review` over it as well.
+- **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. If step
+  3's path or content check matches that commit, run `/security-review` over it as well.
 - **Do not edit the same files while `/simplify` runs.** Pass no review `--fix` either, and on the
   toolkit path leave out its `code-simplifier`, which edits. Wait for its report, then read
   `git diff` as one unit. (why: docs/why.md#simplify-fans-out)
