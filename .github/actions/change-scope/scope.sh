@@ -17,6 +17,9 @@ head=$(git rev-parse --verify --quiet HEAD) || { echo "::warning::No checkout, s
 git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" || true
 git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || { echo "::warning::Could not read the base commit, so running the full lane."; exit 0; }
 
+# Two dots, not three: `ci.yml` can use a merge base because it checks out
+# at depth 0, and here there is no common ancestor to find. A base that has
+# moved on since the event therefore adds its own files, which is a full lane.
 files=$(git diff --name-only "$BASE_SHA" "$head") || { echo "::warning::Could not diff against the base, so running the full lane."; exit 0; }
 [ -n "$files" ] || { echo "Empty diff, so running the full lane."; exit 0; }
 
