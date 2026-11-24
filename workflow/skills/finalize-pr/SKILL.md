@@ -32,6 +32,7 @@ repo:
 | `leanGate.command` / `.full` | Step 4 |
 | `securityReview.triggerPattern` | Step 3 — path regex |
 | `securityReview.contentPattern` / `.contentPaths` | Step 3 — content regex, for repos gating on newly-introduced sinks rather than paths |
+| `generatedFiles[].review` | *Review scope* — `"skip"` leaves a generated path out of review |
 | `packageManager` | Any command you construct |
 | `previewUrl.pattern` | Step 7 — the PR-number host |
 | `fixture.path` / `.link` / `.surfacePaths` | Step 7, *Every link opens on data* — where the repo's committed preview data lives, the admin link to one record (`{pr}`, `{collection}`, `{id}`), and the paths whose change needs a link. Absent: the repo has no fixture, and step 7 keeps plain links with no data rule |
@@ -83,6 +84,19 @@ git rev-list --count origin/<base>..HEAD
   If anything looks unrelated, stop and ask (or abort, non-interactively). Never commit secrets or
   `.env`.
 - **Nothing ahead of `origin/<base>`**, and the PR exists → say so and exit.
+
+### Review scope
+
+Run this before step 1:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/review-scope.mjs" --base origin/<base>
+```
+
+It prints one `review:` or `skip:` line per changed path. A path is skipped only where the base's
+`generatedFiles` entry sets `"review": "skip"`, and never where `securityReview.triggerPattern`
+matches it. **Tell each review in steps 1–3 which paths to skip**, and name them in the report.
+(why: docs/why.md#generated-files-stay-out-of-review)
 
 ### 1. Simplify
 

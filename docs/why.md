@@ -362,6 +362,22 @@ dispatcher step adding fixture links on `pull_request.opened`.
 first message. Editing the same files at the same time makes a patch fail an assertion, or a file
 read back unexpectedly. The first suspicion is always a corrupted edit, not a second writer.
 
+## Generated files stay out of review
+
+SahajCloud#1216, #1217, #1225, #1241 and #1244 each carried a ~29,600-line migration snapshot JSON,
+and every review lens had it in scope. In #1216 the snapshot sat beside 91 lines of real change,
+and 42 minutes passed between the last implementation commit and the PR. A snapshot a command
+writes from a schema the diff already shows has no review to give.
+
+The skip is an opt-in on each `generatedFiles` entry, not the list itself, because that list
+answers a different question: "never hand-edit this". It also names SahajAtlasWeb's
+`pnpm-lock.yaml`, which that repo's security trigger exists to review, because a transitive bump
+or a swapped `resolution` shows only there. It names the WordPress plugin's hand-vendored
+`vendor/`, which runs on 13 sites and decides their next update. And it names SahajCloud's
+migration `.ts`, whose SQL Payload writes from the schema diff: a rename it reads as
+drop-and-add deletes the column's data. A path the security trigger matches is never skipped,
+and the scope is read from the base, so a branch cannot widen its own skip list.
+
 ## A clean review report must carry its evidence
 
 An empty result is harder to notice than a wrong one. Nothing about it looks like a failure. One
