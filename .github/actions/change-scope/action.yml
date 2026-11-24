@@ -2,9 +2,13 @@
 # step after checkout in each repo's own CI, beside `contract-check`.
 #
 # A change touching only files that no build, lint or test reads (by default
-# markdown, docs/, .claude/ and .vscode/) gets `full=false`, and the caller
-# skips its expensive steps or jobs. Anything it cannot prove light is full:
-# an event with no base, an unreadable diff, an empty diff.
+# .claude/ and .vscode/) gets `full=false`, and the caller skips its expensive
+# steps or jobs. Anything it cannot prove light is full: an event with no base,
+# an unreadable diff, an empty diff, an unusable `light`.
+#
+# ⚠ The default leaves markdown and docs/ out, because a repo's tests may read
+# its prose — SahajCloud asserts tests/PERF.md's figures against four consumer
+# docs. A repo that knows its prose is unread widens `light` itself.
 #
 # ⚠ Gate steps, or jobs through `needs`, never the workflow. A required check
 # that never reports blocks the merge forever, so `paths-ignore` is not an
@@ -18,7 +22,7 @@ inputs:
   light:
     description: Extended regex matching a path that never needs the full lane. Replaces the default.
     required: false
-    default: '\.md$|^docs/|^\.claude/|^\.vscode/'
+    default: '^\.claude/|^\.vscode/'
 
 outputs:
   full:

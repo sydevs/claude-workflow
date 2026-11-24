@@ -2025,8 +2025,13 @@ reporting at all, so the PR never merges. `actions/change-scope/` instead decide
 and outputs `full`. A caller gates steps on it, or gates whole jobs through `needs`: a job skipped
 by `if` reports SKIPPED, which a ruleset accepts. A step that still checks a light file, such as
 `prettier --check` on markdown, stays ungated. Every doubt is full: a push, an unreadable base, an
-empty diff. `light` is an input, because a light path differs per repo; this repo's own CI does
-not call it, since its markdown is the product.
+empty diff, a `light` that is empty or not a valid regex. `light` is an input, because a light path
+differs per repo; this repo's own CI does not call it, since its markdown is the product.
+
+The default is `.claude/` and `.vscode/` alone. Markdown and `docs/` are the paths a repo is most
+likely to read from a test: SahajCloud pins `tests/PERF.md`'s figures against four consumer docs,
+so a prose-only PR there would skip the one suite written to catch that edit. A repo that knows
+its prose is unread says so in its own `light`.
 
 ## A moved contract path silences every guard
 
