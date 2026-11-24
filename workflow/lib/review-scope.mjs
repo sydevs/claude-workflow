@@ -77,16 +77,6 @@ export function classify(files, { skip = [], trigger = null, skipWhen = null }) 
   return { verdict: tiny ? 'TINY' : 'FULL', files: review.length, lines, review, skipped }
 }
 
-/** A compiled trigger, or null when the repo sets none or it will not compile. */
-function triggerFrom(text) {
-  try {
-    const pattern = JSON.parse(text).securityReview?.triggerPattern
-    return pattern ? new RegExp(pattern) : null
-  } catch {
-    return null
-  }
-}
-
 function main(argv) {
   const base = flag(argv, 'base')
   if (!base) {
@@ -104,6 +94,13 @@ function main(argv) {
   } catch {
     notes.push('the base has no .claude/workflow.json, so nothing is skipped')
   }
+  // A trigger the repo does not set, or that will not parse or compile, stays
+  // null, and then nothing is forced back into review.
+  let trigger = null
+  try {
+    const pattern = JSON.parse(workflow).securityReview?.triggerPattern
+    if (pattern) trigger = new RegExp(pattern)
+  } catch {}
   let skipWhen = null
   try {
     const w = loadLoopConfig(flag(argv, 'config'))?.review?.skipWhen
@@ -122,7 +119,7 @@ function main(argv) {
     console.log(`FULL — git diff ${baseline.slice(0, 7)} HEAD failed, so nothing is skipped and the reviews read the whole diff`)
     return
   }
-  const result = classify(files, { skip: generatedPatterns(workflow, { review: 'skip' }), trigger: triggerFrom(workflow), skipWhen })
+  const result = classify(files, { skip: generatedPatterns(workflow, { review: 'skip' }), trigger, skipWhen })
 
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ ...result, notes }, null, 2))
