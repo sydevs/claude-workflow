@@ -373,6 +373,16 @@ still runs in the main session, because a subagent cannot start agents of its ow
 that no reviewer sees `/simplify`'s commit, which used to land before the review: so the run
 reads that commit itself, and sends it to `/security-review` when it touches a trigger path.
 
+## A tiny diff gets one read
+
+Two fan-outs of reviewer agents over a two-file, forty-line diff cost minutes and add little that
+one careful read of the whole diff misses. The threshold is `review.skipWhen`, the size at which
+the critic already trusts a PR, so one value moves both: keep it small. The two counts differ in
+one way. finalize-pr counts only the paths kept in review, while the dispatcher counts GitHub's
+totals, skipped snapshots included, so a small change beside a snapshot is read inline and still
+gets a critic. The security review runs on any trigger match whatever the size, because a short
+diff in an access path is no safer than a long one.
+
 ## The gate runs once
 
 The lean gate ran after `/simplify`, after each fixed finding, and after the security review: three

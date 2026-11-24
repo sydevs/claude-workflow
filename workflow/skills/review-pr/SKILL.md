@@ -31,7 +31,7 @@ invoked locally. Names and values below come from `loop-config.json` — read it
 
 Be adversarial about the PR, not about code style. The author-side review already ran before this
 PR opened (`/finalize-pr` step 2: `/code-review high` and `/simplify`, or the toolkit's six
-lenses where it is installed) — **do not re-run it, and do not
+lenses where it is installed, or the author's own read of a `TINY` diff) — **do not re-run it, and do not
 re-litigate lint- or nit-level findings.** That pass asked "is this code good?" You ask: **should
 this PR exist in this shape?**
 

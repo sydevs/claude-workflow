@@ -93,15 +93,19 @@ Run this before step 1:
 node "${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/lib/review-scope.mjs" --base origin/<base>
 ```
 
-It prints one `review:` or `skip:` line per changed path. A path is skipped only where the base's
+It prints `TINY` or `FULL`, then one `review:` or `skip:` line per changed path. A path is skipped only where the base's
 `generatedFiles` entry sets `"review": "skip"`, and never where `securityReview.triggerPattern`
 matches it. **Tell each review in steps 1–3 which paths to skip**, and name them in the report.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
-**Then start steps 1, 2 and 3 together.** Run step 3's trigger check, then invoke `/simplify`. Its
-agents run in the background, so invoke step 2's review and, on a step 3 match, `/security-review`
-straight after, before you wait on its report. Wait for every report before you triage any.
-(why: docs/why.md#the-reviews-run-while-simplify-does)
+- **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify` and step 2's
+  review. Read the diff of every `review:` path yourself for bugs and simplifications, and write
+  `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3 and the comment check
+  run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
+- **`FULL`**: start steps 1, 2 and 3 together. Run step 3's trigger check, then invoke `/simplify`.
+  Its agents run in the background, so invoke step 2's review and, on a step 3 match,
+  `/security-review` straight after, before you wait on its report. Wait for every report before
+  you triage any. (why: docs/why.md#the-reviews-run-while-simplify-does)
 
 ### 1. Simplify
 
