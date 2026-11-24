@@ -373,6 +373,13 @@ still runs in the main session, because a subagent cannot start agents of its ow
 that no reviewer sees `/simplify`'s commit, which used to land before the review: so the run
 reads that commit itself, and sends it to `/security-review` when it touches a trigger path.
 
+## The gate runs once
+
+The lean gate ran after `/simplify`, after each fixed finding, and after the security review: three
+to six times a run, at a median 26 to 54 seconds each across 45 local runs in three repos. The
+fixes stay small, separate commits, so a failure in the one combined run still names its cause
+in a short search, and CI gates the pushed result in full regardless.
+
 ## Generated files stay out of review
 
 SahajCloud#1216, #1217, #1225, #1241 and #1244 each carried a ~29,600-line migration snapshot JSON,

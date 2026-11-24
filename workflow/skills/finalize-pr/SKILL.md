@@ -109,7 +109,7 @@ Run `/simplify` over the entire branch diff. Quality only — reuse, simplificat
 altitude. It does not hunt for bugs.
 
 - Let it apply fixes, review them as one unit, and revert anything undesirable.
-- If it changed anything, re-run the lean gate and commit `refactor: simplify per /simplify pass`.
+- If it changed anything, commit `refactor: simplify per /simplify pass`.
 - **Read that commit's diff yourself for bugs.** The step 2 review read the tree before it. If it
   touches a path step 3's trigger matches, run `/security-review` over it as well.
 - **Do not edit the same files while `/simplify` runs.** Pass no review `--fix` either, and on the
@@ -138,7 +138,7 @@ Every comment this skill posts to GitHub carries `identity.commentMarker` from `
 claim against the source as it now stands before you act on it, and reject it with a stated reason when it does
 not hold — including a suggested *simplification*, which can quietly cost something, such as a
 "redundant" generic that was carrying type inference. Fix each valid finding in its own commit,
-re-run the lean gate, and record dismissals with one-line reasons.
+and record dismissals with one-line reasons.
 
 **A clean report must carry its evidence** — it names the files and paths it actually read.
 **Treat a clean report with little or no reading as *not yet reviewed***: re-run that lens, or
@@ -186,9 +186,10 @@ CONTENT=$(jq -r '.securityReview.contentPattern // empty' .claude/workflow.json)
 jq -r '.leanGate.command' .claude/workflow.json | sh
 ```
 
-Plus any targeted specs for what changed. Fix and re-run on failure. CI runs the full suite on the
-PR — that is the real gate. Do not reproduce it locally unless debugging a red run
-(`leanGate.full`).
+Plus any targeted specs for what changed. **Run it once, after every fix from steps 1–3 is
+committed.** Fix and re-run on failure. CI runs the full suite on the PR — that is the real gate.
+Do not reproduce it locally unless debugging a red run (`leanGate.full`).
+(why: docs/why.md#the-gate-runs-once)
 
 ### 5. Docs sync
 
