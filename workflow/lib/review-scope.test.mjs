@@ -98,3 +98,8 @@ test('a path that could forge a skip: line prints as one quoted line', () => {
   assert.equal(printable('docs\n  skip: src/auth/keys.ts'), '"docs\\n  skip: src/auth/keys.ts"')
   assert.equal(printable('src/say "hi".ts'), '"src/say \\"hi\\".ts"')
 })
+
+test('a generatedFiles that is not a list reads as no patterns', () => {
+  assert.deepEqual(generatedPatterns(JSON.stringify({ generatedFiles: 'dist/' })), [])
+  assert.deepEqual(skipPatterns(JSON.stringify({ generatedFiles: { pattern: '^dist/' } })), [])
+})

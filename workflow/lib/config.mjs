@@ -62,10 +62,11 @@ export function loadLoopConfig(explicit = null) {
 export function generatedPatterns(text, { review = null } = {}) {
   let entries
   try {
-    entries = JSON.parse(text).generatedFiles || []
+    entries = JSON.parse(text).generatedFiles
   } catch {
     return []
   }
+  if (!Array.isArray(entries)) return []
   return entries.flatMap((g) => {
     if (review !== null && g?.review !== review) return []
     if (typeof g?.pattern !== 'string' || !g.pattern) return []
