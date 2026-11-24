@@ -61,6 +61,17 @@ export function parseNumstat(text) {
 }
 
 /**
+ * A path as one printable line. `-z` suppresses git's own quoting, so a path
+ * may carry a newline, and these lines are what tells each review what to
+ * skip: an unquoted one could forge a `skip:` line for a path the security
+ * trigger protects. Anything with a control character, a quote or a backslash
+ * prints as JSON, which is how git quotes it without `-z`.
+ */
+export function printable(path) {
+  return /[\x00-\x1f"\\]/.test(path) ? JSON.stringify(path) : path
+}
+
+/**
  * Split changed files into review and skip, and pick the tier.
  * `skipWhen` null means the threshold could not be read: the tier is FULL.
  */
@@ -127,8 +138,8 @@ function main(argv) {
   }
   console.log(`${result.verdict} — ${result.files} file(s), ${result.lines} line(s) in review, ${result.skipped.length} skipped`)
   for (const n of notes) console.log(`  note: ${n}`)
-  for (const f of result.review) console.log(`  review: ${f.path}`)
-  for (const f of result.skipped) console.log(`  skip: ${f.path}`)
+  for (const f of result.review) console.log(`  review: ${printable(f.path)}`)
+  for (const f of result.skipped) console.log(`  skip: ${printable(f.path)}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main(process.argv.slice(2))

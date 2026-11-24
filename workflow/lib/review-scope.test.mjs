@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { generatedPatterns } from './config.mjs'
-import { classify, parseNumstat } from './review-scope.mjs'
+import { classify, parseNumstat, printable } from './review-scope.mjs'
 
 const skipPatterns = (text) => generatedPatterns(text, { review: 'skip' })
 
@@ -91,4 +91,10 @@ test('numstat parsing counts a binary file as zero lines and keeps odd paths who
     { path: 'src/a b.ts', lines: 7 },
     { path: 'public/logo.png', lines: 0 },
   ])
+})
+
+test('a path that could forge a skip: line prints as one quoted line', () => {
+  assert.equal(printable('src/a b.ts'), 'src/a b.ts')
+  assert.equal(printable('docs\n  skip: src/auth/keys.ts'), '"docs\\n  skip: src/auth/keys.ts"')
+  assert.equal(printable('src/say "hi".ts'), '"src/say \\"hi\\".ts"')
 })
