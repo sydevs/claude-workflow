@@ -77,6 +77,8 @@ test('namedIn matches whole paths and names, never a prefix of a longer one', ()
   const found = namedIn([text], ['/r/.claude/worktrees/fix', '/r/.claude/worktrees/fix-2', 'claude/a', 'claude/a-b'])
   assert.deepEqual([...found].sort(), ['/r/.claude/worktrees/fix-2', 'claude/a-b'])
   assert.ok(namedIn(['"/r/wt/src/x.ts"'], ['/r/wt']).has('/r/wt'), 'a path continues into its directory')
+  // Two needles can start at one index, and both are named there.
+  assert.deepEqual([...namedIn(['cd /r/wt/src/x.ts'], ['/r/wt', '/r/wt/src'])].sort(), ['/r/wt', '/r/wt/src'])
 })
 
 test('scan claims a worktree the transcript names, and not its prefix-sharing neighbour', () => {

@@ -81,7 +81,6 @@ function repoOf(dir) {
 
 // --- naming: does a transcript name this? --------------------------------------
 
-const BEFORE = /[\w./-]/
 const AFTER_PATH = /[\w.-]/ // a path may continue into the directory with `/`
 const AFTER_NAME = /[\w./-]/
 
@@ -95,17 +94,17 @@ export function namedIn(texts, needles) {
   const found = new Set()
   if (!want.length) return found
   const byLatin1 = new Map(want.map((n) => [Buffer.from(n, 'utf8').toString('latin1'), n]))
-  // The lookahead finds overlapping candidates; the boundaries are checked by hand.
-  const re = new RegExp(`(?=(${[...byLatin1.keys()].map(escapeRe).join('|')}))`, 'g')
+  // Zero-width, so every needle starting here is seen: an alternation would
+  // report only its longest, losing `/r/wt` to `/r/wt/src`. The lookbehind is
+  // the opening boundary; the closing one differs per needle, below.
+  const re = new RegExp(`(?<![\\w./-])(?=(${[...byLatin1.keys()].map(escapeRe).join('|')}))`, 'g')
   for (const text of texts) {
     re.lastIndex = 0
     for (let m; (m = re.exec(text)); re.lastIndex = m.index + 1) {
       for (const [latin, needle] of byLatin1) {
         if (found.has(needle) || !text.startsWith(latin, m.index)) continue
-        const before = text[m.index - 1] ?? ''
-        const after = text[m.index + latin.length] ?? ''
         const isPath = needle.startsWith(sep) || needle.startsWith('.')
-        if (!BEFORE.test(before) && !(isPath ? AFTER_PATH : AFTER_NAME).test(after)) found.add(needle)
+        if (!(isPath ? AFTER_PATH : AFTER_NAME).test(text[m.index + latin.length] ?? '')) found.add(needle)
       }
       if (found.size === want.length) return found
     }
