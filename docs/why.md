@@ -2156,9 +2156,9 @@ audit, whose fix is a `loop-config.json` PR. Naming the old and the new path tog
 
 Every dispatch reads `loop-config.json` before it acts, 25 to 40 times a day. By 2026-11-25 its
 `$comment` fields had grown to 8.9 KB of a 17.6 KB file. Each one restated rules and history that
-already lived in a skill or here. Each comment is now one line naming what its values mean, and the
-full text moved verbatim to `docs/loop-config.md`, which no run reads. That saves about 6 KB, about
-1,500 tokens, on every run.
+already lived in a skill or here, so each is now one line naming what its values mean. A page
+mirroring the file key by key was rejected: it is a fourth home for every fact, which
+[documentation.md](documentation.md) forbids. That saves about 6 KB, about 1,500 tokens, on every run.
 
 ## A stood-down repair is not asked again by a merge
 

@@ -122,8 +122,7 @@ threshold there instead of typing it into a `SKILL.md`.
 
 **And nothing but values goes in `loop-config.json`.** Three homes, no overlap: the **value** here,
 the **rule** in the skill that enforces it, the **story** in `docs/why.md`. A `$comment` earns its
-place only when a bare value is unclear alone, and then in one line. Every run reads the file, so
-a section's full meaning goes in [`docs/loop-config.md`](docs/loop-config.md), which no run reads.
+place only when a bare value is unclear alone, and then in one line.
 
 **Scripts, not prose, own mechanical rules.** No script here talks to GitHub — a routine cannot
 reach the API by any client, with any credential, so the run gathers data with MCP and a script

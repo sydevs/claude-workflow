@@ -1,5 +1,5 @@
 {
-  "$comment": "Values only, read fresh from main on every run. Each key's meaning and story: docs/loop-config.md.",
+  "$comment": "Values only, read fresh from main on every run.",
   "repos": [
     "SahajCloud",
     "SahajAtlasWeb",
@@ -93,7 +93,7 @@
     }
   },
   "dispatch": {
-    "$comment": "The Actions dispatcher's values; routines keyed by repo (ROUTINE_ID_<REPO> wins). Each key: docs/loop-config.md#dispatch.",
+    "$comment": "The Actions dispatcher's values; routines keyed by repo (ROUTINE_ID_<REPO> wins).",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
