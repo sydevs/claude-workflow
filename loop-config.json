@@ -1,5 +1,5 @@
 {
-  "$comment": "VALUES the loop reads, nothing else. This file holds only numbers, names, and ids, never rules or rationale. The rule lives in the skill that enforces it. The story lives in docs/why.md. Each run reads this file fresh from main, so a merge here changes only the next run.",
+  "$comment": "Values only, read fresh from main on every run. Each key's meaning and story: docs/loop-config.md.",
   "repos": [
     "SahajCloud",
     "SahajAtlasWeb",
@@ -10,14 +10,14 @@
   "org": "sydevs",
   "journalRepo": "claude-workflow",
   "ceilings": {
-    "$comment": "Stock caps. The dispatcher enforces ciFixIterations (fix-ci per PR) and ciInfraReruns (re-runs of an infrastructure failure per head, why: docs/why.md#an-infrastructure-failure-is-re-run-not-repaired); run-audit's proposal rule enforces the proposal ceilings. There is no WIP cap (why: docs/why.md#there-is-no-wip-cap).",
+    "$comment": "Caps: fix-ci passes per PR, infra re-runs per head, audit proposals per survey and open.",
     "maxProposalsPerSurvey": 3,
     "maxOpenProposals": 10,
     "ciFixIterations": 3,
     "ciInfraReruns": 2
   },
   "findings": {
-    "$comment": "Routing for a real defect a run trips over, applied by the incidental-finding rule in start-run/SKILL.md. directFixMaxFiles bounds a fix small enough to skip the ticket and go straight to a ticketless PR. testGlobs are the paths workflow/lib/test-only.mjs accepts as a test-only change.",
+    "$comment": "directFixMaxFiles bounds a ticketless direct fix; testGlobs are what test-only.mjs accepts as test-only.",
     "directFixMaxFiles": 2,
     "testGlobs": [
       "**/*.test.*",
@@ -32,13 +32,13 @@
     ]
   },
   "labels": {
-    "$comment": "journal excludes the diary from every worklist. lock = a session holds the item (the lease a session reads, the unlock event, the kill switch), proposal = bot-filed with no human verb yet. Where an item stands is the board's Status, not a label. Actions writes both but the lock's release. Rules in start-run/SKILL.md.",
+    "$comment": "journal = the diary, excluded from every worklist; lock = a session holds the item; proposal = bot-filed, no human verb yet.",
     "journal": "ops-journal",
     "lock": "bot:working",
     "proposal": "proposal"
   },
   "assignment": {
-    "$comment": "No assignee carries meaning, and the loop writes none. reviewer is requested at mark-ready. respondTo lists the logins whose comments count as feedback. Rules in format-ticket/SKILL.md.",
+    "$comment": "reviewer is requested at mark-ready; respondTo are the logins whose comments count as feedback.",
     "reviewer": "Ardnived",
     "respondTo": [
       "Ardnived",
@@ -47,7 +47,7 @@
     ]
   },
   "handlers": {
-    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model also selects the lane a handler fires on: a routine keyed like a repo (ROUTINE_ID_<MODEL>, ROUTINE_TOKEN_<MODEL>), used once both are set, else the repo's routine (dispatch.routines) runs it, unless the handler names its own. scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
+    "$comment": "handler → skill. model also names the lane routine (ROUTINE_ID_/ROUTINE_TOKEN_<MODEL>) once both are set, else the repo's routine. scope \"repo\" = no item or lock.",
     "implement": {
       "model": "opus",
       "skill": "implement-ticket"
@@ -93,7 +93,7 @@
     }
   },
   "dispatch": {
-    "$comment": "Values the GitHub Actions dispatcher reads. routines: one routine per repo, keyed by repo name; the ROUTINE_ID_<REPO> org variable wins when set. verbs.aliases maps a verb to the one it means on that surface. timeoutsMinutes is how long a lease holds before the sweeper re-fires; maxAttempts bounds re-fires, and overdue checks of a Pending item, before it is handed to you. pendingDueMinutes is how long a wait the machinery owns may sit Pending before it is checked. reconcileMaxPerEvent caps what one event run adds besides its own item: the record reads that look for an expired lock, then the drift targets left over. githubRetry retries a GitHub 5xx under every dispatcher call, and waits out a rate limit for up to rateLimitMaxWaitSeconds. rateLimitFloor is the REST budget below which an event run returns only its own targets and sheds the drift ones. sessionBranchPrefix is the one branch prefix a cloud session can push to; relayBranchPrefix + <pr>- names the branch a session leaves for Actions to move a PR branch to (docs/why.md#the-relay). enabledHandlers null = all. Rules in .github/workflows/dispatcher.yml and docs/why.md#actions-observes-classifies-locks-and-fires.",
+    "$comment": "The Actions dispatcher's values; routines keyed by repo (ROUTINE_ID_<REPO> wins). Each key: docs/loop-config.md#dispatch.",
     "schemaVersion": 1,
     "commandPrefix": "@sydevs-bot",
     "handlers": [
@@ -179,7 +179,7 @@
     "routineIdVarPrefix": "ROUTINE_ID_"
   },
   "roadmap": {
-    "$comment": "The Roadmap tier. type is the org issue type a roadmap ticket carries. notesMarker opens the Technical notes block at the end of a roadmap body; its v1 spelling marked the old notes comment, which is folded into the block once. spikeBranchPrefix marks a review session's throwaway preview branch, which the dispatcher never touches. readOnlyKeys are the only environment variables a review experiment may call production with. settledMarker opens the comment settle-roadmap posts after writing answers into a body. Rules in format-ticket/SKILL.md and revise-roadmap/SKILL.md (why: docs/why.md#the-roadmap-tier).",
+    "$comment": "The Roadmap tier: issue type, notes and settled markers, spike branch prefix, the env keys a review experiment may call production with.",
     "type": "Roadmap",
     "spikeBranchPrefix": "claude/spike-",
     "notesMarker": "<!-- sydevs-roadmap-notes v2 -->",
@@ -189,7 +189,7 @@
     ]
   },
   "ci": {
-    "$comment": "noCi lists repos with workflows but no CI, so a PR there is green at once. ignoreCheckNames are the dispatcher's own check runs, matched as a name or as that name followed by a matrix suffix — GitHub names a matrix leg `<job> (<params>)`, and cancel-in-progress cancels ours routinely, which reads as failing CI (why: docs/why.md#our-own-check-runs-are-not-ci). infraLabel is the error-annotation title a check writes to mark its failure as infrastructure, not the change.",
+    "$comment": "noCi = repos green at once; ignoreCheckNames = our own checks, also with a matrix suffix; infraLabel = the annotation title marking infrastructure failure.",
     "infraLabel": "infrastructure-failure",
     "noCi": [],
     "ignoreCheckNames": [
@@ -205,14 +205,14 @@
     ]
   },
   "mergePolicy": {
-    "$comment": "loopMayNotMerge: repos never armed, whatever the gate says. proxyApprove: authors whose own ready PR the bot approves once CI is green and the critic has run, because GitHub refuses their approval and the ruleset needs one. The bot never arms their PRs: the author does. Rules in dispatcher/approvals.mjs.",
+    "$comment": "loopMayNotMerge = repos never armed; proxyApprove = authors whose own PR the bot approves but never arms.",
     "loopMayNotMerge": [],
     "proxyApprove": [
       "Ardnived"
     ]
   },
   "auditCalendar": {
-    "$comment": "Weekday -> audit skill, or a list of skills that take turns on that weekday, one per run, counted from rotationEpoch. Only run-audit dispatches these. monthly.<weekday>.<n>, when present, overrides the nth such weekday of the month. Keys are lowercase UTC weekday names, from `date -u +%A | tr A-Z a-z`.",
+    "$comment": "UTC weekday → audit skill, or a list taking turns from rotationEpoch; monthly.<weekday>.<n> overrides the nth such weekday.",
     "monday": [
       "audit-deps",
       "audit-contracts"
@@ -226,7 +226,7 @@
     "rotationEpoch": "2026-10-05"
   },
   "auditAngles": {
-    "$comment": "audit-code's three rotations, one per weekday it runs. Each advances one angle per run of its own day, counted from auditCalendar.rotationEpoch; an overridden day does not count. workflow/skills/run-audit/calendar.mjs is the one reader.",
+    "$comment": "audit-code's rotations, one angle per run of its own day from rotationEpoch; run-audit/calendar.mjs reads them.",
     "tuesday": {
       "family": "risk",
       "angles": [
@@ -259,7 +259,7 @@
     }
   },
   "deps": {
-    "$comment": "The dispatcher's daily vulnerability check (dispatcher/deps.mjs). It fires handler in a repo when an open Dependabot alert at these severities and scopes opened within windowHours, or on catchUpDay is still open with a fix, and no bot PR on branchPrefix is open there. routineBranchPrefix is the routine-updates job's; the dispatcher ignores it.",
+    "$comment": "The daily Dependabot check (dispatcher/deps.mjs): severities, scopes, windowHours, catchUpDay, and the branch prefix that suppresses a fire.",
     "repos": [
       "SahajCloud",
       "SahajAtlasWeb",
@@ -279,7 +279,7 @@
     "routineBranchPrefix": "claude/chore-deps-"
   },
   "sentry": {
-    "$comment": "DE region: the global sentry.io host 404s here. The token lacks org:read, so /organizations/ also 403s. SahajAtlasWordpress ships no Sentry.",
+    "$comment": "DE region host only; the token lacks org:read. SahajAtlasWordpress ships no Sentry.",
     "apiBase": "https://de.sentry.io/api/0",
     "org": "sy-developers",
     "projects": {
@@ -290,7 +290,7 @@
     "tokenEnvVar": "SENTRY_CLAUDE_WORKFLOW_TOKEN"
   },
   "railway": {
-    "$comment": "statusContexts are the commit-status contexts a Railway preview posts. logLines bounds each log read.",
+    "$comment": "statusContexts = a preview's commit-status contexts; logLines bounds each log read.",
     "apiBase": "https://backboard.railway.com/graphql/v2",
     "tokenEnvVar": "RAILWAY_TOKEN",
     "statusContexts": [
@@ -299,16 +299,16 @@
     "logLines": 500
   },
   "mailpit": {
-    "$comment": "Basic-auth credentials live in the cloud environment as MAILPIT_UI_AUTH, never here.",
+    "$comment": "Credentials live in the cloud environment as MAILPIT_UI_AUTH, never here.",
     "url": "https://mailpit-production-db88.up.railway.app",
     "retentionDays": 7
   },
   "storybook": {
-    "$comment": "The one Storybook version every library pins, so their component manifests stay comparable.",
+    "$comment": "The one Storybook version every library pins.",
     "version": "10.6.1"
   },
   "contractSync": {
-    "$comment": "Copies of a producer's files that consumers commit. A merged producer PR touching a source re-runs each affected consumer's command: as a commit on the consumer PR its goal built beside it, else on main, in one bot PR on branch. Each consumer's paths and command also drive .github/actions/contract-check, a step in its required CI, so an edit here can block merges in three repos. Rules in audit-contracts/SKILL.md (why: docs/why.md#a-contract-sync-is-a-pr-not-a-ticket). attestContext is the commit status contracts-sync posts on each commit it writes, which contracts-verify approves; past approveWithinMinutes unapproved, the reviewer is asked.",
+    "$comment": "Producer files consumers commit copies of; paths and command also drive contract-check in three repos' required CI.",
     "producer": "SahajCloud",
     "branch": "claude/chore-sync-contracts",
     "attestContext": "sydevs / contract-sync",
@@ -348,7 +348,7 @@
     }
   },
   "issueFields": {
-    "$comment": "GitHub's native org-level issue fields, not Projects v2, not labels. You can read and write them, but not search them. See format-ticket/SKILL.md for read/write rules and the PUT-replaces-everything trap.",
+    "$comment": "Native org issue fields: readable and writable, not searchable. A PUT replaces every field (format-ticket/SKILL.md).",
     "priority": {
       "fieldId": 14337938,
       "options": [
@@ -359,7 +359,7 @@
       ]
     },
     "holdUntil": {
-      "$comment": "Where a hold lives: the date a ticket comes back to you. Status is Hold while it is ahead. A bare `hold` picks a day between defaultDays[0] and defaultDays[1] from now, spread by item number; no hold may reach past maxHorizonDays (why: docs/why.md#a-hold-is-a-date-not-a-recheck).",
+      "$comment": "Where a hold's date lives. A bare hold picks between defaultDays from now; none past maxHorizonDays.",
       "name": "Hold Until",
       "fieldId": 46423871,
       "maxHorizonDays": 180,
@@ -370,12 +370,12 @@
     }
   },
   "relationships": {
-    "$comment": "No MCP tool writes a native relationship, so a session writes this marker and the dispatcher converts it. The reader matches the words, not the punctuation (why: docs/why.md#the-marker-reader-matches-words-not-punctuation). A date park is the Hold Until field, not a marker.",
+    "$comment": "Markers a session writes and the dispatcher converts to native relationships, matched by words, not punctuation.",
     "bodyMarker": "Blocked by",
     "bodyMarkerFormat": "Blocked by: https://github.com/<org>/<repo>/issues/<n> — <one-line reason>"
   },
   "identity": {
-    "$comment": "expectedLogin is authoritative, and is the sessions' login. Each run checks it against get_me once. dispatcherLogins are every login the loop writes under — the sessions' and the dispatcher App's — and the dispatcher reads its own writes under any of them, so an item written before the App switch keeps its record. REST's spelling only: a GraphQL actor is normalised to it by restLogin, because a bare slug is a name a user account could hold and this list is trusted. Attribution rules in implement-ticket/SKILL.md.",
+    "$comment": "expectedLogin = the sessions' login, checked once per run; dispatcherLogins = every login the loop writes under, REST spelling.",
     "expectedLogin": "sydevs-bot",
     "dispatcherLogins": [
       "sydevs-bot",
@@ -384,7 +384,7 @@
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
   "review": {
-    "$comment": "review-pr. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both, and finalize-pr skips its `/simplify` pass on such a diff. selfReview.level is the `/code-review` level finalize-pr step 2 runs, and tinyLevel the one it runs at or under skipWhen. Rules in review-pr/SKILL.md and finalize-pr/SKILL.md.",
+    "$comment": "skipWhen = no critic and no /simplify at or under both; selfReview = finalize-pr's /code-review levels, normal and tiny.",
     "bodyHeader": "## 🧐 Adversarial review",
     "questionMarker": "<!-- sydevs-question -->",
     "profilePath": "workflow/skills/review-pr/reviewer-profile.md",
@@ -397,7 +397,7 @@
       "tinyLevel": "high"
     },
     "streamline": {
-      "$comment": "The pieces workflow/lib/new-pieces.mjs lists for review-pr's streamliner. Rules in review-pr/SKILL.md.",
+      "$comment": "The pieces new-pieces.mjs lists for review-pr's streamliner.",
       "newFileLines": 150,
       "grownLines": 80,
       "splitLines": 1500,
@@ -422,11 +422,11 @@
     }
   },
   "journal": {
-    "$comment": "One issue per day in journalRepo, created lazily. The title reports run health. Volume lives on the board. No issue number appears here, since the run finds today's by creation date.",
+    "$comment": "One issue per day in journalRepo, created lazily, found by creation date in this timezone.",
     "timezone": "America/Vancouver"
   },
   "projects": {
-    "$comment": "The org board, public as the roadmap. The dispatcher derives every open item's Status, Roadmap tickets included, after each plan, and never reads it back to decide (why: docs/why.md#status-is-derived-never-read). status maps the derivation's keys to the board's option names.",
+    "$comment": "The org board; status maps the derivation's keys to the board's option names. Status is derived, never read back.",
     "url": "https://github.com/orgs/sydevs/projects/2",
     "number": 2,
     "status": {
@@ -439,7 +439,7 @@
     }
   },
   "writing": {
-    "$comment": "Character budgets for everything the loop writes, counted including <details>. Ticket and PR bodies are deliberately unbudgeted, except notes, the Technical notes block of a roadmap body, which is measured but never refused. Bodies are state, and grounding reads them instead of the thread. workflow/lib/budget.mjs enforces this. Rules are in start-run/SKILL.md.",
+    "$comment": "Character budgets for what the loop writes, <details> included; budget.mjs enforces them. Bodies are unbudgeted but notes.",
     "budgets": {
       "comment": 1200,
       "reviewReply": 600,
