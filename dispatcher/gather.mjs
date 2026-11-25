@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, fullTreatment, dispatcherLogins, restLogin } from './predicates.mjs'
+import { isBot, fullTreatment, dispatcherLogins, restLogin, stoodDownFixCi } from './predicates.mjs'
 import { proxyApproves } from './approvals.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
@@ -394,7 +394,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // head that is not its own. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
   s.headAuthor = null
   s.headCommittedAt = null
-  if (proxy || (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3))) {
+  if (proxy || (failingNames.size && ((s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3) || stoodDownFixCi(s.record)))) {
     try {
       const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
       s.headAuthor = c.author?.login || c.committer?.login || null
