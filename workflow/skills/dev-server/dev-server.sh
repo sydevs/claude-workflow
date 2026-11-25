@@ -165,6 +165,9 @@ cmd_start() {
     env PORT="$PORT" ${DB_NAME:+"$DB_URL_ENV=postgresql://postgres:postgres@localhost:5432/$DB_NAME"} \
     nohup bash -lc "$run" >"$LOG_FILE" 2>&1 & echo $! >"$STATE_DIR/$SLUG.pid" )
   state_write "$(cat "$STATE_DIR/$SLUG.pid")"
+  # The .pid file only hands $! out of the subshell. Left behind, it outlives
+  # the worktree.
+  rm -f "$STATE_DIR/$SLUG.pid"
   wait_for_health && echo "healthy: http://localhost:$PORT"
 }
 
@@ -214,6 +217,17 @@ cmd_teardown() {
   echo "torn down $SLUG"
 }
 
+# Where this worktree's server state lives, as JSON. cleanup.mjs asks here
+# instead of re-deriving the slug, so the naming has one owner.
+cmd_info() {
+  python3 - "$SLUG" "$PORT" "$STATE_DIR" "$DB_NAME" "${ISOLATE_DB:+$DB_TEMPLATE}" <<'PY2'
+import json, sys
+slug, port, state_dir, db, template = sys.argv[1:6]
+print(json.dumps({"slug": slug, "port": int(port), "stateDir": state_dir,
+                  "database": db or None, "databaseTemplate": template or None}))
+PY2
+}
+
 cmd_status() {
   echo "worktree : $WORKTREE"
   echo "slug     : $SLUG"
@@ -235,8 +249,9 @@ case "${1:-default}" in
   restart)  cmd_stop; cmd_start ;;
   teardown) cmd_teardown ;;
   status)   cmd_status ;;
+  info)     cmd_info ;;
   logs)     tail -n "${2:-100}" -f "$LOG_FILE" ;;
   health)   curl -fsS -o /dev/null "http://localhost:$PORT$HEALTH_PATH" && echo ok || { echo "unhealthy"; exit 1; } ;;
   default)  cmd_start; warn_head_drift || true; tail -n 100 -f "$LOG_FILE" ;;
-  *)        echo "usage: $0 [start|stop|restart|teardown|status|logs [n]|health]"; exit 1 ;;
+  *)        echo "usage: $0 [start|stop|restart|teardown|status|info|logs [n]|health]"; exit 1 ;;
 esac
