@@ -106,13 +106,29 @@ const GENERATED_LINE = [
   /^\s*\}$/,
 ]
 
+/**
+ * A comment delimiter anywhere but alone on its own line. The patterns above
+ * carry no lexer state, so a body line that closes the doc comment, calls a
+ * function and reopens it still reads as a doc-comment body: all three lines
+ * match, and a statement lands at module scope. The generated file is
+ * the one translation file that is code, and this check is all that stands
+ * between it and an unattended merge, so the guard is separate from the
+ * patterns — a pattern added later cannot reopen the hole.
+ * (why: docs/why.md#a-translation-key-is-approved-by-actions)
+ */
+function escapesComment(line) {
+  const t = line.trim()
+  return t !== '/**' && t !== '*/' && /\/\*|\*\//.test(t)
+}
+
 /** Whether a unified diff only adds lines a key addition would generate. A missing patch proves nothing. */
 export function generatedAddsOnly(patch) {
   if (typeof patch !== 'string' || !patch) return false
   return patch.split('\n').every((l) => {
     if (l.startsWith('-')) return false
     if (!l.startsWith('+')) return true
-    return GENERATED_LINE.some((re) => re.test(l.slice(1)))
+    const body = l.slice(1)
+    return !escapesComment(body) && GENERATED_LINE.some((re) => re.test(body))
   })
 }
 

