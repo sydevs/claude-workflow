@@ -364,7 +364,7 @@ read back unexpectedly. The first suspicion is always a corrupted edit, not a se
 
 ## The reviews run while simplify does
 
-`/simplify`, `/code-review high` and `/security-review` each fan out reviewer agents, and they used
+`/simplify`, `/code-review` and `/security-review` each fan out reviewer agents, and they used
 to run one after another. `/code-review high` alone took a median 6 minutes over 11 local runs,
 42 at worst, and bot PRs spent 20 to 45 minutes between the last implementation commit and the
 PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
@@ -1538,6 +1538,22 @@ commits behind. So step 6 fetches first, and `FETCH_HEAD` is no recipe (a later 
 need that fetch via `base-ref.mjs`: on a tree equal to `origin/main`, `--base main` read 25 skill
 files behind. **The install is deferred** to the first node command: 11 read-only sessions skipped
 it, but three could not then settle a claim and one curled `unpkg`.
+
+## The self-review runs at medium
+
+Every PR over `review.skipWhen` is reviewed twice: the author's session runs `/code-review` in
+step 2 of `finalize-pr`, then `review-pr` runs as a fresh session, the critic, that never saw the
+author's reasoning. At `high` the first pass fans out the most reviewer agents of any step in an
+`implement` run, and its findings overlap the critic's. The routines account kept hitting its
+usage limit in 2026-11, so the self-review dropped to `medium`. What it gives up is
+lower-confidence findings, which the critic either repeats or rightly drops. The critic stays at
+max effort: a reader not anchored on the author's view finds what the author missed.
+
+A `TINY` diff keeps `high`. The dispatcher skips the critic at the same threshold, so step 2 is
+the only agent that reads it, and no second pass is left to repeat what `medium` dropped.
+
+Both levels live in `review.selfReview` because the first attempt typed one into four places and
+left one of them reading `high`.
 
 ## A skill can name a plugin no routine has
 
