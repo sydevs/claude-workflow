@@ -343,6 +343,23 @@ function deployPassFor(record, sha) {
 }
 
 /**
+ * The deferral below has run out. `overdue` covers the Pending path, where
+ * the board holds the clock, but it cannot bound this wait alone: `syncStatus`
+ * nulls `pendingSince` on every pass that derives Awaiting, which is where a
+ * bot PR sits while a thread waits on the reviewer. So the guard keeps its own
+ * clock in the record, keyed by head: a push restarts the window, and a clock
+ * that cannot be read resolves at once.
+ * (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+ */
+function waitedForBase(s, config, sha) {
+  if (overdue(s, config)) return true
+  const w = s.record?.conflictWait
+  if (!w || w.sha !== sha) return false
+  const since = Date.parse(w.since || '')
+  return !since || nowOf(s).getTime() - since > (config.dispatch.pendingDueMinutes ?? 120) * 60_000
+}
+
+/**
  * A conflicted PR, draft or ready. A conflicted branch schedules no CI, so
  * nothing downstream of this — fix-ci, the critic — can ever move it: the
  * conflict goes first. One exception: a resolve-conflicts session that
@@ -354,7 +371,19 @@ export function conflictPlan(s, config) {
   const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
   const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
   if (ended) return [...(s.record?.handback ? [] : [handback(s, 'it still conflicts after resolve-conflicts ran on this head')]), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
-  return [fire('resolve-conflicts')]
+  // A base still moving would conflict the branch again: wait for it to
+  // settle, but never past `dispatch.pendingDueMinutes` from the first
+  // deferral. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+  const quiet = config.dispatch.conflictQuietMinutes ?? 0
+  const moved = Date.parse(s.baseMovedAt || '')
+  if (quiet > 0 && moved && nowOf(s).getTime() - moved < quiet * 60_000 && !waitedForBase(s, config, sha)) {
+    const running = s.record?.conflictWait?.sha === sha
+    return [
+      ...(running ? [] : [record({ conflictWait: { sha, since: nowOf(s).toISOString() } })]),
+      note(`the base moved at ${s.baseMovedAt} — resolve-conflicts waits until it has been still ${quiet} minutes`),
+    ]
+  }
+  return [...(s.record?.conflictWait ? [record({ conflictWait: null })] : []), fire('resolve-conflicts')]
 }
 
 /**

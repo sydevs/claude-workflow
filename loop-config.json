@@ -155,6 +155,7 @@
     },
     "maxAttempts": 3,
     "pendingDueMinutes": 120,
+    "conflictQuietMinutes": 60,
     "reconcileMaxPerEvent": 10,
     "sessionBranchPrefix": "claude/",
     "relayBranchPrefix": "claude/relay-",
