@@ -515,6 +515,13 @@ function settle(label, blocker, act, done) {
 
 const NAMED = 'a live session names it'
 
+/** Delete one local branch unless it is unsafe or a live session names it. 1 when kept. */
+function deleteBranch(repo, branches, name, named, label = name) {
+  const b = branches.find((x) => x.branch === name)
+  const blocker = !b ? 'no such branch' : (branchBlocker(b) ?? (named.has(name) ? NAMED : null))
+  return settle(label, blocker, () => attempt('git', ['branch', '-D', name], { cwd: repo }).err, `deleted (was ${b?.head.slice(0, 12)})`)
+}
+
 function remove(argv) {
   const session = loadSession(argv)
   const stale = argv.includes('--stale')
@@ -553,13 +560,8 @@ function remove(argv) {
     )
     if (!removed) kept++
     if (!removed || !info.branch) continue
-    const b = localBranches(repo, listWorktrees(repo)).find((x) => x.branch === info.branch)
-    settle(
-      `  branch ${info.branch}`,
-      (b && branchBlocker(b)) ?? (others.naming([info.branch]).size ? NAMED : null),
-      () => attempt('git', ['branch', '-D', info.branch], { cwd: repo }).err,
-      'deleted',
-    )
+    // Listed again: the worktree is gone, so its branch is no longer checked out.
+    deleteBranch(repo, localBranches(repo, listWorktrees(repo)), info.branch, others.naming([info.branch]), `  branch ${info.branch}`)
   }
   return kept
 }
@@ -587,11 +589,7 @@ function dropBranch(argv) {
   const all = localBranches(root, listWorktrees(root))
   const named = otherSessions(session.id).naming(names)
   let kept = 0
-  for (const name of names) {
-    const b = all.find((x) => x.branch === name)
-    const blocker = !b ? 'no such branch' : (branchBlocker(b) ?? (named.has(name) ? NAMED : null))
-    kept += settle(name, blocker, () => attempt('git', ['branch', '-D', name], { cwd: root }).err, `deleted (was ${b?.head.slice(0, 12)})`)
-  }
+  for (const name of names) kept += deleteBranch(root, all, name, named)
   return kept
 }
 
