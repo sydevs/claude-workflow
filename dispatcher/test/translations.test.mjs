@@ -221,6 +221,7 @@ test('checkApprove approves with ACTIONS_TOKEN in its own repo only, pinned to t
   assert.ok(body.body.startsWith(TRANSLATION_APPROVAL_MARKER))
   assert.equal((await run({ ...here, GITHUB_REPOSITORY: 'sydevs/claude-workflow' })).length, 0, "another repo's token cannot approve here")
   assert.equal((await run(here, { record: null, item: { labels: [] }, pr: { head: { sha: 'moved' } } })).length, 0, 'head moved')
+  assert.equal((await run(here, { record: null, item: { labels: [] }, pr: { draft: true, head: { sha: 'abc' } } })).length, 0, 'a draft whose mark-ready was denied')
   const [dismiss] = await run(here, undefined, [{ type: 'dismissCheck', ids: [5] }])
   assert.equal(dismiss.url, 'https://api.github.com/repos/sydevs/SahajCloud/pulls/1273/reviews/5/dismissals')
   assert.equal(dismiss.init.method, 'PUT')

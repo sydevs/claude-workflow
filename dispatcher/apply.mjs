@@ -349,6 +349,10 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         }
         if (a.type === 'checkApprove') {
           if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
+          // `markReady` is planned beside this and mutates the snapshot when it
+          // lands, so a draft here is one whose mark-ready was denied. The
+          // contract check refuses a draft outright for the same reason.
+          if (snapshot.pr?.draft) { log('still a draft — no approval'); break }
           log(`translation check: approve ${String(a.sha).slice(0, 7)}`)
           if (dryRun) break
           await handOver('approve a translation-only PR', () => call('POST', '', {
