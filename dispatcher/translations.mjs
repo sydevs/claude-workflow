@@ -13,21 +13,12 @@
  */
 
 import { matchesGlob } from 'node:path'
+import { isDeepStrictEqual as same } from 'node:util'
 
 /** Marks the translation check's own approval, so only that one is ever dismissed. */
 export const TRANSLATION_APPROVAL_MARKER = '<!-- sydevs-translation-check -->'
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
-
-/** Deep equality that ignores key order: reordering a JSON object changes nothing. */
-export function same(a, b) {
-  if (isObj(a) && isObj(b)) {
-    const ka = Object.keys(a)
-    return ka.length === Object.keys(b).length && ka.every((k) => Object.hasOwn(b, k) && same(a[k], b[k]))
-  }
-  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => same(x, b[i]))
-  return a === b
-}
 
 /** The repo's rules, or null when it declares none. */
 export function translationRules(config, repoName) {
