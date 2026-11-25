@@ -177,15 +177,21 @@ function otherSessions(selfId) {
     if (rec.sessionId && rec.sessionId !== selfId && alive(rec.pid)) sessions.push({ pid: rec.pid, id: rec.sessionId, cwd: rec.cwd ?? null })
   }
   let texts = null
+  const read = () =>
+    (texts ??= sessions.flatMap((s) => {
+      const t = findTranscript(s.id)
+      return t ? transcriptFiles(t).map((f) => readFileSync(f, 'latin1')) : []
+    }))
   return {
     /** The needles any of them names. */
-    naming(needles) {
-      texts ??= sessions.flatMap((s) => {
-        const t = findTranscript(s.id)
-        return t ? transcriptFiles(t).map((f) => readFileSync(f, 'latin1')) : []
-      })
-      return namedIn(texts, needles)
-    },
+    naming: (needles) => namedIn(read(), needles),
+    /**
+     * Whether any of them mentions this string at all. A database name sits
+     * inside a `DATABASE_URL` after a `/`, which `naming` reads as part of a
+     * longer token, so an unrecoverable drop asks the looser question.
+     */
+    mentions: (needle) =>
+      Boolean(needle) && read().some((t) => t.includes(Buffer.from(needle, 'utf8').toString('latin1'))),
     /** Pids of the sessions whose cwd sits inside `path`. */
     within: (path) => sessions.filter((s) => s.cwd && inside(s.cwd, path)).map((s) => s.pid),
   }
@@ -553,7 +559,7 @@ function remove(argv) {
     const blocker =
       removalBlocker(info, { stale }) ??
       (foreignDb ? `its database ${dev.database} is not this repo's to drop — remove it by hand` : null) ??
-      (others.naming([...worktreeNeedles(path), dev?.database]).size ? NAMED : null) ??
+      (others.naming(worktreeNeedles(path)).size || others.mentions(dev?.database) ? NAMED : null) ??
       (holders.length ? `a process still runs in it (pid ${holders.join(', ')})` : null)
     const removed = !settle(
       path,
@@ -609,10 +615,10 @@ function dropDb(argv) {
   if (!repo || !names.length) fail('drop-db needs <repo> <name>...')
   const root = resolve(repo)
   const orphans = orphanDatabases(root)
-  const named = otherSessions(session.id).naming(names)
+  const others = otherSessions(session.id)
   let kept = 0
   for (const name of names) {
-    const blocker = !orphans.includes(name) ? `not an orphaned dev database of ${root}` : named.has(name) ? NAMED : null
+    const blocker = !orphans.includes(name) ? `not an orphaned dev database of ${root}` : others.mentions(name) ? NAMED : null
     kept += settle(name, blocker, () => attempt('dropdb', ['--if-exists', name]).err, 'dropped')
   }
   return kept
