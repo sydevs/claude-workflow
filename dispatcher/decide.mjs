@@ -291,11 +291,12 @@ function repairPlan(s, config, reason, flags = {}) {
   if (ended) return [...(s.record?.handback ? [] : [handback(s, `fix-ci ran on ${String(pr.head.sha).slice(0, 7)} and CI is still red`)]), note(`fix-ci ${ended.outcome || 'ran'} on ${String(pr.head.sha).slice(0, 7)} — a push to a new head is what asks again`)]
   // It stood down on an older head, and the same checks are red on this one,
   // which a merge of the base or a bot commit gave it: still your turn.
-  // A person's push, or a different red check, asks again.
+  // A person's push, or a different red check, asks again. A queue failure
+  // leaves nothing red here, and two empty sets are not the same checks.
   // (why: docs/why.md#a-stood-down-repair-is-not-asked-again-by-a-merge)
   const stood = stoodDownFixCi(s.record)
   const names = s.ci.failing.map((c) => c.name).sort()
-  if (stood && stood.failing.join('\n') === names.join('\n') && !isHuman(s.headAuthor, config)) {
+  if (stood && names.length && stood.failing.join('\n') === names.join('\n') && !isHuman(s.headAuthor, config)) {
     return [...(s.record?.handback ? [] : [handback(s, `fix-ci pushed nothing on ${String(stood.sha).slice(0, 7)}, and the same checks are still red`)]), note(`fix-ci stood down on ${String(stood.sha).slice(0, 7)} with ${names.join(', ')} red, as now — a push from you, or a different red check, asks again`)]
   }
   const cap = config.ceilings?.ciFixIterations ?? 3

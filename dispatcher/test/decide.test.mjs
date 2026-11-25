@@ -1375,3 +1375,11 @@ test('a repair that pushed is not a stand-down', () => {
   assert.deepEqual(types(evaluatePr(newHead({ record: { fixCi: 1, dispatches: [{ ...stoodDown, endSha: 'beef123' }] } }), config)), ['bumpFixCi', 'fire:fix-ci'])
   assert.deepEqual(types(evaluatePr(newHead({ record: { fixCi: 1, dispatches: [endedFixCi('19a284d')] } }), config)), ['bumpFixCi', 'fire:fix-ci'], 'an entry from before the change carries no endSha')
 })
+
+// A queue failure leaves `ci.failing` empty, so the pass fired there recorded
+// no names. Two such passes must not match each other on the empty set.
+test('a repair fired where nothing was red does not match a later empty red set', () => {
+  const emptyStand = { ...endedFixCi('19a284d'), endSha: '19a284d', failing: [] }
+  const s = dequeued({ record: { fixCi: 1, queueFail: { sha: 'abc', run }, dispatches: [emptyStand] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['bumpFixCi', 'fire:fix-ci'])
+})
