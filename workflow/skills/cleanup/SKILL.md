@@ -2,7 +2,7 @@
 name: cleanup
 description: End-of-session cleanup for a local session. Stops the dev and Ladle servers this session started, removes its worktrees, local branches and dev databases once their work is safely pushed, prunes what older sessions left behind, and reports what is still outstanding — unpushed or uncommitted work, PRs that need you, follow-up tickets discussed but never filed, and cross-repo steps still owed. Touches nothing a running session uses, and never deletes a branch on GitHub. User-invoked only.
 disable-model-invocation: true
-allowed-tools: Bash(node *skills/cleanup/cleanup.mjs*), Bash(git fetch:*), Bash(git -C:*), Bash(gh pr list:*), Bash(gh api graphql:*), Bash(jq -c .contractSync*), Bash(gh search issues:*), Bash(gh search prs:*), Read, TaskStop, CronList, CronDelete, AskUserQuestion, mcp__playwright__browser_close
+allowed-tools: Bash(node *skills/cleanup/cleanup.mjs*), Bash(git fetch:*), Bash(git -C:*), Bash(gh pr list:*), Bash(gh api graphql:*), Bash(jq -c .contractSync*), Bash(gh search issues:*), Bash(gh search prs:*), Read, TaskStop, CronList, CronDelete, AskUserQuestion, ExitWorktree, mcp__playwright__browser_close
 ---
 
 # Cleanup
@@ -14,8 +14,9 @@ it.
 
 `cleanup.mjs` below is `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/cleanup/cleanup.mjs`.
 Spell the full path in every command: shell variables do not survive between commands. **Stop
-and delete only through the script, never by hand.** It decides what belongs to this session and
-what a live session claims, and re-checks both as it acts.
+and delete only through the script, never by hand.** It reads who created each worktree and
+branch from the stamps the `stamp-ownership` hook writes, and re-checks them as it acts. Never
+search other sessions' transcripts for an owner, and never refuse because one names a thing.
 (why: docs/why.md#cleanup-touches-only-its-own-session)
 
 Ask every question with `AskUserQuestion`, recommended option first.
@@ -50,10 +51,11 @@ the script counts a commit one holds as safe. Then `node cleanup.mjs scan`:
 | Key | Meaning |
 | --- | --- |
 | `servers` | Listening processes this session started |
-| `checkouts` | Checkouts this session created (`createdThisSession`) or changed. `session: true` marks a `dirty` file or `unpushed` commit this session made |
+| `checkouts` | Checkouts this session created (`owner: "self"`) or changed. `session: true` marks a `dirty` file or `unpushed` commit this session made |
 | `stashes` | Stashes made since the session began |
-| `branches` | Local branches no worktree has checked out. `session: true` marks one this session named; `unsafe` holds commits found nowhere else |
-| `olderWorktrees` | Worktrees of earlier sessions |
+| `branches` | Local branches that no worktree checks out, each with `owner` `self` or `orphan`. `unsafe` holds commits found nowhere else |
+| `orphanWorktrees` | Worktrees whose creating session ended, or that carry no stamp |
+| `live` | Counts of other live sessions' worktrees and branches, never their names |
 | `otherServers` | Servers of other sessions, or of a terminal (`session: null`) |
 
 ## 3. Stop this session's servers
@@ -82,9 +84,14 @@ after the merge are on no PR.
 
 ## 5. Remove this session's worktrees and branches
 
-`node cleanup.mjs remove <path>…` with every checkout that has `createdThisSession`. A removed
-worktree takes its local branch and isolated database with it. Then
-`node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries marked `session: true`.
+The session ends here, so the worktree it works in goes too. If the session entered a worktree,
+call `ExitWorktree` with `action: "keep"` first: it returns the session to the directory it
+started in. This session's own processes never hold a worktree, so do nothing else first.
+
+`node cleanup.mjs remove <path>…` with every checkout whose `owner` is `self`. A removed worktree
+takes its local branch and isolated database with it. Then
+`node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries whose `owner` is
+`self`.
 
 **Never delete a branch on GitHub.** Report each thing the script keeps, with its printed reason,
 as outstanding.
@@ -134,16 +141,17 @@ Report each one that applies, as a step the user still owes:
 Prune what earlier sessions left, without asking:
 
 - `node cleanup.mjs prune` — dead server state, and records of worktrees whose directory is gone.
-- `node cleanup.mjs remove --stale <path>…` with every `olderWorktrees` path.
-- `node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries left, one call per repo.
+- `node cleanup.mjs remove --orphans <path>…` with every `orphanWorktrees` path.
+- `node cleanup.mjs drop-branch --orphans <repo> <branch>…` with the `orphan` entries in
+  `branches`, one call per repo.
 
 Never stop an `otherServers` entry: report it. Report what was kept as counts by reason, and by
-name only what holds work found nowhere else.
+name only what holds work found nowhere else. Report `live` as counts.
 
 ## 10. Report
 
 Lead with **Outstanding**, the things the user must do, grouped by repo, each with its link or
 path and its next step. If nothing is outstanding, say so in one line. Then **Cleaned up**: the
 servers stopped, the worktrees removed, the branches and databases dropped, as counts with names.
-Then **Reminders** (step 8), and **Found, not touched** (other sessions' servers, and the older
-worktrees and branches kept). Leave out any section that is empty.
+Then **Reminders** (step 8), and **Found, not touched** (other sessions' servers, the counts in
+`live`, and the orphans kept). Leave out any section that is empty.

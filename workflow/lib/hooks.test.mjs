@@ -8,7 +8,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync, execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -229,4 +229,76 @@ test('prettier-format and eslint-fix: unusable input passes silently', () => {
       assert.deepEqual(JSON.parse(r.out), SILENT)
     }
   }
+})
+
+// --- stamp-ownership --------------------------------------------------------
+
+/** A repo with one commit, so a worktree can be added to it. */
+function committedRepo(name) {
+  const dir = makeRepo(name)
+  execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'x'], { cwd: dir })
+  return dir
+}
+const gitOut = (cwd, ...args) => {
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
+let callId = 0
+
+/** Run the hook either side of `act`, as Claude Code does around one tool call. */
+function aroundCall(tool, tool_input, cwd, act) {
+  const payload = { session_id: 'stamp-session', tool_use_id: `toolu_${++callId}`, tool_name: tool, tool_input, cwd }
+  const pre = run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PreToolUse' }, cwd)
+  act()
+  const post = run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PostToolUse' }, cwd)
+  for (const r of [pre, post]) assertAllowed(r)
+}
+const branchStamp = (r, b) => gitOut(r, 'config', '--get', `branch.${b}.claudeSession`)
+const worktreeStamp = (wt) => {
+  try {
+    return readFileSync(join(gitOut(wt, 'rev-parse', '--absolute-git-dir'), 'claude-session'), 'utf-8').trim()
+  } catch {
+    return null
+  }
+}
+
+test('stamp-ownership: stamps the worktree and branch a call creates, from a workspace cwd', () => {
+  const r = committedRepo('stamped')
+  const command = 'cd stamped && git worktree add .claude/worktrees/fix -b claude/fix'
+  aroundCall('Bash', { command }, tmp, () => {
+    execFileSync('git', ['worktree', 'add', '-q', '.claude/worktrees/fix', '-b', 'claude/fix'], { cwd: r })
+    // Another session's branch, made while this call ran: new, but not named.
+    execFileSync('git', ['branch', 'claude/fix-2'], { cwd: r })
+  })
+  assert.equal(worktreeStamp(join(r, '.claude/worktrees/fix')), 'stamp-session')
+  assert.equal(branchStamp(r, 'claude/fix'), 'stamp-session')
+  assert.equal(branchStamp(r, 'claude/fix-2'), null)
+})
+
+test('stamp-ownership: EnterWorktree stamps the worktree it names, and its branch', () => {
+  const r = committedRepo('entered')
+  aroundCall('EnterWorktree', { name: 'ew' }, r, () => {
+    execFileSync('git', ['worktree', 'add', '-q', '.claude/worktrees/ew', '-b', 'worktree-ew'], { cwd: r })
+  })
+  assert.equal(worktreeStamp(join(r, '.claude/worktrees/ew')), 'stamp-session')
+  assert.equal(branchStamp(r, 'worktree-ew'), 'stamp-session')
+})
+
+test('stamp-ownership: an existing branch a call only names stays unstamped', () => {
+  const r = committedRepo('existing')
+  execFileSync('git', ['branch', 'claude/old'], { cwd: r })
+  aroundCall('Bash', { command: 'git switch claude/old' }, r, () => execFileSync('git', ['switch', '-q', 'claude/old'], { cwd: r }))
+  assert.equal(branchStamp(r, 'claude/old'), null)
+})
+
+test('stamp-ownership: unusable input, and a call outside any repo, pass silently', () => {
+  for (const stdin of ['', 'not json', {}, { tool_name: 'Bash', tool_input: { command: 'git status' } }]) {
+    assertAllowed(run('stamp-ownership.mjs', stdin))
+  }
+  aroundCall('Bash', { command: 'git init x' }, plain, () => {})
+  // A post with no pre (the pre failed, or ran in an older plugin) does nothing.
+  assertAllowed(run('stamp-ownership.mjs', { session_id: 's', tool_use_id: 'toolu_none', tool_name: 'Bash', tool_input: { command: 'git x' }, hook_event_name: 'PostToolUse', cwd: repo }))
 })

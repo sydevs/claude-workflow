@@ -1043,10 +1043,25 @@ A maintainer runs several local sessions at once. On 2026-11-25, while `cleanup`
 one laptop held two Ladle servers and three dev servers from other live sessions, ten worktrees
 across four repos, ninety-odd local branches, and two SahajCloud databases whose worktrees were long
 gone. A sweep that stops "every Ladle" or removes "every clean worktree" kills a neighbour's work
-mid-test, and a check that a path merely *contains* a name let `.claude/worktrees/fix-2` claim
-`fix`. So `cleanup.mjs` proves ownership token by token, refuses whatever a live session names, and
-deletes only local branches: GitHub deletes a merged branch itself, and an unmerged remote branch
-is the only copy of an open PR.
+mid-test. So `cleanup.mjs` acts only on what it can prove is this session's, and deletes only local
+branches: GitHub deletes a merged branch itself, and an unmerged remote branch is the only copy of an
+open PR.
+
+**Ownership is stamped at creation, not inferred from transcripts.** The first version decided
+ownership by whether a transcript named a thing, and refused anything another live session's
+transcript named. It fed itself: every `scan` printed every worktree and branch in the repo, so
+after one cleanup, every other open session's transcript named everything, and every later cleanup
+refused its own work as "named by a live session". It also refused the worktree it ran in, because
+its own session's processes sat there. Now the `stamp-ownership` hook snapshots worktrees and
+branches either side of each `git`/`gh` call and `EnterWorktree`. It stamps what is new and named by
+the call, in git itself: a `claude-session` file in the worktree's admin directory, and
+`branch.<name>.claudeSession`. Git deletes both with the thing. The call must name what it stamps,
+because a neighbour can create a branch while a long command runs. Cleanup then needs no
+transcript but its own: `self` it removes, another live session's it only counts, and an orphan (a
+dead session's, or unstamped) it prunes when nothing would be lost. That last rule accepts one
+risk on purpose: a live session's unstamped worktree that is clean and fully pushed can go. Its
+work is safe on GitHub. The session's own processes never hold a worktree, because cleanup runs
+at the end of the session's life, which is the time to remove it.
 
 A database goes only with the worktree that owns it, through `dev-server.sh teardown`. Cleanup
 never hunts for databases whose worktree is gone: nothing proves which checkout made one (a second

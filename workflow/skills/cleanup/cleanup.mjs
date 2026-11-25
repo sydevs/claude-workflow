@@ -4,25 +4,31 @@
  *
  *   cleanup.mjs scan                           JSON report, changes nothing
  *   cleanup.mjs stop <pid>...                  stop servers this session started
- *   cleanup.mjs remove [--stale] <path>...     remove worktrees, with their branch and database
+ *   cleanup.mjs remove [--orphans] <path>...   remove worktrees, with their branch and database
  *   cleanup.mjs prune                          dead dev-server state, `git worktree prune`
- *   cleanup.mjs drop-branch <repo> <branch>... delete local branches
+ *   cleanup.mjs drop-branch [--orphans] <repo> <branch>...  delete local branches
  *
  * Common flags: --session <id> (default $CLAUDE_CODE_SESSION_ID), --transcript <path>.
  *
- * Ownership is proved, never guessed, because several sessions share one
- * laptop (why: docs/why.md#cleanup-touches-only-its-own-session):
+ * Ownership is read from stamps, never guessed from what a transcript
+ * mentions, because several sessions share one laptop and each one's cleanup
+ * prints the others' names (why: docs/why.md#cleanup-touches-only-its-own-session):
  *
  * - A server is this session's when its environment carries this
  *   session's `CLAUDE_CODE_SESSION_ID`.
- * - A worktree is this session's when the transcript names it and git
- *   registered it after the transcript began. `--stale` lifts that for an
- *   older one, but only under `.claude/worktrees/`.
- * - A change is this session's when the transcript holds its trace — the
- *   edited file's path, or the `[<branch> <sha>]` line `git commit` prints —
- *   or when it is newer than the session in a checkout the session worked in.
- * - Nothing is touched that a live session (`~/.claude/sessions/<pid>.json`)
- *   names, or that any process outside this command sits in.
+ * - A worktree or local branch belongs to the session that created it, as
+ *   `hooks/stamp-ownership.mjs` stamped it. A stamp of this session's is
+ *   `self`, of another live session's (`~/.claude/sessions/<pid>.json`) is
+ *   `live`, and anything else — a dead session's, or no stamp — is an
+ *   `orphan`. `--orphans` lets a mutation take orphans; a worktree only
+ *   under `.claude/worktrees/`. Nothing `live` is ever touched.
+ * - A change is this session's when it is in a worktree the session owns,
+ *   or the transcript holds its trace — the edited file's path, or the
+ *   `[<branch> <sha>]` line `git commit` prints — or it is newer than the
+ *   session in a checkout the session worked in.
+ * - Nothing is removed that a process of another session, or of a
+ *   terminal, sits in. This session's own processes do not count: at the
+ *   end of its life, the worktree it worked in is the one to remove.
  * - A commit is safe to lose locally when a remote branch or a PR head
  *   holds it. The skill fetches PR heads into `refs/cleanup/pull/*`: GitHub
  *   keeps them after a squash merge deletes the branch.
@@ -37,6 +43,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flag } from '../../lib/config.mjs'
+import { STAMP_FILE, STAMP_KEY } from '../../hooks/stamp-ownership.mjs'
 
 const DEV_SERVER = join(dirname(fileURLToPath(import.meta.url)), '..', 'dev-server', 'dev-server.sh')
 const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -111,12 +118,6 @@ export function namedIn(texts, needles) {
   return found
 }
 
-/** The two ways a transcript names a worktree: its path, or `.claude/worktrees/<name>`. */
-const worktreeNeedles = (path) => {
-  const i = path.indexOf(WORKTREES)
-  return i === -1 ? [path] : [path, path.slice(i + 1)]
-}
-
 // --- transcripts and sessions --------------------------------------------------
 
 function findTranscript(id) {
@@ -158,10 +159,7 @@ function loadSession(argv) {
   return { id, transcript, startedAt, cwds: [...cwds], texts }
 }
 
-/**
- * Every other session running now: its cwd, and its transcripts, read once
- * and only when asked. A session with no transcript yet has named nothing.
- */
+/** Every other session running now: its id and its cwd. */
 function otherSessions(selfId) {
   const dir = join(CONFIG_DIR, 'sessions')
   const sessions = []
@@ -175,25 +173,17 @@ function otherSessions(selfId) {
     }
     if (rec.sessionId && rec.sessionId !== selfId && alive(rec.pid)) sessions.push({ pid: rec.pid, id: rec.sessionId, cwd: rec.cwd ?? null })
   }
-  let texts = null
-  const read = () =>
-    (texts ??= sessions.flatMap((s) => {
-      const t = findTranscript(s.id)
-      return t ? transcriptFiles(t).map((f) => readFileSync(f, 'latin1')) : []
-    }))
   return {
-    /** The needles any of them names. */
-    naming: (needles) => namedIn(read(), needles),
-    /**
-     * Whether any of them mentions this string at all. A database name sits
-     * inside a `DATABASE_URL` after a `/`, which `naming` reads as part of a
-     * longer token, so an unrecoverable drop asks the looser question.
-     */
-    mentions: (needle) =>
-      Boolean(needle) && read().some((t) => t.includes(Buffer.from(needle, 'utf8').toString('latin1'))),
+    ids: new Set(sessions.map((s) => s.id)),
     /** Pids of the sessions whose cwd sits inside `path`. */
     within: (path) => sessions.filter((s) => s.cwd && inside(s.cwd, path)).map((s) => s.pid),
   }
+}
+
+/** Who a stamp says made a thing: `self`, `live` (another running session), or `orphan`. */
+export function ownerOf(stamp, selfId, liveIds) {
+  if (stamp && stamp === selfId) return 'self'
+  return stamp && liveIds.has(stamp) ? 'live' : 'orphan'
 }
 
 // --- processes -----------------------------------------------------------------
@@ -246,6 +236,22 @@ function ownAncestry() {
   return own
 }
 
+/**
+ * Whether a process is this session's: it carries the session's id, or it
+ * descends from Claude itself — an MCP server, a background task, a Monitor.
+ */
+function isOwnProcess(pid, sessionId) {
+  if (sessionOf(pid) === sessionId) return true
+  const claude = Number(process.env.CLAUDE_PID) || null
+  if (!claude) return false
+  const seen = new Set()
+  for (let p = pid; p && p > 1 && !seen.has(p); p = parentOf(p)) {
+    if (p === claude) return true
+    seen.add(p)
+  }
+  return false
+}
+
 /** The listener plus its ancestors that belong to this session, below Claude itself. */
 function sessionTree(pid, sessionId) {
   const claude = Number(process.env.CLAUDE_PID) || null
@@ -288,16 +294,26 @@ function listWorktrees(repo) {
   return out
 }
 
-/** When git registered a linked worktree: the birth of its admin directory. */
-function registeredAt(wt) {
+/** The session that created a linked worktree, from the stamp in its admin directory. */
+function worktreeStamp(wt) {
   if (wt.main) return null
   try {
     const admin = readFileSync(join(wt.path, '.git'), 'utf8').match(/^gitdir: (.*)$/m)?.[1]
-    const s = statSync(resolve(wt.path, admin))
-    return s.birthtimeMs || s.ctimeMs
+    return readFileSync(join(resolve(wt.path, admin), STAMP_FILE), 'utf8').trim() || null
   } catch {
     return null
   }
+}
+
+/** Each stamped local branch's creating session, from `branch.<name>.claudeSession`. */
+function branchStamps(repo) {
+  const out = new Map()
+  const key = new RegExp(`^branch\\.(.+)\\.${STAMP_KEY.toLowerCase()} (.+)$`)
+  for (const l of lines(git(repo, 'config', '--get-regexp', `^branch\\..*\\.${STAMP_KEY.toLowerCase()}$`))) {
+    const m = l.match(key)
+    if (m) out.set(m[1], m[2])
+  }
+  return out
 }
 
 /** `owner/name` of origin on GitHub, for `gh --repo`. */
@@ -307,9 +323,13 @@ const remoteSlug = (repo) =>
 const defaultBranch = (repo) =>
   git(repo, 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD')?.replace(/^origin\//, '') ?? 'main'
 
-/** Local branches, each with whether deleting it would lose a commit. One rev-list per repo. */
-function localBranches(repo, worktrees) {
+/**
+ * Local branches, each with its owner and whether deleting it would lose a
+ * commit. One rev-list per repo.
+ */
+function localBranches(repo, worktrees, selfId, liveIds) {
   const unsafe = new Set(lines(git(repo, 'rev-list', '--branches', '--not', ...SAFE)))
+  const stamps = branchStamps(repo)
   const base = defaultBranch(repo)
   return lines(git(repo, 'for-each-ref', '--format=%(refname:short) %(objectname)', 'refs/heads')).map((l) => {
     const [branch, head] = l.split(' ')
@@ -319,16 +339,22 @@ function localBranches(repo, worktrees) {
       head,
       isDefault: branch === base,
       checkedOut: worktrees.some((w) => w.branch === branch),
+      owner: ownerOf(stamps.get(branch), selfId, liveIds),
       // A tip no safe ref reaches exists only here, whatever its ancestors.
       unsafe: unsafe.has(head),
     }
   })
 }
 
+const LIVE = 'another live session created it'
+const NOT_MINE = 'not created by this session — pass --orphans to take it'
+
 /** Why a local branch may not be deleted now, or null when it may. */
-export function branchBlocker(b) {
+export function branchBlocker(b, { orphans = false } = {}) {
   if (b.isDefault) return 'default branch'
   if (b.checkedOut) return 'checked out in a worktree'
+  if (b.owner === 'live') return LIVE
+  if (b.owner === 'orphan' && !orphans) return NOT_MINE
   if (b.unsafe) return 'commits on no remote branch or PR'
   return null
 }
@@ -337,11 +363,10 @@ export function branchBlocker(b) {
  * Everything that would be lost or forgotten if this checkout went away,
  * each change marked with whether this session made it.
  */
-function inspectCheckout(session, wt) {
+function inspectCheckout(session, wt, liveIds) {
   const since = session.startedAt
-  const workedHere = session.cwds.some((c) => inside(c, wt.path))
-  const at = registeredAt(wt)
-  const createdThisSession = at !== null && at >= since && namedIn(session.texts, worktreeNeedles(wt.path)).size > 0
+  const owner = wt.main ? null : ownerOf(worktreeStamp(wt), session.id, liveIds)
+  const workedHere = owner === 'self' || session.cwds.some((c) => inside(c, wt.path))
 
   const entries = (git(wt.path, 'status', '--porcelain=v1', '-z', '--untracked-files=all') ?? '').split('\0')
   const dirty = []
@@ -364,14 +389,15 @@ function inspectCheckout(session, wt) {
     const printed = re && session.texts.some((t) => re.test(t))
     return { sha, subject: subject.join(' '), session: Number(ct) * 1000 >= since && (workedHere || Boolean(printed)) }
   })
-  return { path: wt.path, repo: wt.repo, main: wt.main, locked: wt.locked, branch, head: wt.head, createdThisSession, dirty: changes, unpushed }
+  return { path: wt.path, repo: wt.repo, main: wt.main, locked: wt.locked, branch, head: wt.head, owner, dirty: changes, unpushed }
 }
 
 /** Why a worktree may not be removed now, or null when it may. */
-export function removalBlocker(info, { stale = false } = {}) {
+export function removalBlocker(info, { orphans = false } = {}) {
   if (info.main) return 'main checkout'
-  if (!info.createdThisSession && !stale) return 'not created by this session'
-  if (!info.createdThisSession && !info.path.includes(WORKTREES)) return 'not under .claude/worktrees — remove it by hand'
+  if (info.owner === 'live') return LIVE
+  if (info.owner !== 'self' && !orphans) return NOT_MINE
+  if (info.owner !== 'self' && !info.path.includes(WORKTREES)) return 'not under .claude/worktrees — remove it by hand'
   if (info.locked) return `locked${typeof info.locked === 'string' ? `: ${info.locked}` : ''}`
   if (info.dirty.length) return `${info.dirty.length} uncommitted or untracked file(s)`
   if (info.unpushed.length) return `${info.unpushed.length} commit(s) on no remote branch or PR`
@@ -437,15 +463,20 @@ function scan(argv) {
   const session = loadSession(argv)
   const repos = discoverRepos(session)
   const worktrees = repos.flatMap(listWorktrees).filter((w) => !w.prunable && existsSync(w.path))
+  const { ids: liveIds } = otherSessions(session.id)
 
+  // Another live session's things are counted, never listed: a name printed
+  // here lands in this transcript, and must not read as this session's.
   const checkouts = []
-  const olderWorktrees = []
+  const orphanWorktrees = []
+  let liveWorktrees = 0
   for (const wt of worktrees) {
-    const info = inspectCheckout(session, wt)
-    if (info.createdThisSession || info.dirty.some((d) => d.session) || info.unpushed.some((c) => c.session)) {
+    const info = inspectCheckout(session, wt, liveIds)
+    if (info.owner === 'self' || info.dirty.some((d) => d.session) || info.unpushed.some((c) => c.session)) {
       const point = info.branch ? git(wt.path, 'merge-base', `origin/${defaultBranch(wt.repo)}`, 'HEAD') : null
       checkouts.push({ ...info, remote: remoteSlug(wt.repo), changedFiles: point ? lines(git(wt.path, 'diff', '--name-only', point, 'HEAD')) : [] })
-    } else if (!wt.main) olderWorktrees.push({ path: wt.path, branch: info.branch })
+    } else if (info.owner === 'live') liveWorktrees++
+    else if (!wt.main) orphanWorktrees.push({ path: wt.path, branch: info.branch })
   }
 
   const stashes = repos.flatMap((repo) =>
@@ -464,13 +495,14 @@ function scan(argv) {
     else if (l.cwd && worktrees.some((w) => inside(l.cwd, w.path))) otherServers.push({ ...l, session: owner })
   }
 
-  const branches = repos.flatMap((r) => {
-    const all = localBranches(r, worktrees.filter((w) => w.repo === r)).filter((b) => !b.isDefault && !b.checkedOut)
-    // One pass per repo says which of them this session worked on.
-    const mine = namedIn(session.texts, all.map((b) => b.branch))
-    return all.map(({ repo, branch, head, unsafe }) => ({ repo, branch, head, unsafe, session: mine.has(branch) }))
-  })
-  const report = { servers, checkouts, stashes, branches, olderWorktrees, otherServers }
+  const loose = repos.flatMap((r) =>
+    localBranches(r, worktrees.filter((w) => w.repo === r), session.id, liveIds).filter((b) => !b.isDefault && !b.checkedOut),
+  )
+  const branches = loose
+    .filter((b) => b.owner !== 'live')
+    .map(({ repo, branch, head, unsafe, owner }) => ({ repo, branch, head, unsafe, owner }))
+  const live = { worktrees: liveWorktrees, branches: loose.length - branches.length }
+  const report = { servers, checkouts, stashes, branches, orphanWorktrees, live, otherServers }
   console.log(JSON.stringify(report, null, 2))
   return 0
 }
@@ -512,23 +544,24 @@ function settle(label, blocker, act, done) {
   return kept ? 1 : 0
 }
 
-const NAMED = 'a live session names it'
-
-/** Delete one local branch unless it is unsafe or a live session names it. 1 when kept. */
-function deleteBranch(repo, branches, name, named, label = name) {
+/** Delete one local branch unless `branchBlocker` keeps it. 1 when kept. */
+function deleteBranch(repo, branches, name, { orphans, label = name }) {
   const b = branches.find((x) => x.branch === name)
-  const blocker = !b ? 'no such branch' : (branchBlocker(b) ?? (named.has(name) ? NAMED : null))
+  const blocker = !b ? 'no such branch' : branchBlocker(b, { orphans })
   return settle(label, blocker, () => attempt('git', ['branch', '-D', name], { cwd: repo }).err, `deleted (was ${b?.head.slice(0, 12)})`)
 }
 
 function remove(argv) {
   const session = loadSession(argv)
-  const stale = argv.includes('--stale')
+  const orphans = argv.includes('--orphans')
   const paths = positionals(argv).map((p) => resolve(p))
   if (!paths.length) fail('remove needs at least one worktree path')
   const others = otherSessions(session.id)
   const own = ownAncestry()
   const cwds = lsof('-d', 'cwd').filter(([pid]) => !own.has(pid))
+  // This session's own processes — its shell, an MCP server, a Monitor —
+  // stand in the worktree it is finishing, and do not hold it.
+  const foreign = (pid) => !isOwnProcess(pid, session.id)
   let kept = 0
   for (const path of paths) {
     const repo = repoOf(path)
@@ -537,18 +570,19 @@ function remove(argv) {
       kept += settle(path, 'not a registered worktree')
       continue
     }
-    const info = inspectCheckout(session, wt)
+    const info = inspectCheckout(session, wt, others.ids)
     const dev = devServerInfo(path)
-    const holders = [...new Set([...cwds.filter(([, cwd]) => inside(cwd, path)).map(([pid]) => pid), ...others.within(path)])]
+    const holders = [
+      ...new Set([...cwds.filter(([pid, cwd]) => inside(cwd, path) && foreign(pid)).map(([pid]) => pid), ...others.within(path)]),
+    ]
     // teardown drops dev.database, and a worktree we did not create took that
     // name from its own branch's .claude/workflow.json. Trust only a name the
     // main checkout's template shapes.
     const foreignDb =
-      dev?.database && !info.createdThisSession && !isOwnDatabase(devServerInfo(repo)?.databaseTemplate, dev.database)
+      dev?.database && info.owner !== 'self' && !isOwnDatabase(devServerInfo(repo)?.databaseTemplate, dev.database)
     const blocker =
-      removalBlocker(info, { stale }) ??
+      removalBlocker(info, { orphans }) ??
       (foreignDb ? `its database ${dev.database} is not this repo's to drop — remove it by hand` : null) ??
-      (others.naming(worktreeNeedles(path)).size || others.mentions(dev?.database) ? NAMED : null) ??
       (holders.length ? `a process still runs in it (pid ${holders.join(', ')})` : null)
     const removed = !settle(
       path,
@@ -565,8 +599,11 @@ function remove(argv) {
     )
     if (!removed) kept++
     if (!removed || !info.branch) continue
-    // Listed again: the worktree is gone, so its branch is no longer checked out.
-    deleteBranch(repo, localBranches(repo, listWorktrees(repo)), info.branch, others.naming([info.branch]), `  branch ${info.branch}`)
+    // Listed again: the worktree is gone, so its branch is no longer checked
+    // out. It goes with its worktree even unstamped (`gh pr checkout` names no
+    // branch), but never when another live session created it.
+    const branches = localBranches(repo, listWorktrees(repo), session.id, others.ids)
+    deleteBranch(repo, branches, info.branch, { orphans: true, label: `  branch ${info.branch}` })
   }
   return kept
 }
@@ -591,10 +628,10 @@ function dropBranch(argv) {
   const [repo, ...names] = positionals(argv)
   if (!repo || !names.length) fail('drop-branch needs <repo> <branch>...')
   const root = resolve(repo)
-  const all = localBranches(root, listWorktrees(root))
-  const named = otherSessions(session.id).naming(names)
+  const all = localBranches(root, listWorktrees(root), session.id, otherSessions(session.id).ids)
+  const orphans = argv.includes('--orphans')
   let kept = 0
-  for (const name of names) kept += deleteBranch(root, all, name, named)
+  for (const name of names) kept += deleteBranch(root, all, name, { orphans })
   return kept
 }
 

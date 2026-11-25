@@ -232,8 +232,9 @@ error. Each person still runs `/plugin install` once.
 }
 ```
 
-The plugin also ships four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`
-and `eslint-fix`. Code review, security review and type-checking on edit come from official
+The plugin also ships five hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
+`eslint-fix`, and `stamp-ownership`, which records the session that created each worktree and
+local branch for `/workflow:cleanup`. Code review, security review and type-checking on edit come from official
 plugins instead (`pr-review-toolkit`, `/security-review` with `security-guidance`,
 `typescript-lsp` and `php-lsp`).
 
