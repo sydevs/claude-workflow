@@ -1048,6 +1048,11 @@ mid-test, and a check that a path merely *contains* a name let `.claude/worktree
 deletes only local branches: GitHub deletes a merged branch itself, and an unmerged remote branch
 is the only copy of an open PR.
 
+A database goes only with the worktree that owns it, through `dev-server.sh teardown`. Cleanup
+never hunts for databases whose worktree is gone: nothing proves which checkout made one (a second
+clone's worktrees are invisible to this one, and `stop` deletes the state file that records it),
+and a dropped database cannot be recovered. A stray one costs disk space; drop it by hand.
+
 ## A missed version declaration passes CI
 
 `cut-release` named three places SahajAtlasWordpress declares its version: the plugin header,

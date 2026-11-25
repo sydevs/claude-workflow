@@ -254,7 +254,7 @@ On a laptop that runs the skills or their scripts:
 - **jq**: skill snippets read `loop-config.json` and `.claude/workflow.json` with it.
 - **python3**: `ste-lint.py` and `skills/dev-server/dev-server.sh`.
 - **lsof**, **ps** and **cksum**: `dev-server.sh` and `skills/cleanup/cleanup.mjs` find servers
-  with them. `psql` is optional: without it, cleanup reports no orphaned dev databases.
+  with them.
 - **pnpm**: only where a repo's `workflow.json` names it (the formatting hooks run `pnpm exec`).
 
 No Railway CLI is needed here; `workflow/lib/railway.mjs` only reads Railway URLs. A cloud routine

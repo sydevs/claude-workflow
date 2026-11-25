@@ -44,7 +44,7 @@ first start and dropped by `teardown`.
   that the next `start` misreads as another user's process.
 - State lives in `${XDG_STATE_HOME:-~/.local/state}/sydevs-dev-server/<slug>.json`, outside the
   repo, so a worktree's own tree stays clean. `info` prints a worktree's slug, state directory and
-  database as JSON; `/workflow:cleanup` reads it to prune state and databases no worktree owns.
+  database as JSON; `/workflow:cleanup` reads it to prune state, and tears a worktree down before removing it.
 - `/implement-ticket` runs `teardown` before `ExitWorktree`, so a finished ticket leaves no
   server and no database behind.
 - The script never kills a port held outside this worktree. It reports this and tells you to

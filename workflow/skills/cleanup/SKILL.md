@@ -54,7 +54,6 @@ the script counts a commit one holds as safe. Then `node cleanup.mjs scan`:
 | `stashes` | Stashes made since the session began |
 | `branches` | Local branches no worktree has checked out. `session: true` marks one this session named; `unsafe` holds commits found nowhere else |
 | `olderWorktrees` | Worktrees of earlier sessions |
-| `orphanDatabases` | Isolated dev databases whose worktree is gone |
 | `otherServers` | Servers of other sessions, or of a terminal (`session: null`) |
 
 ## 3. Stop this session's servers
@@ -137,7 +136,6 @@ Prune what earlier sessions left, without asking:
 - `node cleanup.mjs prune` — dead server state, and records of worktrees whose directory is gone.
 - `node cleanup.mjs remove --stale <path>…` with every `olderWorktrees` path.
 - `node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries left, one call per repo.
-- `node cleanup.mjs drop-db <repo> <name>…` with every `orphanDatabases` entry.
 
 Never stop an `otherServers` entry: report it. Report what was kept as counts by reason, and by
 name only what holds work found nowhere else.

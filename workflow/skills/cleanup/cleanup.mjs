@@ -7,7 +7,6 @@
  *   cleanup.mjs remove [--stale] <path>...     remove worktrees, with their branch and database
  *   cleanup.mjs prune                          dead dev-server state, `git worktree prune`
  *   cleanup.mjs drop-branch <repo> <branch>... delete local branches
- *   cleanup.mjs drop-db <repo> <name>...       drop isolated dev databases with no worktree
  *
  * Common flags: --session <id> (default $CLAUDE_CODE_SESSION_ID), --transcript <path>.
  *
@@ -401,15 +400,6 @@ export function isOwnDatabase(template, name) {
   return Boolean(pre && name) && name.startsWith(pre) && name.endsWith(post)
 }
 
-/** Isolated databases that no registered worktree of this repo owns. */
-function orphanDatabases(repo) {
-  const template = devServerInfo(repo)?.databaseTemplate
-  const owned = new Set(listWorktrees(repo).map((w) => devServerInfo(w.path)?.database))
-  return lines(run('psql', ['-lqtA', '-F', '|']))
-    .map((l) => l.split('|')[0])
-    .filter((n) => !owned.has(n) && isOwnDatabase(template, n))
-}
-
 /**
  * State files no running server needs. The state directory is shared by
  * every repo on the laptop, so a slug's files stay while its process lives,
@@ -480,8 +470,7 @@ function scan(argv) {
     const mine = namedIn(session.texts, all.map((b) => b.branch))
     return all.map(({ repo, branch, head, unsafe }) => ({ repo, branch, head, unsafe, session: mine.has(branch) }))
   })
-  const orphans = repos.flatMap((r) => orphanDatabases(r).map((name) => ({ repo: r, name })))
-  const report = { servers, checkouts, stashes, branches, olderWorktrees, orphanDatabases: orphans, otherServers }
+  const report = { servers, checkouts, stashes, branches, olderWorktrees, otherServers }
   console.log(JSON.stringify(report, null, 2))
   return 0
 }
@@ -609,22 +598,7 @@ function dropBranch(argv) {
   return kept
 }
 
-function dropDb(argv) {
-  const session = loadSession(argv)
-  const [repo, ...names] = positionals(argv)
-  if (!repo || !names.length) fail('drop-db needs <repo> <name>...')
-  const root = resolve(repo)
-  const orphans = orphanDatabases(root)
-  const others = otherSessions(session.id)
-  let kept = 0
-  for (const name of names) {
-    const blocker = !orphans.includes(name) ? `not an orphaned dev database of ${root}` : others.mentions(name) ? NAMED : null
-    kept += settle(name, blocker, () => attempt('dropdb', ['--if-exists', name]).err, 'dropped')
-  }
-  return kept
-}
-
-const COMMANDS = { scan, stop, remove, prune, 'drop-branch': dropBranch, 'drop-db': dropDb }
+const COMMANDS = { scan, stop, remove, prune, 'drop-branch': dropBranch }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2)
