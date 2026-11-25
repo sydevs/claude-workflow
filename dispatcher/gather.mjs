@@ -260,6 +260,21 @@ async function pollMergeable(gh, { owner, repo, number }, pr) {
   return cur
 }
 
+/**
+ * One commit's author and committer date, or nulls when the read fails. Both
+ * of `gather`'s commit reads want the same two fields behind the same
+ * try/catch: the head's, and the base tip's. What a null means is the caller's
+ * to say.
+ */
+async function commitFacts(gh, { owner, repo }, ref) {
+  try {
+    const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref })
+    return { author: c.author?.login || c.committer?.login || null, committedAt: c.commit?.committer?.date || null }
+  } catch {
+    return { author: null, committedAt: null }
+  }
+}
+
 export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { owner, name } = target.repo
   const repo = name
@@ -375,14 +390,11 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
   s.mergeable = normalized.mergeable
   // When the base last moved, read only for a conflicted PR: a burst of
-  // merges is resolved once, after it. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
-  s.baseMovedAt = null
-  if (s.mergeable === 'CONFLICTING' && pr.base?.ref) {
-    try {
-      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.base.ref })
-      s.baseMovedAt = c.commit?.committer?.date || null
-    } catch { /* unknown: resolve now, as before */ }
-  }
+  // merges is resolved once, after it. Null — the read failed — resolves now,
+  // as before. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+  s.baseMovedAt = s.mergeable === 'CONFLICTING' && pr.base?.ref
+    ? (await commitFacts(gh, { owner, repo }, pr.base.ref)).committedAt
+    : null
   s.reviews = reviewsShaped
   // The ruleset keeps an approval through every push, so `buriedApprovals`
   // reads the commits after each one. Fetched only when one sits below the head.
@@ -401,15 +413,13 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
   // It matters on the owner's PR too, which the bot approves only over a
   // head that is not its own. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
-  s.headAuthor = null
-  s.headCommittedAt = null
-  if (proxy || (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3))) {
-    try {
-      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
-      s.headAuthor = c.author?.login || c.committer?.login || null
-      s.headCommittedAt = c.commit?.committer?.date || null
-    } catch { /* unknown author: the cap holds, and nothing is vouched for */ }
-  }
+  // Null — the read failed — means an unknown author: the cap holds, and
+  // nothing is vouched for.
+  const head = proxy || (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3))
+    ? await commitFacts(gh, { owner, repo }, pr.head.sha)
+    : { author: null, committedAt: null }
+  s.headAuthor = head.author
+  s.headCommittedAt = head.committedAt
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)
