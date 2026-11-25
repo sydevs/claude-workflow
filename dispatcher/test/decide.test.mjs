@@ -1350,3 +1350,36 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(evaluatePr(bot({ reviews: [app], prCommits }), config), 'dismissStale').length, 0)
   })
 }
+
+// ---- a stood-down repair is not asked again by a merge (why: docs/why.md#a-stood-down-repair-is-not-asked-again-by-a-merge)
+
+// sydevs/WeMeditateWeb#321: fix-ci stood down twice, pushing nothing, on a
+// contract check that waited on an open SahajCloud PR. Each merge of main gave
+// the branch a new head with the same check red, and fired it again.
+const stoodDown = { ...endedFixCi('19a284d'), endSha: '19a284d', failing: ['CI'] }
+const newHead = (over = {}) => prSnap({ ci: red, pr: { ...prSnap().pr, head: { sha: 'c0ffee1' } }, record: { fixCi: 1, dispatches: [stoodDown] }, headAuthor: 'sydevs-bot', ...over })
+
+test('a new head with the same red checks after a stood-down repair is not repaired again', () => {
+  const plan = evaluatePr(newHead(), config)
+  assert.deepEqual(types(plan), ['record', 'note'])
+  assert.match(plan[0].patch.handback.reason, /pushed nothing on 19a284d/)
+  assert.deepEqual(types(evaluatePr(newHead({ record: { fixCi: 1, handback: { reason: 'x' }, dispatches: [stoodDown] } }), config)), ['note'], 'a hand-back already given is not written again')
+})
+
+test('a person\'s push, or a different red check, asks again', () => {
+  assert.deepEqual(types(evaluatePr(newHead({ headAuthor: 'Ardnived' }), config)), ['bumpFixCi', 'fire:fix-ci'])
+  assert.deepEqual(types(evaluatePr(newHead({ ci: { ...red, failing: [{ name: 'CI' }, { name: 'Lint' }] } }), config)), ['bumpFixCi', 'fire:fix-ci'])
+})
+
+test('a repair that pushed is not a stand-down', () => {
+  assert.deepEqual(types(evaluatePr(newHead({ record: { fixCi: 1, dispatches: [{ ...stoodDown, endSha: 'beef123' }] } }), config)), ['bumpFixCi', 'fire:fix-ci'])
+  assert.deepEqual(types(evaluatePr(newHead({ record: { fixCi: 1, dispatches: [endedFixCi('19a284d')] } }), config)), ['bumpFixCi', 'fire:fix-ci'], 'an entry from before the change carries no endSha')
+})
+
+// A queue failure leaves `ci.failing` empty, so the pass fired there recorded
+// no names. Two such passes must not match each other on the empty set.
+test('a repair fired where nothing was red does not match a later empty red set', () => {
+  const emptyStand = { ...endedFixCi('19a284d'), endSha: '19a284d', failing: [] }
+  const s = dequeued({ record: { fixCi: 1, queueFail: { sha: 'abc', run }, dispatches: [emptyStand] } })
+  assert.deepEqual(types(evaluatePr(s, config)), ['bumpFixCi', 'fire:fix-ci'])
+})

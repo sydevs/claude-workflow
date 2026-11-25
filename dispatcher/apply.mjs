@@ -216,7 +216,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // not retried blind.
         if (rec.pending?.refused) { rec.pending = null; recordDirty = true }
         if (rec.current) {
-          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done' }]
+          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done', ...(rec.current.handler === 'fix-ci' && snapshot.pr?.head?.sha ? { endSha: snapshot.pr.head.sha } : {}) }]
           rec.current = null
           recordDirty = true
         }
@@ -602,6 +602,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
     // `sha` rides on `current`, so the entry `unlocked` and `timeout` append
     // carries the head this session was fired against. (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
     rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null, sha: record.head?.sha || null }
+    // A repair pass keeps the red checks it was fired on, so a later head
+    // with the same ones is not asked again. (why: docs/why.md#a-stood-down-repair-is-not-asked-again-by-a-merge)
+    if (handler === 'fix-ci' && flags?.mode !== 'deploy') rec.current.failing = (snapshot.ci?.failing || []).map((c) => c.name).sort()
     rec.pending = null
     // A session starting is the machinery taking the item back.
     rec.handback = null
