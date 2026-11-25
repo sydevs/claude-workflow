@@ -83,16 +83,28 @@ async function reviewThreads(gh, { owner, repo, number }) {
   }))
 }
 
+const REVIEW_DECISION = 'query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }'
+
+/**
+ * Whether the ruleset counts a check's approval, or null. Read only once the
+ * check has approved the head: unasked, the answer tells the contract and
+ * translation plans nothing either would act on.
+ */
+async function checkDecision(gh, { owner, repo, number }, approved) {
+  if (!approved) return null
+  const d = await gh.graphql(REVIEW_DECISION, { o: owner, r: repo, n: number })
+  return d.repository.pullRequest.reviewDecision || null
+}
+
 /** A sync PR's head: written by `contracts-sync`, approved by the check, and GitHub's verdict on that. */
 async function contractSyncFacts(gh, { owner, repo, number }, pr, reviews, config) {
   const { data: statuses } = await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })
   const approvedByCheck = (reviews || []).some((r) => r.state === 'APPROVED' && r.commit_id === pr.head.sha && String(r.body || '').includes(CHECK_APPROVAL_MARKER))
-  let decision = null
-  if (approvedByCheck) {
-    const d = await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })
-    decision = d.repository.pullRequest.reviewDecision || null
+  return {
+    attestedAt: contractSyncAttestedAt(statuses, config),
+    approvedByCheck,
+    decision: await checkDecision(gh, { owner, repo, number }, approvedByCheck),
   }
-  return { attestedAt: contractSyncAttestedAt(statuses, config), approvedByCheck, decision }
 }
 
 async function linkedIssues(gh, { owner, repo, number }) {
@@ -382,10 +394,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   s.pr.translationOnly = translation.ok
   s.pr.translationReason = translation.reason || null
   s.pr.translationCheck = translationCheckFacts(reviews, pr.head?.sha, translation.ok)
-  // Whether the ruleset counts the check's approval: GitHub's own reviewDecision.
-  s.pr.translationCheck.decision = s.pr.translationCheck.approvedAtHead
-    ? (await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })).repository.pullRequest.reviewDecision || null
-    : null
+  s.pr.translationCheck.decision = await checkDecision(gh, base, s.pr.translationCheck.approvedAtHead)
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   // The ruleset keeps an approval through every push, so `buriedApprovals`
