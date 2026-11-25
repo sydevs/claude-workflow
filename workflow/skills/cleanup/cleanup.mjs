@@ -194,21 +194,22 @@ function otherSessions(selfId) {
 
 // --- processes -----------------------------------------------------------------
 
-function processEnv(pid) {
-  if (existsSync(`/proc/${pid}/environ`)) {
-    try {
-      return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0')
-    } catch {
-      return []
-    }
+const SESSION_KEY = 'CLAUDE_CODE_SESSION_ID='
+
+/** The Claude session whose environment a process carries, or null. */
+function sessionOf(pid) {
+  const environ = `/proc/${pid}/environ`
+  let env = []
+  try {
+    // macOS has no /proc: `ps -E` appends the environment, own processes only.
+    env = existsSync(environ)
+      ? readFileSync(environ, 'utf8').split('\0')
+      : (run('ps', ['-wwE', '-o', 'command=', '-p', String(pid)]) ?? '').split(/\s+/)
+  } catch {
+    env = []
   }
-  // macOS: `ps -E` appends the environment, for the caller's own processes only.
-  return (run('ps', ['-wwE', '-o', 'command=', '-p', String(pid)]) ?? '').split(/\s+/)
+  return env.find((e) => e.startsWith(SESSION_KEY))?.slice(SESSION_KEY.length) ?? null
 }
-const sessionOf = (pid) =>
-  processEnv(pid)
-    .find((e) => e.startsWith('CLAUDE_CODE_SESSION_ID='))
-    ?.slice('CLAUDE_CODE_SESSION_ID='.length) ?? null
 const parentOf = (pid) => Number(run('ps', ['-o', 'ppid=', '-p', String(pid)])?.trim()) || null
 const commandOf = (pid) => run('ps', ['-ww', '-o', 'command=', '-p', String(pid)])?.trim() ?? ''
 
