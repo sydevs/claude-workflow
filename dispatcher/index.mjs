@@ -15,7 +15,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { resolve as resolveEvent, coalesceTargets, eventLabel } from './resolve.mjs'
+import { resolve as resolveEvent, coalesceTargets, eventLabel, targetLabel } from './resolve.mjs'
 import { gather } from './gather.mjs'
 import { decide } from './decide.mjs'
 import { apply } from './apply.mjs'
@@ -42,7 +42,7 @@ export async function resolveTargets({ github, context, core, config, env = proc
   installRetry(github, config)
   try {
     const targets = coalesceTargets(await resolveEvent({ github, context, config, core }))
-    core.info(`${eventLabel(context)} → ${targets.length} target(s): ${targets.map((t) => `${t.kind}#${t.number}:${t.reasons.map((r) => r.reason).join('+')}`).join(', ') || 'none'}`)
+    core.info(`${eventLabel(context)} → ${targets.length} target(s): ${targets.map(targetLabel).join(', ') || 'none'}`)
     return targets
   } finally {
     spend(core, github, env)
