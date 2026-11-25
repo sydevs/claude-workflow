@@ -16,7 +16,7 @@
 
 import { fire, recheck, ensure, label, syncStatus, commentOnce, markReady, requestReviewer, armAutoMerge, disarmAutoMerge, bumpFixCi, rerunJobs, sentry, relationships, anomaly, targets, releaseLease, unlocked, retry, timeout, note, react, record, hold, transfer, relay } from './actions.mjs'
 import { lower, isBot, respondTo, isHuman, stoodDownFixCi, fullTreatment, nowOf, isQuestion, isRoadmap, stackedPr, threadsWaiting } from './predicates.mjs'
-import { botArmedOwnerPr, contractSyncPlan, loopMayNotMerge, proxyApproves, proxyPlan, stalePlan } from './approvals.mjs'
+import { botArmedOwnerPr, botTranslationOnly, contractSyncPlan, loopMayNotMerge, proxyApproves, proxyPlan, stalePlan, translationPlan, translationStalePlan } from './approvals.mjs'
 import { parseVerb, parseBlock, parseHold } from './verbs.mjs'
 import { pushRoute, relayRefusal } from './relay.mjs'
 import { failedDeploys } from '../workflow/lib/railway.mjs'
@@ -400,21 +400,21 @@ function deployPass(s, config) {
 
 /** The note that a PR under `review.skipWhen` got no critic, and how to force one. */
 function criticSkipped(pr, config, key) {
-  const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
+  const why = pr.contractSyncOnly ? 'this PR only re-syncs a copied contract' : pr.translationOnly ? 'this PR only adds translation keys' : `${pr.changed_files} file(s), ${(pr.additions || 0) + (pr.deletions || 0)} changed line(s), under \`review.skipWhen\``
   return commentOnce(key, `Adversarial review skipped: ${why}. Say \`${config.dispatch.commandPrefix} review\` to force one.`)
 }
 
 function underThreshold(pr, config) {
   const w = config.review?.skipWhen
   if (!w) return false
-  return Boolean(pr.contractSyncOnly) || ((pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines)
+  return Boolean(pr.contractSyncOnly || pr.translationOnly) || ((pr.changed_files ?? Infinity) <= w.maxFiles && (pr.additions ?? 0) + (pr.deletions ?? 0) <= w.maxLines)
 }
 
 // The actions that move an item. Every other action — a label, a comment, a
 // status, an anomaly — only restates where it already is. Turning a merge off,
 // or dismissing the approval that would allow one, moves an item as surely as
 // arming it does.
-const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'proxyApprove', 'dismissProxy', 'dismissStale', 'markReady', 'recheck', 'targets', 'rerunJobs'])
+const MOVES = new Set(['fire', 'armAutoMerge', 'disarmAutoMerge', 'proxyApprove', 'dismissProxy', 'dismissStale', 'checkApprove', 'dismissCheck', 'markReady', 'recheck', 'targets', 'rerunJobs'])
 
 /**
  * A sweep pass over an item last left Awaiting says nothing unless the
@@ -444,7 +444,7 @@ function quietSweep(plan, s, config) {
  */
 export function evaluatePr(s, config) {
   const pr = s.pr
-  const stale = stalePlan(s, config)
+  const stale = stalePlan(s, config).concat(translationStalePlan(s, config))
   if (!pr || pr.state !== 'open' || !botArmedOwnerPr(s, config)) return stale.concat(evaluateOpenPr(s, config))
   return [
     disarmAutoMerge(),
@@ -545,7 +545,9 @@ function evaluateGreenPr(s, config) {
     // A contract-only sync asks nobody yet: the contract check approves one
     // the sync wrote, and `approvals.mjs`'s `contractSyncPlan` asks when it cannot.
     // (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
-    const plan = pr.contractSyncOnly ? [markReady()] : [markReady(), requestReviewer()]
+    // A bot PR of nothing but new translation keys is approved by the
+    // translation check instead. (why: docs/why.md#a-translation-key-is-approved-by-actions)
+    const plan = pr.contractSyncOnly ? [markReady()] : botTranslationOnly(s, config) ? [markReady(), ...translationPlan(s, config)] : [markReady(), requestReviewer()]
     if (mayArm) plan.push(armAutoMerge())
     if (waitsOn) plan.push(commentOnce(`waits-on ${waitsOn}`, `Ready to review with ${waitsOn}. It merges after ${waitsOn} does: auto-merge is armed once that closes, after its contract re-sync lands here.`))
     if (small && !ownReview(s, config)) plan.push(criticSkipped(pr, config, `critic-skipped ${pr.head?.sha}`))
@@ -566,7 +568,7 @@ function evaluateGreenPr(s, config) {
   // The owner's own PR has no one to ask: the bot approves it at this point
   // instead, and `mayArm` leaves the merge to the owner.
   // (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
-  const plan = !member ? contractSyncPlan(s, config) : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
+  const plan = !member ? contractSyncPlan(s, config).concat(translationPlan(s, config)) : proxyApproves(pr.user?.login, config) ? proxyPlan(s, config) : [requestReviewer()]
   // Said once per PR, not per head: this path runs on every pass, and a member
   // pushes to a ready PR. `commentOnce` carries the once-per-PR promise, so no
   // further guard is needed. (why: docs/why.md#the-critic-skips-small-prs)
@@ -1112,7 +1114,8 @@ function route(target, s, config) {
     case 'pull_request.ready_for_review':
       // A member's ready PR asks for its reviewer after the critic, in evaluatePr.
       // A contract-only sync asks nobody here: `approvals.mjs`'s `contractSyncPlan` does, when the check cannot.
-      return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly ? [requestReviewer()] : []).concat(evaluatePr(s, config))
+      // Nor does a translation-only one: `translationPlan` does.
+      return (isBot(s.pr?.user?.login, config) && !s.pr?.contractSyncOnly && !botTranslationOnly(s, config) ? [requestReviewer()] : []).concat(evaluatePr(s, config))
     case 'pull_request.synchronize':
       // A person's push is the answer a hand-back waits for.
       if (!facts.pusherIsBot) plan.push(...clearHandback(s))

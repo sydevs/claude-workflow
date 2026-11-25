@@ -9,7 +9,8 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, fullTreatment, dispatcherLogins, restLogin, stoodDownFixCi } from './predicates.mjs'
-import { proxyApproves } from './approvals.mjs'
+import { checkFacts, proxyApproves } from './approvals.mjs'
+import { TRANSLATION_APPROVAL_MARKER, translationFacts, translationRules } from './translations.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
@@ -82,16 +83,31 @@ async function reviewThreads(gh, { owner, repo, number }) {
   }))
 }
 
+const REVIEW_DECISION = 'query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }'
+
+/**
+ * Whether the ruleset counts a check's approval, or null. Read only once the
+ * check has approved the head: unasked, the answer tells the contract and
+ * translation plans nothing either would act on.
+ */
+async function checkDecision(gh, { owner, repo, number }, approved) {
+  if (!approved) return null
+  const d = await gh.graphql(REVIEW_DECISION, { o: owner, r: repo, n: number })
+  return d.repository.pullRequest.reviewDecision || null
+}
+
 /** A sync PR's head: written by `contracts-sync`, approved by the check, and GitHub's verdict on that. */
 async function contractSyncFacts(gh, { owner, repo, number }, pr, reviews, config) {
   const { data: statuses } = await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })
-  const approvedByCheck = (reviews || []).some((r) => r.state === 'APPROVED' && r.commit_id === pr.head.sha && String(r.body || '').includes(CHECK_APPROVAL_MARKER))
-  let decision = null
-  if (approvedByCheck) {
-    const d = await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })
-    decision = d.repository.pullRequest.reviewDecision || null
+  // `ok` is true: a sync PR that outgrew the copy is `contractSyncPlan`'s to
+  // refuse, and the verify job withdraws its own approvals, so neither
+  // `staleIds` nor a gated `approvedAtHead` has a reader here.
+  const { approvedAtHead: approvedByCheck } = checkFacts(reviews, pr.head.sha, CHECK_APPROVAL_MARKER, true)
+  return {
+    attestedAt: contractSyncAttestedAt(statuses, config),
+    approvedByCheck,
+    decision: await checkDecision(gh, { owner, repo, number }, approvedByCheck),
   }
-  return { attestedAt: contractSyncAttestedAt(statuses, config), approvedByCheck, decision }
 }
 
 async function linkedIssues(gh, { owner, repo, number }) {
@@ -388,6 +404,15 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // the ruleset counts its approval: GitHub's own reviewDecision, read only
   // once the check has approved. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
+  // A PR of nothing but new translation keys needs no critic, and a bot's own
+  // is approved by Actions. Contents are read only when every path qualifies.
+  // (why: docs/why.md#a-translation-key-is-approved-by-actions)
+  const translation = !syncBranch && pr.state === 'open' && translationRules(config, repo)
+    ? await translationFacts(gh, { owner, repo }, pr, config) : { ok: false }
+  s.pr.translationOnly = translation.ok
+  s.pr.translationReason = translation.reason || null
+  s.pr.translationCheck = checkFacts(reviews, pr.head?.sha, TRANSLATION_APPROVAL_MARKER, translation.ok)
+  s.pr.translationCheck.decision = await checkDecision(gh, base, s.pr.translationCheck.approvedAtHead)
   s.mergeable = normalized.mergeable
   // When the base last moved, read only for a conflicted PR: a burst of
   // merges is resolved once, after it. Null — the read failed — resolves now,

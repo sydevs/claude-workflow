@@ -13,6 +13,7 @@ import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isHuman, lower, dispatcherLogins } from './predicates.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
+import { TRANSLATION_APPROVAL_MARKER } from './translations.mjs'
 
 /**
  * Post an advisory once. `bot` is `identity.dispatcherLogins`, and only one of
@@ -105,6 +106,16 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   // machinery cannot take, so it hands that step to a human: the plan carries
   // on, the item is handed back (Awaiting), and the journal says which step
   // and why. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+
+  // The one way this file reaches the REST API with `ACTIONS_TOKEN`: the PAT
+  // cannot re-run a job or approve as `github-actions[bot]`. The path is under
+  // `/repos/{owner}/{repo}`, and the Response comes back unexamined, because
+  // the two callers disagree on what a refusal means — a re-run logs it, an
+  // approval throws.
+  const actionsFetch = (path, init = {}) => (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}${path}`, {
+    ...init,
+    headers: { authorization: `Bearer ${env?.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers },
+  })
   const handedOver = []
   const handOver = async (what, fn) => {
     try { await fn(); return true } catch (e) {
@@ -239,10 +250,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (dryRun) break
         if (!env?.ACTIONS_TOKEN) { log('no ACTIONS_TOKEN — nothing re-run'); break }
         for (const c of a.checks) {
-          const res = await (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}/actions/jobs/${c.jobId}/rerun`, {
-            method: 'POST',
-            headers: { authorization: `Bearer ${env.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
-          })
+          const res = await actionsFetch(`/actions/jobs/${c.jobId}/rerun`, { method: 'POST' })
           if (!res.ok) log(`re-run of ${c.name} refused (${res.status})`)
         }
         break
@@ -325,6 +333,41 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
             ...args, pull_number: t.number, review_id: id, message,
           }))
+        }
+        break
+      }
+      // A bot PR that only adds translation keys, approved with the calling
+      // repo's own token as github-actions[bot]: the PAT is the author, whose
+      // approval GitHub refuses. That token reaches only the repo whose event
+      // this is, so a target elsewhere waits for its own repo's next event.
+      // (why: docs/why.md#a-translation-key-is-approved-by-actions)
+      case 'checkApprove':
+      case 'dismissCheck': {
+        const here = env?.GITHUB_REPOSITORY && env.GITHUB_REPOSITORY.toLowerCase() === `${t.repo.owner}/${t.repo.name}`.toLowerCase()
+        if (!here) { log(`${a.type}: not this repo's event — left for its own`); break }
+        if (!env?.ACTIONS_TOKEN) { log(`${a.type}: no ACTIONS_TOKEN — nothing done`); break }
+        const call = async (method, path, body) => {
+          const res = await actionsFetch(`/pulls/${t.number}/reviews${path}`, { method, body: JSON.stringify(body) })
+          if (!res.ok) throw Object.assign(new Error(`${res.status} ${await res.text().catch(() => '')}`), { status: res.status })
+        }
+        if (a.type === 'checkApprove') {
+          if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
+          // `markReady` is planned beside this and mutates the snapshot when it
+          // lands, so a draft here is one whose mark-ready was denied. The
+          // contract check refuses a draft outright for the same reason.
+          if (snapshot.pr?.draft) { log('still a draft — no approval'); break }
+          log(`translation check: approve ${String(a.sha).slice(0, 7)}`)
+          if (dryRun) break
+          await handOver('approve a translation-only PR', () => call('POST', '', {
+            commit_id: a.sha, event: 'APPROVE',
+            body: `${TRANSLATION_APPROVAL_MARKER}\nThis PR only adds translation keys: every file is a declared translation schema, seed or generated type, and every change adds a key. Approved by the translation check; the merge queue still runs CI.`,
+          }))
+          break
+        }
+        for (const id of a.ids) {
+          log(`translation check: dismiss its approval ${id}`)
+          if (dryRun) continue
+          await handOver('dismiss the translation check\'s approval', () => call('PUT', `/${id}/dismissals`, { message: 'The head moved to a commit the translation check has not vouched for.', event: 'DISMISS' }))
         }
         break
       }

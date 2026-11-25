@@ -14,7 +14,11 @@
 # that never reports blocks the merge forever, so `paths-ignore` is not an
 # option. A job skipped by `if` reports SKIPPED, which a ruleset accepts.
 #
-# why: sydevs/claude-workflow/docs/why.md#a-docs-only-change-takes-the-light-lane
+# `narrow` is a third lane between them: a change inside its regex (and
+# `light`) still runs the caller's cheap checks, but only its targeted tests.
+#
+# why: sydevs/claude-workflow/docs/why.md#a-docs-only-change-takes-the-light-lane,
+#      sydevs/claude-workflow/docs/why.md#a-translation-key-is-approved-by-actions
 name: Change scope
 description: Output full=false when a PR changes only files no build, lint or test reads.
 
@@ -23,11 +27,18 @@ inputs:
     description: Extended regex matching a path that never needs the full lane. Replaces the default.
     required: false
     default: '^\.claude/|^\.vscode/'
+  narrow:
+    description: Extended regex matching a path a targeted lane covers, such as translation files. Empty, the default, means no narrow lane.
+    required: false
+    default: ''
 
 outputs:
   full:
     description: "'true' when the full lane must run, 'false' for a light-only change."
     value: ${{ steps.scope.outputs.full }}
+  narrow:
+    description: "'true' when every changed file matches `light` or `narrow`, and one matches `narrow`: the caller runs its targeted lane in place of its full tests. Always 'false' when `full` is 'false'."
+    value: ${{ steps.scope.outputs.narrow }}
 
 runs:
   using: composite
@@ -36,5 +47,6 @@ runs:
       shell: bash
       env:
         LIGHT: ${{ inputs.light }}
+        NARROW: ${{ inputs.narrow }}
         BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       run: bash "$GITHUB_ACTION_PATH/scope.sh"

@@ -348,6 +348,23 @@
       }
     }
   },
+  "translationOnly": {
+    "$comment": "Per repo, the files a new translation key touches. A PR changing only these, and only by adding keys (dispatcher/translations.mjs), skips the critic, and a bot's own is approved by Actions (why: docs/why.md#a-translation-key-is-approved-by-actions).",
+    "maxFiles": 40,
+    "repos": {
+      "SahajCloud": {
+        "schemas": [
+          "src/globals/*Translations/translationsSchema.json"
+        ],
+        "seeds": [
+          "seeds/*-translations/data.*.json"
+        ],
+        "generated": [
+          "src/payload-types.ts"
+        ]
+      }
+    }
+  },
   "issueFields": {
     "$comment": "Native org issue fields: readable and writable, not searchable. A PUT replaces every field (format-ticket/SKILL.md).",
     "priority": {

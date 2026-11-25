@@ -103,6 +103,10 @@ noted on the PR and fires nothing. Each product repo's CI also calls the shared
 contract consumer's calls `actions/contract-check`, which fails a PR only for a copied contract it
 changes to something its source does not produce.
 
+**A PR of nothing but new translation keys** (`translationOnly` in `loop-config.json`) skips the
+critic, and a bot's own is approved by Actions, as a contract sync is. `actions/change-scope`'s
+`narrow` lane lets its CI run only the targeted tests.
+
 ## Skills you run
 
 | Skill | Use it to | Example |
