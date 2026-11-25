@@ -2143,6 +2143,22 @@ with a wider blast radius. So the config is checked where drift on `main` is alr
 audit, whose fix is a `loop-config.json` PR. Naming the old and the new path together was rejected:
 `git add` on an absent path exits 128, so `contracts-sync` would fail its job rather than go quiet.
 
+## A stood-down repair is not asked again by a merge
+
+A `fix-ci` that ends on the head it was fired on pushed nothing: it stood down and said why, and
+the PR is handed back. A push to a new head used to clear that, and most new heads were not
+anyone's answer. A merge of the base or another session's commit gave the branch a new head, the
+same check stayed red, and `fix-ci` ran again to reach the same verdict. From 2026-11-22 to 25,
+12 of 25 `fix-ci` sessions stood down. Most of them hit a contract check that waited on an open
+producer PR, such as sydevs/WeMeditateWeb#321 twice and #337.
+
+So a repair pass records the red check names it was fired on, and its unlock records the head it
+ended on. While the last pass stood down, a new head with the same red checks keeps the hand-back.
+A person's push, or a different set of red checks, asks again. A pass that timed out records no end
+head, and neither does an entry from before this rule, so neither counts as a stand-down. A check
+name is a job, not a failure, so a bot commit that breaks the same job a new way is missed. That
+costs a hand-back the person already holds, never a merge.
+
 ## A push from a person resets the repair count
 
 The cap comment promised *"A mention or a push from you starts me again"*, but `rec.fixCi` grew at

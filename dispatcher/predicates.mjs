@@ -71,6 +71,16 @@ export function isBot(login, config) {
 export function respondTo(login, config) {
   return (config.assignment?.respondTo || []).some((l) => lower(l) === lower(login))
 }
+/**
+ * The last repair pass, when it pushed nothing: the head it ended on is the
+ * head it was fired on. Only such a pass carries the red checks it saw.
+ * (why: docs/why.md#a-stood-down-repair-is-not-asked-again-by-a-merge)
+ */
+export function stoodDownFixCi(record) {
+  const last = [...(record?.dispatches || [])].reverse().find((d) => d?.handler === 'fix-ci' && d.flags?.mode !== 'deploy' && d.outcome)
+  return last?.sha && last.endSha === last.sha && Array.isArray(last.failing) ? last : null
+}
+
 export function isHuman(login, config) {
   return respondTo(login, config) && lower(login) !== 'copilot'
 }
