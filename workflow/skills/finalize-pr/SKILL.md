@@ -101,9 +101,9 @@ claude-workflow checkout's copy where you have one.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
 - **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify`, and run
-  step 2's review as usual. The dispatcher skips the critic on the same threshold, so dropping both
-  leaves the PR unread by any agent. Read the diff of every `review:` path yourself for
-  simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
+  step 2's review at `review.selfReview.tinyLevel`. The dispatcher skips the critic on the same
+  threshold, so step 2 is the only agent that reads this diff. Read the diff of every `review:`
+  path yourself for simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
   and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
 - **`FULL`**: start steps 1 and 2 together. Run step 3's trigger check, then invoke `/simplify`.
   Its agents run in the background, so invoke step 2's review straight after, with the branch as
@@ -128,17 +128,19 @@ altitude. It does not hunt for bugs.
 
 ```
 /pr-review-toolkit:review-pr all        # only where the plugin is installed
-/code-review high                       # otherwise, plus step 1's /simplify pass
+/code-review <level>                    # otherwise, plus step 1's /simplify pass
 ```
+
+`<level>` is `review.selfReview.level`, or its `tinyLevel` on a `TINY` diff.
+(why: docs/why.md#the-self-review-runs-at-medium)
 
 The toolkit runs six specialist agents over the branch diff in their own contexts, with confidence
 scores: `code-reviewer`, `pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`,
 `comment-analyzer`, `code-simplifier`.
 
 **No routine has it, so check before you reach for it** — `ListPlugins` answers, and no routine has
-answered yes in three weeks. There the pass is `/code-review high` beside step 1's `/simplify`,
-which is what every run converged on unaided. Say in the report which one ran.
-(why: docs/why.md#a-skill-can-name-a-plugin-no-routine-has)
+answered yes in three weeks. There the pass is `/code-review <level>` beside step 1's `/simplify`.
+Say in the report which one ran. (why: docs/why.md#a-skill-can-name-a-plugin-no-routine-has)
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 
@@ -152,8 +154,7 @@ record dismissals with one-line reasons.
 **Treat a clean report with little or no reading as *not yet reviewed***: re-run that lens, or
 read the highest-risk paths yourself. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
-For a deeper pass, the user can run the billed `/code-review ultra` themselves — Claude cannot
-launch it.
+For a deeper pass, the user can run `/code-review max` themselves — Claude never picks that level.
 
 Then run the deterministic comment check, which the six lenses do not cover — it reads only the
 comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:

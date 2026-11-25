@@ -8,7 +8,7 @@
 import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../workflow/lib/merge-gate.mjs'
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
-import { isBot, fullTreatment, dispatcherLogins, restLogin } from './predicates.mjs'
+import { isBot, fullTreatment, dispatcherLogins, restLogin, stoodDownFixCi } from './predicates.mjs'
 import { proxyApproves } from './approvals.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
@@ -413,9 +413,10 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
   // It matters on the owner's PR too, which the bot approves only over a
   // head that is not its own. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
+  // A stood-down repair asks again too: its hand-back names the pusher.
   // Null — the read failed — means an unknown author: the cap holds, and
   // nothing is vouched for.
-  const head = proxy || (failingNames.size && (s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3))
+  const head = proxy || (failingNames.size && ((s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3) || stoodDownFixCi(s.record)))
     ? await commitFacts(gh, { owner, repo }, pr.head.sha)
     : { author: null, committedAt: null }
   s.headAuthor = head.author

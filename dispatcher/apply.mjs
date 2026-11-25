@@ -7,7 +7,7 @@
 import { saveRecord } from './record.mjs'
 import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
-import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
+import { buildRecord, fireRoutine, routineFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isHuman, lower, dispatcherLogins } from './predicates.mjs'
@@ -215,7 +215,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         // not retried blind.
         if (rec.pending?.refused) { rec.pending = null; recordDirty = true }
         if (rec.current) {
-          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done' }]
+          rec.dispatches = [...(rec.dispatches || []), { ...rec.current, outcome: 'done', ...(rec.current.handler === 'fix-ci' && snapshot.pr?.head?.sha ? { endSha: snapshot.pr.head.sha } : {}) }]
           rec.current = null
           recordDirty = true
         }
@@ -519,8 +519,8 @@ async function syncStatus({ gh, config, t, snapshot, rec, nodeId, now, dryRun, l
 }
 
 async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi = false }) {
-  const routineId = routineIdFor(t.repo.name, config, env)
-  const token = tokenFor(t.repo.name, config, env)
+  const { routineId, token, lane } = routineFor(t.repo.name, handler, config, env)
+  if (lane) log(`${handler} fires on the ${lane} lane`)
   const L = config.labels
   if (!routineId || !token) {
     log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)
@@ -566,6 +566,9 @@ async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, d
     // `sha` rides on `current`, so the entry `unlocked` and `timeout` append
     // carries the head this session was fired against. (why: docs/why.md#a-fix-ci-fire-is-keyed-to-its-head)
     rec.current = { id: record.id, handler, flags, attempt, firedAt: record.firedAt, deadline: record.deadline, session: null, url: null, sha: record.head?.sha || null }
+    // A repair pass keeps the red checks it was fired on, so a later head
+    // with the same ones is not asked again. (why: docs/why.md#a-stood-down-repair-is-not-asked-again-by-a-merge)
+    if (handler === 'fix-ci' && flags?.mode !== 'deploy') rec.current.failing = (snapshot.ci?.failing || []).map((c) => c.name).sort()
     rec.pending = null
     // A session starting is the machinery taking the item back.
     rec.handback = null

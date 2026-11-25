@@ -4,7 +4,7 @@
  *
  * ## Why this exists
  *
- * finalize-pr runs `/simplify`, `/code-review high` and, on a trigger,
+ * finalize-pr runs `/simplify`, `/code-review` and, on a trigger,
  * `/security-review` over the branch diff. Two things about that diff are
  * mechanical, so a script owns them rather than each run's prose:
  *

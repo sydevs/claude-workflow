@@ -364,7 +364,7 @@ read back unexpectedly. The first suspicion is always a corrupted edit, not a se
 
 ## The reviews run while simplify does
 
-`/simplify`, `/code-review high` and `/security-review` each fan out reviewer agents, and they used
+`/simplify`, `/code-review` and `/security-review` each fan out reviewer agents, and they used
 to run one after another. `/code-review high` alone took a median 6 minutes over 11 local runs,
 42 at worst, and bot PRs spent 20 to 45 minutes between the last implementation commit and the
 PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
@@ -376,8 +376,8 @@ reads the worktree, which `/simplify` is editing, so it runs once, after that co
 
 ## A tiny diff gets one read
 
-A `/simplify` fan-out over a two-file, forty-line diff costs minutes and adds little that step 2's
-review and one careful read do not already find. The threshold is `review.skipWhen`, the size at
+A `/simplify` fan-out over a diff under `review.skipWhen` costs minutes and adds little that
+step 2's review and one careful read do not already find. That threshold is the size at
 which the critic already trusts a PR, so one value moves both: keep it small. That overlap is why
 the tier skips `/simplify` and nothing else. The two counts differ in one way — finalize-pr counts
 only the paths kept in review, while the dispatcher counts GitHub's totals, skipped snapshots
@@ -1193,6 +1193,21 @@ The cost is one model and tool grant per repo: a short `write-ticket` answer run
 as `implement`, five to eight turns. "Never pushes" is a skill rule now; the lock label and the
 dispatcher's actor filter were always the controls that mattered.
 
+## A mechanical handler runs on a lighter model
+
+[One routine per repo](#one-routine-per-repo-one-prompt) put every handler on Opus. The usage limit
+on the routines account then became the loop's throttle. From 2026-11-22 to 25, `resolve-conflicts`
+and `fix-ci` were 86 of 214 sessions. Both are bounded jobs: a merge of the base, or one red check
+against a lean gate. Both already hand back what they cannot settle (a semantic conflict, a red
+check no pass can fix), so a weaker model costs a hand-back, never a guess.
+
+A handler's `model` names a lane routine of its own, keyed like a repo, so it needs no new
+mechanism and no second key: `ROUTINE_ID_<MODEL>`, `ROUTINE_TOKEN_<MODEL>`,
+`dispatch.routines[<model>]`. One lane routine serves
+every repo, so it clones all five. A lane with no id or token falls back to the repo's routine, so
+the config can merge before the routine exists, and removing the secret is the rollback. Review,
+implementation and address-review stay on Opus: they are where the judgement is.
+
 ## A closed item is nobody's turn
 
 sydevs/SahajCloud#747 merged while a session held the lock. Two minutes later the unlock path
@@ -1204,12 +1219,18 @@ and a closed PR clears `awaiting` and `stuck` instead of gaining them.
 ## The critic skips small PRs
 
 An adversarial review costs an Opus session, a CI cycle, and a round of the reviewer's attention on
-the rebuttals, and a two-file, twenty-line PR rarely has the shape problem the critic exists to
-find. Below `review.skipWhen` the dispatcher marks the PR ready at once and notes the skip.
+the rebuttals, and a diff under `review.skipWhen` rarely has the shape problem the critic exists
+to find. There the dispatcher marks the PR ready at once and notes the skip.
 `@sydevs-bot review` forces a review at any size. A small member PR gets the same note when its
 reviewer is asked, once per PR rather than per head: that path runs on every pass of a ready PR the
 member keeps pushing to. A member who requested the reviewer themselves still gets it: that is the
 case it exists for, and `commentOnce` keeps it to one.
+
+On 2026-11-25 the threshold went from 2 files and 40 lines to 3 and 100, while the routines
+account kept hitting its usage limit. Of the 45 PRs the critic read from 2026-11-22 to 25, two
+fall under the new threshold. Four files and 120 lines would have caught five, but it would also
+make SahajCloud#1216 tiny. That PR is a four-file, 91-line migration, the review-scope fixture
+that must stay FULL, and it would have skipped the critic.
 
 ## There is no WIP cap
 
@@ -1523,6 +1544,22 @@ commits behind. So step 6 fetches first, and `FETCH_HEAD` is no recipe (a later 
 need that fetch via `base-ref.mjs`: on a tree equal to `origin/main`, `--base main` read 25 skill
 files behind. **The install is deferred** to the first node command: 11 read-only sessions skipped
 it, but three could not then settle a claim and one curled `unpkg`.
+
+## The self-review runs at medium
+
+Every PR over `review.skipWhen` is reviewed twice: the author's session runs `/code-review` in
+step 2 of `finalize-pr`, then `review-pr` runs as a fresh session, the critic, that never saw the
+author's reasoning. At `high` the first pass fans out the most reviewer agents of any step in an
+`implement` run, and its findings overlap the critic's. The routines account kept hitting its
+usage limit in 2026-11, so the self-review dropped to `medium`. What it gives up is
+lower-confidence findings, which the critic either repeats or rightly drops. The critic stays at
+max effort: a reader not anchored on the author's view finds what the author missed.
+
+A `TINY` diff keeps `high`. The dispatcher skips the critic at the same threshold, so step 2 is
+the only agent that reads it, and no second pass is left to repeat what `medium` dropped.
+
+Both levels live in `review.selfReview` because the first attempt typed one into four places and
+left one of them reading `high`.
 
 ## A skill can name a plugin no routine has
 
@@ -2111,6 +2148,31 @@ an absent path would redden every PR there until the config caught up — the sh
 with a wider blast radius. So the config is checked where drift on `main` is already fixed, in the
 audit, whose fix is a `loop-config.json` PR. Naming the old and the new path together was rejected:
 `git add` on an absent path exits 128, so `contracts-sync` would fail its job rather than go quiet.
+
+## The config comments are one line
+
+Every dispatch reads `loop-config.json` before it acts, 25 to 40 times a day. By 2026-11-25 its
+`$comment` fields had grown to 8,903 bytes of a 19,599-byte file. Each one restated rules and
+history that already lived in a skill or here, so each is now one line naming what its values
+mean. A page mirroring the file key by key was rejected: it is a fourth home for every fact,
+which [documentation.md](documentation.md) forbids. That saves 5,977 bytes, about 1,500 tokens,
+on every run.
+
+## A stood-down repair is not asked again by a merge
+
+A `fix-ci` that ends on the head it was fired on pushed nothing: it stood down and said why, and
+the PR is handed back. A push to a new head used to clear that, and most new heads were not
+anyone's answer. A merge of the base or another session's commit gave the branch a new head, the
+same check stayed red, and `fix-ci` ran again to reach the same verdict. From 2026-11-22 to 25,
+12 of 25 `fix-ci` sessions stood down. Most of them hit a contract check that waited on an open
+producer PR, such as sydevs/WeMeditateWeb#321 twice and #337.
+
+So a repair pass records the red check names it was fired on, and its unlock records the head it
+ended on. While the last pass stood down, a new head with the same red checks keeps the hand-back.
+A person's push, or a different set of red checks, asks again. A pass that timed out records no end
+head, and neither does an entry from before this rule, so neither counts as a stand-down. A check
+name is a job, not a failure, so a bot commit that breaks the same job a new way is missed. That
+costs a hand-back the person already holds, never a merge.
 
 ## A push from a person resets the repair count
 
