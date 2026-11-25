@@ -107,6 +107,34 @@ export function botArmedOwnerPr(s, config) {
 }
 
 /**
+ * What a check's own approvals say about one head, from the REST reviews.
+ * One reader for the contract check and the translation check: each owns a
+ * marker, and `ok` is whether the PR still qualifies for that check. `ever`
+ * is whether the check ever approved a head of this PR, kept once dismissed,
+ * because a PR that outgrows a check needs its reviewer asked. `staleIds` are
+ * the approvals to withdraw: an earlier head's, or any at all once the PR
+ * outgrew the check. Pure.
+ */
+export function checkFacts(reviews, headSha, marker, ok) {
+  const own = (reviews || []).filter((r) => String(r.body || '').includes(marker))
+  const standing = own.filter((r) => r.state === 'APPROVED')
+  return {
+    ever: own.length > 0,
+    approvedAtHead: Boolean(ok) && standing.some((r) => r.commit_id === headSha),
+    staleIds: standing.filter((r) => !ok || r.commit_id !== headSha).map((r) => r.id).filter(Boolean),
+  }
+}
+
+/**
+ * What a check owes a PR it cannot carry: the reviewer, and one comment
+ * saying why. Both checks word it the same way, and `key` is what keeps a
+ * later push from repeating it.
+ */
+export function checkRefusal(key, why) {
+  return [requestReviewer(), commentOnce(key, `Not approved automatically: ${why}. It needs a person's review.`)]
+}
+
+/**
  * A sync PR asks its reviewer once the contract check cannot carry it: the PR
  * changes more than the copy, `contracts-sync` did not write its head (a hand
  * edit, or a fix-ci push), the ruleset does not count the check's approval,
@@ -126,8 +154,7 @@ export function contractSyncPlan(s, config) {
     : null
   if (!why) return []
   // Outgrowing the copy is said once per PR: each fix-ci push would repeat it.
-  const key = s.pr.contractSyncOnly ? `contract-check ${s.pr.head?.sha}` : 'contract-check outgrew'
-  return [requestReviewer(), commentOnce(key, `Not approved automatically: ${why}. It needs a person's review.`)]
+  return checkRefusal(s.pr.contractSyncOnly ? `contract-check ${s.pr.head?.sha}` : 'contract-check outgrew', why)
 }
 
 /** A bot PR the translation check carries: nothing but new keys, by the loop's own login. */
@@ -156,12 +183,12 @@ export function translationStalePlan(s, config) {
 export function translationPlan(s, config) {
   const c = s.pr?.translationCheck
   if (!s.pr?.translationOnly) {
-    return c?.ever ? [requestReviewer(), commentOnce('translation-check outgrew', `Not approved automatically: ${s.pr?.translationReason || 'it changes more than new translation keys'}. It needs a person's review.`)] : []
+    return c?.ever ? checkRefusal('translation-check outgrew', s.pr?.translationReason || 'it changes more than new translation keys') : []
   }
   if (!isBot(s.pr.user?.login, config)) return []
   if (!c?.approvedAtHead) return [checkApprove(s.pr.head?.sha)]
   if (c.decision && c.decision !== 'APPROVED') {
-    return [requestReviewer(), commentOnce(`translation-check ${s.pr.head?.sha}`, "Not approved automatically: the ruleset does not count the translation check's approval. It needs a person's review.")]
+    return checkRefusal(`translation-check ${s.pr.head?.sha}`, "the ruleset does not count the translation check's approval")
   }
   return []
 }

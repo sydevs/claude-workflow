@@ -9,8 +9,8 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, fullTreatment, dispatcherLogins, restLogin, stoodDownFixCi } from './predicates.mjs'
-import { proxyApproves } from './approvals.mjs'
-import { translationCheckFacts, translationFacts, translationRules } from './translations.mjs'
+import { checkFacts, proxyApproves } from './approvals.mjs'
+import { TRANSLATION_APPROVAL_MARKER, translationFacts, translationRules } from './translations.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
@@ -99,7 +99,10 @@ async function checkDecision(gh, { owner, repo, number }, approved) {
 /** A sync PR's head: written by `contracts-sync`, approved by the check, and GitHub's verdict on that. */
 async function contractSyncFacts(gh, { owner, repo, number }, pr, reviews, config) {
   const { data: statuses } = await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })
-  const approvedByCheck = (reviews || []).some((r) => r.state === 'APPROVED' && r.commit_id === pr.head.sha && String(r.body || '').includes(CHECK_APPROVAL_MARKER))
+  // `ok` is true: a sync PR that outgrew the copy is `contractSyncPlan`'s to
+  // refuse, and the verify job withdraws its own approvals, so neither
+  // `staleIds` nor a gated `approvedAtHead` has a reader here.
+  const { approvedAtHead: approvedByCheck } = checkFacts(reviews, pr.head.sha, CHECK_APPROVAL_MARKER, true)
   return {
     attestedAt: contractSyncAttestedAt(statuses, config),
     approvedByCheck,
@@ -393,7 +396,7 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
     ? await translationFacts(gh, { owner, repo }, pr, config) : { ok: false }
   s.pr.translationOnly = translation.ok
   s.pr.translationReason = translation.reason || null
-  s.pr.translationCheck = translationCheckFacts(reviews, pr.head?.sha, translation.ok)
+  s.pr.translationCheck = checkFacts(reviews, pr.head?.sha, TRANSLATION_APPROVAL_MARKER, translation.ok)
   s.pr.translationCheck.decision = await checkDecision(gh, base, s.pr.translationCheck.approvedAtHead)
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped

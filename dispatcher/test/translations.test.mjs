@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { TRANSLATION_APPROVAL_MARKER, generatedAddsOnly, schemaAdds, seedAdds, translationCheckFacts, translationFacts, translationVerdict } from '../translations.mjs'
+import { TRANSLATION_APPROVAL_MARKER, generatedAddsOnly, schemaAdds, seedAdds, translationFacts, translationVerdict } from '../translations.mjs'
+import { checkFacts } from '../approvals.mjs'
 import { evaluatePr } from '../decide.mjs'
 import { apply } from '../apply.mjs'
 
@@ -142,9 +143,12 @@ test('translationFacts reads only when every path qualifies, from the merge base
 test("the check's facts: its approval at the head, its stale ones, and whether it ever approved", () => {
   const mine = (id, commit_id, state = 'APPROVED') => ({ id, commit_id, state, body: `${TRANSLATION_APPROVAL_MARKER}\nok` })
   const person = { id: 9, commit_id: 'old', state: 'APPROVED', body: 'lgtm' }
-  assert.deepEqual(translationCheckFacts([mine(1, 'old'), mine(2, 'h'), person], 'h', true), { ever: true, approvedAtHead: true, staleIds: [1] })
-  assert.deepEqual(translationCheckFacts([mine(2, 'h')], 'h', false), { ever: true, approvedAtHead: false, staleIds: [2] }, 'outgrown: even the head approval goes')
-  assert.deepEqual(translationCheckFacts([mine(1, 'old', 'DISMISSED')], 'h', true), { ever: true, approvedAtHead: false, staleIds: [] })
+  const facts = (reviews, ok) => checkFacts(reviews, 'h', TRANSLATION_APPROVAL_MARKER, ok)
+  assert.deepEqual(facts([mine(1, 'old'), mine(2, 'h'), person], true), { ever: true, approvedAtHead: true, staleIds: [1] })
+  assert.deepEqual(facts([mine(2, 'h')], false), { ever: true, approvedAtHead: false, staleIds: [2] }, 'outgrown: even the head approval goes')
+  assert.deepEqual(facts([mine(1, 'old', 'DISMISSED')], true), { ever: true, approvedAtHead: false, staleIds: [] })
+  // Another check's marker is another check's business.
+  assert.deepEqual(facts([{ id: 3, commit_id: 'h', state: 'APPROVED', body: '<!-- sydevs-contract-check -->\nok' }], true), { ever: false, approvedAtHead: false, staleIds: [] })
 })
 
 const snap = (pr = {}, rest = {}) => ({

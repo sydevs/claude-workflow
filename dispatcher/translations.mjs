@@ -176,19 +176,3 @@ export async function translationFacts(gh, { owner, repo }, pr, config) {
     return { ok: false, reason: `unread: ${e?.status || ''} ${String(e?.message || '').slice(0, 80)}`.trim() }
   }
 }
-
-/**
- * What the check's own reviews say about this head, from the REST reviews.
- * `ever` is whether it has approved any head of this PR, kept even once
- * dismissed: a PR that outgrows the check then needs its reviewer asked.
- */
-export function translationCheckFacts(reviews, headSha, translationOnly) {
-  const own = (reviews || []).filter((r) => String(r.body || '').includes(TRANSLATION_APPROVAL_MARKER))
-  const standing = own.filter((r) => r.state === 'APPROVED')
-  return {
-    ever: own.length > 0,
-    approvedAtHead: translationOnly && standing.some((r) => r.commit_id === headSha),
-    // Its approval of an earlier head, or of a head that is no longer only keys.
-    staleIds: standing.filter((r) => !translationOnly || r.commit_id !== headSha).map((r) => r.id).filter(Boolean),
-  }
-}
