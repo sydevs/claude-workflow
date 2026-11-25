@@ -1193,6 +1193,21 @@ The cost is one model and tool grant per repo: a short `write-ticket` answer run
 as `implement`, five to eight turns. "Never pushes" is a skill rule now; the lock label and the
 dispatcher's actor filter were always the controls that mattered.
 
+## A mechanical handler runs on a lighter model
+
+[One routine per repo](#one-routine-per-repo-one-prompt) put every handler on Opus. The usage limit
+on the routines account then became the loop's throttle. From 2026-11-22 to 25, `resolve-conflicts`
+and `fix-ci` were 86 of 214 sessions. Both are bounded jobs: a merge of the base, or one red check
+against a lean gate. Both already hand back what they cannot settle (a semantic conflict, a red
+check no pass can fix), so a weaker model costs a hand-back, never a guess.
+
+A handler's `model` names a lane routine of its own, keyed like a repo, so it needs no new
+mechanism and no second key: `ROUTINE_ID_<MODEL>`, `ROUTINE_TOKEN_<MODEL>`,
+`dispatch.routines[<model>]`. One lane routine serves
+every repo, so it clones all five. A lane with no id or token falls back to the repo's routine, so
+the config can merge before the routine exists, and removing the secret is the rollback. Review,
+implementation and address-review stay on Opus: they are where the judgement is.
+
 ## A closed item is nobody's turn
 
 sydevs/SahajCloud#747 merged while a session held the lock. Two minutes later the unlock path

@@ -17,7 +17,7 @@
  * the read never loses the audit. The anomaly says why, every day.
  */
 
-import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
+import { buildRecord, fireRoutine, routineFor } from './fire.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
 import { isBot, lower } from './predicates.mjs'
 import { installRetry } from './retry.mjs'
@@ -95,8 +95,7 @@ async function unreadable({ github, core, config, dryRun, now, repo, handler, e 
 }
 
 async function fireDeps({ github, core, config, env, dryRun, now, fetchImpl, repo, handler, due }) {
-  const routineId = routineIdFor(repo.name, config, env)
-  const token = tokenFor(repo.name, config, env)
+  const { routineId, token } = routineFor(repo.name, handler, config, env)
   const journal = dryRun ? { number: 0 } : await ensureJournalDay(github, config, now)
   if (!routineId || !token) {
     core.warning(`${repo.name}: no routine id or token — cannot fire ${handler}`)

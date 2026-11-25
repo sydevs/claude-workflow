@@ -7,7 +7,7 @@
 import { saveRecord } from './record.mjs'
 import { setStatus, ensureItem } from './projects.mjs'
 import { ensureJournalDay, postAnomaly } from './journal.mjs'
-import { buildRecord, fireRoutine, routineIdFor, tokenFor } from './fire.mjs'
+import { buildRecord, fireRoutine, routineFor } from './fire.mjs'
 import { takeLease, releaseLease, leaseRef } from './lease.mjs'
 import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isHuman, lower, dispatcherLogins } from './predicates.mjs'
@@ -519,8 +519,8 @@ async function syncStatus({ gh, config, t, snapshot, rec, nodeId, now, dryRun, l
 }
 
 async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi = false }) {
-  const routineId = routineIdFor(t.repo.name, config, env)
-  const token = tokenFor(t.repo.name, config, env)
+  const { routineId, token, lane } = routineFor(t.repo.name, handler, config, env)
+  if (lane) log(`${handler} fires on the ${lane} lane`)
   const L = config.labels
   if (!routineId || !token) {
     log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)
