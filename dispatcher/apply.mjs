@@ -106,6 +106,15 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   // machinery cannot take, so it hands that step to a human: the plan carries
   // on, the item is handed back (Awaiting), and the journal says which step
   // and why. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+  // The one way this file reaches the REST API with `ACTIONS_TOKEN`: the PAT
+  // cannot re-run a job or approve as `github-actions[bot]`. The path is under
+  // `/repos/{owner}/{repo}`, and the Response comes back unexamined, because
+  // the two callers disagree on what a refusal means — a re-run logs it, an
+  // approval throws.
+  const actionsFetch = (path, init = {}) => (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}${path}`, {
+    ...init,
+    headers: { authorization: `Bearer ${env?.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers },
+  })
   const handedOver = []
   const handOver = async (what, fn) => {
     try { await fn(); return true } catch (e) {
@@ -240,10 +249,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (dryRun) break
         if (!env?.ACTIONS_TOKEN) { log('no ACTIONS_TOKEN — nothing re-run'); break }
         for (const c of a.checks) {
-          const res = await (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}/actions/jobs/${c.jobId}/rerun`, {
-            method: 'POST',
-            headers: { authorization: `Bearer ${env.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
-          })
+          const res = await actionsFetch(`/actions/jobs/${c.jobId}/rerun`, { method: 'POST' })
           if (!res.ok) log(`re-run of ${c.name} refused (${res.status})`)
         }
         break
@@ -340,11 +346,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
         if (!here) { log(`${a.type}: not this repo's event — left for its own`); break }
         if (!env?.ACTIONS_TOKEN) { log(`${a.type}: no ACTIONS_TOKEN — nothing done`); break }
         const call = async (method, path, body) => {
-          const res = await (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}/pulls/${t.number}/reviews${path}`, {
-            method,
-            headers: { authorization: `Bearer ${env.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-          })
+          const res = await actionsFetch(`/pulls/${t.number}/reviews${path}`, { method, body: JSON.stringify(body) })
           if (!res.ok) throw Object.assign(new Error(`${res.status} ${await res.text().catch(() => '')}`), { status: res.status })
         }
         if (a.type === 'checkApprove') {
