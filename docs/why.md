@@ -1037,6 +1037,17 @@ Twelve of seventeen skills were missing from that cache, and the marketplace clo
 behind. `version` is the cache key, the only thing that invalidates it, so bumping the manifest is
 a required part of any skill change, not a release ceremony.
 
+## Cleanup touches only its own session
+
+A maintainer runs several local sessions at once. On 2026-11-25, while `cleanup` was being written,
+one laptop held two Ladle servers and three dev servers from other live sessions, ten worktrees
+across four repos, ninety-odd local branches, and two SahajCloud databases whose worktrees were long
+gone. A sweep that stops "every Ladle" or removes "every clean worktree" kills a neighbour's work
+mid-test, and a check that a path merely *contains* a name let `.claude/worktrees/fix-2` claim
+`fix`. So `cleanup.mjs` proves ownership token by token, refuses whatever a live session names, and
+deletes only local branches: GitHub deletes a merged branch itself, and an unmerged remote branch
+is the only copy of an open PR.
+
 ## A missed version declaration passes CI
 
 `cut-release` named three places SahajAtlasWordpress declares its version: the plugin header,

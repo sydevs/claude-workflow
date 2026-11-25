@@ -111,6 +111,7 @@ changes to something its source does not produce.
 | `/workflow:settle-roadmap` | Answer the open questions on roadmap goals in the terminal instead of on GitHub. It briefs each goal, asks each question with a recommendation (and your earlier answer, when one is reopened), researches anything you ask back, then writes the decisions into the ticket on your yes. No cloud session is spent. | `/workflow:settle-roadmap` or `/workflow:settle-roadmap sydevs/SahajCloud#902` |
 | `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh the PR. Asking for a PR in prose runs it too — it is the only path to one. A cloud run opens a draft. On your own branch it opens ready once the branch is complete, so the loop works it at all — your draft it leaves alone. It never merges. | `/workflow:finalize-pr` |
 | `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
+| `/workflow:cleanup` | End a session. It stops the servers this session started, removes its worktrees, local branches and dev databases once their work is pushed, and prunes what older sessions left, then lists what you still owe: uncommitted or unpushed work, PRs that need you, follow-up tickets never filed, and cross-repo steps. It never touches anything a running session uses, and never deletes a branch on GitHub. | `/workflow:cleanup` |
 
 `write-ticket`, `implement-ticket`, `revise-roadmap`, `implement-roadmap` and `review-pr` also run
 locally against an issue or PR number, for example `/workflow:implement-ticket 41` or
@@ -252,6 +253,8 @@ On a laptop that runs the skills or their scripts:
 - **git** and **gh**: scripts and hooks call `git`, and skills fall back to `gh api` for a search.
 - **jq**: skill snippets read `loop-config.json` and `.claude/workflow.json` with it.
 - **python3**: `ste-lint.py` and `skills/dev-server/dev-server.sh`.
+- **lsof**, **ps** and **cksum**: `dev-server.sh` and `skills/cleanup/cleanup.mjs` find servers
+  with them. `psql` is optional: without it, cleanup reports no orphaned dev databases.
 - **pnpm**: only where a repo's `workflow.json` names it (the formatting hooks run `pnpm exec`).
 
 No Railway CLI is needed here; `workflow/lib/railway.mjs` only reads Railway URLs. A cloud routine
