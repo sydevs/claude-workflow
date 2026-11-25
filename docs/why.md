@@ -1230,10 +1230,7 @@ On 2026-11-25 the threshold went from 2 files and 40 lines to 3 and 100, while t
 account kept hitting its usage limit. Of the 45 PRs the critic read from 2026-11-22 to 25, two
 fall under the new threshold. Four files and 120 lines would have caught five, but it would also
 make SahajCloud#1216 tiny. That PR is a four-file, 91-line migration, the review-scope fixture
-that must stay FULL, and it would have skipped the critic. A
-small diff still gets step 2's self-review at `review.selfReview.tinyLevel`, and a person's read.
-`improve-loop` watches for a PR under the threshold that the reviewer then changed, which is the
-sign it is too generous.
+that must stay FULL, and it would have skipped the critic.
 
 ## There is no WIP cap
 
