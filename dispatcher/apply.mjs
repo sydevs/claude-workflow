@@ -106,6 +106,7 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
   // machinery cannot take, so it hands that step to a human: the plan carries
   // on, the item is handed back (Awaiting), and the journal says which step
   // and why. (why: docs/why.md#a-write-we-cannot-make-is-handed-over-not-thrown)
+
   // The one way this file reaches the REST API with `ACTIONS_TOKEN`: the PAT
   // cannot re-run a job or approve as `github-actions[bot]`. The path is under
   // `/repos/{owner}/{repo}`, and the Response comes back unexamined, because
