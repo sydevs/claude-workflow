@@ -52,7 +52,7 @@ the script counts a commit one holds as safe. Then `node cleanup.mjs scan`:
 | `servers` | Listening processes this session started |
 | `checkouts` | Checkouts this session created (`createdThisSession`) or changed. `session: true` marks a `dirty` file or `unpushed` commit this session made |
 | `stashes` | Stashes made since the session began |
-| `branches` | Local branches no worktree has checked out. `unsafe` holds commits found nowhere else |
+| `branches` | Local branches no worktree has checked out. `session: true` marks one this session named; `unsafe` holds commits found nowhere else |
 | `olderWorktrees` | Worktrees of earlier sessions |
 | `orphanDatabases` | Isolated dev databases whose worktree is gone |
 | `otherServers` | Servers of other sessions, or of a terminal (`session: null`) |
@@ -85,7 +85,7 @@ after the merge are on no PR.
 
 `node cleanup.mjs remove <path>…` with every checkout that has `createdThisSession`. A removed
 worktree takes its local branch and isolated database with it. Then
-`node cleanup.mjs drop-branch <repo> <branch>…` with this session's entries in `branches`.
+`node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries marked `session: true`.
 
 **Never delete a branch on GitHub.** Report each thing the script keeps, with its printed reason,
 as outstanding.
@@ -136,7 +136,7 @@ Prune what earlier sessions left, without asking:
 
 - `node cleanup.mjs prune` — dead server state, and records of worktrees whose directory is gone.
 - `node cleanup.mjs remove --stale <path>…` with every `olderWorktrees` path.
-- `node cleanup.mjs drop-branch <repo> <branch>…` with the rest of `branches`, one call per repo.
+- `node cleanup.mjs drop-branch <repo> <branch>…` with the `branches` entries left, one call per repo.
 - `node cleanup.mjs drop-db <repo> <name>…` with every `orphanDatabases` entry.
 
 Never stop an `otherServers` entry: report it. Report what was kept as counts by reason, and by

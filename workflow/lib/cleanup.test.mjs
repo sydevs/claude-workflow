@@ -178,6 +178,16 @@ test('a commit a PR head holds is safe, though its remote branch is gone', () =>
   assert.match(cleanup('drop-branch', repo, 'claude/squashed').stdout, /claude\/squashed: deleted/)
 })
 
+test('scan marks the loose branches this session named', () => {
+  git(repo, 'branch', 'claude/scan-mine', 'origin/main')
+  git(repo, 'branch', 'claude/scan-theirs', 'origin/main')
+  writeTranscript('git switch claude/scan-mine')
+  const branches = JSON.parse(cleanup('scan').stdout).branches
+  const mark = (b) => branches.find((x) => x.branch === b)?.session
+  assert.equal(mark('claude/scan-mine'), true)
+  assert.equal(mark('claude/scan-theirs'), false)
+})
+
 test('stop refuses a process this session did not start', () => {
   const r = cleanup('stop', String(process.pid))
   assert.equal(r.status, 1)

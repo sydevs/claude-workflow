@@ -462,11 +462,12 @@ function scan(argv) {
     else if (l.cwd && worktrees.some((w) => inside(l.cwd, w.path))) otherServers.push({ ...l, session: owner })
   }
 
-  const branches = repos.flatMap((r) =>
-    localBranches(r, worktrees.filter((w) => w.repo === r))
-      .filter((b) => !b.isDefault && !b.checkedOut)
-      .map(({ repo, branch, head, unsafe }) => ({ repo, branch, head, unsafe })),
-  )
+  const branches = repos.flatMap((r) => {
+    const all = localBranches(r, worktrees.filter((w) => w.repo === r)).filter((b) => !b.isDefault && !b.checkedOut)
+    // One pass per repo says which of them this session worked on.
+    const mine = namedIn(session.texts, all.map((b) => b.branch))
+    return all.map(({ repo, branch, head, unsafe }) => ({ repo, branch, head, unsafe, session: mine.has(branch) }))
+  })
   const orphans = repos.flatMap((r) =>
     orphanDatabases(worktrees.filter((w) => w.repo === r).map((w) => devServerInfo(w.path))).map((name) => ({ repo: r, name })),
   )
