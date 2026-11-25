@@ -1534,7 +1534,10 @@ usage limit in 2026-11, so the self-review dropped to `medium`. What it gives up
 lower-confidence findings, which the critic either repeats or rightly drops. The critic stays at
 max effort: a reader not anchored on the author's view finds what the author missed.
 
-The level lives in `review.selfReview` because the first attempt typed it into four places and
+A `TINY` diff keeps `high`. The dispatcher skips the critic at the same threshold, so step 2 is
+the only agent that reads it, and no second pass is left to repeat what `medium` dropped.
+
+Both levels live in `review.selfReview` because the first attempt typed one into four places and
 left one of them reading `high`.
 
 ## A skill can name a plugin no routine has

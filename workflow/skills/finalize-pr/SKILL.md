@@ -101,8 +101,8 @@ claude-workflow checkout's copy where you have one.
 (why: docs/why.md#generated-files-stay-out-of-review)
 
 - **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify`, and run
-  step 2's review as usual. The dispatcher skips the critic on the same threshold, so dropping both
-  leaves the PR unread by any agent. Read the diff of every `review:` path yourself for
+  step 2's review at `review.selfReview.tinyLevel`. The dispatcher skips the critic on the same
+  threshold, so step 2 is the only agent that reads this diff. Read the diff of every `review:` path yourself for
   simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
   and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
 - **`FULL`**: start steps 1 and 2 together. Run step 3's trigger check, then invoke `/simplify`.
@@ -131,7 +131,8 @@ altitude. It does not hunt for bugs.
 /code-review <level>                    # otherwise, plus step 1's /simplify pass
 ```
 
-`<level>` is `review.selfReview.level`. (why: docs/why.md#the-self-review-runs-at-medium)
+`<level>` is `review.selfReview.level`, or its `tinyLevel` on a `TINY` diff.
+(why: docs/why.md#the-self-review-runs-at-medium)
 
 The toolkit runs six specialist agents over the branch diff in their own contexts, with confidence
 scores: `code-reviewer`, `pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`,
