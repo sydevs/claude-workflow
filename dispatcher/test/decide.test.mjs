@@ -1358,8 +1358,23 @@ const now = new Date('2026-10-09T12:00:00Z')
 
 test('a conflict on a base that just moved waits for it to settle', () => {
   const s = conflicted({ now, baseMovedAt: '2026-10-09T11:30:00Z' })
-  assert.deepEqual(types(evaluatePr(s, quietConfig)), ['note'])
-  assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, s, quietConfig)), ['note'], 'the scan after a merge waits too')
+  assert.deepEqual(types(evaluatePr(s, quietConfig)), ['record', 'note'])
+  assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, s, quietConfig)), ['record', 'note'], 'the scan after a merge waits too')
+  assert.deepEqual(evaluatePr(s, quietConfig)[0].patch, { conflictWait: { sha: 'abc', since: now.toISOString() } }, 'the wait starts its own clock')
+})
+
+test('the wait is bounded where the board nulls pendingSince', () => {
+  const waiting = (wait) => conflicted({ now, baseMovedAt: '2026-10-09T11:59:00Z', record: { fixCi: 0, conflictWait: wait } })
+  const p = evaluatePr(waiting({ sha: 'abc', since: '2026-10-09T09:00:00Z' }), quietConfig)
+  assert.deepEqual(types(p), ['record', 'fire:resolve-conflicts'], 'three hours of a moving base is resolved, with no pendingSince')
+  assert.deepEqual(p[0].patch, { conflictWait: null }, 'the clock is cleared when it fires')
+  assert.deepEqual(types(evaluatePr(waiting({ sha: 'abc', since: 'not a date' }), quietConfig)), ['record', 'fire:resolve-conflicts'], 'a clock that cannot be read resolves at once')
+})
+
+test('the wait clock is written once per head', () => {
+  const waiting = (wait) => conflicted({ now, baseMovedAt: '2026-10-09T11:59:00Z', record: { fixCi: 0, conflictWait: wait } })
+  assert.deepEqual(types(evaluatePr(waiting({ sha: 'abc', since: '2026-10-09T11:50:00Z' }), quietConfig)), ['note'], 'a clock already running is not rewritten')
+  assert.deepEqual(types(evaluatePr(waiting({ sha: 'old', since: '2026-10-09T06:00:00Z' }), quietConfig)), ['record', 'note'], 'another head\'s clock never bounds this head')
 })
 
 test('a conflict on a base still long enough is resolved', () => {

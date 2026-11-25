@@ -2627,9 +2627,14 @@ that week. Each resolution after the first redid work the next merge undid.
 
 So a conflicted PR waits until the base tip has been still `dispatch.conflictQuietMinutes`, read
 from the base commit's committer date, which is the merge time under a merge queue. The sweep, the
-reconciler or the PR's next event re-derives it after that. The wait never outlasts
-`dispatch.pendingDueMinutes`: an overdue conflict is resolved at once, so a base that never stops
-moving costs no more than before. A failed read of the base resolves at once too.
+reconciler or the PR's next event re-derives it after that. A failed read of the base resolves at
+once.
+
+The wait never outlasts `dispatch.pendingDueMinutes`, counted from the deferral the guard records
+against the head. The Pending due alone cannot bound it: `syncStatus` nulls `pendingSince` on every
+pass that derives Awaiting, and that is where a bot PR sits while a thread waits on the reviewer, so
+a base moving hourly would have deferred the resolution for good. With the guard's own clock, a base
+that never stops moving costs one session per head, as before.
 
 ## A bot commit buries an approval, a conflict merge does not
 
