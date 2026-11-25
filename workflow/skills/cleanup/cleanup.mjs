@@ -414,15 +414,16 @@ function staleStateFiles(infos) {
       if (slug) groups.set(slug, { ...groups.get(slug), [ext]: join(dir, f) })
     }
     for (const [slug, g] of groups) {
-      const read = (f, parse) => {
-        try {
-          return f ? parse(readFileSync(f, 'utf8')) : null
-        } catch {
-          return null
-        }
+      // The json holds the pid, old script and new alike. A surviving .pid is
+      // a crashed start's leftover whose number may now belong to anything,
+      // so trusting it would keep dead state forever.
+      let pid = null
+      try {
+        if (g.json) pid = JSON.parse(readFileSync(g.json, 'utf8')).pid
+      } catch {
+        pid = null
       }
-      const pids = [read(g.json, (t) => JSON.parse(t).pid), read(g.pid, (t) => Number(t.trim()))]
-      if (pids.some(alive)) continue
+      if (alive(pid)) continue
       out.push(...[g.json, g.pid, live.has(slug) ? null : g.log].filter(Boolean))
     }
   }
