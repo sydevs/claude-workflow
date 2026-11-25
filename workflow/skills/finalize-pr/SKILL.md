@@ -154,8 +154,7 @@ record dismissals with one-line reasons.
 **Treat a clean report with little or no reading as *not yet reviewed***: re-run that lens, or
 read the highest-risk paths yourself. (why: docs/why.md#a-clean-review-report-must-carry-its-evidence)
 
-For a deeper pass, the user can run the billed `/code-review ultra` themselves — Claude cannot
-launch it.
+For a deeper pass, the user can run `/code-review max` themselves — Claude never picks that level.
 
 Then run the deterministic comment check, which the six lenses do not cover — it reads only the
 comments the branch **added**, and covers SahajAtlasWordpress, where no linter runs at all:

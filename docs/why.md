@@ -364,7 +364,7 @@ read back unexpectedly. The first suspicion is always a corrupted edit, not a se
 
 ## The reviews run while simplify does
 
-`/simplify`, `/code-review high` and `/security-review` each fan out reviewer agents, and they used
+`/simplify`, `/code-review` and `/security-review` each fan out reviewer agents, and they used
 to run one after another. `/code-review high` alone took a median 6 minutes over 11 local runs,
 42 at worst, and bot PRs spent 20 to 45 minutes between the last implementation commit and the
 PR. `/simplify` alone edits, and only once its agents report, so the other two can read while
