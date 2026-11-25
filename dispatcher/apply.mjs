@@ -13,6 +13,7 @@ import { stripBlockedBy, dispatcherMark } from './markers.mjs'
 import { isLogin, isHuman, lower, dispatcherLogins } from './predicates.mjs'
 import { deriveStatus } from './status.mjs'
 import { applyRelay } from './relay.mjs'
+import { TRANSLATION_APPROVAL_MARKER } from './translations.mjs'
 
 /**
  * Post an advisory once. `bot` is `identity.dispatcherLogins`, and only one of
@@ -325,6 +326,41 @@ export async function apply({ gh, target, snapshot, plan, config, env, dryRun, c
           await handOver('dismiss an approval', () => gh.rest.pulls.dismissReview({
             ...args, pull_number: t.number, review_id: id, message,
           }))
+        }
+        break
+      }
+      // A bot PR that only adds translation keys, approved with the calling
+      // repo's own token as github-actions[bot]: the PAT is the author, whose
+      // approval GitHub refuses. That token reaches only the repo whose event
+      // this is, so a target elsewhere waits for its own repo's next event.
+      // (why: docs/why.md#a-translation-key-is-approved-by-actions)
+      case 'checkApprove':
+      case 'dismissCheck': {
+        const here = env?.GITHUB_REPOSITORY && env.GITHUB_REPOSITORY.toLowerCase() === `${t.repo.owner}/${t.repo.name}`.toLowerCase()
+        if (!here) { log(`${a.type}: not this repo's event — left for its own`); break }
+        if (!env?.ACTIONS_TOKEN) { log(`${a.type}: no ACTIONS_TOKEN — nothing done`); break }
+        const call = async (method, path, body) => {
+          const res = await (fetchImpl || fetch)(`https://api.github.com/repos/${t.repo.owner}/${t.repo.name}/pulls/${t.number}/reviews${path}`, {
+            method,
+            headers: { authorization: `Bearer ${env.ACTIONS_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          if (!res.ok) throw Object.assign(new Error(`${res.status} ${await res.text().catch(() => '')}`), { status: res.status })
+        }
+        if (a.type === 'checkApprove') {
+          if (snapshot.pr?.head?.sha !== a.sha) { log('head moved since the plan — no approval'); break }
+          log(`translation check: approve ${String(a.sha).slice(0, 7)}`)
+          if (dryRun) break
+          await handOver('approve a translation-only PR', () => call('POST', '', {
+            commit_id: a.sha, event: 'APPROVE',
+            body: `${TRANSLATION_APPROVAL_MARKER}\nThis PR only adds translation keys: every file is a declared translation schema, seed or generated type, and every change adds a key. Approved by the translation check; the merge queue still runs CI.`,
+          }))
+          break
+        }
+        for (const id of a.ids) {
+          log(`translation check: dismiss its approval ${id}`)
+          if (dryRun) continue
+          await handOver('dismiss the translation check\'s approval', () => call('PUT', `/${id}/dismissals`, { message: 'The head moved to a commit the translation check has not vouched for.', event: 'DISMISS' }))
         }
         break
       }

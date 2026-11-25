@@ -10,6 +10,7 @@ import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, fullTreatment, dispatcherLogins, restLogin } from './predicates.mjs'
 import { proxyApproves } from './approvals.mjs'
+import { translationCheckFacts, translationFacts, translationRules } from './translations.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
@@ -373,6 +374,18 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // the ruleset counts its approval: GitHub's own reviewDecision, read only
   // once the check has approved. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
+  // A PR of nothing but new translation keys needs no critic, and a bot's own
+  // is approved by Actions. Contents are read only when every path qualifies.
+  // (why: docs/why.md#a-translation-key-is-approved-by-actions)
+  const translation = !syncBranch && pr.state === 'open' && translationRules(config, repo)
+    ? await translationFacts(gh, { owner, repo }, pr, config) : { ok: false }
+  s.pr.translationOnly = translation.ok
+  s.pr.translationReason = translation.reason || null
+  s.pr.translationCheck = translationCheckFacts(reviews, pr.head?.sha, translation.ok)
+  // Whether the ruleset counts the check's approval: GitHub's own reviewDecision.
+  s.pr.translationCheck.decision = s.pr.translationCheck.approvedAtHead
+    ? (await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })).repository.pullRequest.reviewDecision || null
+    : null
   s.mergeable = normalized.mergeable
   s.reviews = reviewsShaped
   // The ruleset keeps an approval through every push, so `buriedApprovals`

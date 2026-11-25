@@ -347,6 +347,23 @@
       }
     }
   },
+  "translationOnly": {
+    "$comment": "Per repo, the files a new translation key touches. A PR changing only these, and only by adding keys (dispatcher/translations.mjs), skips the critic, and a bot's own is approved by Actions (why: docs/why.md#a-translation-key-is-approved-by-actions).",
+    "maxFiles": 40,
+    "repos": {
+      "SahajCloud": {
+        "schemas": [
+          "src/globals/*Translations/translationsSchema.json"
+        ],
+        "seeds": [
+          "seeds/*-translations/data.*.json"
+        ],
+        "generated": [
+          "src/payload-types.ts"
+        ]
+      }
+    }
+  },
   "issueFields": {
     "$comment": "GitHub's native org-level issue fields, not Projects v2, not labels. You can read and write them, but not search them. See format-ticket/SKILL.md for read/write rules and the PUT-replaces-everything trap.",
     "priority": {

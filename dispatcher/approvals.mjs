@@ -16,7 +16,7 @@
  * the directory's first cycle. Nothing here fetches.
  */
 
-import { commentOnce, dismissProxy, dismissStale, note, proxyApprove, requestReviewer } from './actions.mjs'
+import { checkApprove, commentOnce, dismissCheck, dismissProxy, dismissStale, note, proxyApprove, requestReviewer } from './actions.mjs'
 import { fullTreatment, isBot, lower, nowOf, threadsWaiting } from './predicates.mjs'
 import { dispatcherMark } from './markers.mjs'
 import { STATE_BEARING } from '../workflow/lib/merge-gate.mjs'
@@ -128,6 +128,42 @@ export function contractSyncPlan(s, config) {
   // Outgrowing the copy is said once per PR: each fix-ci push would repeat it.
   const key = s.pr.contractSyncOnly ? `contract-check ${s.pr.head?.sha}` : 'contract-check outgrew'
   return [requestReviewer(), commentOnce(key, `Not approved automatically: ${why}. It needs a person's review.`)]
+}
+
+/** A bot PR the translation check carries: nothing but new keys, by the loop's own login. */
+export function botTranslationOnly(s, config) {
+  return Boolean(s.pr?.translationOnly) && isBot(s.pr?.user?.login, config)
+}
+
+/**
+ * The translation check's approval of a head it no longer covers is withdrawn
+ * on every pass, ahead of the lock guard, as `stalePlan`'s is: the ruleset
+ * keeps an approval through every push. Only its own, found by its marker.
+ * (why: docs/why.md#a-translation-key-is-approved-by-actions)
+ */
+export function translationStalePlan(s, config) {
+  const ids = s.pr?.state === 'open' ? s.pr.translationCheck?.staleIds || [] : []
+  return ids.length ? [dismissCheck(ids)] : []
+}
+
+/**
+ * A green, ready bot PR of nothing but new translation keys is approved by
+ * the check, pinned to its head. Its reviewer is asked once the check cannot
+ * carry it: the PR outgrew new keys after the check approved an earlier head,
+ * or the ruleset does not count the check's approval.
+ * (why: docs/why.md#a-translation-key-is-approved-by-actions)
+ */
+export function translationPlan(s, config) {
+  const c = s.pr?.translationCheck
+  if (!s.pr?.translationOnly) {
+    return c?.ever ? [requestReviewer(), commentOnce('translation-check outgrew', `Not approved automatically: ${s.pr?.translationReason || 'it changes more than new translation keys'}. It needs a person's review.`)] : []
+  }
+  if (!isBot(s.pr.user?.login, config)) return []
+  if (!c?.approvedAtHead) return [checkApprove(s.pr.head?.sha)]
+  if (c.decision && c.decision !== 'APPROVED') {
+    return [requestReviewer(), commentOnce(`translation-check ${s.pr.head?.sha}`, "Not approved automatically: the ruleset does not count the translation check's approval. It needs a person's review.")]
+  }
+  return []
 }
 
 /**
