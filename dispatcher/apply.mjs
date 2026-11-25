@@ -519,9 +519,8 @@ async function syncStatus({ gh, config, t, snapshot, rec, nodeId, now, dryRun, l
 }
 
 async function doFire({ gh, t, snapshot, handler, flags, attempt, config, env, dryRun, log, now, fetchImpl, rec, bumpFixCi = false }) {
-  const { routineId, token, lane, unsetLane } = routineFor(t.repo.name, handler, config, env)
+  const { routineId, token, lane } = routineFor(t.repo.name, handler, config, env)
   if (lane) log(`${handler} fires on the ${lane} lane`)
-  else if (unsetLane) log(`the ${unsetLane} lane has no routine id or token — ${handler} fires on ${t.repo.name}'s routine`)
   const L = config.labels
   if (!routineId || !token) {
     log(`no routine id or token for ${t.repo.name} — cannot fire ${handler}`)

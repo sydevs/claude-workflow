@@ -668,8 +668,8 @@ The dispatched routines carry **no schedule**. They run only when `/fire` starts
 `clear_mcp_connections: true`. All are opus except `loop-sonnet`, which runs the handlers whose
 `handlers.<handler>.model` is `sonnet` (today `fix-ci` and `resolve-conflicts`) in any repo, so it
 clones all five. It takes the same prompt as the five repo routines. Until `ROUTINE_ID_SONNET` and
-`ROUTINE_TOKEN_SONNET` are both set, those handlers fire on the repo's routine, and the `act` log
-says so. (why: docs/why.md#a-mechanical-handler-runs-on-a-lighter-model)
+`ROUTINE_TOKEN_SONNET` are both set, those handlers fire on the repo's routine.
+(why: docs/why.md#a-mechanical-handler-runs-on-a-lighter-model)
 
 **The `/fire` contract.** `POST https://api.anthropic.com/v1/claude_code/routines/{id}/fire`, with
 `Authorization: Bearer <that routine's token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`
