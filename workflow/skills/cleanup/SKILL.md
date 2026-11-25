@@ -2,7 +2,7 @@
 name: cleanup
 description: End-of-session cleanup for a local session. Stops the dev and Ladle servers this session started, removes its worktrees, local branches and dev databases once their work is safely pushed, prunes what older sessions left behind, and reports what is still outstanding — unpushed or uncommitted work, PRs that need you, follow-up tickets discussed but never filed, and cross-repo steps still owed. Touches nothing a running session uses, and never deletes a branch on GitHub. User-invoked only.
 disable-model-invocation: true
-allowed-tools: Bash(node:*), Bash(git fetch:*), Bash(gh pr list:*), Bash(gh api:*), Bash(gh search issues:*), Bash(gh search prs:*), Read, TaskStop, CronList, CronDelete, AskUserQuestion, mcp__playwright__browser_close
+allowed-tools: Bash(node:*), Bash(git fetch:*), Bash(gh pr list:*), Bash(gh api graphql:*), Bash(gh search issues:*), Bash(gh search prs:*), Read, TaskStop, CronList, CronDelete, AskUserQuestion, mcp__playwright__browser_close
 ---
 
 # Cleanup

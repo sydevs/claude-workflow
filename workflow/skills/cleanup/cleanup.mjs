@@ -383,14 +383,19 @@ function devServerInfo(path) {
   }
 }
 
-/** Isolated databases of a repo's template that no registered worktree owns. */
+/**
+ * Isolated databases that no registered worktree owns. `infos[0]` is the
+ * main checkout's: the template comes from it alone, never from a branch's
+ * worktree, and needs a literal prefix — `{slug}` alone would match every
+ * database on the machine.
+ */
 function orphanDatabases(infos) {
-  const templates = [...new Set(infos.map((i) => i.databaseTemplate).filter(Boolean))].map((t) => t.split('{slug}'))
-  if (!templates.length) return []
-  const owned = new Set(infos.map((i) => i.database))
+  const [pre, post] = infos[0]?.databaseTemplate?.split('{slug}') ?? []
+  if (!pre) return []
+  const owned = new Set(infos.map((i) => i?.database))
   return lines(run('psql', ['-lqtA', '-F', '|']))
     .map((l) => l.split('|')[0])
-    .filter((n) => !owned.has(n) && templates.some(([pre, post]) => n.startsWith(pre) && n.endsWith(post)))
+    .filter((n) => !owned.has(n) && n.startsWith(pre) && n.endsWith(post))
 }
 
 /**
@@ -462,7 +467,7 @@ function scan(argv) {
       .map(({ repo, branch, head, unsafe }) => ({ repo, branch, head, unsafe })),
   )
   const orphans = repos.flatMap((r) =>
-    orphanDatabases(worktrees.filter((w) => w.repo === r).map((w) => devServerInfo(w.path)).filter(Boolean)).map((name) => ({ repo: r, name })),
+    orphanDatabases(worktrees.filter((w) => w.repo === r).map((w) => devServerInfo(w.path))).map((name) => ({ repo: r, name })),
   )
   const report = { servers, checkouts, stashes, branches, olderWorktrees, orphanDatabases: orphans, otherServers }
   console.log(JSON.stringify(report, null, 2))
@@ -590,7 +595,7 @@ function dropDb(argv) {
   const [repo, ...names] = positionals(argv)
   if (!repo || !names.length) fail('drop-db needs <repo> <name>...')
   const root = resolve(repo)
-  const orphans = orphanDatabases(listWorktrees(root).map((w) => devServerInfo(w.path)).filter(Boolean))
+  const orphans = orphanDatabases(listWorktrees(root).map((w) => devServerInfo(w.path)))
   const named = otherSessions(session.id).naming(names)
   let kept = 0
   for (const name of names) {
