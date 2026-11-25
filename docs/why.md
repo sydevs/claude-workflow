@@ -1526,14 +1526,16 @@ it, but three could not then settle a claim and one curled `unpkg`.
 
 ## The self-review runs at medium
 
-Every PR over `review.skipWhen` is reviewed twice. First the author's session runs `/code-review`
-in step 2 of `finalize-pr`. Then `review-pr` runs as a fresh session, the critic, that never saw
-the author's reasoning. At `high`, the first pass fans out the most reviewer agents of any step
-in an `implement` run, and its findings overlap the critic's. The routines account kept hitting
-its usage limit in 2026-11, so the self-review dropped to `medium`. It still catches the plain
-bugs before the PR opens. The critic stays at max effort, because a reader not anchored on the
-author's view is the review that finds what the author missed. What `medium` gives up is
-lower-confidence findings, which the critic either repeats or rightly drops.
+Every PR over `review.skipWhen` is reviewed twice: the author's session runs `/code-review` in
+step 2 of `finalize-pr`, then `review-pr` runs as a fresh session, the critic, that never saw the
+author's reasoning. At `high` the first pass fans out the most reviewer agents of any step in an
+`implement` run, and its findings overlap the critic's. The routines account kept hitting its
+usage limit in 2026-11, so the self-review dropped to `medium`. What it gives up is
+lower-confidence findings, which the critic either repeats or rightly drops. The critic stays at
+max effort: a reader not anchored on the author's view finds what the author missed.
+
+The level lives in `review.selfReview` because the first attempt typed it into four places and
+left one of them reading `high`.
 
 ## A skill can name a plugin no routine has
 

@@ -128,18 +128,18 @@ altitude. It does not hunt for bugs.
 
 ```
 /pr-review-toolkit:review-pr all        # only where the plugin is installed
-/code-review medium                     # otherwise, plus step 1's /simplify pass
+/code-review <level>                    # otherwise, plus step 1's /simplify pass
 ```
+
+`<level>` is `review.selfReview.level`. (why: docs/why.md#the-self-review-runs-at-medium)
 
 The toolkit runs six specialist agents over the branch diff in their own contexts, with confidence
 scores: `code-reviewer`, `pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`,
 `comment-analyzer`, `code-simplifier`.
 
 **No routine has it, so check before you reach for it** — `ListPlugins` answers, and no routine has
-answered yes in three weeks. There the pass is `/code-review medium` beside step 1's `/simplify`.
+answered yes in three weeks. There the pass is `/code-review <level>` beside step 1's `/simplify`.
 Say in the report which one ran. (why: docs/why.md#a-skill-can-name-a-plugin-no-routine-has)
-`medium`, not `high`: `review-pr` reads every PR over `review.skipWhen` again, in a fresh context.
-(why: docs/why.md#the-self-review-runs-at-medium)
 
 Every comment this skill posts to GitHub carries `identity.commentMarker` from `loop-config.json`.
 

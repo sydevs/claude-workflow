@@ -384,13 +384,16 @@
     "commentMarker": "<sub>🤖 Written by the sydevs autonomous loop — see [what this is](https://github.com/sydevs/claude-workflow#the-loop)</sub>"
   },
   "review": {
-    "$comment": "review-pr. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both, and finalize-pr skips its `/simplify` pass on such a diff. Rules in review-pr/SKILL.md and finalize-pr/SKILL.md.",
+    "$comment": "review-pr. Advisory only. skipWhen: the dispatcher marks a draft ready without a critic at or under both, and finalize-pr skips its `/simplify` pass on such a diff. selfReview.level is the `/code-review` level finalize-pr step 2 runs. Rules in review-pr/SKILL.md and finalize-pr/SKILL.md.",
     "bodyHeader": "## 🧐 Adversarial review",
     "questionMarker": "<!-- sydevs-question -->",
     "profilePath": "workflow/skills/review-pr/reviewer-profile.md",
     "skipWhen": {
       "maxFiles": 2,
       "maxLines": 40
+    },
+    "selfReview": {
+      "level": "medium"
     },
     "streamline": {
       "$comment": "The pieces workflow/lib/new-pieces.mjs lists for review-pr's streamliner. Rules in review-pr/SKILL.md.",
