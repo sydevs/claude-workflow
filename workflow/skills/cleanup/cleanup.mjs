@@ -385,18 +385,23 @@ function devServerInfo(path) {
 }
 
 /**
- * Isolated databases that no registered worktree of this repo owns. The
- * template comes from the main checkout alone, never from a branch's
- * worktree, and needs a literal prefix — `{slug}` alone would match every
- * database on the machine.
+ * Whether a database name has the shape this repo's main checkout gives an
+ * isolated one. The template comes from the main checkout alone, never from
+ * a branch's worktree, and needs a literal prefix — `{slug}` alone would
+ * match every database on the machine.
  */
+export function isOwnDatabase(template, name) {
+  const [pre, post] = template?.split('{slug}') ?? []
+  return Boolean(pre && name) && name.startsWith(pre) && name.endsWith(post)
+}
+
+/** Isolated databases that no registered worktree of this repo owns. */
 function orphanDatabases(repo) {
-  const [pre, post] = devServerInfo(repo)?.databaseTemplate?.split('{slug}') ?? []
-  if (!pre) return []
+  const template = devServerInfo(repo)?.databaseTemplate
   const owned = new Set(listWorktrees(repo).map((w) => devServerInfo(w.path)?.database))
   return lines(run('psql', ['-lqtA', '-F', '|']))
     .map((l) => l.split('|')[0])
-    .filter((n) => !owned.has(n) && n.startsWith(pre) && n.endsWith(post))
+    .filter((n) => !owned.has(n) && isOwnDatabase(template, n))
 }
 
 /**
@@ -540,8 +545,14 @@ function remove(argv) {
     const info = inspectCheckout(session, wt)
     const dev = devServerInfo(path)
     const holders = [...new Set([...cwds.filter(([, cwd]) => inside(cwd, path)).map(([pid]) => pid), ...others.within(path)])]
+    // teardown drops dev.database, and a worktree we did not create took that
+    // name from its own branch's .claude/workflow.json. Trust only a name the
+    // main checkout's template shapes.
+    const foreignDb =
+      dev?.database && !info.createdThisSession && !isOwnDatabase(devServerInfo(repo)?.databaseTemplate, dev.database)
     const blocker =
       removalBlocker(info, { stale }) ??
+      (foreignDb ? `its database ${dev.database} is not this repo's to drop — remove it by hand` : null) ??
       (others.naming([...worktreeNeedles(path), dev?.database]).size ? NAMED : null) ??
       (holders.length ? `a process still runs in it (pid ${holders.join(', ')})` : null)
     const removed = !settle(

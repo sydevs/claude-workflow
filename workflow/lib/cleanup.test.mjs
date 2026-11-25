@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { namedIn, removalBlocker } from '../skills/cleanup/cleanup.mjs'
+import { isOwnDatabase, namedIn, removalBlocker } from '../skills/cleanup/cleanup.mjs'
 
 const script = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'cleanup', 'cleanup.mjs')
 const SESSION = 'test-session-0000'
@@ -194,6 +194,16 @@ test('stop refuses a process this session did not start', () => {
   const r = cleanup('stop', String(process.pid))
   assert.equal(r.status, 1)
   assert.match(r.stdout, /REFUSED — not started by this session/)
+})
+
+test('isOwnDatabase trusts only a name the main checkout template shapes', () => {
+  const t = 'sahajcloud_dev_{slug}'
+  assert.ok(isOwnDatabase(t, 'sahajcloud_dev_wt_123'))
+  assert.ok(!isOwnDatabase(t, 'production'))
+  // A template with no literal prefix would match every database on the machine.
+  assert.ok(!isOwnDatabase('{slug}', 'production'))
+  assert.ok(!isOwnDatabase(null, 'sahajcloud_dev_wt_123'))
+  assert.ok(!isOwnDatabase(t, null))
 })
 
 test('removalBlocker: --stale excuses only who created it', () => {
