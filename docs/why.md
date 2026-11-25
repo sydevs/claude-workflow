@@ -1643,12 +1643,10 @@ is small: a key that did not exist cannot break a reader of the keys that did.
 So `translationOnly` in loop-config.json names, per repo, the translation schemas, the locale
 seeds and the generated types such a PR touches, and `dispatcher/translations.mjs` decides from
 **contents**, not paths. A path check alone would pass a PR that renames a key the consumers read,
-or puts `maxLength` on a leaf that production data already breaks. Every file must be one of
-those, `modified`, and only grow: a schema group may gain `properties` and nothing else, each new
-node a plain string leaf or a closed group of them; a seed may only gain string keys; the
-generated file may only gain doc comments, optional fields and interfaces. Base and head are read
-at the compare's merge base, so a base that moved on adds nothing. Anything unread, unparsable or
-outside those shapes is not translation-only, and gets the full treatment.
+or puts `maxLength` on a leaf that production data already breaks. What counts as add-only lives
+in `translations.mjs`, case by case in its test. Base and head are read at the compare's merge
+base, so a base that moved on adds nothing. Anything unread, unparsable or outside those shapes is
+not translation-only, and gets the full treatment.
 
 Such a PR skips the critic, as a contract sync does. A bot's own is then approved where a
 contract sync is, by `github-actions[bot]`, but from `act` rather than a job of its own: the PR's
