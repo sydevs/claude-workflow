@@ -1709,6 +1709,22 @@ under `ciFixIterations` like red CI, never re-armed. `cancelled` is not a failur
 cancels a run when it rebuilds a group after another entry failed. A PR still armed is that
 rebuild, so it is left alone.
 
+**Only Actions' own suite is that failure.** On SahajAtlasWeb#489 a check suite from another app
+failed at 21:24Z on 2026-11-25 while the queue's Actions run was still going; that run concluded
+`success` at 21:27:02Z and GitHub merged the PR 32 seconds later. The dispatcher had already
+recorded `queueFail` against head `6ccbee46`, bumped `fixCi` to 2, and spent a `fix-ci` session
+that found nothing to repair. The cost is more than that one session: the record is kept against
+the head while nothing re-arms it, so every later pass repairs rather than re-arms, to
+`ciFixIterations` and a handback, on a PR whose required checks are all green. The PR-head path
+never read a failure that way — `gather` drops `ci.ignoreCheckNames` and reduces to the base
+ruleset's required checks before anything reads red — so another app's suite is advisory there, and
+it is advisory on the ephemeral branch too. A `workflow_run` is always Actions; a `check_suite`
+must say `app.slug === 'github-actions'`. Reading the queue branch's own run back before firing was
+rejected: it costs a call per event and still races, since that run was in progress when the event
+arrived. The record now names the app and the suite or run url beside the sha, because the old one
+kept only `run`, which is null for a `check_suite` — afterwards nothing could say which app had
+spent the passes.
+
 ## The journal tally needs a writer that cannot stop
 
 Monday 2026-09-28 reported 22 dispatches and 1 anomaly against 37 and 4; Thursday 2026-10-01, 84

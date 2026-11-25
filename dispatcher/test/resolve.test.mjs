@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { coalesceTargets, queuedPr, resolve } from '../resolve.mjs'
+import { coalesceTargets, queuedPr, resolve, targetLabel } from '../resolve.mjs'
 import { emptyRecord, renderRecord } from '../record.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../../loop-config.json', import.meta.url), 'utf-8'))
@@ -57,23 +57,55 @@ test('a queue branch names its PR, whatever the base is called', () => {
   assert.equal(queuedPr(undefined), null)
 })
 
-const queueRun = (conclusion, kind = 'workflow_run') => ({
+// A `check_suite` carries the app that posted it and no `html_url`; a
+// `workflow_run` is Actions' own and carries one.
+const queueRun = (conclusion, kind = 'workflow_run', slug = 'github-actions') => ({
   eventName: kind,
   repo: { owner: 'sydevs', repo: 'SahajCloud' },
-  payload: { action: 'completed', [kind]: { head_sha: 'q1', head_branch: 'gh-readonly-queue/main/pr-959-2c2765ba', conclusion, pull_requests: [], html_url: kind === 'workflow_run' ? 'https://run' : undefined } },
+  payload: {
+    action: 'completed',
+    [kind]: {
+      head_sha: 'q1',
+      head_branch: 'gh-readonly-queue/main/pr-959-2c2765ba',
+      conclusion,
+      pull_requests: [],
+      ...(kind === 'workflow_run'
+        ? { html_url: 'https://run' }
+        : { app: slug ? { slug } : undefined, url: 'https://api.github.com/repos/sydevs/SahajCloud/check-suites/9' }),
+    },
+  },
 })
 // The queue path needs no API call: a lookup by sha would find no PR.
 const noApi = new Proxy({}, { get: () => { throw new Error('no API call expected') } })
+const logging = () => { const said = []; return { said, info: (m) => said.push(m) } }
 
-test('a failed queue run targets the PR its branch names', async () => {
+test('a failed queue run targets the PR its branch names, and says what failed', async () => {
   const out = await resolve({ github: noApi, context: queueRun('failure'), config: {} })
-  assert.deepEqual(out.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { run: 'https://run' }]])
+  assert.deepEqual(out.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: 'https://run' }]])
   const suite = await resolve({ github: noApi, context: queueRun('timed_out', 'check_suite'), config: {} })
-  assert.deepEqual(suite.map((t) => [t.number, t.reason]), [[959, 'queue-failed']])
+  assert.deepEqual(suite.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: 'https://api.github.com/repos/sydevs/SahajCloud/check-suites/9' }]])
 })
 
 test('a passing or cancelled queue run targets nothing', async () => {
   for (const c of ['success', 'cancelled', 'neutral']) assert.deepEqual(await resolve({ github: noApi, context: queueRun(c), config: {} }), [], c)
+})
+
+// SahajAtlasWeb#489: another app's suite failed on the queue branch while the
+// queue's own Actions run was still going and about to pass. It is advisory on
+// the PR head, so it is advisory here.
+test("another app's failed suite on a queue branch targets nothing, and is logged", async () => {
+  const core = logging()
+  assert.deepEqual(await resolve({ github: noApi, context: queueRun('failure', 'check_suite', 'cloudflare-workers'), config: {}, core }), [])
+  assert.match(core.said.join('\n'), /cloudflare-workers/)
+  assert.deepEqual(await resolve({ github: noApi, context: queueRun('failure', 'check_suite', null), config: {} }), [], 'an app-less suite is not Actions either')
+})
+
+test('the resolve log line names the app and run behind a queue failure', () => {
+  const queueFailed = { kind: 'pr', number: 959, reasons: [{ reason: 'queue-failed', facts: { app: 'github-actions', run: 'https://run' } }] }
+  assert.equal(targetLabel(queueFailed), 'pr#959:queue-failed(github-actions https://run)')
+  assert.equal(targetLabel({ kind: 'pr', number: 959, reasons: [{ reason: 'queue-failed', facts: {} }] }), 'pr#959:queue-failed')
+  assert.equal(targetLabel(t(860, 'sweep-pr')), 'pr#860:sweep-pr', 'every other reason is named as it always was')
+  assert.equal(targetLabel(coalesceTargets([t(860, 'sweep-pr'), t(860, 'sweep-orphan')])[0]), 'pr#860:sweep-pr+sweep-orphan')
 })
 
 // ---- a thin budget sheds the drift targets ------------------------------

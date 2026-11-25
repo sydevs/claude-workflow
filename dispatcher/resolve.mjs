@@ -29,6 +29,37 @@ export function queuedPr(branch) {
 // not a verdict on this PR.
 const QUEUE_FAILED = new Set(['failure', 'timed_out'])
 
+const ACTIONS_APP = 'github-actions'
+
+/**
+ * What failed a queue run, or null when nothing did. Only GitHub Actions' own
+ * suite is a verdict on the queue's CI: another app's check suite on the
+ * ephemeral branch is advisory, exactly as it is on the PR head, where
+ * `gather` keeps the base ruleset's required checks and drops the rest. A
+ * `workflow_run` is always Actions and carries no `app`.
+ * (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+ */
+function queueFailure(ev) {
+  if (ev.workflow_run) return { app: ACTIONS_APP, run: ev.workflow_run.html_url || null }
+  const suite = ev.check_suite
+  if (suite?.app?.slug !== ACTIONS_APP) return null
+  return { app: ACTIONS_APP, run: suite.url || null }
+}
+
+/**
+ * How the `resolve` log line names one target. A queue failure names what
+ * failed, because the record used to keep only the run url — null for a
+ * `check_suite` — so afterwards nothing could say which app spent the repair
+ * passes. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+ */
+export function targetLabel(t) {
+  const reasons = (t.reasons || [{ reason: t.reason, facts: t.facts }]).map(({ reason, facts }) => {
+    const said = reason === 'queue-failed' ? [facts?.app, facts?.run].filter(Boolean) : []
+    return said.length ? `${reason}(${said.join(' ')})` : reason
+  })
+  return `${t.kind}#${t.number}:${reasons.join('+')}`
+}
+
 function repoOf(context) {
   return { owner: context.repo.owner, name: context.repo.repo, full: `${context.repo.owner}/${context.repo.repo}` }
 }
@@ -78,7 +109,7 @@ export function coalesceTargets(targets) {
  *  docs/why.md#a-rate-limited-call-waits-for-the-reset)
  */
 export async function resolve({ github, context, config, core = { info() {} }, now = new Date() }) {
-  const own = await eventTargets({ github, context, config, now })
+  const own = await eventTargets({ github, context, config, core, now })
   if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
@@ -109,7 +140,7 @@ export async function resolve({ github, context, config, core = { info() {} }, n
   return own.concat(expired, driftTargets(view, config, repo, { now, limit: limit - expired.length, skip }))
 }
 
-async function eventTargets({ github, context, config, now }) {
+async function eventTargets({ github, context, config, core, now }) {
   const repo = repoOf(context)
   const ev = context.payload
   const action = ev.action
@@ -180,7 +211,12 @@ async function eventTargets({ github, context, config, now }) {
     const queued = queuedPr(ev.workflow_run?.head_branch || ev.check_suite?.head_branch)
     if (queued) {
       if (!QUEUE_FAILED.has(ev.workflow_run?.conclusion || ev.check_suite?.conclusion)) return []
-      return one('pr', queued, 'queue-failed', { run: ev.workflow_run?.html_url || null })
+      const failed = queueFailure(ev)
+      if (!failed) {
+        core.info(`a failed suite from ${ev.check_suite?.app?.slug || 'an unnamed app'} on ${ev.check_suite?.head_branch} is not the queue's CI — ignored`)
+        return []
+      }
+      return one('pr', queued, 'queue-failed', failed)
     }
     let prs = (ev.workflow_run?.pull_requests || ev.check_suite?.pull_requests || []).map((p) => p.number)
     if (!prs.length) {
