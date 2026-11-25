@@ -344,6 +344,13 @@ export function conflictPlan(s, config) {
   const ran = (d) => d?.handler === 'resolve-conflicts' && sha && d.sha === sha
   const ended = (s.record?.dispatches || []).find((d) => ran(d) && d.outcome) || (ran(s.record?.current) ? s.record.current : null)
   if (ended) return [...(s.record?.handback ? [] : [handback(s, 'it still conflicts after resolve-conflicts ran on this head')]), note(`resolve-conflicts ${ended.outcome || 'ran'} on ${String(sha).slice(0, 7)} and it still conflicts — a push to a new head is what asks again`)]
+  // A base still moving would conflict the branch again: wait for it to
+  // settle, but never past the Pending due. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+  const quiet = config.dispatch.conflictQuietMinutes ?? 0
+  const moved = Date.parse(s.baseMovedAt || '')
+  if (quiet > 0 && moved && nowOf(s).getTime() - moved < quiet * 60_000 && !overdue(s, config)) {
+    return [note(`the base moved at ${s.baseMovedAt} — resolve-conflicts waits until it has been still ${quiet} minutes`)]
+  }
   return [fire('resolve-conflicts')]
 }
 

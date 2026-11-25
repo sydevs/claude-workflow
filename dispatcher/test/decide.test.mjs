@@ -1350,3 +1350,28 @@ test('a PR stacked on another branch is never armed; its review is the gate', ()
     assert.equal(of(evaluatePr(bot({ reviews: [app], prCommits }), config), 'dismissStale').length, 0)
   })
 }
+
+// ---- a conflict waits for the base to settle (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+
+const quietConfig = { ...config, dispatch: { ...config.dispatch, conflictQuietMinutes: 60 } }
+const now = new Date('2026-10-09T12:00:00Z')
+
+test('a conflict on a base that just moved waits for it to settle', () => {
+  const s = conflicted({ now, baseMovedAt: '2026-10-09T11:30:00Z' })
+  assert.deepEqual(types(evaluatePr(s, quietConfig)), ['note'])
+  assert.deepEqual(types(decide({ reason: 'conflict-scan', facts: {} }, s, quietConfig)), ['note'], 'the scan after a merge waits too')
+})
+
+test('a conflict on a base still long enough is resolved', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ now, baseMovedAt: '2026-10-09T10:30:00Z' }), quietConfig)), ['fire:resolve-conflicts'])
+})
+
+test('an overdue conflict is resolved even while the base moves', () => {
+  const s = conflicted({ now, baseMovedAt: '2026-10-09T11:59:00Z', record: { fixCi: 0, pendingSince: '2026-10-09T09:00:00Z' } })
+  assert.deepEqual(types(evaluatePr(s, quietConfig)), ['fire:resolve-conflicts'])
+})
+
+test('an unknown base time, or no quiet window, resolves at once', () => {
+  assert.deepEqual(types(evaluatePr(conflicted({ now, baseMovedAt: null }), quietConfig)), ['fire:resolve-conflicts'])
+  assert.deepEqual(types(evaluatePr(conflicted({ now, baseMovedAt: '2026-10-09T11:59:00Z' }), config)), ['fire:resolve-conflicts'])
+})

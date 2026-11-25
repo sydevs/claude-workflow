@@ -374,6 +374,15 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // once the check has approved. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
   s.mergeable = normalized.mergeable
+  // When the base last moved, read only for a conflicted PR: a burst of
+  // merges is resolved once, after it. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+  s.baseMovedAt = null
+  if (s.mergeable === 'CONFLICTING' && pr.base?.ref) {
+    try {
+      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.base.ref })
+      s.baseMovedAt = c.commit?.committer?.date || null
+    } catch { /* unknown: resolve now, as before */ }
+  }
   s.reviews = reviewsShaped
   // The ruleset keeps an approval through every push, so `buriedApprovals`
   // reads the commits after each one. Fetched only when one sits below the head.

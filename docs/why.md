@@ -2617,6 +2617,20 @@ which labelled the PR `awaiting` and put it back on the reviewer's list. Approva
 dismissed. Now an approved PR a session touched derives Pending. Only a hunk the session asks about,
 as a question thread, makes it Awaiting.
 
+## A conflict waits for the base to settle
+
+Every merge to a base re-derives the repo's other open PRs (`conflict-scan`), and each conflicted
+one got a `resolve-conflicts` session at once. A burst of merges therefore resolved the same branch
+once per merge: sydevs/SahajAtlasWeb#466 took five sessions in four days, and the WeMeditateWeb
+reorganisation on 2026-11-22 set off 35 in an afternoon, about a fifth of the loop's session time
+that week. Each resolution after the first redid work the next merge undid.
+
+So a conflicted PR waits until the base tip has been still `dispatch.conflictQuietMinutes`, read
+from the base commit's committer date, which is the merge time under a merge queue. The sweep, the
+reconciler or the PR's next event re-derives it after that. The wait never outlasts
+`dispatch.pendingDueMinutes`: an overdue conflict is resolved at once, so a base that never stops
+moving costs no more than before. A failed read of the base resolves at once too.
+
 ## A bot commit buries an approval, a conflict merge does not
 
 On 2026-11-17 the five rulesets turned on `dismiss_stale_reviews_on_push`. GitHub then dismissed
