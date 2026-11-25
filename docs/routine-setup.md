@@ -354,7 +354,7 @@ private repo:
 | `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. **Commit statuses** write must reach each `contractSync` consumer (WeMeditateWeb, SahajAtlasWeb, SahajAtlasWordpress), for the status `contracts-verify` approves on. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
-| `ROUTINE_TOKEN_SONNET` / `ROUTINE_ID_SONNET` | the `loop-sonnet` lane routine's token (secret) and trigger id (variable). Until both are set, its handlers fire on the repo's routine. |
+| `ROUTINE_TOKEN_SONNET` / `ROUTINE_ID_SONNET` | the `loop-sonnet` lane routine's token (secret) and trigger id (variable). |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's smoke step — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. The loop holds no Access credential (§4). |
 
