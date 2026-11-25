@@ -542,9 +542,12 @@ function remove(argv) {
       path,
       blocker,
       () => {
-        // teardown drops the worktree's database and its server state.
-        if (dev) attempt('bash', [DEV_SERVER, 'teardown'], { cwd: path })
-        return attempt('git', ['worktree', 'remove', path], { cwd: repo }).err
+        // teardown drops the worktree's database and its server state, and
+        // needs the worktree, so it cannot wait for the removal to succeed.
+        const tornDown = dev && !attempt('bash', [DEV_SERVER, 'teardown'], { cwd: path }).err
+        const err = attempt('git', ['worktree', 'remove', path], { cwd: repo }).err
+        // Keeping the worktree does not bring the database back. Say so.
+        return err && tornDown && dev.database ? `${err} (database ${dev.database} was already dropped)` : err
       },
       `removed${dev?.database ? `, database ${dev.database} dropped` : ''}`,
     )
