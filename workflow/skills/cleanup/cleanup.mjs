@@ -352,10 +352,11 @@ function inspectCheckout(session, wt) {
   const changes = dirty.map(({ status, file, path, recent }) => ({ status, file, session: recent && (workedHere || named.has(path)) }))
 
   const branch = wt.branch ?? null
-  const text = branch ? session.texts.join('\n') : ''
   const unpushed = lines(git(wt.path, 'log', '--format=%H %ct %s', 'HEAD', '--not', ...SAFE)).map((l) => {
     const [sha, ct, ...subject] = l.split(' ')
-    const printed = branch && new RegExp(`\\[${escapeRe(branch)}( \\(root-commit\\))? ${sha.slice(0, 7)}`).test(text)
+    // One text at a time: joining hundreds of megabytes throws RangeError.
+    const re = branch && new RegExp(`\\[${escapeRe(branch)}( \\(root-commit\\))? ${sha.slice(0, 7)}`)
+    const printed = re && session.texts.some((t) => re.test(t))
     return { sha, subject: subject.join(' '), session: Number(ct) * 1000 >= since && (workedHere || Boolean(printed)) }
   })
   return { path: wt.path, repo: wt.repo, main: wt.main, locked: wt.locked, branch, head: wt.head, createdThisSession, dirty: changes, unpushed }
