@@ -12,7 +12,7 @@ code to a test that expects this one.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh            # start + tail logs
-${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh start|stop|restart|status|health|logs [n]
+${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh start|stop|restart|status|health|info|logs [n]
 ${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/dev-server/dev-server.sh teardown   # stop + drop the database
 ```
 
@@ -43,7 +43,8 @@ first start and dropped by `teardown`.
   (vite, next-server) that owns the socket, so killing only the tracked pid leaves a listener
   that the next `start` misreads as another user's process.
 - State lives in `${XDG_STATE_HOME:-~/.local/state}/sydevs-dev-server/<slug>.json`, outside the
-  repo, so removing a worktree strands no state.
+  repo, so a worktree's own tree stays clean. `info` prints a worktree's slug, state directory and
+  database as JSON; `/workflow:cleanup` reads it to prune state and databases no worktree owns.
 - `/implement-ticket` runs `teardown` before `ExitWorktree`, so a finished ticket leaves no
   server and no database behind.
 - The script never kills a port held outside this worktree. It reports this and tells you to
