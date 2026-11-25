@@ -26,6 +26,22 @@ export function tokenFor(repoName, config, env = process.env) {
 }
 
 /**
+ * The routine a handler fires on. A handler's `lane` names a routine of its
+ * own, keyed like a repo (`ROUTINE_ID_<LANE>`, `ROUTINE_TOKEN_<LANE>`); until
+ * both are set, the repo's routine runs it, as before.
+ * (why: docs/why.md#a-mechanical-handler-runs-on-a-lighter-model)
+ */
+export function routineFor(repoName, handler, config, env = process.env) {
+  const lane = config.handlers?.[handler]?.lane || null
+  if (lane) {
+    const routineId = routineIdFor(lane, config, env)
+    const token = tokenFor(lane, config, env)
+    if (routineId && token) return { routineId, token, lane }
+  }
+  return { routineId: routineIdFor(repoName, config, env), token: tokenFor(repoName, config, env), lane: null, unsetLane: lane }
+}
+
+/**
  * A dispatch id is unique per fire, not per second. The old stamp dropped the
  * milliseconds, so two fires in one second produced one id — indistinguishable
  * in `rec.dispatches`, in the journal tally, and in the status comment

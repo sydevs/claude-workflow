@@ -354,6 +354,7 @@ private repo:
 | `SYDEVS_BOT_PAT` | the dispatch token, and the fallback when §0c's App is not set up. A `sydevs-bot` fine-grained PAT with **Issues**, **Pull requests**, **Contents**, **Commit statuses** and org **Projects**, all read and write, plus **Checks** and **Dependabot alerts** read — the same set as the App, and for the same reasons (§0c). Contents is what `PUT …/merge`, the lease ref and the relay need. A relay commit that touches `.github/workflows/` also needs **Workflows** write; without it that relay is handed back with GitHub's refusal. **Commit statuses** write must reach each `contractSync` consumer (WeMeditateWeb, SahajAtlasWeb, SahajAtlasWordpress), for the status `contracts-verify` approves on. |
 | `ROUTINE_TOKEN_<REPO>` ×5 | the bearer token for each repo's routine. Generated in the routines UI, shown once. |
 | `ROUTINE_ID_<REPO>` ×5 | variables, not secrets. The trigger id, overriding `dispatch.routines` in `loop-config.json`. |
+| `ROUTINE_TOKEN_SONNET` / `ROUTINE_ID_SONNET` | the `loop-sonnet` lane routine's token (secret) and trigger id (variable). Until both are set, its handlers fire on the repo's routine. |
 | `SENTRY_CLAUDE_WORKFLOW_TOKEN` | optional, for `audit-sentry` and the resolve-on-merge step. |
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | the `github-ci` Cloudflare Access service token, read by SahajCloud CI's smoke step — so a **repo** secret on SahajCloud, not an org one: the table's `--visibility all` would hand that repo's previews to every workflow in all five. Arrives with sydevs/SahajCloud#1082. The loop holds no Access credential (§4). |
 
@@ -660,10 +661,15 @@ under an old name before the rename merged fails validation. Post the verb again
 | `loop-SahajAtlasWordpress` | itself, SahajCloud, claude-workflow | the dispatcher |
 | `loop-claude-workflow` | itself | the dispatcher |
 | `sydevs-audit-nightly` | all five | cron, `0 8 * * *` |
+| `loop-sonnet` | all five | the dispatcher, for each handler whose `lane` is `sonnet` |
 
-The five dispatched routines carry **no schedule**. They run only when `/fire` starts them, so
-`next_run_at` stays unset. All six are opus, on the one environment, with
-`persist_session: false` and `clear_mcp_connections: true`.
+The dispatched routines carry **no schedule**. They run only when `/fire` starts them, so
+`next_run_at` stays unset. All are on the one environment, with `persist_session: false` and
+`clear_mcp_connections: true`. All are opus except `loop-sonnet`, which runs the handlers whose
+`handlers.<handler>.lane` is `sonnet` (today `fix-ci` and `resolve-conflicts`) in any repo, so it
+clones all five. It takes the same prompt as the five repo routines. Until `ROUTINE_ID_SONNET` and
+`ROUTINE_TOKEN_SONNET` are both set, those handlers fire on the repo's routine, and the `act` log
+says so. (why: docs/why.md#a-mechanical-handler-runs-on-a-lighter-model)
 
 **The `/fire` contract.** `POST https://api.anthropic.com/v1/claude_code/routines/{id}/fire`, with
 `Authorization: Bearer <that routine's token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`
