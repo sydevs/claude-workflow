@@ -47,7 +47,7 @@
     ]
   },
   "handlers": {
-    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model is documentary — every handler runs on the repo's routine (dispatch.routines), unless it names its own routine, or a lane: a routine keyed like a repo (ROUTINE_ID_<LANE>, ROUTINE_TOKEN_<LANE>), used once both are set. scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
+    "$comment": "One skill per handler; the dispatch record's handler field selects it, and its flags.mode names the job for a multi-mode skill. model also selects the lane a handler fires on: a routine keyed like a repo (ROUTINE_ID_<MODEL>, ROUTINE_TOKEN_<MODEL>), used once both are set, else the repo's routine (dispatch.routines) runs it, unless the handler names its own. scope \"repo\" marks a handler fired at a repository with no item or lock. Rules in start-run/SKILL.md.",
     "implement": {
       "model": "opus",
       "skill": "implement-ticket"
@@ -70,12 +70,10 @@
     },
     "fix-ci": {
       "model": "sonnet",
-      "lane": "sonnet",
       "skill": "fix-ci"
     },
     "resolve-conflicts": {
       "model": "sonnet",
-      "lane": "sonnet",
       "skill": "resolve-conflicts"
     },
     "review-pr": {

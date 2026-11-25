@@ -661,12 +661,12 @@ under an old name before the rename merged fails validation. Post the verb again
 | `loop-SahajAtlasWordpress` | itself, SahajCloud, claude-workflow | the dispatcher |
 | `loop-claude-workflow` | itself | the dispatcher |
 | `sydevs-audit-nightly` | all five | cron, `0 8 * * *` |
-| `loop-sonnet` | all five | the dispatcher, for each handler whose `lane` is `sonnet` |
+| `loop-sonnet` | all five | the dispatcher, for each handler whose `model` is `sonnet` |
 
 The dispatched routines carry **no schedule**. They run only when `/fire` starts them, so
 `next_run_at` stays unset. All are on the one environment, with `persist_session: false` and
 `clear_mcp_connections: true`. All are opus except `loop-sonnet`, which runs the handlers whose
-`handlers.<handler>.lane` is `sonnet` (today `fix-ci` and `resolve-conflicts`) in any repo, so it
+`handlers.<handler>.model` is `sonnet` (today `fix-ci` and `resolve-conflicts`) in any repo, so it
 clones all five. It takes the same prompt as the five repo routines. Until `ROUTINE_ID_SONNET` and
 `ROUTINE_TOKEN_SONNET` are both set, those handlers fire on the repo's routine, and the `act` log
 says so. (why: docs/why.md#a-mechanical-handler-runs-on-a-lighter-model)

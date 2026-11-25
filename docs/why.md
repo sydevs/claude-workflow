@@ -1201,8 +1201,9 @@ and `fix-ci` were 86 of 214 sessions. Both are bounded jobs: a merge of the base
 against a lean gate. Both already hand back what they cannot settle (a semantic conflict, a red
 check no pass can fix), so a weaker model costs a hand-back, never a guess.
 
-A handler's `lane` names a routine of its own, keyed like a repo, so it needs no new mechanism:
-`ROUTINE_ID_<LANE>`, `ROUTINE_TOKEN_<LANE>`, `dispatch.routines[<lane>]`. One lane routine serves
+A handler's `model` names a lane routine of its own, keyed like a repo, so it needs no new
+mechanism and no second key: `ROUTINE_ID_<MODEL>`, `ROUTINE_TOKEN_<MODEL>`,
+`dispatch.routines[<model>]`. One lane routine serves
 every repo, so it clones all five. A lane with no id or token falls back to the repo's routine, so
 the config can merge before the routine exists, and removing the secret is the rollback. Review,
 implementation and address-review stay on Opus: they are where the judgement is.
