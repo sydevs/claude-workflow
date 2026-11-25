@@ -376,7 +376,7 @@ reads the worktree, which `/simplify` is editing, so it runs once, after that co
 
 ## A tiny diff gets one read
 
-A `/simplify` fan-out over a two-file, forty-line diff costs minutes and adds little that step 2's
+A `/simplify` fan-out over a three-file, 100-line diff costs minutes and adds little that step 2's
 review and one careful read do not already find. The threshold is `review.skipWhen`, the size at
 which the critic already trusts a PR, so one value moves both: keep it small. That overlap is why
 the tier skips `/simplify` and nothing else. The two counts differ in one way — finalize-pr counts
@@ -1225,6 +1225,15 @@ find. Below `review.skipWhen` the dispatcher marks the PR ready at once and note
 reviewer is asked, once per PR rather than per head: that path runs on every pass of a ready PR the
 member keeps pushing to. A member who requested the reviewer themselves still gets it: that is the
 case it exists for, and `commentOnce` keeps it to one.
+
+On 2026-11-25 the threshold went from 2 files and 40 lines to 3 and 100, while the routines
+account kept hitting its usage limit. Of the 45 PRs the critic read from 2026-11-22 to 25, two
+fall under the new threshold. Four files and 120 lines would have caught five, but it would also
+make SahajCloud#1216 tiny. That PR is a four-file, 91-line migration, the review-scope fixture
+that must stay FULL, and it would have skipped the critic. A
+small diff still gets step 2's self-review at `review.selfReview.tinyLevel`, and a person's read.
+`improve-loop` watches for a PR under the threshold that the reviewer then changed, which is the
+sign it is too generous.
 
 ## There is no WIP cap
 

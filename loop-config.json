@@ -389,8 +389,8 @@
     "questionMarker": "<!-- sydevs-question -->",
     "profilePath": "workflow/skills/review-pr/reviewer-profile.md",
     "skipWhen": {
-      "maxFiles": 2,
-      "maxLines": 40
+      "maxFiles": 3,
+      "maxLines": 100
     },
     "selfReview": {
       "level": "medium",
