@@ -102,8 +102,8 @@ claude-workflow checkout's copy where you have one.
 
 - **`TINY`**, at or under `review.skipWhen` over the `review:` paths: skip `/simplify`, and run
   step 2's review at `review.selfReview.tinyLevel`. The dispatcher skips the critic on the same
-  threshold, so step 2 is the only agent that reads this diff. Read the diff of every `review:` path yourself for
-  simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
+  threshold, so step 2 is the only agent that reads this diff. Read the diff of every `review:`
+  path yourself for simplifications, and write `Tiny diff, read inline.` under the body's *Notes for reviewer*. Step 3
   and the comment check run as usual. (why: docs/why.md#a-tiny-diff-gets-one-read)
 - **`FULL`**: start steps 1 and 2 together. Run step 3's trigger check, then invoke `/simplify`.
   Its agents run in the background, so invoke step 2's review straight after, with the branch as
