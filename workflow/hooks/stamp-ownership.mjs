@@ -72,20 +72,24 @@ function creates(input) {
 function main() {
   const input = readInput()
   const session = input?.session_id
-  if (!session || !input.tool_use_id || !creates(input)) return
+  if (!session || !creates(input)) return
 
   const dir = join(tmpdir(), 'claude-stamp-ownership')
-  const file = join(dir, `${input.tool_use_id.replace(/[^\w-]/g, '_')}.json`)
+  // `tool_use_id` pairs a call's two events. Where a Claude Code version sends
+  // none, the session id does: two creating calls at once then share one
+  // snapshot, which costs a stamp and never misplaces one.
+  const file = join(dir, `${(input.tool_use_id ?? session).replace(/[^\w-]/g, '_')}.json`)
 
   if (input.hook_event_name === 'PreToolUse') {
     const repos = nearbyRepos(resolve(input.cwd || process.cwd()))
-    if (!repos.length) return
     mkdirSync(dir, { recursive: true })
     // A denied or interrupted call never reaches a post event: drop its snapshot after a day.
     for (const f of readdirSync(dir)) {
       const age = Date.now() - (statSync(join(dir, f), { throwIfNoEntry: false })?.mtimeMs ?? Date.now())
       if (age > DAY) rmSync(join(dir, f), { force: true })
     }
+    // Written even with no repos to snapshot, so a session-keyed file is always
+    // this call's own and never an abandoned call's.
     writeFileSync(file, JSON.stringify(snapshot(repos)))
     return
   }

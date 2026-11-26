@@ -271,6 +271,15 @@ test('stamp-ownership: the first stamp wins, so a neighbour’s branch keeps its
   assert.deepEqual(Object.fromEntries(branchStamps(r)), { 'claude/theirs': 'neighbour', 'claude/mine': 'stamp-session' })
 })
 
+test('stamp-ownership: a call carrying no tool_use_id is keyed by its session', () => {
+  const r = committedRepo('unkeyed')
+  const payload = { session_id: 'unkeyed-session', tool_name: 'Bash', tool_input: { command: 'git switch -c claude/unkeyed' }, cwd: r }
+  assertAllowed(run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PreToolUse' }, r))
+  gitIn(r, 'switch', '-q', '-c', 'claude/unkeyed')
+  assertAllowed(run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PostToolUse' }, r))
+  assert.equal(branchStamps(r).get('claude/unkeyed'), 'unkeyed-session')
+})
+
 test('stamp-ownership: a nameless EnterWorktree is stamped; one entering a path is not', () => {
   const r = committedRepo('entered')
   aroundCall('EnterWorktree', {}, r, () => gitIn(r, 'worktree', 'add', '-q', '.claude/worktrees/random-name', '-b', 'worktree-random-name'))
