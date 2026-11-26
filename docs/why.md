@@ -1065,7 +1065,11 @@ call is stamped as this session's if the neighbour's call ends last, because the
 wins. An earlier draft demanded that the call name what it stamps. It missed `../x` worktrees,
 `gh pr checkout` and a nameless `EnterWorktree`, and let `git commit -m fix` claim a neighbour's
 `fix`. And a live session's unstamped worktree, made by a script the hook cannot see, goes when it
-is clean and fully pushed. In both cases the work is safe on GitHub.
+is clean and fully pushed. In both cases the committed work is safe on GitHub, and nothing else is.
+`remove` runs `dev-server.sh teardown` first, and a same-repo worktree's database name fits the main
+checkout's template, so `isOwnDatabase` does not call it foreign: the second case drops a dev
+database that is on no remote. Teardown is not restricted to `self`, because that would strand a
+database on every orphan prune, and the removal is the one moment teardown can still run.
 
 A database goes only with the worktree that owns it, through `dev-server.sh teardown`. Cleanup
 never hunts for databases whose worktree is gone: nothing proves which checkout made one (a second
