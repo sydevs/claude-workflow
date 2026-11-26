@@ -1778,10 +1778,8 @@ deliberately makes none.
 
 The record now names what failed beside the sha. The old one kept only `run`, which is null for a
 `check_suite`, so afterwards nothing could say what had spent the passes — the ticket for #489
-could not name the app either. `run` stays a page a person can open, because `flags.queueRun`
-hands it to a session and [a routine cannot reach the API](#a-routine-cannot-reach-the-github-api);
-a suite's API url goes under `suite`. The app slug can hold only one value while the test above is
-an equality, and is recorded so the record states what it matched, not derives it.
+could not name the app either. The app slug can hold only one value while the test above is an
+equality, and is recorded so the record states what it matched, not derives it.
 
 ## The journal tally needs a writer that cannot stop
 
