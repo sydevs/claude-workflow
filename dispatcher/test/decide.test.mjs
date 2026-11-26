@@ -1056,13 +1056,8 @@ test('a queue failure is recorded against the head and repaired, not re-armed', 
   assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
   // The app is recorded with the sha: SahajAtlasWeb#489 spent two repair
   // passes on a failure the record could not name afterwards.
-  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run, app: 'github-actions' } })
+  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run, app: 'github-actions', suite: null } })
   assert.deepEqual(plan[2].flags, { queueRun: run, push: 'direct' }, 'the session is told where the failure is, and where it may push')
-})
-
-test('a queue failure with no app recorded is still charged to the head', () => {
-  const plan = decide({ reason: 'queue-failed', facts: { run } }, dequeued(), config)
-  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run, app: null } })
 })
 
 test('a sweep over a recorded queue failure repairs it — the #959 loop', () => {

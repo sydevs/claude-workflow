@@ -1715,15 +1715,27 @@ failed at 21:24Z on 2026-11-25 while the queue's Actions run was still going; th
 recorded `queueFail` against head `6ccbee46`, bumped `fixCi` to 2, and spent a `fix-ci` session
 that found nothing to repair. The cost is more than that one session: the record is kept against
 the head while nothing re-arms it, so every later pass repairs rather than re-arms, to
-`ciFixIterations` and a handback, on a PR whose required checks are all green. The PR-head path
-never read a failure that way — `gather` drops `ci.ignoreCheckNames` and reduces to the base
-ruleset's required checks before anything reads red — so another app's suite is advisory there, and
-it is advisory on the ephemeral branch too. A `workflow_run` is always Actions; a `check_suite`
-must say `app.slug === 'github-actions'`. Reading the queue branch's own run back before firing was
-rejected: it costs a call per event and still races, since that run was in progress when the event
-arrived. The record now names the app and the suite or run url beside the sha, because the old one
-kept only `run`, which is null for a `check_suite` — afterwards nothing could say which app had
-spent the passes.
+`ciFixIterations` and a handback, on a PR whose required checks are all green.
+
+The PR head has a sharper test than the queue branch can have. There `gather` drops
+`ci.ignoreCheckNames` and reduces to the base ruleset's required checks, so a check is CI because
+the ruleset requires it, whoever posted it. That test needs **check names**, and a `check_suite`
+event carries none — only `app`, `conclusion` and `head_branch`. So the queue path
+**approximates** it by the posting app: a `workflow_run` is always Actions, and a `check_suite`
+must say `app.slug === 'github-actions'`. Two assumptions make the approximation safe, and neither
+is asserted anywhere: that every check these rulesets require is Actions-hosted — a repo that
+required a third-party context would record no queue failure when it failed, and the #959 loop
+would return for that repo — and that an Actions failure on a queue branch is the queue's own
+gate rather than some other workflow that matched the ephemeral branch. Reading the queue branch's
+runs back would settle both, and was rejected on cost: a call per event, on a path that
+deliberately makes none.
+
+The record now names what failed beside the sha. The old one kept only `run`, which is null for a
+`check_suite`, so afterwards nothing could say what had spent the passes — the ticket for #489
+could not name the app either. `run` stays a page a person can open, because `flags.queueRun`
+hands it to a session and [a routine cannot reach the API](#a-routine-cannot-reach-the-github-api);
+a suite's API url goes under `suite`. The app slug can hold only one value while the test above is
+an equality, and is recorded so the record states what it matched, not derives it.
 
 ## The journal tally needs a writer that cannot stop
 

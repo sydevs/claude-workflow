@@ -57,33 +57,27 @@ test('a queue branch names its PR, whatever the base is called', () => {
   assert.equal(queuedPr(undefined), null)
 })
 
-// A `check_suite` carries the app that posted it and no `html_url`; a
-// `workflow_run` is Actions' own and carries one.
-const queueRun = (conclusion, kind = 'workflow_run', slug = 'github-actions') => ({
+// A `workflow_run` is Actions' own and carries an `html_url`; a `check_suite`
+// carries the app that posted it, and only an API `url`.
+const SUITE_URL = 'https://api.github.com/repos/sydevs/SahajCloud/check-suites/9'
+const queueEvent = (kind, body) => ({
   eventName: kind,
   repo: { owner: 'sydevs', repo: 'SahajCloud' },
-  payload: {
-    action: 'completed',
-    [kind]: {
-      head_sha: 'q1',
-      head_branch: 'gh-readonly-queue/main/pr-959-2c2765ba',
-      conclusion,
-      pull_requests: [],
-      ...(kind === 'workflow_run'
-        ? { html_url: 'https://run' }
-        : { app: slug ? { slug } : undefined, url: 'https://api.github.com/repos/sydevs/SahajCloud/check-suites/9' }),
-    },
-  },
+  payload: { action: 'completed', [kind]: { head_sha: 'q1', head_branch: 'gh-readonly-queue/main/pr-959-2c2765ba', pull_requests: [], ...body } },
 })
+const queueRun = (conclusion) => queueEvent('workflow_run', { conclusion, html_url: 'https://run' })
+const queueSuite = (conclusion, app = { slug: 'github-actions' }) => queueEvent('check_suite', { conclusion, app, url: SUITE_URL })
 // The queue path needs no API call: a lookup by sha would find no PR.
 const noApi = new Proxy({}, { get: () => { throw new Error('no API call expected') } })
 const logging = () => { const said = []; return { said, info: (m) => said.push(m) } }
 
-test('a failed queue run targets the PR its branch names, and says what failed', async () => {
+test("a failed Actions queue run targets the PR its branch names, and says what failed", async () => {
   const out = await resolve({ github: noApi, context: queueRun('failure'), config: {} })
-  assert.deepEqual(out.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: 'https://run' }]])
-  const suite = await resolve({ github: noApi, context: queueRun('timed_out', 'check_suite'), config: {} })
-  assert.deepEqual(suite.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: 'https://api.github.com/repos/sydevs/SahajCloud/check-suites/9' }]])
+  assert.deepEqual(out.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: 'https://run', suite: null }]])
+  // A suite has no run page, so `run` stays null and the API url it does carry
+  // goes under its own name: `flags.queueRun` never points at an endpoint.
+  const suite = await resolve({ github: noApi, context: queueSuite('timed_out'), config: {} })
+  assert.deepEqual(suite.map((t) => [t.number, t.reason, t.facts]), [[959, 'queue-failed', { app: 'github-actions', run: null, suite: SUITE_URL }]])
 })
 
 test('a passing or cancelled queue run targets nothing', async () => {
@@ -95,16 +89,18 @@ test('a passing or cancelled queue run targets nothing', async () => {
 // the PR head, so it is advisory here.
 test("another app's failed suite on a queue branch targets nothing, and is logged", async () => {
   const core = logging()
-  assert.deepEqual(await resolve({ github: noApi, context: queueRun('failure', 'check_suite', 'cloudflare-workers'), config: {}, core }), [])
+  assert.deepEqual(await resolve({ github: noApi, context: queueSuite('failure', { slug: 'cloudflare-workers' }), config: {}, core }), [])
   assert.match(core.said.join('\n'), /cloudflare-workers/)
-  assert.deepEqual(await resolve({ github: noApi, context: queueRun('failure', 'check_suite', null), config: {} }), [], 'an app-less suite is not Actions either')
+  // `null`, not `undefined`: a default parameter would swallow the latter.
+  assert.deepEqual(await resolve({ github: noApi, context: queueSuite('failure', null), config: {} }), [], 'an app-less suite is not Actions either')
 })
 
-test('the resolve log line names the app and run behind a queue failure', () => {
-  const queueFailed = { kind: 'pr', number: 959, reasons: [{ reason: 'queue-failed', facts: { app: 'github-actions', run: 'https://run' } }] }
-  assert.equal(targetLabel(queueFailed), 'pr#959:queue-failed(github-actions https://run)')
-  assert.equal(targetLabel({ kind: 'pr', number: 959, reasons: [{ reason: 'queue-failed', facts: {} }] }), 'pr#959:queue-failed')
-  assert.equal(targetLabel(t(860, 'sweep-pr')), 'pr#860:sweep-pr', 'every other reason is named as it always was')
+test('the resolve log line names what failed a queue run', () => {
+  const label = (facts) => targetLabel(coalesceTargets([{ ...t(959, 'queue-failed', facts) }])[0])
+  assert.equal(label({ app: 'github-actions', run: 'https://run' }), 'pr#959:queue-failed(github-actions https://run)')
+  assert.equal(label({ app: 'github-actions', suite: SUITE_URL }), `pr#959:queue-failed(github-actions ${SUITE_URL})`)
+  assert.equal(label({}), 'pr#959:queue-failed')
+  assert.equal(targetLabel(coalesceTargets([t(860, 'sweep-pr')])[0]), 'pr#860:sweep-pr', 'every other reason is named as it always was')
   assert.equal(targetLabel(coalesceTargets([t(860, 'sweep-pr'), t(860, 'sweep-orphan')])[0]), 'pr#860:sweep-pr+sweep-orphan')
 })
 
