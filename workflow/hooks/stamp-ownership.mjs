@@ -20,14 +20,13 @@
  * when nothing would be lost.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { readInput } from './lib/workflow-config.mjs'
 import { git, lines, repoOf, stampBranch, stampWorktree } from '../lib/stamps.mjs'
 
 const CREATES = /\b(?:worktree|branch|switch|checkout)\b/
-const DAY = 86_400_000
 
 const childRepos = (dir) => {
   try {
@@ -83,11 +82,6 @@ function main() {
   if (input.hook_event_name === 'PreToolUse') {
     const repos = nearbyRepos(resolve(input.cwd || process.cwd()))
     mkdirSync(dir, { recursive: true })
-    // A denied or interrupted call never reaches a post event: drop its snapshot after a day.
-    for (const f of readdirSync(dir)) {
-      const age = Date.now() - (statSync(join(dir, f), { throwIfNoEntry: false })?.mtimeMs ?? Date.now())
-      if (age > DAY) rmSync(join(dir, f), { force: true })
-    }
     // Written even with no repos to snapshot, so a session-keyed file is always
     // this call's own and never an abandoned call's.
     writeFileSync(file, JSON.stringify(snapshot(repos)))
