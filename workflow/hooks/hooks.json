@@ -18,6 +18,15 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/block-wrong-bash.mjs"
           }
         ]
+      },
+      {
+        "matcher": "Bash|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/stamp-ownership.mjs"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -31,6 +40,26 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/eslint-fix.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/stamp-ownership.mjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/stamp-ownership.mjs"
           }
         ]
       }
