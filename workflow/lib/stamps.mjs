@@ -7,22 +7,33 @@
  *   (`.git/worktrees/<name>/`), gone with `git worktree remove`;
  * - a branch: `branch.<name>.claudeSession`, gone with `git branch -D`.
  *
- * (why: docs/why.md#cleanup-touches-only-its-own-session)
+ * It also holds the three git helpers both of them need, so each has one
+ * definition. (why: docs/why.md#cleanup-touches-only-its-own-session)
  */
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const FILE = 'claude-session'
 const KEY = 'claudeSession'
 
-const git = (cwd, ...args) => {
+/** A git command's stdout, trailing newline gone, or null when it fails. */
+export const git = (cwd, ...args) => {
   try {
     return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).replace(/\n$/, '')
   } catch {
     return null
   }
+}
+
+/** Non-empty lines of a command's output. Porcelain lines can start with a space. */
+export const lines = (s) => (s ? s.split('\n').filter(Boolean) : [])
+
+/** The repo a path belongs to, as its main checkout's path. */
+export const repoOf = (dir) => {
+  const common = git(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir')
+  return common ? dirname(common) : null
 }
 
 /**

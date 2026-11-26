@@ -43,7 +43,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flag } from '../../lib/config.mjs'
-import { branchStamps, worktreeStamp } from '../../lib/stamps.mjs'
+import { branchStamps, lines, repoOf, worktreeStamp } from '../../lib/stamps.mjs'
 
 const DEV_SERVER = join(dirname(fileURLToPath(import.meta.url)), '..', 'dev-server', 'dev-server.sh')
 const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -65,7 +65,6 @@ function attempt(cmd, args, opts = {}) {
 const run = (cmd, args, opts) => attempt(cmd, args, opts).out
 // Only the trailing newline goes: porcelain lines can start with a space.
 const git = (cwd, ...args) => run('git', args, { cwd })?.replace(/\n$/, '') ?? null
-const lines = (s) => (s ? s.split('\n').filter(Boolean) : [])
 const inside = (p, dir) => p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep)
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
 const alive = (pid) => {
@@ -81,12 +80,6 @@ const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 const fail = (msg) => {
   console.error(`cleanup: ${msg}`)
   process.exit(2)
-}
-
-/** The repo a path belongs to, as its main checkout's path. */
-function repoOf(dir) {
-  const common = git(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir')
-  return common ? dirname(common) : null
 }
 
 // --- naming: does a transcript name this? --------------------------------------

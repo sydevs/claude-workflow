@@ -20,30 +20,14 @@
  * when nothing would be lost.
  */
 
-import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 import { readInput } from './lib/workflow-config.mjs'
-import { stampBranch, stampWorktree } from '../lib/stamps.mjs'
+import { git, lines, repoOf, stampBranch, stampWorktree } from '../lib/stamps.mjs'
 
 const CREATES = /\b(?:worktree|branch|switch|checkout)\b/
 const DAY = 86_400_000
-
-const git = (cwd, ...args) => {
-  try {
-    return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).replace(/\n$/, '')
-  } catch {
-    return null
-  }
-}
-const lines = (s) => (s ? s.split('\n').filter(Boolean) : [])
-
-/** The repo a path belongs to, as its main checkout's path. */
-const repoOf = (dir) => {
-  const common = git(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir')
-  return common ? dirname(common) : null
-}
 
 const childRepos = (dir) => {
   try {
