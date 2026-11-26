@@ -115,7 +115,7 @@ critic, and a bot's own is approved by Actions, as a contract sync is. `actions/
 | `/workflow:settle-roadmap` | Answer the open questions on roadmap goals in the terminal instead of on GitHub. It briefs each goal, asks each question with a recommendation (and your earlier answer, when one is reopened), researches anything you ask back, then writes the decisions into the ticket on your yes. No cloud session is spent. | `/workflow:settle-roadmap` or `/workflow:settle-roadmap sydevs/SahajCloud#902` |
 | `/workflow:finalize-pr` | Finish your own branch: simplify, review, gate, push, open or refresh the PR. Asking for a PR in prose runs it too — it is the only path to one. A cloud run opens a draft. On your own branch it opens ready once the branch is complete, so the loop works it at all — your draft it leaves alone. It never merges. | `/workflow:finalize-pr` |
 | `/workflow:dev-server` | Start, stop or check this worktree's dev server. Each worktree gets its own port and database. | `/workflow:dev-server status` |
-| `/workflow:cleanup` | End a session. It stops the servers this session started, removes its worktrees, local branches and dev databases once their work is pushed, and prunes what older sessions left, then lists what you still owe: uncommitted or unpushed work, PRs that need you, follow-up tickets never filed, and cross-repo steps. It never touches anything a running session uses, and never deletes a branch on GitHub. | `/workflow:cleanup` |
+| `/workflow:cleanup` | End a session. It stops the servers this session started, removes its worktrees, local branches and dev databases once their work is pushed, and prunes what older sessions left, then lists what you still owe: uncommitted or unpushed work, PRs that need you, follow-up tickets never filed, and cross-repo steps. It never touches anything another running session made or uses, and never deletes a branch on GitHub. | `/workflow:cleanup` |
 
 `write-ticket`, `implement-ticket`, `revise-roadmap`, `implement-roadmap` and `review-pr` also run
 locally against an issue or PR number, for example `/workflow:implement-ticket 41` or
@@ -232,9 +232,10 @@ error. Each person still runs `/plugin install` once.
 }
 ```
 
-The plugin also ships four hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`
-and `eslint-fix`. Code review, security review and type-checking on edit come from official
-plugins instead (`pr-review-toolkit`, `/security-review` with `security-guidance`,
+The plugin also ships five hooks: `block-generated-files`, `block-wrong-bash`, `prettier-format`,
+`eslint-fix`, and `stamp-ownership`, which records the session that created each worktree and
+local branch for `/workflow:cleanup`. Code review, security review and type-checking on edit come
+from official plugins instead (`pr-review-toolkit`, `/security-review` with `security-guidance`,
 `typescript-lsp` and `php-lsp`).
 
 **Developing this repo.** Read [`AGENTS.md`](AGENTS.md) first — merging to `main` is the deploy.

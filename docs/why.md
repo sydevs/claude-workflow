@@ -1043,10 +1043,33 @@ A maintainer runs several local sessions at once. On 2026-11-25, while `cleanup`
 one laptop held two Ladle servers and three dev servers from other live sessions, ten worktrees
 across four repos, ninety-odd local branches, and two SahajCloud databases whose worktrees were long
 gone. A sweep that stops "every Ladle" or removes "every clean worktree" kills a neighbour's work
-mid-test, and a check that a path merely *contains* a name let `.claude/worktrees/fix-2` claim
-`fix`. So `cleanup.mjs` proves ownership token by token, refuses whatever a live session names, and
-deletes only local branches: GitHub deletes a merged branch itself, and an unmerged remote branch
-is the only copy of an open PR.
+mid-test. So `cleanup.mjs` acts only on what it can prove is this session's, and deletes only local
+branches: GitHub deletes a merged branch itself, and an unmerged remote branch is the only copy of an
+open PR.
+
+**Ownership is stamped at creation, not inferred from transcripts.** The first version decided
+ownership by whether a transcript named a thing, and refused anything another live session's
+transcript named. It fed itself: every `scan` printed every worktree and branch in the repo, so
+after one cleanup, every other open session's transcript named everything, and every later cleanup
+refused its own work as "named by a live session". It also refused the worktree it ran in: its
+own `lsof`, started there, listed itself as a process holding it. Now the `stamp-ownership` hook
+snapshots worktrees and branches either side of each call that can create one, and stamps what
+is new, in git itself: a `claude-session` file in the worktree's admin directory, and
+`branch.<name>.claudeSession` (`workflow/lib/stamps.mjs`). Git deletes both with the thing.
+Cleanup then needs no transcript but its own: `self` it removes, another live session's it only
+counts, and an orphan (a dead session's, or unstamped) it prunes when nothing would be lost, and
+every command runs at `/` so it never holds what it removes.
+
+Two risks are accepted on purpose. A neighbour's branch created during this session's creating
+call is stamped as this session's if the neighbour's call ends last, because the first stamp
+wins. An earlier draft demanded that the call name what it stamps. It missed `../x` worktrees,
+`gh pr checkout` and a nameless `EnterWorktree`, and let `git commit -m fix` claim a neighbour's
+`fix`. And a live session's unstamped worktree, made by a script the hook cannot see, goes when it
+is clean and fully pushed. In both cases the committed work is safe on GitHub, and nothing else is.
+`remove` runs `dev-server.sh teardown` first, and a same-repo worktree's database name fits the main
+checkout's template, so `isOwnDatabase` does not call it foreign: the second case drops a dev
+database that is on no remote. Teardown is not restricted to `self`, because that would strand a
+database on every orphan prune, and the removal is the one moment teardown can still run.
 
 A database goes only with the worktree that owns it, through `dev-server.sh teardown`. Cleanup
 never hunts for databases whose worktree is gone: nothing proves which checkout made one (a second
