@@ -1,6 +1,6 @@
 ---
 name: cleanup
-description: End-of-session cleanup for a local session. Stops the dev and Ladle servers this session started, removes its worktrees, local branches and dev databases once their work is safely pushed, prunes what older sessions left behind, and reports what is still outstanding — unpushed or uncommitted work, PRs that need you, follow-up tickets discussed but never filed, and cross-repo steps still owed. Touches nothing a running session uses, and never deletes a branch on GitHub. User-invoked only.
+description: End-of-session cleanup for a local session. Stops the dev and Ladle servers this session started, removes its worktrees, local branches and dev databases once their work is safely pushed, prunes what older sessions left behind, and reports what is still outstanding — unpushed or uncommitted work, PRs that need you, follow-up tickets discussed but never filed, and cross-repo steps still owed. Touches nothing another running session made or uses, and never deletes a branch on GitHub. User-invoked only.
 disable-model-invocation: true
 allowed-tools: Bash(node *skills/cleanup/cleanup.mjs*), Bash(git fetch:*), Bash(git -C:*), Bash(gh pr list:*), Bash(gh api graphql:*), Bash(jq -c .contractSync*), Bash(gh search issues:*), Bash(gh search prs:*), Read, TaskStop, CronList, CronDelete, AskUserQuestion, ExitWorktree, mcp__playwright__browser_close
 ---
@@ -15,8 +15,7 @@ it.
 `cleanup.mjs` below is `${CLAUDE_PLUGIN_ROOT:-<claude-workflow>/workflow}/skills/cleanup/cleanup.mjs`.
 Spell the full path in every command: shell variables do not survive between commands. **Stop
 and delete only through the script, never by hand.** It reads who created each worktree and
-branch from the stamps the `stamp-ownership` hook writes, and re-checks them as it acts. Never
-search other sessions' transcripts for an owner, and never refuse because one names a thing.
+branch from the stamps the `stamp-ownership` hook writes, and re-checks them as it acts.
 (why: docs/why.md#cleanup-touches-only-its-own-session)
 
 Ask every question with `AskUserQuestion`, recommended option first.
@@ -86,7 +85,8 @@ after the merge are on no PR.
 
 The session ends here, so the worktree it works in goes too. If the session entered a worktree,
 call `ExitWorktree` with `action: "keep"` first: it returns the session to the directory it
-started in. This session's own processes never hold a worktree, so do nothing else first.
+started in. A process still running in a worktree keeps it, this session's own included: step 1
+decides about those.
 
 `node cleanup.mjs remove <path>…` with every checkout whose `owner` is `self`. A removed worktree
 takes its local branch and isolated database with it. Then

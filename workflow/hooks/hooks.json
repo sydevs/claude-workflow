@@ -52,6 +52,17 @@
           }
         ]
       }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/stamp-ownership.mjs"
+          }
+        ]
+      }
     ]
   }
 }

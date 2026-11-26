@@ -8,10 +8,11 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync, execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { branchStamps, worktreeStamp } from './stamps.mjs'
 
 const hooks = join(dirname(fileURLToPath(import.meta.url)), '..', 'hooks')
 
@@ -239,66 +240,62 @@ function committedRepo(name) {
   execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'x'], { cwd: dir })
   return dir
 }
-const gitOut = (cwd, ...args) => {
-  try {
-    return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  } catch {
-    return null
-  }
-}
+const gitIn = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' })
 let callId = 0
 
 /** Run the hook either side of `act`, as Claude Code does around one tool call. */
-function aroundCall(tool, tool_input, cwd, act) {
+function aroundCall(tool, tool_input, cwd, act, post = 'PostToolUse') {
   const payload = { session_id: 'stamp-session', tool_use_id: `toolu_${++callId}`, tool_name: tool, tool_input, cwd }
   const pre = run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PreToolUse' }, cwd)
   act()
-  const post = run('stamp-ownership.mjs', { ...payload, hook_event_name: 'PostToolUse' }, cwd)
-  for (const r of [pre, post]) assertAllowed(r)
-}
-const branchStamp = (r, b) => gitOut(r, 'config', '--get', `branch.${b}.claudeSession`)
-const worktreeStamp = (wt) => {
-  try {
-    return readFileSync(join(gitOut(wt, 'rev-parse', '--absolute-git-dir'), 'claude-session'), 'utf-8').trim()
-  } catch {
-    return null
-  }
+  for (const r of [pre, run('stamp-ownership.mjs', { ...payload, hook_event_name: post }, cwd)]) assertAllowed(r)
 }
 
-test('stamp-ownership: stamps the worktree and branch a call creates, from a workspace cwd', () => {
+test('stamp-ownership: stamps what a creating call makes, from a workspace cwd and beside the repo', () => {
   const r = committedRepo('stamped')
-  const command = 'cd stamped && git worktree add .claude/worktrees/fix -b claude/fix'
+  const command = 'cd stamped && git worktree add .claude/worktrees/fix -b claude/fix && git worktree add ../beside -b claude/beside'
   aroundCall('Bash', { command }, tmp, () => {
-    execFileSync('git', ['worktree', 'add', '-q', '.claude/worktrees/fix', '-b', 'claude/fix'], { cwd: r })
-    // Another session's branch, made while this call ran: new, but not named.
-    execFileSync('git', ['branch', 'claude/fix-2'], { cwd: r })
+    gitIn(r, 'worktree', 'add', '-q', '.claude/worktrees/fix', '-b', 'claude/fix')
+    gitIn(r, 'worktree', 'add', '-q', '../beside', '-b', 'claude/beside')
   })
   assert.equal(worktreeStamp(join(r, '.claude/worktrees/fix')), 'stamp-session')
-  assert.equal(branchStamp(r, 'claude/fix'), 'stamp-session')
-  assert.equal(branchStamp(r, 'claude/fix-2'), null)
+  assert.equal(worktreeStamp(join(tmp, 'beside')), 'stamp-session')
+  assert.deepEqual(Object.fromEntries(branchStamps(r)), { 'claude/fix': 'stamp-session', 'claude/beside': 'stamp-session' })
 })
 
-test('stamp-ownership: EnterWorktree stamps the worktree it names, and its branch', () => {
+test('stamp-ownership: the first stamp wins, so a neighbour’s branch keeps its owner', () => {
+  const r = committedRepo('raced')
+  gitIn(r, 'branch', 'claude/theirs')
+  gitIn(r, 'config', 'branch.claude/theirs.claudeSession', 'neighbour')
+  aroundCall('Bash', { command: 'git switch -c claude/mine' }, r, () => gitIn(r, 'switch', '-q', '-c', 'claude/mine'))
+  assert.deepEqual(Object.fromEntries(branchStamps(r)), { 'claude/theirs': 'neighbour', 'claude/mine': 'stamp-session' })
+})
+
+test('stamp-ownership: a nameless EnterWorktree is stamped; one entering a path is not', () => {
   const r = committedRepo('entered')
-  aroundCall('EnterWorktree', { name: 'ew' }, r, () => {
-    execFileSync('git', ['worktree', 'add', '-q', '.claude/worktrees/ew', '-b', 'worktree-ew'], { cwd: r })
-  })
-  assert.equal(worktreeStamp(join(r, '.claude/worktrees/ew')), 'stamp-session')
-  assert.equal(branchStamp(r, 'worktree-ew'), 'stamp-session')
+  aroundCall('EnterWorktree', {}, r, () => gitIn(r, 'worktree', 'add', '-q', '.claude/worktrees/random-name', '-b', 'worktree-random-name'))
+  assert.equal(worktreeStamp(join(r, '.claude/worktrees/random-name')), 'stamp-session')
+  gitIn(r, 'worktree', 'add', '-q', '.claude/worktrees/made-by-hand', '-b', 'claude/by-hand')
+  aroundCall('EnterWorktree', { path: '.claude/worktrees/made-by-hand' }, r, () => {})
+  assert.equal(worktreeStamp(join(r, '.claude/worktrees/made-by-hand')), null)
 })
 
-test('stamp-ownership: an existing branch a call only names stays unstamped', () => {
-  const r = committedRepo('existing')
-  execFileSync('git', ['branch', 'claude/old'], { cwd: r })
-  aroundCall('Bash', { command: 'git switch claude/old' }, r, () => execFileSync('git', ['switch', '-q', 'claude/old'], { cwd: r }))
-  assert.equal(branchStamp(r, 'claude/old'), null)
+test('stamp-ownership: a call that fails after creating still stamps', () => {
+  const r = committedRepo('failed')
+  const command = 'git worktree add .claude/worktrees/half -b claude/half && pnpm install'
+  aroundCall('Bash', { command }, r, () => gitIn(r, 'worktree', 'add', '-q', '.claude/worktrees/half', '-b', 'claude/half'), 'PostToolUseFailure')
+  assert.equal(worktreeStamp(join(r, '.claude/worktrees/half')), 'stamp-session')
 })
 
-test('stamp-ownership: unusable input, and a call outside any repo, pass silently', () => {
-  for (const stdin of ['', 'not json', {}, { tool_name: 'Bash', tool_input: { command: 'git status' } }]) {
+test('stamp-ownership: unusable input, a call that creates nothing, and a call outside any repo pass silently', () => {
+  for (const stdin of ['', 'not json', {}, { tool_name: 'Bash', tool_input: { command: 'git branch x' } }]) {
     assertAllowed(run('stamp-ownership.mjs', stdin))
   }
-  aroundCall('Bash', { command: 'git init x' }, plain, () => {})
+  const r = committedRepo('readonly')
+  aroundCall('Bash', { command: 'git status && touch x' }, r, () => gitIn(r, 'branch', 'claude/not-from-this-call'))
+  assert.equal(branchStamps(r).size, 0)
+  aroundCall('Bash', { command: 'git branch x' }, plain, () => {})
   // A post with no pre (the pre failed, or ran in an older plugin) does nothing.
-  assertAllowed(run('stamp-ownership.mjs', { session_id: 's', tool_use_id: 'toolu_none', tool_name: 'Bash', tool_input: { command: 'git x' }, hook_event_name: 'PostToolUse', cwd: repo }))
+  const post = { session_id: 's', tool_use_id: 'toolu_none', tool_name: 'Bash', tool_input: { command: 'git branch x' }, hook_event_name: 'PostToolUse', cwd: repo }
+  assertAllowed(run('stamp-ownership.mjs', post))
 })

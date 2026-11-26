@@ -6,13 +6,13 @@
 // hooks/stamp-ownership.mjs writes, never by what a transcript names.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync, execFileSync } from 'node:child_process'
+import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isOwnDatabase, namedIn, ownerOf, removalBlocker } from '../skills/cleanup/cleanup.mjs'
+import { stampBranch as writeBranchStamp, stampWorktree as writeWorktreeStamp } from './stamps.mjs'
 
 const script = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'cleanup', 'cleanup.mjs')
 const SESSION = 'test-session-0000'
@@ -31,8 +31,11 @@ function writeTranscript(...mentions) {
 }
 
 function cleanup(...args) {
+  return cleanupIn(repo, ...args)
+}
+function cleanupIn(cwd, ...args) {
   return spawnSync('node', [script, ...args, '--session', SESSION, '--transcript', transcript], {
-    cwd: repo,
+    cwd,
     encoding: 'utf8',
     env: { ...process.env, XDG_STATE_HOME: join(tmp, 'state'), CLAUDE_CONFIG_DIR: join(tmp, 'claude'), CLAUDE_PID: '' },
   })
@@ -49,12 +52,12 @@ function commit(dir, file) {
   git(dir, 'commit', '-q', '-m', file)
 }
 
-/** Stamp a worktree as the hook does: a file in its admin directory. */
+/** Stamp a worktree as the hook does, by default as this session's. */
 function stampWorktree(dir, id = SESSION) {
-  writeFileSync(join(git(dir, 'rev-parse', '--absolute-git-dir'), 'claude-session'), `${id}\n`)
+  writeWorktreeStamp(dir, id)
   return dir
 }
-const stampBranch = (branch, id = SESSION) => git(repo, 'config', `branch.${branch}.claudeSession`, id)
+const stampBranch = (branch, id = SESSION) => writeBranchStamp(repo, branch, id)
 
 /** Register a live session, as Claude Code does, whose transcript says `says`. */
 function liveSession(t, says = 'nothing') {
@@ -84,10 +87,10 @@ before(() => {
 
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-test('namedIn matches whole paths and names, never a prefix of a longer one', () => {
-  const text = 'cd /r/.claude/worktrees/fix-2 && git switch claude/a-b'
-  const found = namedIn([text], ['/r/.claude/worktrees/fix', '/r/.claude/worktrees/fix-2', 'claude/a', 'claude/a-b'])
-  assert.deepEqual([...found].sort(), ['/r/.claude/worktrees/fix-2', 'claude/a-b'])
+test('namedIn matches whole paths, never a prefix of a longer one', () => {
+  const text = 'Edit /r/src/a.tsx and /r/wt-2/b.ts'
+  const found = namedIn([text], ['/r/src/a.ts', '/r/src/a.tsx', '/r/wt/b.ts', '/r/wt-2/b.ts'])
+  assert.deepEqual([...found].sort(), ['/r/src/a.tsx', '/r/wt-2/b.ts'])
   assert.ok(namedIn(['"/r/wt/src/x.ts"'], ['/r/wt']).has('/r/wt'), 'a path continues into its directory')
   // Two needles can start at one index, and both are named there.
   assert.deepEqual([...namedIn(['cd /r/wt/src/x.ts'], ['/r/wt', '/r/wt/src'])].sort(), ['/r/wt', '/r/wt/src'])
@@ -180,30 +183,25 @@ test('remove --orphans leaves a worktree outside .claude/worktrees to a person',
   assert.ok(existsSync(handMade))
 })
 
-/** A process sitting in `dir`, carrying `session` as Claude's Bash tool does. */
-function sitIn(t, dir, session) {
-  // node, not sleep: macOS hides a platform binary's environment from `ps -E`.
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], {
-    cwd: dir,
-    env: { ...process.env, CLAUDE_CODE_SESSION_ID: session },
-    stdio: 'ignore',
-  })
-  t.after(() => child.kill())
-  pause(300) // until lsof can see its cwd
-  return child.pid
-}
-const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-
-test('this session’s own process does not hold its worktree; another session’s does', (t) => {
-  const own = stampWorktree(addWorktree('rooted'))
-  sitIn(t, own, SESSION)
-  const held = stampWorktree(addWorktree('held'))
-  const pid = sitIn(t, held, 'someone-else')
+test('remove takes the worktree it runs in', () => {
+  // The failure this replaced: its own `lsof`, started in the worktree, held it.
+  const wt = stampWorktree(addWorktree('rooted'))
   writeTranscript('session')
-  const r = cleanup('remove', own, held)
-  assert.match(r.stdout, /rooted: removed/)
-  assert.match(r.stdout, new RegExp(`held: KEPT — a process still runs in it \\(pid ${pid}\\)`))
+  const r = cleanupIn(wt, 'remove', wt)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.ok(!existsSync(wt))
 })
+
+test('remove keeps a worktree a process still runs in', (t) => {
+  const wt = stampWorktree(addWorktree('held'))
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { cwd: wt, stdio: 'ignore' })
+  t.after(() => child.kill())
+  for (let i = 0; i < 100 && !spawnSync('lsof', ['-a', '-d', 'cwd', '-p', String(child.pid)]).stdout?.length; i++) pause(20)
+  writeTranscript('session')
+  assert.match(cleanup('remove', wt).stdout, new RegExp(`held: KEPT — a process still runs in it \\(pid ${child.pid}\\)`))
+  assert.ok(existsSync(wt))
+})
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
 test('drop-branch deletes only a local branch with nothing to lose', (t) => {
   git(repo, 'branch', 'claude/pushed', 'origin/main')

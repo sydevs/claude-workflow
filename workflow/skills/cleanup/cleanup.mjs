@@ -26,9 +26,9 @@
  *   or the transcript holds its trace — the edited file's path, or the
  *   `[<branch> <sha>]` line `git commit` prints — or it is newer than the
  *   session in a checkout the session worked in.
- * - Nothing is removed that a process of another session, or of a
- *   terminal, sits in. This session's own processes do not count: at the
- *   end of its life, the worktree it worked in is the one to remove.
+ * - Nothing is removed that a process sits in, except this command and the
+ *   shells above it: at the end of its life, the worktree the session
+ *   worked in is the one to remove, but a build still running there keeps it.
  * - A commit is safe to lose locally when a remote branch or a PR head
  *   holds it. The skill fetches PR heads into `refs/cleanup/pull/*`: GitHub
  *   keeps them after a squash merge deletes the branch.
@@ -43,7 +43,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flag } from '../../lib/config.mjs'
-import { STAMP_FILE, STAMP_KEY } from '../../hooks/stamp-ownership.mjs'
+import { branchStamps, worktreeStamp } from '../../lib/stamps.mjs'
 
 const DEV_SERVER = join(dirname(fileURLToPath(import.meta.url)), '..', 'dev-server', 'dev-server.sh')
 const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
@@ -52,9 +52,13 @@ const WORKTREES = `${sep}.claude${sep}worktrees${sep}`
 
 // --- plumbing ----------------------------------------------------------------
 
-/** Run a command. `out` is stdout on success; `err` says why not, ENOENT included. */
+/**
+ * Run a command. `out` is stdout on success; `err` says why not, ENOENT
+ * included. It runs at `/` unless told otherwise: an `lsof` started inside a
+ * worktree lists itself as a process holding it.
+ */
 function attempt(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], ...opts })
+  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], cwd: '/', ...opts })
   if (r.status === 0) return { out: r.stdout, err: null }
   return { out: null, err: (r.stderr || r.error?.message || `${cmd} exited ${r.status}`).trim() }
 }
@@ -87,13 +91,12 @@ function repoOf(dir) {
 
 // --- naming: does a transcript name this? --------------------------------------
 
-const AFTER_PATH = /[\w.-]/ // a path may continue into the directory with `/`
-const AFTER_NAME = /[\w./-]/
+const AFTER = /[\w.-]/ // a path may continue into the directory with `/`
 
 /**
- * Which needles some text names as a whole token, so `fix` is not named by
- * `fix-2`, nor `claude/a` by `claude/a-b`. One pass over each text however
- * many needles: live transcripts run to hundreds of megabytes.
+ * Which paths some text names as a whole token, so `/r/a.ts` is not named by
+ * `/r/a.tsx`. One pass over each text however many paths: live transcripts
+ * run to hundreds of megabytes.
  */
 export function namedIn(texts, needles) {
   const want = [...new Set(needles.filter(Boolean))].sort((a, b) => b.length - a.length)
@@ -102,15 +105,14 @@ export function namedIn(texts, needles) {
   const byLatin1 = new Map(want.map((n) => [Buffer.from(n, 'utf8').toString('latin1'), n]))
   // Zero-width, so every needle starting here is seen: an alternation would
   // report only its longest, losing `/r/wt` to `/r/wt/src`. The lookbehind is
-  // the opening boundary; the closing one differs per needle, below.
+  // the opening boundary, and AFTER the closing one.
   const re = new RegExp(`(?<![\\w./-])(?=(${[...byLatin1.keys()].map(escapeRe).join('|')}))`, 'g')
   for (const text of texts) {
     re.lastIndex = 0
     for (let m; (m = re.exec(text)); re.lastIndex = m.index + 1) {
       for (const [latin, needle] of byLatin1) {
         if (found.has(needle) || !text.startsWith(latin, m.index)) continue
-        const isPath = needle.startsWith(sep) || needle.startsWith('.')
-        if (!(isPath ? AFTER_PATH : AFTER_NAME).test(text[m.index + latin.length] ?? '')) found.add(needle)
+        if (!AFTER.test(text[m.index + latin.length] ?? '')) found.add(needle)
       }
       if (found.size === want.length) return found
     }
@@ -129,7 +131,7 @@ function findTranscript(id) {
   return null
 }
 
-/** A transcript and its subagents' — a subagent's worktree is named only in its own. */
+/** A transcript and its subagents' — a subagent's edits are recorded only in its own. */
 function transcriptFiles(transcript) {
   const files = [transcript]
   const sub = join(transcript.replace(/\.jsonl$/, ''), 'subagents')
@@ -182,8 +184,7 @@ function otherSessions(selfId) {
 
 /** Who a stamp says made a thing: `self`, `live` (another running session), or `orphan`. */
 export function ownerOf(stamp, selfId, liveIds) {
-  if (stamp && stamp === selfId) return 'self'
-  return stamp && liveIds.has(stamp) ? 'live' : 'orphan'
+  return stamp === selfId ? 'self' : liveIds.has(stamp) ? 'live' : 'orphan'
 }
 
 // --- processes -----------------------------------------------------------------
@@ -236,22 +237,6 @@ function ownAncestry() {
   return own
 }
 
-/**
- * Whether a process is this session's: it carries the session's id, or it
- * descends from Claude itself — an MCP server, a background task, a Monitor.
- */
-function isOwnProcess(pid, sessionId) {
-  if (sessionOf(pid) === sessionId) return true
-  const claude = Number(process.env.CLAUDE_PID) || null
-  if (!claude) return false
-  const seen = new Set()
-  for (let p = pid; p && p > 1 && !seen.has(p); p = parentOf(p)) {
-    if (p === claude) return true
-    seen.add(p)
-  }
-  return false
-}
-
 /** The listener plus its ancestors that belong to this session, below Claude itself. */
 function sessionTree(pid, sessionId) {
   const claude = Number(process.env.CLAUDE_PID) || null
@@ -290,28 +275,6 @@ function listWorktrees(repo) {
     else if (key === 'HEAD') cur.head = val
     else if (key === 'locked') cur.locked = val || true
     else if (key === 'prunable') cur.prunable = true
-  }
-  return out
-}
-
-/** The session that created a linked worktree, from the stamp in its admin directory. */
-function worktreeStamp(wt) {
-  if (wt.main) return null
-  try {
-    const admin = readFileSync(join(wt.path, '.git'), 'utf8').match(/^gitdir: (.*)$/m)?.[1]
-    return readFileSync(join(resolve(wt.path, admin), STAMP_FILE), 'utf8').trim() || null
-  } catch {
-    return null
-  }
-}
-
-/** Each stamped local branch's creating session, from `branch.<name>.claudeSession`. */
-function branchStamps(repo) {
-  const out = new Map()
-  const key = new RegExp(`^branch\\.(.+)\\.${STAMP_KEY.toLowerCase()} (.+)$`)
-  for (const l of lines(git(repo, 'config', '--get-regexp', `^branch\\..*\\.${STAMP_KEY.toLowerCase()}$`))) {
-    const m = l.match(key)
-    if (m) out.set(m[1], m[2])
   }
   return out
 }
@@ -365,7 +328,7 @@ export function branchBlocker(b, { orphans = false } = {}) {
  */
 function inspectCheckout(session, wt, liveIds) {
   const since = session.startedAt
-  const owner = wt.main ? null : ownerOf(worktreeStamp(wt), session.id, liveIds)
+  const owner = wt.main ? null : ownerOf(worktreeStamp(wt.path), session.id, liveIds)
   const workedHere = owner === 'self' || session.cwds.some((c) => inside(c, wt.path))
 
   const entries = (git(wt.path, 'status', '--porcelain=v1', '-z', '--untracked-files=all') ?? '').split('\0')
@@ -378,14 +341,15 @@ function inspectCheckout(session, wt, liveIds) {
     const mtime = statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? null
     dirty.push({ status: e.slice(0, 2), file: e.slice(3), path: file, recent: mtime === null || mtime >= since })
   }
-  const named = namedIn(session.texts, dirty.filter((d) => d.recent).map((d) => d.path))
+  // Where the session worked, every recent change is its own: no transcript search.
+  const named = workedHere ? new Set() : namedIn(session.texts, dirty.filter((d) => d.recent).map((d) => d.path))
   const changes = dirty.map(({ status, file, path, recent }) => ({ status, file, session: recent && (workedHere || named.has(path)) }))
 
   const branch = wt.branch ?? null
   const unpushed = lines(git(wt.path, 'log', '--format=%H %ct %s', 'HEAD', '--not', ...SAFE)).map((l) => {
     const [sha, ct, ...subject] = l.split(' ')
     // One text at a time: joining hundreds of megabytes throws RangeError.
-    const re = branch && new RegExp(`\\[${escapeRe(branch)}( \\(root-commit\\))? ${sha.slice(0, 7)}`)
+    const re = !workedHere && branch && new RegExp(`\\[${escapeRe(branch)}( \\(root-commit\\))? ${sha.slice(0, 7)}`)
     const printed = re && session.texts.some((t) => re.test(t))
     return { sha, subject: subject.join(' '), session: Number(ct) * 1000 >= since && (workedHere || Boolean(printed)) }
   })
@@ -465,18 +429,17 @@ function scan(argv) {
   const worktrees = repos.flatMap(listWorktrees).filter((w) => !w.prunable && existsSync(w.path))
   const { ids: liveIds } = otherSessions(session.id)
 
-  // Another live session's things are counted, never listed: a name printed
-  // here lands in this transcript, and must not read as this session's.
+  // Another live session's things are only counted: they are its to report.
   const checkouts = []
   const orphanWorktrees = []
   let liveWorktrees = 0
   for (const wt of worktrees) {
     const info = inspectCheckout(session, wt, liveIds)
-    if (info.owner === 'self' || info.dirty.some((d) => d.session) || info.unpushed.some((c) => c.session)) {
+    if (info.owner === 'live') liveWorktrees++
+    else if (info.owner === 'self' || info.dirty.some((d) => d.session) || info.unpushed.some((c) => c.session)) {
       const point = info.branch ? git(wt.path, 'merge-base', `origin/${defaultBranch(wt.repo)}`, 'HEAD') : null
       checkouts.push({ ...info, remote: remoteSlug(wt.repo), changedFiles: point ? lines(git(wt.path, 'diff', '--name-only', point, 'HEAD')) : [] })
-    } else if (info.owner === 'live') liveWorktrees++
-    else if (!wt.main) orphanWorktrees.push({ path: wt.path, branch: info.branch })
+    } else if (!wt.main) orphanWorktrees.push({ path: wt.path, branch: info.branch })
   }
 
   const stashes = repos.flatMap((repo) =>
@@ -559,9 +522,6 @@ function remove(argv) {
   const others = otherSessions(session.id)
   const own = ownAncestry()
   const cwds = lsof('-d', 'cwd').filter(([pid]) => !own.has(pid))
-  // This session's own processes — its shell, an MCP server, a Monitor —
-  // stand in the worktree it is finishing, and do not hold it.
-  const foreign = (pid) => !isOwnProcess(pid, session.id)
   let kept = 0
   for (const path of paths) {
     const repo = repoOf(path)
@@ -573,7 +533,7 @@ function remove(argv) {
     const info = inspectCheckout(session, wt, others.ids)
     const dev = devServerInfo(path)
     const holders = [
-      ...new Set([...cwds.filter(([pid, cwd]) => inside(cwd, path) && foreign(pid)).map(([pid]) => pid), ...others.within(path)]),
+      ...new Set([...cwds.filter(([, cwd]) => inside(cwd, path)).map(([pid]) => pid), ...others.within(path)]),
     ]
     // teardown drops dev.database, and a worktree we did not create took that
     // name from its own branch's .claude/workflow.json. Trust only a name the
