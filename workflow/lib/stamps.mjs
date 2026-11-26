@@ -12,7 +12,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 const FILE = 'claude-session'
 const KEY = 'claudeSession'
@@ -25,14 +25,14 @@ const git = (cwd, ...args) => {
   }
 }
 
-/** A linked worktree's admin directory, from its `.git` file. Null for a main checkout. */
+/**
+ * A linked worktree's admin directory, as git reports it. The two paths differ
+ * only in a linked worktree, so a main checkout answers null — and so does a
+ * worktree whose admin directory git has already dropped.
+ */
 function adminDir(worktree) {
-  try {
-    const gitdir = readFileSync(join(worktree, '.git'), 'utf8').match(/^gitdir: (.*)$/m)?.[1]
-    return gitdir ? resolve(worktree, gitdir) : null
-  } catch {
-    return null
-  }
+  const [dir, common] = (git(worktree, 'rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir') ?? '').split('\n')
+  return dir && dir !== common ? dir : null
 }
 
 /** The session that created a linked worktree, or null. */
