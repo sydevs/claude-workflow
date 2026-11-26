@@ -1632,6 +1632,52 @@ its dispatch job: a reusable job asking for more than its caller grants fails th
 rulesets are unchanged: a bypass actor could not be scoped to these paths, and would skip the
 queue for every bot PR.
 
+## A translation key is approved by Actions
+
+SahajCloud#1273 added two atlas strings: one schema leaf each, the same two keys in nine locale
+seeds, and the regenerated `payload-types.ts`. Eleven files put it far past `review.skipWhen`, so it
+paid for a critic, an `address-review` and two full CI runs of about 11 minutes, 543 s of each the
+whole unit and integration suite. Most of those files are mirrors of one decision, and the decision
+is small: a key that did not exist cannot break a reader of the keys that did.
+
+So `translationOnly` in loop-config.json names, per repo, the translation schemas, the locale
+seeds and the generated types such a PR touches, and `dispatcher/translations.mjs` decides from
+**contents**, not paths. A path check alone would pass a PR that renames a key the consumers read,
+or puts `maxLength` on a leaf that production data already breaks. What counts as add-only lives
+in `translations.mjs`, case by case in its test. Base and head are read at the compare's merge
+base, so a base that moved on adds nothing. Anything unread, unparsable or outside those shapes is
+not translation-only, and gets the full treatment.
+
+Such a PR skips the critic, as a contract sync does. A bot's own is then approved where a
+contract sync is, by `github-actions[bot]`, but from `act` rather than a job of its own: the PR's
+own event wakes `act` in its own repo, whose token can approve there, so no attestation and no
+second trigger are needed. That token reaches only the event's repo, so a sweep from elsewhere
+leaves the approval to the PR's next event. The approval is pinned to the head and carries a
+marker; one covering an earlier head, or a head that outgrew the check, is dismissed on every
+pass, and a PR that outgrew it gets the critic and its reviewer. GitHub's own `reviewDecision`
+tells whether the ruleset counts the approval, and when it does not the reviewer is asked. The
+owner's own PR is not approved by the check: it skips the critic, and is approved for its author
+and armed by its author as any owner PR is.
+
+The generated file is the one translation file that is code, and it is matched line by line, with
+no lexer state. The branch's own security review found the hole that leaves: a doc-comment body
+that closes the comment, runs a statement and reopens it matches three times over, and lands
+unreviewed code on `main` under the check's own approval. So a comment delimiter is allowed only
+alone on its line, as a guard separate from the patterns, where a pattern added later cannot
+reopen it. The deeper fix is provenance rather than shape — re-run the generator in CI and require
+the committed file to match — and that belongs to the repo whose CI would run it.
+
+What this gives up is a reader for the words. On #1273 the critic caught a heading named like a
+control (`browse`, renamed `browse_heading`) and a description claiming the widget uppercases it,
+which it did not yet. Those names and descriptions are the cost. A renamed or removed key, the
+change that breaks a consumer, still gets a person.
+
+CI narrows too. `change-scope` takes a `narrow` regex beside `light`, and reports `narrow=true`
+when every changed file matches one or the other: the caller then runs its cheap checks and only
+its targeted tests in place of the whole suite. CI cannot see add-only, and needs not: it answers
+whether the tests that read these files pass, and the approval answers whether a person must read
+them.
+
 ## The lease is a ref, not a label
 
 The label was taken too late to be a mutex: `gather` read `locked`, `decide` ran on that snapshot,
@@ -2706,6 +2752,25 @@ sydevs/SahajAtlasWeb#328 was approved three times: each conflict resolution ende
 which labelled the PR `awaiting` and put it back on the reviewer's list. Approvals were never
 dismissed. Now an approved PR a session touched derives Pending. Only a hunk the session asks about,
 as a question thread, makes it Awaiting.
+
+## A conflict waits for the base to settle
+
+Every merge to a base re-derives the repo's other open PRs (`conflict-scan`), and each conflicted
+one got a `resolve-conflicts` session at once. A burst of merges therefore resolved the same branch
+once per merge: sydevs/SahajAtlasWeb#466 took five sessions in four days, and the WeMeditateWeb
+reorganisation on 2026-11-22 set off 35 in an afternoon, about a fifth of the loop's session time
+that week. Each resolution after the first redid work the next merge undid.
+
+So a conflicted PR waits until the base tip has been still `dispatch.conflictQuietMinutes`, read
+from the base commit's committer date, which is the merge time under a merge queue. The sweep, the
+reconciler or the PR's next event re-derives it after that. A failed read of the base resolves at
+once.
+
+The wait never outlasts `dispatch.pendingDueMinutes`, counted from the deferral the guard records
+against the head. The Pending due alone cannot bound it: `syncStatus` nulls `pendingSince` on every
+pass that derives Awaiting, and that is where a bot PR sits while a thread waits on the reviewer, so
+a base moving hourly would have deferred the resolution for good. With the guard's own clock, a base
+that never stops moving costs one session per head, as before.
 
 ## A bot commit buries an approval, a conflict merge does not
 

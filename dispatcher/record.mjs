@@ -48,6 +48,7 @@ export function renderRecord(rec) {
   if (rec.handback) lines.push(`✋ handed back: ${rec.handback.reason}`)
   if (rec.approved) lines.push(`approved${rec.approved.by ? ` by ${rec.approved.by}` : ''}`)
   if (rec.pendingSince) lines.push(`pending since ${fmtTime(rec.pendingSince)}${rec.dueAttempts ? ` · ${rec.dueAttempts} check(s) past the due` : ''}`)
+  if (rec.conflictWait?.since) lines.push(`conflict held since ${fmtTime(rec.conflictWait.since)}, waiting for the base to settle`)
   if (rec.fixCi) lines.push(`CI fix ${rec.fixCi}`)
   if (rec.ciReruns?.count) lines.push(`CI re-run ${rec.ciReruns.count} on ${String(rec.ciReruns.sha || '').slice(0, 7)} — infrastructure, not the change`)
   if (rec.queueFail?.sha) lines.push(`merge queue failed on ${String(rec.queueFail.sha).slice(0, 7)}${rec.queueFail.app ? ` · ${rec.queueFail.app}` : ''}${rec.queueFail.run ? ` · [run](${rec.queueFail.run})` : ''}${rec.queueFail.suite ? ` · [suite](${rec.queueFail.suite})` : ''}`)

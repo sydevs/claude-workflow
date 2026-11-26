@@ -26,6 +26,10 @@ export const proxyApprove = (sha) => ({ type: 'proxyApprove', sha })
 export const dismissProxy = (ids) => ({ type: 'dismissProxy', ids })
 /** Dismiss a person's approvals, by review id: a commit of the bot's own landed after them. */
 export const dismissStale = (ids) => ({ type: 'dismissStale', ids })
+/** Approve a bot PR that only adds translation keys, at `sha`, as `github-actions[bot]`. */
+export const checkApprove = (sha) => ({ type: 'checkApprove', sha })
+/** Dismiss the translation check's own approvals, by review id: the head it covered moved or outgrew it. */
+export const dismissCheck = (ids) => ({ type: 'dismissCheck', ids })
 export const bumpFixCi = () => ({ type: 'bumpFixCi' })
 export const rerunJobs = (sha, checks) => ({ type: 'rerunJobs', sha, checks })
 export const sentry = (issue, id) => ({ type: 'sentry', issue, id })

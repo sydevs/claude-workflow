@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Writes full=true|false to $GITHUB_OUTPUT. Every failure path is full=true.
+# Writes full=true|false and narrow=true|false to $GITHUB_OUTPUT. Every
+# failure path is full=true, narrow=false: the whole lane.
 set -uo pipefail
 
 full=true
-out() { echo "full=$full" >> "${GITHUB_OUTPUT:-/dev/stdout}"; }
+narrow=false
+out() { printf 'full=%s\nnarrow=%s\n' "$full" "$narrow" >> "${GITHUB_OUTPUT:-/dev/stdout}"; }
 trap out EXIT
 
 head=$(git rev-parse --verify --quiet HEAD) || { echo "::warning::No checkout, so running the full lane."; exit 0; }
@@ -32,6 +34,19 @@ heavy=$(echo "$files" | grep -vE -- "$LIGHT")
 if [ -z "$heavy" ]; then
   full=false
   echo "::notice title=Light lane::Every changed file matches /$LIGHT/, so the full CI lane is skipped."
+elif [ -n "${NARROW:-}" ]; then
+  # Same status rule as above: 1 is "selected nothing", 2 a bad regex.
+  wide=$(echo "$heavy" | grep -vE -- "$NARROW")
+  status=$?
+  if [ "$status" -gt 1 ]; then
+    echo "::warning::\`narrow\` is not a valid extended regex, so running the full lane."
+  elif [ -z "$wide" ]; then
+    narrow=true
+    echo "::notice title=Narrow lane::Every changed file matches /$LIGHT/ or /$NARROW/, so only the targeted tests run."
+  else
+    echo "Needs the full lane for:"
+    echo "$wide" | sed 's/^/  /'
+  fi
 else
   echo "Needs the full lane for:"
   echo "$heavy" | sed 's/^/  /'

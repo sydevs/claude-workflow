@@ -155,6 +155,7 @@
     },
     "maxAttempts": 3,
     "pendingDueMinutes": 120,
+    "conflictQuietMinutes": 60,
     "reconcileMaxPerEvent": 10,
     "sessionBranchPrefix": "claude/",
     "relayBranchPrefix": "claude/relay-",
@@ -343,6 +344,23 @@
         "command": "curl -fsSL --retry 3 -o tests/atlas-url-contract.json https://raw.githubusercontent.com/sydevs/SahajCloud/main/src/lib/atlas/atlas-url-contract.json",
         "paths": [
           "tests/atlas-url-contract.json"
+        ]
+      }
+    }
+  },
+  "translationOnly": {
+    "$comment": "Per repo, the files a new translation key touches. A PR changing only these, and only by adding keys (dispatcher/translations.mjs), skips the critic, and a bot's own is approved by Actions (why: docs/why.md#a-translation-key-is-approved-by-actions).",
+    "maxFiles": 40,
+    "repos": {
+      "SahajCloud": {
+        "schemas": [
+          "src/globals/*Translations/translationsSchema.json"
+        ],
+        "seeds": [
+          "seeds/*-translations/data.*.json"
+        ],
+        "generated": [
+          "src/payload-types.ts"
         ]
       }
     }

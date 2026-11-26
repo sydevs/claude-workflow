@@ -9,7 +9,8 @@ import { ciVerdict, normalizeMcp, requiredOnly, setRepoWorkflows } from '../work
 import { loadRecord, findRecord } from './record.mjs'
 import { parseBlockedBy, unresolvedBlockers, parseRecheck, parseSentry, parseOpenQuestions, parseRequest, datePassed } from './markers.mjs'
 import { isBot, fullTreatment, dispatcherLogins, restLogin, stoodDownFixCi } from './predicates.mjs'
-import { proxyApproves } from './approvals.mjs'
+import { checkFacts, proxyApproves } from './approvals.mjs'
+import { TRANSLATION_APPROVAL_MARKER, translationFacts, translationRules } from './translations.mjs'
 import { isDispatcherComment } from './decide.mjs'
 import { CHECK_APPROVAL_MARKER, changedPaths, contractSyncAttestedAt, isContractSyncOnly } from './contracts.mjs'
 
@@ -82,16 +83,31 @@ async function reviewThreads(gh, { owner, repo, number }) {
   }))
 }
 
+const REVIEW_DECISION = 'query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }'
+
+/**
+ * Whether the ruleset counts a check's approval, or null. Read only once the
+ * check has approved the head: unasked, the answer tells the contract and
+ * translation plans nothing either would act on.
+ */
+async function checkDecision(gh, { owner, repo, number }, approved) {
+  if (!approved) return null
+  const d = await gh.graphql(REVIEW_DECISION, { o: owner, r: repo, n: number })
+  return d.repository.pullRequest.reviewDecision || null
+}
+
 /** A sync PR's head: written by `contracts-sync`, approved by the check, and GitHub's verdict on that. */
 async function contractSyncFacts(gh, { owner, repo, number }, pr, reviews, config) {
   const { data: statuses } = await gh.rest.repos.listCommitStatusesForRef({ owner, repo, ref: pr.head.sha, per_page: 100 })
-  const approvedByCheck = (reviews || []).some((r) => r.state === 'APPROVED' && r.commit_id === pr.head.sha && String(r.body || '').includes(CHECK_APPROVAL_MARKER))
-  let decision = null
-  if (approvedByCheck) {
-    const d = await gh.graphql('query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ pullRequest(number:$n){ reviewDecision } } }', { o: owner, r: repo, n: number })
-    decision = d.repository.pullRequest.reviewDecision || null
+  // `ok` is true: a sync PR that outgrew the copy is `contractSyncPlan`'s to
+  // refuse, and the verify job withdraws its own approvals, so neither
+  // `staleIds` nor a gated `approvedAtHead` has a reader here.
+  const { approvedAtHead: approvedByCheck } = checkFacts(reviews, pr.head.sha, CHECK_APPROVAL_MARKER, true)
+  return {
+    attestedAt: contractSyncAttestedAt(statuses, config),
+    approvedByCheck,
+    decision: await checkDecision(gh, { owner, repo, number }, approvedByCheck),
   }
-  return { attestedAt: contractSyncAttestedAt(statuses, config), approvedByCheck, decision }
 }
 
 async function linkedIssues(gh, { owner, repo, number }) {
@@ -260,6 +276,21 @@ async function pollMergeable(gh, { owner, repo, number }, pr) {
   return cur
 }
 
+/**
+ * One commit's author and committer date, or nulls when the read fails. Both
+ * of `gather`'s commit reads want the same two fields behind the same
+ * try/catch: the head's, and the base tip's. What a null means is the caller's
+ * to say.
+ */
+async function commitFacts(gh, { owner, repo }, ref) {
+  try {
+    const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref })
+    return { author: c.author?.login || c.committer?.login || null, committedAt: c.commit?.committer?.date || null }
+  } catch {
+    return { author: null, committedAt: null }
+  }
+}
+
 export async function gather(gh, target, config, { now = new Date() } = {}) {
   const { owner, name } = target.repo
   const repo = name
@@ -373,7 +404,22 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // the ruleset counts its approval: GitHub's own reviewDecision, read only
   // once the check has approved. (why: docs/why.md#a-verified-contract-sync-is-approved-by-actions)
   s.pr.contractSync = syncBranch ? await contractSyncFacts(gh, base, pr, reviews, config) : null
+  // A PR of nothing but new translation keys needs no critic, and a bot's own
+  // is approved by Actions. Contents are read only when every path qualifies.
+  // (why: docs/why.md#a-translation-key-is-approved-by-actions)
+  const translation = !syncBranch && pr.state === 'open' && translationRules(config, repo)
+    ? await translationFacts(gh, { owner, repo }, pr, config) : { ok: false }
+  s.pr.translationOnly = translation.ok
+  s.pr.translationReason = translation.reason || null
+  s.pr.translationCheck = checkFacts(reviews, pr.head?.sha, TRANSLATION_APPROVAL_MARKER, translation.ok)
+  s.pr.translationCheck.decision = await checkDecision(gh, base, s.pr.translationCheck.approvedAtHead)
   s.mergeable = normalized.mergeable
+  // When the base last moved, read only for a conflicted PR: a burst of
+  // merges is resolved once, after it. Null — the read failed — resolves now,
+  // as before. (why: docs/why.md#a-conflict-waits-for-the-base-to-settle)
+  s.baseMovedAt = s.mergeable === 'CONFLICTING' && pr.base?.ref
+    ? (await commitFacts(gh, { owner, repo }, pr.base.ref)).committedAt
+    : null
   s.reviews = reviewsShaped
   // The ruleset keeps an approval through every push, so `buriedApprovals`
   // reads the commits after each one. Fetched only when one sits below the head.
@@ -392,15 +438,14 @@ export async function gather(gh, target, config, { now = new Date() } = {}) {
   // (why: docs/why.md#a-push-from-a-person-resets-the-repair-count)
   // It matters on the owner's PR too, which the bot approves only over a
   // head that is not its own. (why: docs/why.md#the-owners-pr-is-approved-by-the-bot)
-  s.headAuthor = null
-  s.headCommittedAt = null
-  if (proxy || (failingNames.size && ((s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3) || stoodDownFixCi(s.record)))) {
-    try {
-      const { data: c } = await gh.rest.repos.getCommit({ owner, repo, ref: pr.head.sha })
-      s.headAuthor = c.author?.login || c.committer?.login || null
-      s.headCommittedAt = c.commit?.committer?.date || null
-    } catch { /* unknown author: the cap holds, and nothing is vouched for */ }
-  }
+  // A stood-down repair asks again too: its hand-back names the pusher.
+  // Null — the read failed — means an unknown author: the cap holds, and
+  // nothing is vouched for.
+  const head = proxy || (failingNames.size && ((s.record?.fixCi || 0) >= (config.ceilings?.ciFixIterations ?? 3) || stoodDownFixCi(s.record)))
+    ? await commitFacts(gh, { owner, repo }, pr.head.sha)
+    : { author: null, committedAt: null }
+  s.headAuthor = head.author
+  s.headCommittedAt = head.committedAt
   // No merge verdict: the ruleset and the merge queue decide that now.
   // (why: docs/why.md#github-owns-the-merge)
   s.linkedIssues = await linkedIssues(gh, base)
