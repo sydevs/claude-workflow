@@ -48,17 +48,16 @@ function nearbyRepos(cwd) {
   return [...new Set((own ? [own, ...childRepos(dirname(own))] : childRepos(cwd)).filter(Boolean))]
 }
 
-/** Each repo's worktree paths, each with its branch, and its local branches. */
+/** Each repo's worktree paths and local branches. */
 function snapshot(repos) {
   const out = {}
   for (const repo of repos) {
-    const worktrees = {}
-    let cur = null
-    for (const l of lines(git(repo, 'worktree', 'list', '--porcelain'))) {
-      if (l.startsWith('worktree ')) worktrees[(cur = l.slice(9))] = null
-      else if (l.startsWith('branch ') && cur) worktrees[cur] = l.slice(7).replace(/^refs\/heads\//, '')
+    out[repo] = {
+      worktrees: lines(git(repo, 'worktree', 'list', '--porcelain'))
+        .filter((l) => l.startsWith('worktree '))
+        .map((l) => l.slice(9)),
+      branches: lines(git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads')),
     }
-    out[repo] = { worktrees, branches: lines(git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads')) }
   }
   return out
 }
@@ -95,7 +94,7 @@ function main() {
   const before = JSON.parse(readFileSync(file, 'utf-8'))
   rmSync(file, { force: true })
   for (const [repo, now] of Object.entries(snapshot(Object.keys(before)))) {
-    for (const path of Object.keys(now.worktrees)) if (!(path in before[repo].worktrees)) stampWorktree(path, session)
+    for (const path of now.worktrees) if (!before[repo].worktrees.includes(path)) stampWorktree(path, session)
     for (const b of now.branches) if (!before[repo].branches.includes(b)) stampBranch(repo, b, session)
   }
 }
