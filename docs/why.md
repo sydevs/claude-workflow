@@ -1778,6 +1778,35 @@ under `ciFixIterations` like red CI, never re-armed. `cancelled` is not a failur
 cancels a run when it rebuilds a group after another entry failed. A PR still armed is that
 rebuild, so it is left alone.
 
+**Only the queue's own gate is that failure.** On SahajAtlasWeb#489 a check suite from another app
+failed at 21:24Z on 2026-11-25 while the queue's Actions run was still going; that run concluded
+`success` at 21:27:02Z and GitHub merged the PR 32 seconds later. The dispatcher had already
+recorded `queueFail` against head `6ccbee46`, bumped `fixCi` to 2, and spent a `fix-ci` session
+that found nothing to repair. The cost is more than that one session: the record is kept against
+the head while nothing re-arms it, so every later pass repairs rather than re-arms, to
+`ciFixIterations` and a handback, on a PR whose required checks are all green.
+
+The PR head has a sharper test than the queue branch can have. There `gather` drops
+`ci.ignoreCheckNames` and reduces to the base ruleset's required checks, so a check is CI because
+the ruleset requires it, whoever posted it. That test needs **check names**, and neither event
+carries them. What a `workflow_run` does carry is the trigger that ran it, so
+`event === 'merge_group'` *is* the queue's gate rather than an approximation of it, and a
+`check_suite` — which names no trigger — is never that gate. An earlier revision tested
+`app.slug === 'github-actions'` instead. That named only who posted a suite, and an Actions suite
+aggregates every Actions check run on the sha, the `dispatch / *` ones `ci.ignoreCheckNames` drops
+on the PR head included.
+
+One assumption survives, asserted nowhere: that every check a ruleset requires in the queue is an
+Actions workflow triggered by `merge_group`, as `ci.yml` is here. A repo whose queue gate is a
+third-party context would record no queue failure when it failed, and the #959 loop would return
+for that repo. Reading the queue branch's runs back would settle it, and was rejected on cost: a
+call per event, on a path that deliberately makes none.
+
+The record names the failing run beside the sha. The old one kept `run` alone and took it from a
+`check_suite` too, where it is null, so afterwards nothing could say what had spent the passes —
+the ticket for #489 could not name it either. A `merge_group` run always carries its own page, so
+`flags.queueRun` hands a session something a person can open.
+
 ## The journal tally needs a writer that cannot stop
 
 Monday 2026-09-28 reported 22 dispatches and 1 anomaly against 37 and 4; Thursday 2026-10-01, 84

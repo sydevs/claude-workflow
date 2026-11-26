@@ -29,6 +29,17 @@ export function queuedPr(branch) {
 // not a verdict on this PR.
 const QUEUE_FAILED = new Set(['failure', 'timed_out'])
 
+/**
+ * How the `resolve` log line names one coalesced target. A queue failure names
+ * the run that failed: before it did, nothing afterwards could say what had
+ * spent the repair passes. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+ */
+export function targetLabel(t) {
+  const reasons = t.reasons.map(({ reason, facts }) =>
+    (reason === 'queue-failed' && facts?.run ? `${reason}(${facts.run})` : reason))
+  return `${t.kind}#${t.number}:${reasons.join('+')}`
+}
+
 function repoOf(context) {
   return { owner: context.repo.owner, name: context.repo.repo, full: `${context.repo.owner}/${context.repo.repo}` }
 }
@@ -78,7 +89,7 @@ export function coalesceTargets(targets) {
  *  docs/why.md#a-rate-limited-call-waits-for-the-reset)
  */
 export async function resolve({ github, context, config, core = { info() {} }, now = new Date() }) {
-  const own = await eventTargets({ github, context, config, now })
+  const own = await eventTargets({ github, context, config, core, now })
   if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') return own
   const limit = config.dispatch?.reconcileMaxPerEvent ?? 0
   if (!limit) return own
@@ -109,7 +120,7 @@ export async function resolve({ github, context, config, core = { info() {} }, n
   return own.concat(expired, driftTargets(view, config, repo, { now, limit: limit - expired.length, skip }))
 }
 
-async function eventTargets({ github, context, config, now }) {
+async function eventTargets({ github, context, config, core, now }) {
   const repo = repoOf(context)
   const ev = context.payload
   const action = ev.action
@@ -180,7 +191,17 @@ async function eventTargets({ github, context, config, now }) {
     const queued = queuedPr(ev.workflow_run?.head_branch || ev.check_suite?.head_branch)
     if (queued) {
       if (!QUEUE_FAILED.has(ev.workflow_run?.conclusion || ev.check_suite?.conclusion)) return []
-      return one('pr', queued, 'queue-failed', { run: ev.workflow_run?.html_url || null })
+      // The queue's CI is what the `merge_group` trigger ran, and
+      // `workflow_run.event` says so. Nothing else failing on the ephemeral
+      // branch is a verdict on this PR — it is advisory here exactly as on the
+      // PR head, where `gather` reduces to the base ruleset's required checks
+      // before anything reads red. A `check_suite` names no trigger, so it
+      // never reaches this reason. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+      if (ev.workflow_run?.event !== 'merge_group') {
+        core.info(`a failed ${ev.workflow_run ? `${ev.workflow_run.event} run` : 'check suite'} on ${ev.workflow_run?.head_branch || ev.check_suite?.head_branch} is not the queue's CI — ignored`)
+        return []
+      }
+      return one('pr', queued, 'queue-failed', { run: ev.workflow_run.html_url || null })
     }
     let prs = (ev.workflow_run?.pull_requests || ev.check_suite?.pull_requests || []).map((p) => p.number)
     if (!prs.length) {
