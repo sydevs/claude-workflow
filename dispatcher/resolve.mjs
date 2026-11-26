@@ -29,19 +29,14 @@ export function queuedPr(branch) {
 // not a verdict on this PR.
 const QUEUE_FAILED = new Set(['failure', 'timed_out'])
 
-const ACTIONS_APP = 'github-actions'
-
 /**
  * How the `resolve` log line names one coalesced target. A queue failure names
- * what failed, because the record kept only the run url — null for a
- * `check_suite` — so afterwards nothing could say what had spent the repair
- * passes. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+ * the run that failed: before it did, nothing afterwards could say what had
+ * spent the repair passes. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
  */
 export function targetLabel(t) {
-  const reasons = t.reasons.map(({ reason, facts }) => {
-    const said = reason === 'queue-failed' ? [facts?.app, facts?.run || facts?.suite].filter(Boolean) : []
-    return said.length ? `${reason}(${said.join(' ')})` : reason
-  })
+  const reasons = t.reasons.map(({ reason, facts }) =>
+    (reason === 'queue-failed' && facts?.run ? `${reason}(${facts.run})` : reason))
   return `${t.kind}#${t.number}:${reasons.join('+')}`
 }
 
@@ -196,20 +191,17 @@ async function eventTargets({ github, context, config, core, now }) {
     const queued = queuedPr(ev.workflow_run?.head_branch || ev.check_suite?.head_branch)
     if (queued) {
       if (!QUEUE_FAILED.has(ev.workflow_run?.conclusion || ev.check_suite?.conclusion)) return []
-      // Only Actions' own suite is the queue's CI failing. Another app's suite
-      // on the ephemeral branch is advisory, exactly as it is on the PR head,
-      // where `gather` reduces to the base ruleset's required checks before
-      // anything reads red. A `workflow_run` is always Actions and carries no
-      // `app`. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
-      const app = ev.workflow_run ? ACTIONS_APP : ev.check_suite?.app?.slug
-      if (app !== ACTIONS_APP) {
-        core.info(`a failed suite from ${app || 'an unnamed app'} on ${ev.check_suite?.head_branch} is not the queue's CI — ignored`)
+      // The queue's CI is what the `merge_group` trigger ran, and
+      // `workflow_run.event` says so. Nothing else failing on the ephemeral
+      // branch is a verdict on this PR — it is advisory here exactly as on the
+      // PR head, where `gather` reduces to the base ruleset's required checks
+      // before anything reads red. A `check_suite` names no trigger, so it
+      // never reaches this reason. (why: docs/why.md#a-queue-failure-is-a-ci-failure)
+      if (ev.workflow_run?.event !== 'merge_group') {
+        core.info(`a failed ${ev.workflow_run ? `${ev.workflow_run.event} run` : 'check suite'} on ${ev.workflow_run?.head_branch || ev.check_suite?.head_branch} is not the queue's CI — ignored`)
         return []
       }
-      // `run` stays a page a person can open, so `flags.queueRun` keeps
-      // pointing a session at one. A suite carries only its API url, under its
-      // own name. (why: docs/why.md#a-routine-cannot-reach-the-github-api)
-      return one('pr', queued, 'queue-failed', { app, run: ev.workflow_run?.html_url || null, suite: ev.check_suite?.url || null })
+      return one('pr', queued, 'queue-failed', { run: ev.workflow_run.html_url || null })
     }
     let prs = (ev.workflow_run?.pull_requests || ev.check_suite?.pull_requests || []).map((p) => p.number)
     if (!prs.length) {

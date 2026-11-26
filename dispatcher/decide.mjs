@@ -1209,7 +1209,7 @@ function route(target, s, config) {
     case 'queue-failed': {
       if (!fullTreatment(s.pr?.user?.login, config)) return [note('outside PR')]
       if (!s.pr?.head?.sha || s.pr.state !== 'open') return [note('no open head to charge the queue failure to')]
-      const queueFail = { sha: s.pr.head.sha, run: facts.run || null, app: facts.app || null, suite: facts.suite || null }
+      const queueFail = { sha: s.pr.head.sha, run: facts.run || null }
       return [record({ queueFail })].concat(evaluatePr({ ...s, record: { ...s.record, queueFail } }, config))
     }
     // A lease ref on an item with no lock. Residue from a pass that won the

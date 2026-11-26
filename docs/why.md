@@ -1778,7 +1778,7 @@ under `ciFixIterations` like red CI, never re-armed. `cancelled` is not a failur
 cancels a run when it rebuilds a group after another entry failed. A PR still armed is that
 rebuild, so it is left alone.
 
-**Only Actions' own suite is that failure.** On SahajAtlasWeb#489 a check suite from another app
+**Only the queue's own gate is that failure.** On SahajAtlasWeb#489 a check suite from another app
 failed at 21:24Z on 2026-11-25 while the queue's Actions run was still going; that run concluded
 `success` at 21:27:02Z and GitHub merged the PR 32 seconds later. The dispatcher had already
 recorded `queueFail` against head `6ccbee46`, bumped `fixCi` to 2, and spent a `fix-ci` session
@@ -1788,21 +1788,24 @@ the head while nothing re-arms it, so every later pass repairs rather than re-ar
 
 The PR head has a sharper test than the queue branch can have. There `gather` drops
 `ci.ignoreCheckNames` and reduces to the base ruleset's required checks, so a check is CI because
-the ruleset requires it, whoever posted it. That test needs **check names**, and a `check_suite`
-event carries none — only `app`, `conclusion` and `head_branch`. So the queue path
-**approximates** it by the posting app: a `workflow_run` is always Actions, and a `check_suite`
-must say `app.slug === 'github-actions'`. Two assumptions make the approximation safe, and neither
-is asserted anywhere: that every check these rulesets require is Actions-hosted — a repo that
-required a third-party context would record no queue failure when it failed, and the #959 loop
-would return for that repo — and that an Actions failure on a queue branch is the queue's own
-gate rather than some other workflow that matched the ephemeral branch. Reading the queue branch's
-runs back would settle both, and was rejected on cost: a call per event, on a path that
-deliberately makes none.
+the ruleset requires it, whoever posted it. That test needs **check names**, and neither event
+carries them. What a `workflow_run` does carry is the trigger that ran it, so
+`event === 'merge_group'` *is* the queue's gate rather than an approximation of it, and a
+`check_suite` — which names no trigger — is never that gate. An earlier revision tested
+`app.slug === 'github-actions'` instead. That named only who posted a suite, and an Actions suite
+aggregates every Actions check run on the sha, the `dispatch / *` ones `ci.ignoreCheckNames` drops
+on the PR head included.
 
-The record now names what failed beside the sha. The old one kept only `run`, which is null for a
-`check_suite`, so afterwards nothing could say what had spent the passes — the ticket for #489
-could not name the app either. The app slug can hold only one value while the test above is an
-equality, and is recorded so the record states what it matched, not derives it.
+One assumption survives, asserted nowhere: that every check a ruleset requires in the queue is an
+Actions workflow triggered by `merge_group`, as `ci.yml` is here. A repo whose queue gate is a
+third-party context would record no queue failure when it failed, and the #959 loop would return
+for that repo. Reading the queue branch's runs back would settle it, and was rejected on cost: a
+call per event, on a path that deliberately makes none.
+
+The record names the failing run beside the sha. The old one kept `run` alone and took it from a
+`check_suite` too, where it is null, so afterwards nothing could say what had spent the passes —
+the ticket for #489 could not name it either. A `merge_group` run always carries its own page, so
+`flags.queueRun` hands a session something a person can open.
 
 ## The journal tally needs a writer that cannot stop
 

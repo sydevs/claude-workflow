@@ -1052,11 +1052,11 @@ const run = 'https://github.com/sydevs/SahajCloud/actions/runs/40014085678'
 const dequeued = (over = {}) => prSnap({ pr: { ...prSnap().pr, draft: false, autoMergeArmed: false }, normalized: { reviewDecision: 'APPROVED' }, ...over })
 
 test('a queue failure is recorded against the head and repaired, not re-armed', () => {
-  const plan = decide({ reason: 'queue-failed', facts: { app: 'github-actions', run } }, dequeued(), config)
+  const plan = decide({ reason: 'queue-failed', facts: { run } }, dequeued(), config)
   assert.deepEqual(types(plan), ['record', 'bumpFixCi', 'fire:fix-ci'])
-  // The app is recorded with the sha: SahajAtlasWeb#489 spent two repair
+  // The run is recorded with the sha: SahajAtlasWeb#489 spent two repair
   // passes on a failure the record could not name afterwards.
-  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run, app: 'github-actions', suite: null } })
+  assert.deepEqual(plan[0].patch, { queueFail: { sha: 'abc', run } })
   assert.deepEqual(plan[2].flags, { queueRun: run, push: 'direct' }, 'the session is told where the failure is, and where it may push')
 })
 
